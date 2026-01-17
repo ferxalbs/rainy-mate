@@ -31,8 +31,8 @@ export function TaskInput({ onSubmit, isLoading = false }: TaskInputProps) {
     return (
         <div className="space-y-4">
             <div className="flex items-center gap-2">
-                <Sparkles className="size-5 text-primary shrink-0" />
-                <h2 className="text-lg font-semibold">New Task</h2>
+                <Sparkles className="size-4 text-primary shrink-0" />
+                <h2 className="text-sm font-semibold">New Task</h2>
             </div>
 
             <div className="space-y-4">
@@ -41,29 +41,29 @@ export function TaskInput({ onSubmit, isLoading = false }: TaskInputProps) {
                     onChange={(e) => setTaskDescription(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="What would you like me to do? (⌘+Enter to submit)"
-                    className="min-h-[100px] sm:min-h-[120px] w-full"
+                    className="min-h-[100px] w-full bg-muted/30 border-0 focus:ring-1 focus:ring-primary/30 rounded-xl"
                     disabled={isLoading}
                     rows={4}
                     aria-label="Task description"
                 />
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        <Label className="text-sm text-muted-foreground whitespace-nowrap">AI Provider:</Label>
+                        <Label className="text-xs text-muted-foreground whitespace-nowrap">AI Provider:</Label>
                         <Select
                             aria-label="Select AI Provider"
-                            className="w-full sm:w-48"
+                            className="w-full sm:w-44"
                             placeholder="Select provider"
                             selectedKey={selectedProvider}
                             onSelectionChange={(key) => setSelectedProvider(key as ProviderType)}
                         >
-                            <Select.Trigger>
+                            <Select.Trigger className="bg-muted/30 border-0 rounded-lg h-8">
                                 <Select.Value>
                                     {selectedProviderObj?.name || "Select provider"}
                                 </Select.Value>
                                 <Select.Indicator />
                             </Select.Trigger>
-                            <Select.Popover>
+                            <Select.Popover className="rounded-xl">
                                 <ListBox>
                                     {AI_PROVIDERS.map((provider) => (
                                         <ListBox.Item
@@ -72,7 +72,7 @@ export function TaskInput({ onSubmit, isLoading = false }: TaskInputProps) {
                                             textValue={provider.name}
                                         >
                                             <div className="flex flex-col">
-                                                <span className="font-medium">{provider.name}</span>
+                                                <span className="font-medium text-sm">{provider.name}</span>
                                                 <span className="text-xs text-muted-foreground">{provider.model}</span>
                                             </div>
                                             <ListBox.ItemIndicator />
@@ -85,12 +85,12 @@ export function TaskInput({ onSubmit, isLoading = false }: TaskInputProps) {
 
                     <Button
                         variant="primary"
-                        size="md"
+                        size="sm"
                         onPress={handleSubmit}
                         isDisabled={!taskDescription.trim() || isLoading}
-                        className="w-full sm:w-auto"
+                        className="w-full sm:w-auto rounded-lg px-4"
                     >
-                        <Play className="size-4" />
+                        <Play className="size-3.5" />
                         Start Task
                     </Button>
                 </div>

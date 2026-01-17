@@ -14,7 +14,13 @@
       {
         "title": "Rainy Cowork",
         "width": 1200,
-        "height": 800
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "titleBarStyle": "Overlay",
+        "transparent": true,
+        "decorations": false,
+        "dragDropEnabled": true
       }
     ],
     "security": {

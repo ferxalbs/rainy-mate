@@ -5,7 +5,31 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-01-17
+## [0.1.1] - 2026-01-17
+
+### Changed
+- **macOS Tahoe-style UI redesign** - Premium floating elements with glassmorphism
+- **Floating sidebar** - Rounded corners (24px), drop shadow, collapsible sections
+- **Glass surface main content** - Backdrop blur, subtle borders
+- **Overlay title bar** - Traffic light spacer on macOS, seamless integration
+- **Window transparency** - Enabled in Tauri config for glass effects
+- **Improved color palette** - Rose/pink tinted light theme, deep charcoal dark theme
+- **Window drag regions** - Proper `-webkit-app-region: drag` for window movement
+- **Responsive design** - Works across different screen sizes
+
+### Added
+- `FloatingSidebar.tsx` - New collapsible sidebar with Tasks, Favorites, Locations, Settings
+- `TahoeLayout.tsx` - New layout component with floating elements
+- OS detection for Windows vs macOS controls
+- Premium hover elevation effects
+- Smooth animations for component appearance
+
+### Technical
+- Tauri config: `titleBarStyle: "overlay"`, `transparent: true`
+- CSS variables for floating shadows and glass effects
+- Custom scrollbar styling matching macOS
+
+
 
 ### Added
 - **Initial Tauri + React + HeroUI v3 foundation**

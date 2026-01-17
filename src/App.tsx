@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { MainLayout, TaskInput, TaskCard, FileTable } from "./components";
-import { Card, Separator } from "@heroui/react";
+import { TahoeLayout, TaskInput, TaskCard, FileTable } from "./components";
+import { Separator } from "@heroui/react";
 import { Zap, CheckCircle2, ListTodo } from "lucide-react";
 import type { Task, ProviderType, Folder, FileChange } from "./types";
 
@@ -97,7 +97,6 @@ function App() {
   // Handle folder selection
   const handleFolderSelect = useCallback((folder: Folder) => {
     console.log("Selected folder:", folder);
-    // TODO: Implement folder navigation
   }, []);
 
   // Handle navigation
@@ -127,24 +126,24 @@ function App() {
   }[activeSection] || { icon: <Zap className="size-5 text-blue-500 shrink-0" />, label: "Tasks" };
 
   return (
-    <MainLayout
+    <TahoeLayout
       onFolderSelect={handleFolderSelect}
       onNavigate={handleNavigate}
       activeSection={activeSection}
       taskCounts={taskCounts}
     >
-      <div className="space-y-6 sm:space-y-8">
+      <div className="space-y-6">
         {/* Task Input Section */}
-        <Card className="p-4 sm:p-6">
+        <div className="floating-card p-5 animate-appear">
           <TaskInput onSubmit={handleTaskSubmit} />
-        </Card>
+        </div>
 
         {/* Tasks Section */}
         {displayTasks.length > 0 && (
           <section className="space-y-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-1">
               {sectionTitle.icon}
-              <h2 className="text-lg font-semibold">{sectionTitle.label}</h2>
+              <h2 className="text-base font-semibold">{sectionTitle.label}</h2>
               <span className="text-sm text-muted-foreground">({displayTasks.length})</span>
             </div>
             <div className="space-y-3">
@@ -168,31 +167,31 @@ function App() {
 
         {/* Empty State */}
         {tasks.length === 0 && (
-          <Card variant="transparent" className="p-6 sm:p-8 text-center">
+          <div className="floating-card p-8 text-center animate-appear">
             <div className="space-y-3">
-              <div className="size-16 mx-auto bg-muted rounded-full flex items-center justify-center">
-                <Zap className="size-8 text-muted-foreground" />
+              <div className="size-14 mx-auto bg-muted/50 rounded-2xl flex items-center justify-center">
+                <Zap className="size-7 text-muted-foreground" />
               </div>
-              <p className="text-lg font-medium text-muted-foreground">
+              <p className="text-base font-medium text-foreground">
                 No tasks yet
               </p>
-              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                Type a task above to get started with your AI assistant. Press ⌘+Enter to submit quickly.
+              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                Type a task above to get started with your AI assistant. Press ⌘+Enter to submit.
               </p>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Empty section state */}
         {tasks.length > 0 && displayTasks.length === 0 && (
-          <Card variant="transparent" className="p-6 text-center">
+          <div className="floating-card p-6 text-center animate-appear">
             <p className="text-sm text-muted-foreground">
               No {activeSection} tasks
             </p>
-          </Card>
+          </div>
         )}
       </div>
-    </MainLayout>
+    </TahoeLayout>
   );
 }
 

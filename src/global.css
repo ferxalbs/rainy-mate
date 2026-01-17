@@ -1,4 +1,4 @@
-/* Rainy Cowork - Global Styles */
+/* Rainy Cowork - macOS Tahoe-Style Premium UI */
 /* Tailwind CSS v4 + HeroUI v3 */
 
 @import "tailwindcss";
@@ -7,16 +7,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Design Tokens - macOS Inspired */
+/* ============================================
+   DESIGN TOKENS - macOS Tahoe Inspired
+   ============================================ */
+
 @theme inline {
-  /* Border Radius Scale */
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  /* Border Radius Scale - Softer, more rounded */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 28px;
+  --radius-4xl: 32px;
 
   /* Color Mappings */
   --color-background: var(--background);
@@ -42,126 +45,138 @@
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* Light Theme - macOS Inspired */
+/* ============================================
+   LIGHT THEME - macOS Tahoe (Rose/Pink tint)
+   ============================================ */
 :root {
-  --radius: 0.625rem;
+  --radius: 16px;
 
-  /* Base Colors */
-  --background: oklch(0.985 0 0);
-  /* Near white, slightly warm */
-  --foreground: oklch(0.145 0 0);
+  /* Base - Warm pink/rose tint like Tahoe */
+  --background: oklch(0.94 0.01 20);
+  --foreground: oklch(0.20 0.02 20);
 
-  /* Card & Surface */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  /* Card & Surface - White with subtle warmth */
+  --card: oklch(0.99 0.005 20);
+  --card-foreground: oklch(0.20 0.02 20);
+  --popover: oklch(0.99 0.005 20);
+  --popover-foreground: oklch(0.20 0.02 20);
 
   /* Primary - macOS Blue */
   --primary: oklch(0.55 0.22 255);
-  /* #007AFF */
   --primary-foreground: oklch(1 0 0);
 
-  /* Secondary */
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  /* Secondary - Subtle warm gray */
+  --secondary: oklch(0.96 0.005 20);
+  --secondary-foreground: oklch(0.25 0.02 20);
 
-  /* Muted */
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.45 0 0);
+  /* Muted - Soft rose gray */
+  --muted: oklch(0.92 0.008 20);
+  --muted-foreground: oklch(0.45 0.02 20);
 
   /* Accent */
-  --accent: oklch(0.96 0.02 255);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent: oklch(0.95 0.01 255);
+  --accent-foreground: oklch(0.25 0.02 20);
 
-  /* Destructive - macOS Red */
+  /* Destructive */
   --destructive: oklch(0.55 0.22 25);
-  /* #FF3B30 */
 
-  /* Borders & Input */
-  --border: oklch(0.9 0 0);
-  --input: oklch(0.9 0 0);
+  /* Borders & Input - Very subtle */
+  --border: oklch(0.88 0.01 20);
+  --input: oklch(0.92 0.008 20);
   --ring: oklch(0.55 0.22 255);
 
-  /* Sidebar */
-  --sidebar: oklch(0.975 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
+  /* Sidebar - Semi-transparent white */
+  --sidebar: oklch(0.99 0.003 20 / 85%);
+  --sidebar-foreground: oklch(0.20 0.02 20);
   --sidebar-primary: oklch(0.55 0.22 255);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.95 0.01 255);
-  --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.9 0 0);
-  --sidebar-ring: oklch(0.55 0.22 255);
+  --sidebar-accent: oklch(0.94 0.01 255);
+  --sidebar-border: oklch(0.90 0.01 20 / 50%);
+
+  /* Floating elements */
+  --floating-shadow: 0 8px 32px oklch(0.20 0.02 20 / 12%),
+    0 2px 8px oklch(0.20 0.02 20 / 8%);
+  --floating-shadow-lg: 0 12px 48px oklch(0.20 0.02 20 / 15%),
+    0 4px 16px oklch(0.20 0.02 20 / 10%);
 }
 
-/* Dark Theme - macOS Dark Mode Inspired */
+/* ============================================
+   DARK THEME - macOS Tahoe Dark
+   ============================================ */
 .dark {
-  /* Base Colors */
-  --background: oklch(0.13 0 0);
-  /* #1C1C1E equivalent */
-  --foreground: oklch(0.96 0 0);
+  /* Base - Deep charcoal */
+  --background: oklch(0.14 0.01 260);
+  --foreground: oklch(0.95 0 0);
 
   /* Card & Surface */
-  --card: oklch(0.18 0 0);
-  /* Slightly elevated */
-  --card-foreground: oklch(0.96 0 0);
-  --popover: oklch(0.22 0 0);
-  --popover-foreground: oklch(0.96 0 0);
+  --card: oklch(0.20 0.01 260);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.22 0.01 260);
+  --popover-foreground: oklch(0.95 0 0);
 
-  /* Primary - macOS Blue (Dark) */
-  --primary: oklch(0.6 0.2 255);
-  /* #0A84FF */
+  /* Primary - macOS Blue (brighter for dark) */
+  --primary: oklch(0.65 0.20 255);
   --primary-foreground: oklch(1 0 0);
 
   /* Secondary */
-  --secondary: oklch(0.22 0 0);
-  --secondary-foreground: oklch(0.96 0 0);
+  --secondary: oklch(0.24 0.01 260);
+  --secondary-foreground: oklch(0.95 0 0);
 
   /* Muted */
-  --muted: oklch(0.22 0 0);
-  --muted-foreground: oklch(0.6 0 0);
+  --muted: oklch(0.22 0.01 260);
+  --muted-foreground: oklch(0.60 0 0);
 
   /* Accent */
-  --accent: oklch(0.25 0.02 255);
-  --accent-foreground: oklch(0.96 0 0);
+  --accent: oklch(0.28 0.02 255);
+  --accent-foreground: oklch(0.95 0 0);
 
-  /* Destructive - macOS Red (Dark) */
-  --destructive: oklch(0.6 0.2 25);
+  /* Destructive */
+  --destructive: oklch(0.60 0.20 25);
 
   /* Borders & Input */
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.6 0.2 255);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 10%);
+  --ring: oklch(0.65 0.20 255);
 
-  /* Sidebar */
-  --sidebar: oklch(0.16 0 0);
-  --sidebar-foreground: oklch(0.96 0 0);
-  --sidebar-primary: oklch(0.6 0.2 255);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.22 0 0);
-  --sidebar-accent-foreground: oklch(0.96 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.6 0.2 255);
+  /* Sidebar - Translucent dark */
+  --sidebar: oklch(0.18 0.01 260 / 80%);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.65 0.20 255);
+  --sidebar-accent: oklch(0.28 0.02 255);
+  --sidebar-border: oklch(1 0 0 / 6%);
+
+  /* Floating elements */
+  --floating-shadow: 0 8px 32px oklch(0 0 0 / 40%),
+    0 2px 8px oklch(0 0 0 / 30%);
+  --floating-shadow-lg: 0 12px 48px oklch(0 0 0 / 50%),
+    0 4px 16px oklch(0 0 0 / 35%);
 }
 
-/* Base Layer Styles */
+/* ============================================
+   BASE STYLES
+   ============================================ */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
 
-  body {
-    @apply bg-background text-foreground antialiased;
+  html {
+    /* Prevent text selection during window drag */
+    -webkit-user-select: none;
+    user-select: none;
   }
 
-  /* Custom scrollbar for macOS feel */
+  body {
+    @apply bg-background text-foreground antialiased;
+    /* Allow text selection in content areas */
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* macOS-style scrollbars */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -172,54 +187,158 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/20 rounded-full;
+    @apply bg-foreground/10 rounded-full;
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/30;
+    @apply bg-foreground/20;
   }
 }
 
-/* Component Layer Utilities */
+/* ============================================
+   WINDOW CHROME & DRAGGING
+   ============================================ */
 @layer components {
 
-  /* Glass effect for header */
-  .glass-effect {
-    @apply bg-background/80 backdrop-blur-md border-b border-border;
+  /* Draggable title bar region */
+  .window-drag {
+    -webkit-app-region: drag;
   }
 
-  /* Subtle hover effects */
-  .hover-lift {
-    @apply transition-transform duration-200 hover:-translate-y-0.5;
+  /* Non-draggable elements within drag region */
+  .window-no-drag {
+    -webkit-app-region: no-drag;
   }
 
-  /* Focus ring */
-  .focus-ring {
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  /* Traffic light spacer for macOS */
+  .traffic-light-spacer {
+    padding-left: 78px;
+  }
+
+  /* Windows title bar buttons - hidden on macOS */
+  .windows-controls {
+    display: none;
+  }
+
+  /* Show on Windows (detected via CSS) */
+  @supports (-ms-ime-align: auto) {
+    .windows-controls {
+      display: flex;
+    }
+
+    .traffic-light-spacer {
+      padding-left: 0;
+    }
   }
 }
 
-/* Animations */
-@layer utilities {
+/* ============================================
+   FLOATING COMPONENTS - Tahoe Style
+   ============================================ */
+@layer components {
 
-  /* Smooth page transitions */
-  .animate-page-enter {
-    animation: pageEnter 200ms ease-out;
+  /* Floating sidebar */
+  .floating-sidebar {
+    @apply rounded-2xl;
+    background: var(--sidebar);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: var(--floating-shadow);
+    border: 1px solid var(--sidebar-border);
   }
 
-  @keyframes pageEnter {
+  /* Floating card */
+  .floating-card {
+    @apply rounded-2xl;
+    background: var(--card);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    box-shadow: var(--floating-shadow);
+    border: 1px solid var(--border);
+  }
+
+  /* Premium glass effect */
+  .glass-surface {
+    @apply rounded-3xl;
+    background: oklch(1 0 0 / 70%);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: var(--floating-shadow-lg);
+    border: 1px solid oklch(1 0 0 / 20%);
+  }
+
+  .dark .glass-surface {
+    background: oklch(0.15 0.01 260 / 70%);
+    border: 1px solid oklch(1 0 0 / 8%);
+  }
+
+  /* Elevated hover effect */
+  .hover-elevate {
+    @apply transition-all duration-200;
+  }
+
+  .hover-elevate:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--floating-shadow-lg);
+  }
+}
+
+/* ============================================
+   SIDEBAR STYLES - Tahoe Floating
+   ============================================ */
+@layer components {
+  .sidebar-section-header {
+    @apply px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm;
+    @apply text-foreground/80 hover:bg-accent/50 hover:text-foreground;
+    @apply transition-colors duration-150;
+  }
+
+  .sidebar-item[data-selected="true"] {
+    @apply bg-accent text-foreground font-medium;
+  }
+
+  .sidebar-item-icon {
+    @apply size-4 shrink-0 text-muted-foreground;
+  }
+
+  .sidebar-item[data-selected="true"] .sidebar-item-icon {
+    @apply text-primary;
+  }
+
+  .sidebar-detail {
+    @apply text-xs text-muted-foreground ml-auto;
+  }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@layer utilities {
+
+  /* Smooth appear animation */
+  .animate-appear {
+    animation: appear 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes appear {
     from {
       opacity: 0;
-      transform: translateY(4px);
+      transform: scale(0.97) translateY(-4px);
     }
 
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: scale(1) translateY(0);
     }
   }
 
-  /* Task card appear animation */
+  /* Task card animation */
   .animate-task-appear {
     animation: taskAppear 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -236,20 +355,38 @@
     }
   }
 
-  /* Pulse for running tasks */
-  .animate-pulse-subtle {
-    animation: pulseSubtle 2s ease-in-out infinite;
+  /* Floating sidebar animation */
+  .animate-sidebar {
+    animation: sidebarSlide 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  @keyframes pulseSubtle {
+  @keyframes sidebarSlide {
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
 
-    0%,
-    100% {
+    to {
       opacity: 1;
+      transform: translateX(0);
     }
+  }
+}
 
-    50% {
-      opacity: 0.7;
-    }
+/* ============================================
+   UTILITY OVERRIDES
+   ============================================ */
+@layer utilities {
+
+  /* Prevent text selection on interactive elements */
+  .select-none {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Allow text selection */
+  .select-text {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }
