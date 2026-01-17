@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "rainy-cowork",
+  "productName": "Rainy Cowork",
   "version": "0.1.0",
   "identifier": "com.enosislabs.rainycowork",
   "build": {
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "rainy-cowork",
-        "width": 800,
-        "height": 600
+        "title": "Rainy Cowork",
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {
