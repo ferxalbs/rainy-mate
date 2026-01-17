@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Rainy Cowork",
@@ -17,9 +18,9 @@
         "height": 800,
         "minWidth": 800,
         "minHeight": 600,
-        "titleBarStyle": "Overlay",
-        "transparent": true,
-        "decorations": false,
+        "titleBarStyle": "Transparent",
+        "hiddenTitle": true,
+        "decorations": true,
         "dragDropEnabled": true
       }
     ],
