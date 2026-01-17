@@ -1,4 +1,4 @@
-import { ListBox, Separator, Label } from "@heroui/react";
+import { ListBox, Separator, Label, Button } from "@heroui/react";
 import {
     FolderOpen,
     Download,
@@ -7,12 +7,13 @@ import {
     Timer,
     ListTodo,
     Clock,
-    Settings,
     Sparkles,
     Shield,
     Palette,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react";
-import type { Folder, TaskStatus } from "../../types";
+import type { Folder } from "../../types";
 
 interface SidebarProps {
     folders?: Folder[];
@@ -24,6 +25,8 @@ interface SidebarProps {
         running: number;
         queued: number;
     };
+    isCollapsed?: boolean;
+    onToggleCollapse?: () => void;
 }
 
 const defaultFolders: Folder[] = [
@@ -32,15 +35,75 @@ const defaultFolders: Folder[] = [
     { id: "3", path: "~/Projects", name: "Projects", accessType: "full-access" },
 ];
 
+const folderIcons: Record<string, React.ReactNode> = {
+    Documents: <FolderOpen className="size-4 shrink-0" />,
+    Downloads: <Download className="size-4 shrink-0" />,
+    Projects: <FileCode className="size-4 shrink-0" />,
+};
+
 export function Sidebar({
     folders = defaultFolders,
     onFolderSelect,
     onNavigate,
     activeSection = "tasks",
     taskCounts = { completed: 0, running: 0, queued: 0 },
+    isCollapsed = false,
+    onToggleCollapse,
 }: SidebarProps) {
+    if (isCollapsed) {
+        return (
+            <aside className="hidden lg:flex flex-col w-14 h-full border-r border-border bg-sidebar items-center py-3 gap-2">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onPress={onToggleCollapse}
+                    aria-label="Expand sidebar"
+                    className="mb-2"
+                >
+                    <ChevronRight className="size-4" />
+                </Button>
+
+                {/* Collapsed icons */}
+                <div className="flex flex-col gap-1">
+                    {folders.map((folder) => (
+                        <Button
+                            key={folder.id}
+                            variant="ghost"
+                            size="sm"
+                            onPress={() => onFolderSelect?.(folder)}
+                            aria-label={folder.name}
+                        >
+                            {folderIcons[folder.name] || <FolderOpen className="size-4" />}
+                        </Button>
+                    ))}
+                </div>
+
+                <Separator className="my-2 w-8" />
+
+                <Button variant="ghost" size="sm" onPress={() => onNavigate?.("running")} aria-label="Running tasks">
+                    <Timer className="size-4 text-blue-500" />
+                </Button>
+                <Button variant="ghost" size="sm" onPress={() => onNavigate?.("completed")} aria-label="Completed tasks">
+                    <CheckCircle2 className="size-4 text-green-500" />
+                </Button>
+            </aside>
+        );
+    }
+
     return (
-        <aside className="flex flex-col w-56 h-full border-r border-border bg-sidebar">
+        <aside className="hidden lg:flex flex-col w-56 xl:w-64 h-full border-r border-border bg-sidebar transition-all duration-200">
+            {/* Collapse button */}
+            <div className="flex justify-end p-2 border-b border-border">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onPress={onToggleCollapse}
+                    aria-label="Collapse sidebar"
+                >
+                    <ChevronLeft className="size-4" />
+                </Button>
+            </div>
+
             <div className="flex-1 overflow-y-auto p-3 space-y-4">
                 {/* Folders Section */}
                 <section>
@@ -62,12 +125,7 @@ export function Sidebar({
                         {folders.map((folder) => (
                             <ListBox.Item key={folder.id} id={folder.id} textValue={folder.name}>
                                 <div className="flex items-center gap-2">
-                                    {folder.name === "Documents" && <FolderOpen className="size-4" />}
-                                    {folder.name === "Downloads" && <Download className="size-4" />}
-                                    {folder.name === "Projects" && <FileCode className="size-4" />}
-                                    {!["Documents", "Downloads", "Projects"].includes(folder.name) && (
-                                        <FolderOpen className="size-4" />
-                                    )}
+                                    {folderIcons[folder.name] || <FolderOpen className="size-4" />}
                                     <span className="truncate">{folder.name}</span>
                                 </div>
                             </ListBox.Item>
@@ -97,22 +155,22 @@ export function Sidebar({
                         <ListBox.Item id="completed" textValue="Completed">
                             <div className="flex items-center justify-between w-full">
                                 <div className="flex items-center gap-2">
-                                    <CheckCircle2 className="size-4 text-green-500" />
+                                    <CheckCircle2 className="size-4 text-green-500 shrink-0" />
                                     <span>Completed</span>
                                 </div>
                                 {taskCounts.completed > 0 && (
-                                    <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{taskCounts.completed}</span>
+                                    <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full">{taskCounts.completed}</span>
                                 )}
                             </div>
                         </ListBox.Item>
                         <ListBox.Item id="running" textValue="Running">
                             <div className="flex items-center justify-between w-full">
                                 <div className="flex items-center gap-2">
-                                    <Timer className="size-4 text-blue-500" />
+                                    <Timer className="size-4 text-blue-500 shrink-0" />
                                     <span>Running</span>
                                 </div>
                                 {taskCounts.running > 0 && (
-                                    <span className="text-xs bg-blue-500/20 text-blue-500 px-1.5 py-0.5 rounded">
+                                    <span className="text-xs bg-blue-500/20 text-blue-500 px-1.5 py-0.5 rounded-full">
                                         {taskCounts.running}
                                     </span>
                                 )}
@@ -121,11 +179,11 @@ export function Sidebar({
                         <ListBox.Item id="queued" textValue="Queued">
                             <div className="flex items-center justify-between w-full">
                                 <div className="flex items-center gap-2">
-                                    <ListTodo className="size-4 text-orange-500" />
+                                    <ListTodo className="size-4 text-orange-500 shrink-0" />
                                     <span>Queued</span>
                                 </div>
                                 {taskCounts.queued > 0 && (
-                                    <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{taskCounts.queued}</span>
+                                    <span className="text-xs bg-muted px-1.5 py-0.5 rounded-full">{taskCounts.queued}</span>
                                 )}
                             </div>
                         </ListBox.Item>
@@ -142,7 +200,7 @@ export function Sidebar({
                     <ListBox aria-label="History" className="mt-2" selectionMode="single">
                         <ListBox.Item id="history-7d" textValue="Last 7 days">
                             <div className="flex items-center gap-2">
-                                <Clock className="size-4" />
+                                <Clock className="size-4 shrink-0" />
                                 <span>Last 7 days</span>
                             </div>
                         </ListBox.Item>
@@ -159,19 +217,19 @@ export function Sidebar({
                     <ListBox aria-label="Settings" className="mt-2" selectionMode="single">
                         <ListBox.Item id="ai-provider" textValue="AI Provider">
                             <div className="flex items-center gap-2">
-                                <Sparkles className="size-4" />
+                                <Sparkles className="size-4 shrink-0" />
                                 <span>AI Provider</span>
                             </div>
                         </ListBox.Item>
                         <ListBox.Item id="permissions" textValue="Permissions">
                             <div className="flex items-center gap-2">
-                                <Shield className="size-4" />
+                                <Shield className="size-4 shrink-0" />
                                 <span>Permissions</span>
                             </div>
                         </ListBox.Item>
                         <ListBox.Item id="appearance" textValue="Appearance">
                             <div className="flex items-center gap-2">
-                                <Palette className="size-4" />
+                                <Palette className="size-4 shrink-0" />
                                 <span>Appearance</span>
                             </div>
                         </ListBox.Item>

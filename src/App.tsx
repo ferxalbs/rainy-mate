@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { MainLayout, TaskInput, TaskCard, FileTable } from "./components";
-import { Card, Label, Separator } from "@heroui/react";
-import { Zap } from "lucide-react";
+import { Card, Separator } from "@heroui/react";
+import { Zap, CheckCircle2, ListTodo } from "lucide-react";
 import type { Task, ProviderType, Folder, FileChange } from "./types";
 
 // Generate unique IDs
@@ -9,13 +9,13 @@ const generateId = () => Math.random().toString(36).substring(2, 11);
 
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [activeSection, setActiveSection] = useState("tasks");
+  const [activeSection, setActiveSection] = useState("running");
   const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
 
   // Calculate task counts for sidebar
   const taskCounts = {
     completed: tasks.filter((t) => t.status === "completed").length,
-    running: tasks.filter((t) => t.status === "running").length,
+    running: tasks.filter((t) => t.status === "running" || t.status === "paused").length,
     queued: tasks.filter((t) => t.status === "queued").length,
   };
 
@@ -34,8 +34,6 @@ function App() {
     };
 
     setTasks((prev) => [newTask, ...prev]);
-
-    // Simulate task progress
     simulateTaskProgress(newTask.id);
   }, []);
 
@@ -108,7 +106,7 @@ function App() {
   }, []);
 
   // Filter tasks based on active section
-  const getFilteredTasks = () => {
+  const getDisplayTasks = () => {
     switch (activeSection) {
       case "completed":
         return tasks.filter((t) => t.status === "completed");
@@ -121,8 +119,12 @@ function App() {
     }
   };
 
-  const filteredTasks = getFilteredTasks();
-  const activeTasks = tasks.filter((t) => t.status === "running" || t.status === "paused");
+  const displayTasks = getDisplayTasks();
+  const sectionTitle = {
+    running: { icon: <Zap className="size-5 text-blue-500 shrink-0" />, label: "Active Tasks" },
+    completed: { icon: <CheckCircle2 className="size-5 text-green-500 shrink-0" />, label: "Completed Tasks" },
+    queued: { icon: <ListTodo className="size-5 text-orange-500 shrink-0" />, label: "Queued Tasks" },
+  }[activeSection] || { icon: <Zap className="size-5 text-blue-500 shrink-0" />, label: "Tasks" };
 
   return (
     <MainLayout
@@ -131,21 +133,22 @@ function App() {
       activeSection={activeSection}
       taskCounts={taskCounts}
     >
-      <div className="max-w-3xl mx-auto space-y-8">
+      <div className="space-y-6 sm:space-y-8">
         {/* Task Input Section */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <TaskInput onSubmit={handleTaskSubmit} />
         </Card>
 
-        {/* Active Tasks Section */}
-        {activeTasks.length > 0 && (
+        {/* Tasks Section */}
+        {displayTasks.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center gap-2">
-              <Zap className="size-5 text-blue-500" />
-              <Label className="text-lg font-semibold">Active Tasks</Label>
+              {sectionTitle.icon}
+              <h2 className="text-lg font-semibold">{sectionTitle.label}</h2>
+              <span className="text-sm text-muted-foreground">({displayTasks.length})</span>
             </div>
             <div className="space-y-3">
-              {activeTasks.map((task) => (
+              {displayTasks.map((task) => (
                 <TaskCard
                   key={task.id}
                   task={task}
@@ -158,22 +161,34 @@ function App() {
         )}
 
         {/* Divider */}
-        {activeTasks.length > 0 && fileChanges.length > 0 && <Separator />}
+        {displayTasks.length > 0 && fileChanges.length > 0 && <Separator />}
 
         {/* File Changes Section */}
         {fileChanges.length > 0 && <FileTable changes={fileChanges} />}
 
         {/* Empty State */}
         {tasks.length === 0 && (
-          <Card variant="transparent" className="p-8 text-center">
-            <div className="space-y-2">
+          <Card variant="transparent" className="p-6 sm:p-8 text-center">
+            <div className="space-y-3">
+              <div className="size-16 mx-auto bg-muted rounded-full flex items-center justify-center">
+                <Zap className="size-8 text-muted-foreground" />
+              </div>
               <p className="text-lg font-medium text-muted-foreground">
                 No tasks yet
               </p>
-              <p className="text-sm text-muted-foreground">
-                Type a task above to get started with your AI assistant
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                Type a task above to get started with your AI assistant. Press ⌘+Enter to submit quickly.
               </p>
             </div>
+          </Card>
+        )}
+
+        {/* Empty section state */}
+        {tasks.length > 0 && displayTasks.length === 0 && (
+          <Card variant="transparent" className="p-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              No {activeSection} tasks
+            </p>
           </Card>
         )}
       </div>

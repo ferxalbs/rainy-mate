@@ -31,28 +31,28 @@ export function TaskInput({ onSubmit, isLoading = false }: TaskInputProps) {
     return (
         <div className="space-y-4">
             <div className="flex items-center gap-2">
-                <Sparkles className="size-5 text-primary" />
+                <Sparkles className="size-5 text-primary shrink-0" />
                 <h2 className="text-lg font-semibold">New Task</h2>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
                 <TextArea
                     value={taskDescription}
                     onChange={(e) => setTaskDescription(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="What would you like me to do? (⌘+Enter to submit)"
-                    className="min-h-[120px] w-full"
+                    className="min-h-[100px] sm:min-h-[120px] w-full"
                     disabled={isLoading}
                     rows={4}
                     aria-label="Task description"
                 />
 
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
                     <div className="flex items-center gap-2">
-                        <Label className="text-sm text-muted-foreground">AI Provider:</Label>
+                        <Label className="text-sm text-muted-foreground whitespace-nowrap">AI Provider:</Label>
                         <Select
                             aria-label="Select AI Provider"
-                            className="w-48"
+                            className="w-full sm:w-48"
                             placeholder="Select provider"
                             selectedKey={selectedProvider}
                             onSelectionChange={(key) => setSelectedProvider(key as ProviderType)}
@@ -72,7 +72,7 @@ export function TaskInput({ onSubmit, isLoading = false }: TaskInputProps) {
                                             textValue={provider.name}
                                         >
                                             <div className="flex flex-col">
-                                                <span>{provider.name}</span>
+                                                <span className="font-medium">{provider.name}</span>
                                                 <span className="text-xs text-muted-foreground">{provider.model}</span>
                                             </div>
                                             <ListBox.ItemIndicator />
@@ -88,6 +88,7 @@ export function TaskInput({ onSubmit, isLoading = false }: TaskInputProps) {
                         size="md"
                         onPress={handleSubmit}
                         isDisabled={!taskDescription.trim() || isLoading}
+                        className="w-full sm:w-auto"
                     >
                         <Play className="size-4" />
                         Start Task
