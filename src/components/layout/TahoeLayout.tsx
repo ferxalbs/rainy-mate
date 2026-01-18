@@ -8,6 +8,7 @@ interface TahoeLayoutProps {
     children: ReactNode;
     onFolderSelect?: (folder: Folder) => void;
     onNavigate?: (section: string) => void;
+    onSettingsClick?: () => void;
     activeSection?: string;
     taskCounts?: {
         completed: number;
@@ -20,6 +21,7 @@ export function TahoeLayout({
     children,
     onFolderSelect,
     onNavigate,
+    onSettingsClick,
     activeSection,
     taskCounts,
 }: TahoeLayoutProps) {
@@ -71,7 +73,7 @@ export function TahoeLayout({
                     </div>
 
                     {/* Settings */}
-                    <Button variant="ghost" size="sm" aria-label="Settings">
+                    <Button variant="ghost" size="sm" aria-label="Settings" onPress={onSettingsClick}>
                         <Settings className="size-4" />
                     </Button>
 
