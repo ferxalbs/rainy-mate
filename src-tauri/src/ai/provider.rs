@@ -3,7 +3,6 @@
 
 use crate::ai::{gemini::GeminiProvider, keychain::KeychainManager, rainy_api::RainyApiProvider};
 use crate::models::{AIProviderConfig, ProviderType};
-use async_trait::async_trait;
 
 /// Error type for AI operations
 #[derive(Debug, thiserror::Error)]
@@ -18,32 +17,6 @@ pub enum AIError {
     ModelNotFound(String),
     #[error("Provider not available: {0}")]
     ProviderNotAvailable(String),
-}
-
-/// Trait for AI providers (for future extensibility)
-#[async_trait]
-pub trait AIProvider: Send + Sync {
-    /// Get provider name
-    fn name(&self) -> &str;
-
-    /// Get available models
-    fn available_models(&self) -> Vec<String>;
-
-    /// Complete a prompt (non-streaming)
-    async fn complete(&self, model: &str, prompt: &str) -> Result<String, AIError>;
-
-    /// Complete with progress callback
-    async fn complete_with_progress<F>(
-        &self,
-        model: &str,
-        prompt: &str,
-        on_progress: F,
-    ) -> Result<String, AIError>
-    where
-        F: Fn(u8, Option<String>) + Send + Sync + 'static;
-
-    /// Validate an API key
-    async fn validate_key(&self, api_key: &str) -> Result<bool, AIError>;
 }
 
 /// Manager for AI providers
