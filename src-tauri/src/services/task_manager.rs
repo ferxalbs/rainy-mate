@@ -6,15 +6,16 @@ use crate::models::{Task, TaskEvent, TaskStatus};
 use dashmap::DashMap;
 use std::sync::Arc;
 use tauri::ipc::Channel;
+use tokio::sync::Mutex;
 
 /// Task manager for orchestrating AI task execution
 pub struct TaskManager {
     tasks: DashMap<String, Task>,
-    ai_provider: Arc<AIProviderManager>,
+    ai_provider: Arc<Mutex<AIProviderManager>>,
 }
 
 impl TaskManager {
-    pub fn new(ai_provider: Arc<AIProviderManager>) -> Self {
+    pub fn new(ai_provider: Arc<Mutex<AIProviderManager>>) -> Self {
         Self {
             tasks: DashMap::new(),
             ai_provider,
@@ -59,21 +60,21 @@ impl TaskManager {
             })
             .map_err(|e| e.to_string())?;
 
-        // Execute the task using AI provider
+        // Execute the task using AI provider (acquire lock)
         let task_id_for_closure = task_id.to_string();
-        let result = self
-            .ai_provider
-            .execute_prompt(
-                &task.provider,
-                &task.model,
-                &task.description,
-                move |progress, _message| {
-                    // Progress callback - we can't use the channel here easily
-                    // due to lifetime constraints, so we'll handle progress differently
-                    tracing::debug!("Task {} progress: {}%", task_id_for_closure, progress);
-                },
-            )
-            .await;
+        let result = {
+            let mut provider = self.ai_provider.lock().await;
+            provider
+                .execute_prompt(
+                    &task.provider,
+                    &task.model,
+                    &task.description,
+                    move |progress, _message| {
+                        tracing::debug!("Task {} progress: {}%", task_id_for_closure, progress);
+                    },
+                )
+                .await
+        };
 
         // Update task status based on result
         match result {
