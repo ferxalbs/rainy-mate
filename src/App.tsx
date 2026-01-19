@@ -26,6 +26,7 @@ function App() {
   const {
     folders: userFolders,
     addFolder,
+    refreshFolders,
   } = useFolderManager();
 
   // Convert UserFolder to Folder type for sidebar
@@ -37,6 +38,7 @@ function App() {
   }));
 
   const [activeSection, setActiveSection] = useState("running");
+  const [activeFolder, setActiveFolder] = useState<Folder | null>(null);
   const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -119,11 +121,15 @@ function App() {
   const handleFolderSelect = useCallback(async (folder: Folder) => {
     try {
       await tauri.setWorkspace(folder.path, folder.name);
+      await tauri.updateFolderAccess(folder.id);
+      setActiveFolder(folder);
+      // Refresh folders to get new ordering (most recent first)
+      refreshFolders();
       console.log("Workspace set:", folder);
     } catch (err) {
       console.error('Failed to set workspace:', err);
     }
-  }, []);
+  }, [refreshFolders]);
 
   // Handle navigation
   const handleNavigate = useCallback((section: string) => {
@@ -173,6 +179,8 @@ function App() {
     <>
       <TahoeLayout
         folders={folders}
+        activeFolderId={activeFolder?.id}
+        workspacePath={activeFolder?.path}
         onFolderSelect={handleFolderSelect}
         onAddFolder={addFolder}
         onNavigate={handleNavigate}

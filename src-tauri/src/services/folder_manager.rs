@@ -77,12 +77,14 @@ impl FolderManager {
             }
         }
 
+        let now = Utc::now();
         let folder = UserFolder {
             id: Uuid::new_v4().to_string(),
             path,
             name,
             access_type,
-            added_at: Utc::now(),
+            added_at: now,
+            last_accessed: now,
         };
 
         // Add and persist
@@ -95,9 +97,25 @@ impl FolderManager {
         Ok(folder)
     }
 
-    /// List all user folders
+    /// List all user folders (sorted by last accessed, most recent first)
     pub async fn list_folders(&self) -> Vec<UserFolder> {
-        self.folders.read().await.clone()
+        let mut folders = self.folders.read().await.clone();
+        folders.sort_by(|a, b| b.last_accessed.cmp(&a.last_accessed));
+        folders
+    }
+
+    /// Update last accessed timestamp for a folder
+    pub async fn update_last_accessed(&self, id: &str) -> Result<(), String> {
+        {
+            let mut folders = self.folders.write().await;
+            if let Some(folder) = folders.iter_mut().find(|f| f.id == id) {
+                folder.last_accessed = Utc::now();
+            } else {
+                return Err(format!("Folder not found: {}", id));
+            }
+        }
+        self.persist().await?;
+        Ok(())
     }
 
     /// Remove a folder by ID

@@ -123,6 +123,7 @@ pub fn run() {
             commands::add_user_folder,
             commands::list_user_folders,
             commands::remove_user_folder,
+            commands::update_folder_access,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

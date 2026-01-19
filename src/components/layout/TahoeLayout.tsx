@@ -1,12 +1,14 @@
 import { ReactNode, useState, useEffect } from "react";
 import { FloatingSidebar } from "./FloatingSidebar";
 import { Button, Avatar, Switch } from "@heroui/react";
-import { Settings, Moon, Sun, Maximize2, Minus, X } from "lucide-react";
+import { Settings, Moon, Sun, Maximize2, Minus, X, FolderOpen } from "lucide-react";
 import type { Folder } from "../../types";
 
 interface TahoeLayoutProps {
     children: ReactNode;
     folders?: Folder[];
+    activeFolderId?: string;
+    workspacePath?: string;
     onFolderSelect?: (folder: Folder) => void;
     onAddFolder?: () => void;
     onNavigate?: (section: string) => void;
@@ -22,6 +24,8 @@ interface TahoeLayoutProps {
 export function TahoeLayout({
     children,
     folders,
+    activeFolderId,
+    workspacePath,
     onFolderSelect,
     onAddFolder,
     onNavigate,
@@ -108,6 +112,7 @@ export function TahoeLayout({
                 {/* Floating Sidebar */}
                 <FloatingSidebar
                     folders={folders}
+                    activeFolderId={activeFolderId}
                     onFolderSelect={onFolderSelect}
                     onAddFolder={onAddFolder}
                     onNavigate={onNavigate}
@@ -118,6 +123,19 @@ export function TahoeLayout({
                 {/* Main Content - Glass Surface */}
                 <main className="flex-1 overflow-y-auto p-6 rounded-3xl bg-white/70 dark:bg-black/20 backdrop-blur-2xl backdrop-saturate-150 shadow-2xl border border-white/20 dark:border-white/10">
                     <div className="max-w-3xl mx-auto select-text">
+                        {/* Workspace Title */}
+                        {workspacePath && (
+                            <div className="flex items-center gap-2 mb-6 pb-4 border-b border-border/50">
+                                <FolderOpen className="size-5 text-primary" />
+                                <h1 className="text-lg font-semibold">
+                                    Rainy Cowork
+                                    <span className="text-muted-foreground font-normal"> in </span>
+                                    <span className="text-foreground/80 font-mono text-sm bg-muted/50 px-2 py-0.5 rounded">
+                                        {workspacePath}
+                                    </span>
+                                </h1>
+                            </div>
+                        )}
                         {children}
                     </div>
                 </main>

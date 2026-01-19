@@ -33,3 +33,12 @@ pub async fn remove_user_folder(
 ) -> Result<(), String> {
     folder_manager.remove_folder(&id).await
 }
+
+/// Update last accessed timestamp for a folder
+#[tauri::command]
+pub async fn update_folder_access(
+    id: String,
+    folder_manager: State<'_, FolderManager>,
+) -> Result<(), String> {
+    folder_manager.update_last_accessed(&id).await
+}

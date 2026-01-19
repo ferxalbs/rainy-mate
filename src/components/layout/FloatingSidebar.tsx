@@ -20,6 +20,7 @@ import type { Folder } from "../../types";
 
 interface FloatingSidebarProps {
     folders?: Folder[];
+    activeFolderId?: string;
     onFolderSelect?: (folder: Folder) => void;
     onNavigate?: (section: string) => void;
     activeSection?: string;
@@ -39,6 +40,7 @@ const defaultFolders: Folder[] = [
 
 export function FloatingSidebar({
     folders = defaultFolders,
+    activeFolderId,
     onFolderSelect,
     onNavigate,
     activeSection = "running",
@@ -84,6 +86,7 @@ export function FloatingSidebar({
                                 key={folder.id}
                                 icon={getFolderIcon(folder.name)}
                                 label={folder.name}
+                                isActive={folder.id === activeFolderId}
                                 onClick={() => onFolderSelect?.(folder)}
                             />
                         ))}

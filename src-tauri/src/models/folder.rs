@@ -13,6 +13,7 @@ pub struct UserFolder {
     pub name: String,
     pub access_type: FolderAccess,
     pub added_at: DateTime<Utc>,
+    pub last_accessed: DateTime<Utc>,
 }
 
 /// Folder access level (used for UI display)

@@ -232,6 +232,7 @@ export interface UserFolder {
     name: string;
     accessType: FolderAccess;
     addedAt: string;
+    lastAccessed: string;
 }
 
 // ============ User Folder Commands ============
@@ -246,4 +247,8 @@ export async function listUserFolders(): Promise<UserFolder[]> {
 
 export async function removeUserFolder(id: string): Promise<void> {
     return invoke<void>('remove_user_folder', { id });
+}
+
+export async function updateFolderAccess(id: string): Promise<void> {
+    return invoke<void>('update_folder_access', { id });
 }
