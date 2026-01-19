@@ -6,7 +6,9 @@ import type { Folder } from "../../types";
 
 interface TahoeLayoutProps {
     children: ReactNode;
+    folders?: Folder[];
     onFolderSelect?: (folder: Folder) => void;
+    onAddFolder?: () => void;
     onNavigate?: (section: string) => void;
     onSettingsClick?: () => void;
     activeSection?: string;
@@ -19,7 +21,9 @@ interface TahoeLayoutProps {
 
 export function TahoeLayout({
     children,
+    folders,
     onFolderSelect,
+    onAddFolder,
     onNavigate,
     onSettingsClick,
     activeSection,
@@ -103,7 +107,9 @@ export function TahoeLayout({
             <div className="flex flex-1 p-3 gap-3 overflow-hidden">
                 {/* Floating Sidebar */}
                 <FloatingSidebar
+                    folders={folders}
                     onFolderSelect={onFolderSelect}
+                    onAddFolder={onAddFolder}
                     onNavigate={onNavigate}
                     activeSection={activeSection}
                     taskCounts={taskCounts}

@@ -4,6 +4,7 @@
 pub mod ai;
 pub mod document;
 pub mod file;
+pub mod folder;
 pub mod image;
 pub mod task;
 pub mod web;
@@ -11,6 +12,7 @@ pub mod web;
 pub use ai::*;
 pub use document::*;
 pub use file::*;
+pub use folder::*;
 pub use image::*;
 pub use task::*;
 pub use web::*;

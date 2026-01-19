@@ -1,6 +1,8 @@
 // Rainy Cowork - Data Models
 // Core data structures for tasks, files, and AI providers
 
+pub mod folder;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

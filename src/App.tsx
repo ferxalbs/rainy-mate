@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { TahoeLayout, TaskInput, TaskCard, FileTable, SettingsPanel, AIDocumentPanel, AIResearchPanel } from "./components";
 import { Separator, Button } from "@heroui/react";
 import { Zap, CheckCircle2, ListTodo, Settings, AlertCircle, FileText, Search } from "lucide-react";
-import { useTauriTask, useAIProvider } from "./hooks";
+import { useTauriTask, useAIProvider, useFolderManager } from "./hooks";
 import type { Task, ProviderType, Folder, FileChange } from "./types";
 import * as tauri from "./services/tauri";
 
@@ -21,6 +21,20 @@ function App() {
   } = useTauriTask();
 
   const { hasApiKey, refreshProviders } = useAIProvider();
+
+  // Folder management hook
+  const {
+    folders: userFolders,
+    addFolder,
+  } = useFolderManager();
+
+  // Convert UserFolder to Folder type for sidebar
+  const folders: Folder[] = userFolders.map(uf => ({
+    id: uf.id,
+    path: uf.path,
+    name: uf.name,
+    accessType: uf.accessType,
+  }));
 
   const [activeSection, setActiveSection] = useState("running");
   const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
@@ -158,7 +172,9 @@ function App() {
   return (
     <>
       <TahoeLayout
+        folders={folders}
         onFolderSelect={handleFolderSelect}
+        onAddFolder={addFolder}
         onNavigate={handleNavigate}
         onSettingsClick={handleSettingsClick}
         activeSection={activeSection}

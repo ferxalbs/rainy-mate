@@ -8,7 +8,9 @@ mod models;
 mod services;
 
 use ai::AIProviderManager;
-use services::{DocumentService, FileManager, ImageService, TaskManager, WebResearchService};
+use services::{
+    DocumentService, FileManager, FolderManager, ImageService, TaskManager, WebResearchService,
+};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -32,6 +34,9 @@ pub fn run() {
     // Initialize image service
     let image_service = ImageService::new();
 
+    // Initialize folder manager (requires app handle for data dir)
+    // We'll initialize it in setup since we need the app handle
+
     tauri::Builder::default()
         // Plugins
         .plugin(tauri_plugin_opener::init())
@@ -45,6 +50,30 @@ pub fn run() {
         .manage(document_service)
         .manage(image_service)
         .manage(ai_provider) // Arc<Mutex<AIProviderManager>>
+        .setup(|app| {
+            use tauri::Manager;
+
+            // Initialize folder manager with app data dir
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir");
+            let folder_manager = FolderManager::new(app_data_dir);
+
+            // Manage the folder manager state
+            app.manage(folder_manager);
+
+            // Initialize folder manager in background
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let fm = app_handle.state::<FolderManager>();
+                if let Err(e) = fm.init().await {
+                    tracing::error!("Failed to init folder manager: {}", e);
+                }
+            });
+
+            Ok(())
+        })
         // Commands
         .invoke_handler(tauri::generate_handler![
             // Task commands
@@ -90,6 +119,10 @@ pub fn run() {
             commands::generate_thumbnail,
             commands::get_image_dimensions,
             commands::is_image_supported,
+            // Folder commands
+            commands::add_user_folder,
+            commands::list_user_folders,
+            commands::remove_user_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

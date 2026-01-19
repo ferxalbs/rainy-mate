@@ -221,3 +221,29 @@ export async function rollbackFile(versionId: string): Promise<void> {
 export async function listFileChanges(taskId?: string): Promise<FileChange[]> {
     return invoke<FileChange[]>('list_file_changes', { taskId });
 }
+
+// ============ User Folder Types ============
+
+export type FolderAccess = 'read-only' | 'full-access';
+
+export interface UserFolder {
+    id: string;
+    path: string;
+    name: string;
+    accessType: FolderAccess;
+    addedAt: string;
+}
+
+// ============ User Folder Commands ============
+
+export async function addUserFolder(path: string, name: string): Promise<UserFolder> {
+    return invoke<UserFolder>('add_user_folder', { path, name });
+}
+
+export async function listUserFolders(): Promise<UserFolder[]> {
+    return invoke<UserFolder[]>('list_user_folders');
+}
+
+export async function removeUserFolder(id: string): Promise<void> {
+    return invoke<void>('remove_user_folder', { id });
+}
