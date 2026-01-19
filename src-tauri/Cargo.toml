@@ -28,7 +28,7 @@ serde_json = "1.0.149"
 tokio = { version = "1.49.0", features = ["full"] }
 reqwest = { version = "0.13.1", features = ["json", "stream"] }
 async-trait = "0.1.89"
-rainy-sdk = { version = "0.4.3", features = ["rate-limiting", "tracing", "cowork"] }
+rainy-sdk = { version = "0.5.0", features = ["rate-limiting", "tracing", "cowork"] }
 dashmap = "6.1.0"
 uuid = { version = "1.19.0", features = ["v4"] }
 chrono = { version = "0.4.43", features = ["serde"] }
