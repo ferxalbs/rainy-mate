@@ -274,14 +274,9 @@ impl CoworkAgent {
 
         // Try Rainy API first if user has paid plan
         if caps.plan.is_paid() && caps.can_make_request() {
-            // Try with the best available model
-            let preferred_model = if caps.can_use_model("gpt-4o") {
-                "gpt-4o"
-            } else if caps.can_use_model("gpt-4o-mini") {
-                "gpt-4o-mini"
-            } else {
-                "gpt-4o-mini" // Default fallback
-            };
+            // Use the first available model from SDK's caps.models (already prioritized by tier)
+            // The SDK returns models in order of quality/preference
+            let preferred_model = caps.models.first().map(|s| s.as_str()).unwrap_or("gpt-4o"); // Fallback if models list is empty
 
             match provider
                 .execute_prompt(&ProviderType::RainyApi, preferred_model, prompt, |_, _| {})
@@ -304,8 +299,9 @@ impl CoworkAgent {
             }
         }
 
-        // Fallback to Gemini (free tier)
-        let gemini_model = "gemini-2.5-flash";
+        // Fallback to Gemini (free tier) - Use high-quality model for best results
+        // Free tier models: gemini-3-flash-minimal, gemini-3-flash-high, gemini-2.5-flash-lite
+        let gemini_model = "gemini-3-flash-high"; // Best quality for complex file operations
         let response = provider
             .execute_prompt(&ProviderType::Gemini, gemini_model, prompt, |_, _| {})
             .await

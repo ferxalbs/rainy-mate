@@ -24,7 +24,14 @@ impl Default for ThinkingLevel {
     }
 }
 
-/// Gemini provider - for users with their own Google API key
+/// Gemini provider - for users with their own Google API key (BYOK)
+///
+/// **Free Tier Models (Gemini BYOK)**:
+/// - `gemini-3-flash-minimal` - Fast responses with minimal thinking
+/// - `gemini-3-flash-high` - Deep reasoning for complex tasks
+/// - `gemini-2.5-flash-lite` - Lightweight, fast responses
+///
+/// All other models require Rainy API subscription.
 pub struct GeminiProvider {
     client: Client,
 }
@@ -36,15 +43,50 @@ impl GeminiProvider {
         }
     }
 
-    /// Get available Gemini model IDs
+    /// Get available Gemini model IDs for free tier (BYOK)
+    ///
+    /// Only 3 models are available for free users with their own Gemini API key:
+    /// - Gemini 3 Flash with Minimal thinking (fast)
+    /// - Gemini 3 Flash with High thinking (accurate)
+    /// - Gemini 2.5 Flash Lite (lightweight)
+    ///
+    /// All other models (GPT-4o, GPT-5, Claude, Gemini Pro, etc.) require Rainy API.
     pub fn available_models(&self) -> Vec<String> {
         vec![
-            "gemini-3-pro-preview".to_string(),
-            "gemini-3-flash-preview".to_string(),
-            "gemini-2.5-pro".to_string(),
-            "gemini-2.5-flash".to_string(),
+            "gemini-3-flash-minimal".to_string(),
+            "gemini-3-flash-high".to_string(),
             "gemini-2.5-flash-lite".to_string(),
         ]
+    }
+
+    /// Map user-friendly model names to actual API model IDs
+    fn get_api_model_id(&self, model: &str) -> &'static str {
+        match model {
+            "gemini-3-flash-minimal" => "gemini-3-flash-preview",
+            "gemini-3-flash-high" => "gemini-3-flash-preview",
+            "gemini-2.5-flash-lite" => "gemini-2.5-flash-lite",
+            // Unknown models - use high-quality default
+            _ => "gemini-3-flash-preview",
+        }
+    }
+
+    /// Get thinking configuration based on model variant
+    fn get_thinking_config(&self, model: &str) -> Option<ThinkingConfig> {
+        match model {
+            "gemini-3-flash-minimal" => Some(ThinkingConfig {
+                thinking_level: Some(ThinkingLevel::Minimal),
+                thinking_budget: None,
+            }),
+            "gemini-3-flash-high" => Some(ThinkingConfig {
+                thinking_level: Some(ThinkingLevel::High),
+                thinking_budget: None,
+            }),
+            "gemini-2.5-flash-lite" => Some(ThinkingConfig {
+                thinking_level: None,
+                thinking_budget: Some(0), // Disable thinking for lite
+            }),
+            _ => None,
+        }
     }
 
     /// Validate API key against Gemini API
@@ -72,26 +114,13 @@ impl GeminiProvider {
     {
         on_progress(10, Some("Preparing Gemini request...".to_string()));
 
-        // Build thinking config based on model type
-        let generation_config = if model.starts_with("gemini-3") {
-            // Gemini 3 uses thinkingLevel - default to high for best reasoning
-            Some(GenerationConfig {
-                thinking_config: Some(ThinkingConfig {
-                    thinking_level: Some(ThinkingLevel::High),
-                    thinking_budget: None,
-                }),
-            })
-        } else if model.starts_with("gemini-2.5") {
-            // Gemini 2.5 uses thinkingBudget (-1 for dynamic)
-            Some(GenerationConfig {
-                thinking_config: Some(ThinkingConfig {
-                    thinking_level: None,
-                    thinking_budget: Some(-1),
-                }),
-            })
-        } else {
-            None
-        };
+        // Get actual API model ID and thinking config for the variant
+        let api_model_id = self.get_api_model_id(model);
+        let thinking_config = self.get_thinking_config(model);
+
+        let generation_config = thinking_config.map(|tc| GenerationConfig {
+            thinking_config: Some(tc),
+        });
 
         let request_body = GeminiRequest {
             contents: vec![GeminiContent {
@@ -106,7 +135,7 @@ impl GeminiProvider {
 
         let url = format!(
             "{}/models/{}:generateContent?key={}",
-            GEMINI_API_BASE_URL, model, api_key
+            GEMINI_API_BASE_URL, api_model_id, api_key
         );
 
         let response = self
