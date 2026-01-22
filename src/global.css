@@ -56,14 +56,14 @@
   --radius: 16px;
 
   /* Base - Warm pink/rose tint like Tahoe */
-  --background: oklch(0.94 0.01 20);
-  --foreground: oklch(0.20 0.02 20);
+  --background: oklch(0.98 0.005 20); /* Lighter background for better contrast */
+  --foreground: oklch(0.15 0.02 20);  /* Darker text for readability */
 
   /* Card & Surface - White with subtle warmth */
-  --card: oklch(0.99 0.005 20);
-  --card-foreground: oklch(0.20 0.02 20);
-  --popover: oklch(0.99 0.005 20);
-  --popover-foreground: oklch(0.20 0.02 20);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.02 20);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.02 20);
 
   /* Primary - macOS Blue */
   --primary: oklch(0.55 0.22 255);
@@ -71,30 +71,31 @@
 
   /* Secondary - Subtle warm gray */
   --secondary: oklch(0.96 0.005 20);
-  --secondary-foreground: oklch(0.25 0.02 20);
+  --secondary-foreground: oklch(0.20 0.02 20);
 
   /* Muted - Soft rose gray */
-  --muted: oklch(0.92 0.008 20);
-  --muted-foreground: oklch(0.45 0.02 20);
+  --muted: oklch(0.94 0.005 20);
+  --muted-foreground: oklch(0.40 0.02 20); /* Darker for better text visibility */
 
-  /* Accent */
-  --accent: oklch(0.95 0.01 255);
-  --accent-foreground: oklch(0.25 0.02 20);
+  /* Accent - Vibrant Blue/Purple for visibility */
+  --accent: oklch(0.55 0.22 255); /* Matches primary for consistency in light mode */
+  --accent-foreground: oklch(1 0 0);
 
   /* Destructive */
   --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
 
-  /* Borders & Input - Very subtle */
-  --border: oklch(0.88 0.01 20);
-  --input: oklch(0.92 0.008 20);
+  /* Borders & Input - Visible but subtle */
+  --border: oklch(0.90 0.01 20);
+  --input: oklch(0.90 0.01 20);
   --ring: oklch(0.55 0.22 255);
 
-  /* Sidebar - Semi-transparent white */
-  --sidebar: oklch(0.99 0.003 20 / 85%);
-  --sidebar-foreground: oklch(0.20 0.02 20);
+  /* Sidebar - Slightly off-white */
+  --sidebar: oklch(0.98 0.003 20);
+  --sidebar-foreground: oklch(0.15 0.02 20);
   --sidebar-primary: oklch(0.55 0.22 255);
-  --sidebar-accent: oklch(0.94 0.01 255);
-  --sidebar-border: oklch(0.90 0.01 20 / 50%);
+  --sidebar-accent: oklch(0.94 0.01 20);
+  --sidebar-border: oklch(0.90 0.01 20);
 
   /* Floating elements */
   --floating-shadow: 0 8px 32px oklch(0.20 0.02 20 / 12%),
@@ -107,52 +108,53 @@
    DARK THEME - macOS Tahoe Dark
    ============================================ */
 .dark {
-  /* Base - Deep charcoal */
-  --background: oklch(0.14 0.01 260);
-  --foreground: oklch(0.95 0 0);
+  /* Base - Deep charcoal/slate (Better contrast than pitch black) */
+  --background: oklch(0.12 0.01 260);
+  --foreground: oklch(0.98 0.005 260); /* Brighter white */
 
-  /* Card & Surface */
-  --card: oklch(0.20 0.01 260);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.22 0.01 260);
-  --popover-foreground: oklch(0.95 0 0);
+  /* Card & Surface - Slightly lighter than background */
+  --card: oklch(0.16 0.01 260); /* Clearly distinguished card surface */
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.16 0.01 260);
+  --popover-foreground: oklch(0.98 0 0);
 
-  /* Primary - macOS Blue (brighter for dark) */
+  /* Primary - macOS Blue (Vibrant) */
   --primary: oklch(0.65 0.20 255);
   --primary-foreground: oklch(1 0 0);
 
   /* Secondary */
-  --secondary: oklch(0.24 0.01 260);
-  --secondary-foreground: oklch(0.95 0 0);
+  --secondary: oklch(0.22 0.01 260);
+  --secondary-foreground: oklch(0.98 0 0);
 
-  /* Muted */
+  /* Muted - Distinct from background */
   --muted: oklch(0.22 0.01 260);
-  --muted-foreground: oklch(0.60 0 0);
+  --muted-foreground: oklch(0.70 0.01 260); /* MUCH Lighter for readability */
 
-  /* Accent */
-  --accent: oklch(0.28 0.02 255);
-  --accent-foreground: oklch(0.95 0 0);
+  /* Accent - Vibrant Blue/Purple (Visible against dark) */
+  --accent: oklch(0.65 0.20 255); /* Bright enough for text, rich enough for bg */
+  --accent-foreground: oklch(1 0 0);
 
   /* Destructive */
   --destructive: oklch(0.60 0.20 25);
+  --destructive-foreground: oklch(1 0 0);
 
   /* Borders & Input */
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 10%);
+  --border: oklch(0.30 0.01 260); /* Visible borders */
+  --input: oklch(0.30 0.01 260);  /* Visible input boundaries */
   --ring: oklch(0.65 0.20 255);
 
   /* Sidebar - Translucent dark */
-  --sidebar: oklch(0.18 0.01 260 / 80%);
-  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar: oklch(0.14 0.01 260 / 95%); /* Less transparent for clarity */
+  --sidebar-foreground: oklch(0.98 0 0);
   --sidebar-primary: oklch(0.65 0.20 255);
-  --sidebar-accent: oklch(0.28 0.02 255);
-  --sidebar-border: oklch(1 0 0 / 6%);
+  --sidebar-accent: oklch(0.22 0.01 260);
+  --sidebar-border: oklch(0.30 0.01 260);
 
   /* Floating elements */
-  --floating-shadow: 0 8px 32px oklch(0 0 0 / 40%),
-    0 2px 8px oklch(0 0 0 / 30%);
-  --floating-shadow-lg: 0 12px 48px oklch(0 0 0 / 50%),
-    0 4px 16px oklch(0 0 0 / 35%);
+  --floating-shadow: 0 8px 32px oklch(0 0 0 / 60%),
+    0 2px 8px oklch(0 0 0 / 40%);
+  --floating-shadow-lg: 0 12px 48px oklch(0 0 0 / 70%),
+    0 4px 16px oklch(0 0 0 / 50%);
 }
 
 /* ============================================
