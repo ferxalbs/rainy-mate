@@ -1,7 +1,7 @@
 // Theme System Types
 export type ThemeMode = 'light' | 'dark';
 
-export type ThemeName = 
+export type ThemeName =
   | 'cosmic-gold'
   | 'cosmic-night'
   | 'jujutsu-kaisen'
@@ -45,7 +45,9 @@ export interface ThemeColors {
   sidebarBorder: string;
 }
 
+
 export interface ThemeConfig {
   theme: ThemeName;
   mode: ThemeMode;
+  enableAnimations: boolean;
 }

@@ -1,4 +1,5 @@
 import { ReactNode, useState, useEffect } from "react";
+import { BackgroundManager } from "../backgrounds/BackgroundManager";
 import { FloatingSidebar } from "./FloatingSidebar";
 import { Button, Avatar, Switch } from "@heroui/react";
 import { Settings, Moon, Sun, Maximize2, Minus, X, FolderOpen } from "lucide-react";
@@ -50,7 +51,8 @@ export function TahoeLayout({
     };
 
     return (
-        <div className="flex flex-col h-screen bg-background overflow-hidden">
+        <div className="flex flex-col h-screen bg-background overflow-hidden relative">
+            <BackgroundManager />
             {/* Drag region - covers top area for window movement */}
             <div
                 data-tauri-drag-region

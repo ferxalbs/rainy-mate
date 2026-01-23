@@ -9,9 +9,11 @@ const MODE_STORAGE_KEY = 'rainy-cowork-mode';
 interface ThemeContextType {
     theme: ThemeName;
     mode: ThemeMode;
+    enableAnimations: boolean;
     config: ThemeConfig;
     setTheme: (theme: ThemeName) => void;
     setMode: (mode: ThemeMode) => void;
+    setEnableAnimations: (enable: boolean) => void;
     toggleMode: () => void;
     themes: Theme[];
 }
@@ -27,9 +29,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const [mode, setModeState] = useState<ThemeMode>(() => {
         const stored = localStorage.getItem(MODE_STORAGE_KEY);
         if (stored === 'light' || stored === 'dark') return stored;
-
-        // Auto-detect system preference
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    });
+
+    const [enableAnimations, setEnableAnimationsState] = useState<boolean>(() => {
+        const stored = localStorage.getItem('rainy-cowork-animations');
+        // Default to false as per user request
+        return stored === 'true';
     });
 
     // Apply theme to document
@@ -87,18 +93,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setModeState(newMode);
     }, []);
 
+    const setEnableAnimations = useCallback((enable: boolean) => {
+        setEnableAnimationsState(enable);
+        localStorage.setItem('rainy-cowork-animations', String(enable));
+    }, []);
+
     const toggleMode = useCallback(() => {
         setModeState(prev => prev === 'light' ? 'dark' : 'light');
     }, []);
 
-    const config: ThemeConfig = { theme, mode };
+    const config: ThemeConfig = { theme, mode, enableAnimations };
 
     const value = {
         theme,
         mode,
+        enableAnimations,
         config,
         setTheme,
         setMode,
+        setEnableAnimations,
         toggleMode,
         themes: Object.values(themes),
     };
