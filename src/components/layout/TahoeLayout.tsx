@@ -169,7 +169,7 @@ export function TahoeLayout({
         </div>
 
         {/* Main Content - Transparent Surface with offset */}
-        <main className="flex-1 overflow-hidden w-full h-full relative pl-6">
+        <main className="flex-1 overflow-hidden w-full h-full relative pl-6 pr-6">
           <div className="w-full h-full select-text">{children}</div>
         </main>
       </div>

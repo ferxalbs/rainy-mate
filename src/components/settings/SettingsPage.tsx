@@ -876,7 +876,7 @@ export function SettingsPage({
 
             {/* Premium Animations Group */}
             {/* Premium Animations Group */}
-            <div className="space-y-6 px-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium flex items-center gap-2">
@@ -917,7 +917,7 @@ export function SettingsPage({
 
           {/* Permissions Tab */}
           <Tabs.Panel id="permissions" className="space-y-4">
-            <Card className="p-4 space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="font-medium">Notifications</Label>
@@ -947,7 +947,7 @@ export function SettingsPage({
                   </Switch.Control>
                 </Switch>
               </div>
-            </Card>
+            </div>
           </Tabs.Panel>
         </Tabs>
       </div>
