@@ -1,4 +1,4 @@
-import { Button, Card } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { Sun, Moon, Sparkles, Check } from "lucide-react";
 import { useTheme } from "../../hooks/useTheme";
 import type { ThemeName } from "../../types/theme";
@@ -157,10 +157,10 @@ export function ThemeSelector() {
           colors adapt perfectly to {mode} mode.
         </p>
         <div className="flex gap-2">
-          <Button variant="solid" color="primary" size="sm">
+          <Button variant="primary" size="sm">
             Primary
           </Button>
-          <Button variant="faded" color="secondary" size="sm">
+          <Button variant="secondary" size="sm">
             Secondary
           </Button>
           <Button variant="ghost" size="sm">

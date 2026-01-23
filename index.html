@@ -1,39 +1,73 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta
+      name="theme-color"
+      content="#007AFF"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#0A84FF"
+      media="(prefers-color-scheme: dark)"
+    />
+    <title>Rainy Cowork - AI Workspace Agent</title>
 
-<head>
-  <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="theme-color" content="#007AFF" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#0A84FF" media="(prefers-color-scheme: dark)" />
-  <title>Rainy Cowork - AI Workspace Agent</title>
+    <!-- Preload system fonts for faster rendering -->
+    <style>
+      /* SF Pro fallback - uses system fonts on macOS */
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans",
+          "Helvetica Neue", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
 
-  <!-- Preload system fonts for faster rendering -->
-  <style>
-    /* SF Pro fallback - uses system fonts on macOS */
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
-        'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
-        'Helvetica Neue', sans-serif;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
+      code,
+      pre,
+      .font-mono {
+        font-family:
+          "SF Mono", Monaco, Menlo, "Ubuntu Mono", Consolas, "Courier New",
+          monospace;
+      }
+    </style>
+  </head>
 
-    code,
-    pre,
-    .font-mono {
-      font-family: 'SF Mono', Monaco, Menlo, 'Ubuntu Mono', Consolas,
-        'Courier New', monospace;
-    }
-  </style>
-</head>
+  <body>
+    <!-- Instant Theme Application - Runs BEFORE React -->
+    <script>
+      (function () {
+        const THEME_KEY = "rainy-cowork-theme";
+        const MODE_KEY = "rainy-cowork-mode";
 
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-</body>
+        // Get stored mode or detect system preference
+        const storedMode = localStorage.getItem(MODE_KEY);
+        const mode =
+          storedMode ||
+          (window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light");
 
+        // Apply dark class immediately to prevent flash
+        if (mode === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+
+        // Get stored theme for CSS variable preload
+        const theme = localStorage.getItem(THEME_KEY) || "cosmic-gold";
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
