@@ -1,9 +1,23 @@
 import { useState, useCallback, useEffect } from "react";
-import { TahoeLayout, TaskCard, SettingsPanel, AIDocumentPanel, AIResearchPanel } from "./components";
+import {
+  TahoeLayout,
+  TaskCard,
+  SettingsPanel,
+  AIDocumentPanel,
+  AIResearchPanel,
+} from "./components";
 import { SettingsPage } from "./components/settings";
 import { CoworkPanel } from "./components/cowork";
 import { Button, Card } from "@heroui/react";
-import { Zap, CheckCircle2, ListTodo, AlertCircle, FileText, Search, FolderPlus } from "lucide-react";
+import {
+  Zap,
+  CheckCircle2,
+  ListTodo,
+  AlertCircle,
+  FileText,
+  Search,
+  FolderPlus,
+} from "lucide-react";
 import { useTauriTask, useAIProvider, useFolderManager } from "./hooks";
 import type { Task, Folder } from "./types";
 import * as tauri from "./services/tauri";
@@ -16,7 +30,7 @@ function App() {
     pauseTask,
     resumeTask,
     cancelTask,
-    refreshTasks
+    refreshTasks,
   } = useTauriTask();
 
   const { refreshProviders } = useAIProvider();
@@ -29,7 +43,7 @@ function App() {
   } = useFolderManager();
 
   // Convert UserFolder to Folder type for sidebar
-  const folders: Folder[] = userFolders.map(uf => ({
+  const folders: Folder[] = userFolders.map((uf) => ({
     id: uf.id,
     path: uf.path,
     name: uf.name,
@@ -50,48 +64,59 @@ function App() {
   // Calculate task counts for sidebar
   const taskCounts = {
     completed: tasks.filter((t) => t.status === "completed").length,
-    running: tasks.filter((t) => t.status === "running" || t.status === "paused").length,
+    running: tasks.filter(
+      (t) => t.status === "running" || t.status === "paused",
+    ).length,
     queued: tasks.filter((t) => t.status === "queued").length,
   };
 
   // Handle task pause
-  const handleTaskPause = useCallback(async (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
+  const handleTaskPause = useCallback(
+    async (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
 
-    try {
-      if (task.status === 'paused') {
-        await resumeTask(taskId);
-      } else {
-        await pauseTask(taskId);
+      try {
+        if (task.status === "paused") {
+          await resumeTask(taskId);
+        } else {
+          await pauseTask(taskId);
+        }
+      } catch (err) {
+        console.error("Failed to pause/resume task:", err);
       }
-    } catch (err) {
-      console.error('Failed to pause/resume task:', err);
-    }
-  }, [tasks, pauseTask, resumeTask]);
+    },
+    [tasks, pauseTask, resumeTask],
+  );
 
   // Handle task stop
-  const handleTaskStop = useCallback(async (taskId: string) => {
-    try {
-      await cancelTask(taskId);
-    } catch (err) {
-      console.error('Failed to cancel task:', err);
-    }
-  }, [cancelTask]);
+  const handleTaskStop = useCallback(
+    async (taskId: string) => {
+      try {
+        await cancelTask(taskId);
+      } catch (err) {
+        console.error("Failed to cancel task:", err);
+      }
+    },
+    [cancelTask],
+  );
 
   // Handle folder selection
-  const handleFolderSelect = useCallback(async (folder: Folder) => {
-    try {
-      await tauri.setWorkspace(folder.path, folder.name);
-      await tauri.updateFolderAccess(folder.id);
-      setActiveFolder(folder);
-      // Refresh folders to get new ordering (most recent first)
-      refreshFolders();
-      console.log("Workspace set:", folder);
-    } catch (err) {
-      console.error('Failed to set workspace:', err);
-    }
-  }, [refreshFolders]);
+  const handleFolderSelect = useCallback(
+    async (folder: Folder) => {
+      try {
+        await tauri.setWorkspace(folder.path, folder.name);
+        await tauri.updateFolderAccess(folder.id);
+        setActiveFolder(folder);
+        // Refresh folders to get new ordering (most recent first)
+        refreshFolders();
+        console.log("Workspace set:", folder);
+      } catch (err) {
+        console.error("Failed to set workspace:", err);
+      }
+    },
+    [refreshFolders],
+  );
 
   // Handle navigation
   const handleNavigate = useCallback((section: string) => {
@@ -109,16 +134,20 @@ function App() {
       case "completed":
         return tasks.filter((t) => t.status === "completed");
       case "running":
-        return tasks.filter((t) => t.status === "running" || t.status === "paused");
+        return tasks.filter(
+          (t) => t.status === "running" || t.status === "paused",
+        );
       case "queued":
         return tasks.filter((t) => t.status === "queued");
       default:
-        return tasks.filter((t) => t.status === "running" || t.status === "paused");
+        return tasks.filter(
+          (t) => t.status === "running" || t.status === "paused",
+        );
     }
   };
 
   // Convert Tauri tasks to local Task type for TaskCard
-  const convertTask = (t: typeof tasks[0]): Task => ({
+  const convertTask = (t: (typeof tasks)[0]): Task => ({
     ...t,
     createdAt: new Date(t.createdAt),
     startedAt: t.startedAt ? new Date(t.startedAt) : undefined,
@@ -127,19 +156,42 @@ function App() {
 
   const displayTasks = getDisplayTasks();
   const sectionTitle = {
-    running: { icon: <Zap className="size-5 text-blue-500 shrink-0" />, label: "Active Tasks" },
-    completed: { icon: <CheckCircle2 className="size-5 text-green-500 shrink-0" />, label: "Completed Tasks" },
-    queued: { icon: <ListTodo className="size-5 text-orange-500 shrink-0" />, label: "Queued Tasks" },
-    documents: { icon: <FileText className="size-5 text-accent shrink-0" />, label: "AI Documents" },
-    research: { icon: <Search className="size-5 text-accent shrink-0" />, label: "AI Research" },
-  }[activeSection] || { icon: <Zap className="size-5 text-blue-500 shrink-0" />, label: "Tasks" };
+    running: {
+      icon: <Zap className="size-5 text-blue-500 shrink-0" />,
+      label: "Active Tasks",
+    },
+    completed: {
+      icon: <CheckCircle2 className="size-5 text-green-500 shrink-0" />,
+      label: "Completed Tasks",
+    },
+    queued: {
+      icon: <ListTodo className="size-5 text-orange-500 shrink-0" />,
+      label: "Queued Tasks",
+    },
+    documents: {
+      icon: <FileText className="size-5 text-accent shrink-0" />,
+      label: "AI Documents",
+    },
+    research: {
+      icon: <Search className="size-5 text-accent shrink-0" />,
+      label: "AI Research",
+    },
+  }[activeSection] || {
+    icon: <Zap className="size-5 text-blue-500 shrink-0" />,
+    label: "Tasks",
+  };
 
   // Check if we're in AI Studio section
-  const isAIStudioSection = activeSection === 'documents' || activeSection === 'research' || activeSection === 'cowork';
+  const isAIStudioSection =
+    activeSection === "documents" ||
+    activeSection === "research" ||
+    activeSection === "cowork";
 
   // Check if we're in Settings section
-  const isSettingsSection = activeSection.startsWith('settings-');
-  const settingsTab = isSettingsSection ? activeSection.replace('settings-', '') : 'models';
+  const isSettingsSection = activeSection.startsWith("settings-");
+  const settingsTab = isSettingsSection
+    ? activeSection.replace("settings-", "")
+    : "models";
 
   return (
     <>
@@ -176,7 +228,7 @@ function App() {
           )}
 
           {/* AI Studio Sections - Require active folder */}
-          {activeSection === 'documents' && (
+          {activeSection === "documents" && (
             <div className="animate-appear">
               {activeFolder ? (
                 <AIDocumentPanel />
@@ -186,7 +238,7 @@ function App() {
             </div>
           )}
 
-          {activeSection === 'research' && (
+          {activeSection === "research" && (
             <div className="animate-appear">
               {activeFolder ? (
                 <AIResearchPanel />
@@ -196,7 +248,7 @@ function App() {
             </div>
           )}
 
-          {activeSection === 'cowork' && (
+          {activeSection === "cowork" && (
             <div className="animate-appear h-[calc(100vh-120px)]">
               {activeFolder ? (
                 <CoworkPanel workspacePath={activeFolder.path} />
@@ -208,10 +260,10 @@ function App() {
 
           {/* Settings Section */}
           {isSettingsSection && (
-            <div className="animate-appear h-[calc(100vh-120px)]">
+            <div className="animate-appear h-full">
               <SettingsPage
                 initialTab={settingsTab}
-                onBack={() => handleNavigate('running')}
+                onBack={() => handleNavigate("running")}
               />
             </div>
           )}
@@ -225,12 +277,19 @@ function App() {
               ) : (
                 <>
                   {/* Task Queue Sections - Show when Running/Queued/Completed selected */}
-                  {(activeSection === 'running' || activeSection === 'queued' || activeSection === 'completed') && displayTasks.length > 0 ? (
+                  {(activeSection === "running" ||
+                    activeSection === "queued" ||
+                    activeSection === "completed") &&
+                  displayTasks.length > 0 ? (
                     <section className="space-y-4 animate-appear">
                       <div className="flex items-center gap-2 px-1">
                         {sectionTitle.icon}
-                        <h2 className="text-base font-semibold">{sectionTitle.label}</h2>
-                        <span className="text-sm text-muted-foreground">({displayTasks.length})</span>
+                        <h2 className="text-base font-semibold">
+                          {sectionTitle.label}
+                        </h2>
+                        <span className="text-sm text-muted-foreground">
+                          ({displayTasks.length})
+                        </span>
                       </div>
                       <div className="space-y-3">
                         {displayTasks.map((task) => (
@@ -281,8 +340,8 @@ function NoFolderGate({ onAddFolder }: { onAddFolder: () => void }) {
             Select a Project Folder
           </h2>
           <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-            To get started, select a folder where Rainy Cowork will work.
-            All files, documents, and AI-generated content will be saved there.
+            To get started, select a folder where Rainy Cowork will work. All
+            files, documents, and AI-generated content will be saved there.
           </p>
         </div>
         <Button

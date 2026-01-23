@@ -223,7 +223,7 @@ export function SettingsPage({
       </div>
 
       {/* Tabs Content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto">
         <Tabs
           selectedKey={activeTab}
           onSelectionChange={(key) => setActiveTab(key as string)}
@@ -875,8 +875,9 @@ export function SettingsPage({
             <ThemeSelector />
 
             {/* Premium Animations Group */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border/50">
+            {/* Premium Animations Group */}
+            <div className="space-y-6 px-4">
+              <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium flex items-center gap-2">
                     <Sparkles className="size-4 text-primary" />
@@ -898,7 +899,7 @@ export function SettingsPage({
                 </Switch>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border/50">
+              <div className="flex items-center justify-between">
                 <div>
                   <Label className="font-medium">Compact Mode</Label>
                   <p className="text-sm text-muted-foreground">

@@ -153,19 +153,23 @@ export function TahoeLayout({
 
       {/* Main content area */}
       <div className="flex flex-1 overflow-hidden z-10 relative">
-        {/* Floating Sidebar */}
-        <FloatingSidebar
-          folders={folders}
-          activeFolderId={activeFolderId}
-          onFolderSelect={onFolderSelect}
-          onAddFolder={onAddFolder}
-          onNavigate={onNavigate}
-          activeSection={activeSection}
-          taskCounts={taskCounts}
-        />
+        {/* Floating Sidebar with spacing */}
+        <div className="pl-4 py-4 shrink-0 flex flex-col pointer-events-none">
+          <div className="pointer-events-auto h-full">
+            <FloatingSidebar
+              folders={folders}
+              activeFolderId={activeFolderId}
+              onFolderSelect={onFolderSelect}
+              onAddFolder={onAddFolder}
+              onNavigate={onNavigate}
+              activeSection={activeSection}
+              taskCounts={taskCounts}
+            />
+          </div>
+        </div>
 
-        {/* Main Content - Transparent Surface */}
-        <main className="flex-1 overflow-hidden w-full h-full relative">
+        {/* Main Content - Transparent Surface with offset */}
+        <main className="flex-1 overflow-hidden w-full h-full relative pl-6">
           <div className="w-full h-full select-text">{children}</div>
         </main>
       </div>
