@@ -61,7 +61,7 @@ export function FloatingSidebar({
   };
 
   return (
-    <aside className="w-52 h-fit max-h-[calc(100vh-48px)] overflow-y-auto overflow-x-hidden select-none rounded-2xl bg-sidebar/60 dark:bg-sidebar/40 backdrop-blur-xl backdrop-saturate-150 shadow-lg border border-sidebar-border/50 animate-sidebar">
+    <aside className="w-52 h-fit max-h-[calc(100vh-48px)] overflow-y-auto overflow-x-hidden select-none rounded-2xl bg-sidebar/20 dark:bg-black/10 backdrop-blur-2xl backdrop-saturate-200 shadow-2xl border border-white/10 dark:border-white/5 animate-sidebar">
       {/* Folders Section */}
       <div className="p-2">
         <SectionHeader

@@ -152,7 +152,7 @@ export function TahoeLayout({
       </header>
 
       {/* Main content area */}
-      <div className="flex flex-1 p-3 gap-3 overflow-hidden z-10 relative">
+      <div className="flex flex-1 overflow-hidden z-10 relative">
         {/* Floating Sidebar */}
         <FloatingSidebar
           folders={folders}
@@ -165,8 +165,8 @@ export function TahoeLayout({
         />
 
         {/* Main Content - Transparent Surface */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-3xl mx-auto select-text">{children}</div>
+        <main className="flex-1 overflow-hidden w-full h-full relative">
+          <div className="w-full h-full select-text">{children}</div>
         </main>
       </div>
     </div>

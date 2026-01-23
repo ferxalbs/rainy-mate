@@ -874,7 +874,8 @@ export function SettingsPage({
           <Tabs.Panel id="appearance" className="space-y-4">
             <ThemeSelector />
 
-            <Card className="p-4 space-y-4">
+            {/* Premium Animations Group */}
+            <div className="space-y-3">
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border/50">
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium flex items-center gap-2">
@@ -897,7 +898,7 @@ export function SettingsPage({
                 </Switch>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border/50">
                 <div>
                   <Label className="font-medium">Compact Mode</Label>
                   <p className="text-sm text-muted-foreground">
@@ -910,7 +911,7 @@ export function SettingsPage({
                   </Switch.Control>
                 </Switch>
               </div>
-            </Card>
+            </div>
           </Tabs.Panel>
 
           {/* Permissions Tab */}
