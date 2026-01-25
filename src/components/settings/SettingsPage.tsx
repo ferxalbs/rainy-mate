@@ -28,6 +28,8 @@ import {
   Trash2,
   ExternalLink,
   Zap,
+  Palette,
+  Shield,
 } from "lucide-react";
 import * as tauri from "../../services/tauri";
 import {
@@ -295,12 +297,51 @@ export function SettingsPage({
             className="w-full"
           >
             <Tabs.List className="mb-4 bg-muted/50 p-1 rounded-xl gap-1 backdrop-blur-xl border border-border/30">
-              {/* ... (Tabs remain same) ... */}
-              <Tabs.Tab id="models">Models</Tabs.Tab>
-              <Tabs.Tab id="keys">API Keys</Tabs.Tab>
-              <Tabs.Tab id="subscription">Subscription</Tabs.Tab>
-              <Tabs.Tab id="appearance">Appearance</Tabs.Tab>
-              <Tabs.Tab id="permissions">Permissions</Tabs.Tab>
+              <Tabs.Tab
+                id="models"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground data-[selected=true]:text-foreground data-[selected=true]:bg-background data-[selected=true]:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background"
+              >
+                <div className="flex items-center gap-2">
+                  <Bot className="size-4" />
+                  AI Models
+                </div>
+              </Tabs.Tab>
+              <Tabs.Tab
+                id="keys"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground data-[selected=true]:text-foreground data-[selected=true]:bg-background data-[selected=true]:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background"
+              >
+                <div className="flex items-center gap-2">
+                  <Key className="size-4" />
+                  API Keys
+                </div>
+              </Tabs.Tab>
+              <Tabs.Tab
+                id="subscription"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground data-[selected=true]:text-foreground data-[selected=true]:bg-background data-[selected=true]:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background"
+              >
+                <div className="flex items-center gap-2">
+                  <CreditCard className="size-4" />
+                  Subscription
+                </div>
+              </Tabs.Tab>
+              <Tabs.Tab
+                id="appearance"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground data-[selected=true]:text-foreground data-[selected=true]:bg-background data-[selected=true]:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background"
+              >
+                <div className="flex items-center gap-2">
+                  <Palette className="size-4" />
+                  Appearance
+                </div>
+              </Tabs.Tab>
+              <Tabs.Tab
+                id="permissions"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground data-[selected=true]:text-foreground data-[selected=true]:bg-background data-[selected=true]:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="size-4" />
+                  Permissions
+                </div>
+              </Tabs.Tab>
             </Tabs.List>
 
             {/* Models Tab */}
