@@ -251,7 +251,10 @@ function App() {
           {activeSection === "cowork" && (
             <div className="animate-appear h-[calc(100vh-120px)]">
               {activeFolder ? (
-                <CoworkPanel workspacePath={activeFolder.path} />
+                <CoworkPanel
+                  workspacePath={activeFolder.path}
+                  onOpenSettings={() => setSettingsOpen(true)}
+                />
               ) : (
                 <NoFolderGate onAddFolder={addFolder} />
               )}
@@ -305,7 +308,10 @@ function App() {
                   ) : (
                     /* CoworkPanel - Central Default View */
                     <div className="animate-appear h-[calc(100vh-120px)]">
-                      <CoworkPanel workspacePath={activeFolder.path} />
+                      <CoworkPanel
+                        workspacePath={activeFolder.path}
+                        onOpenSettings={() => setSettingsOpen(true)}
+                      />
                     </div>
                   )}
                 </>

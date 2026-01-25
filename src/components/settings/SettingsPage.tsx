@@ -71,6 +71,7 @@ export function SettingsPage({
     isLoading: coworkLoading,
     status: coworkStatus,
     refresh: refreshCowork,
+    error: coworkError,
   } = useCoworkStatus();
 
   // Cowork billing and API keys
@@ -589,6 +590,14 @@ export function SettingsPage({
 
             {/* Subscription Tab */}
             <Tabs.Panel id="subscription" className="space-y-6">
+              {/* Error Banner */}
+              {coworkError && (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-center gap-2">
+                  <Shield className="size-4" />
+                  <span>Failed to load subscription: {coworkError}</span>
+                </div>
+              )}
+
               {/* Current Plan & Usage */}
               <div className="p-4 rounded-xl border bg-muted/50 border-border/50">
                 <div className="space-y-4">

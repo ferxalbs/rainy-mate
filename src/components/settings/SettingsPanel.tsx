@@ -46,6 +46,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     isLoading: coworkLoading,
     status: coworkStatus,
     refresh: refreshCowork,
+    error: coworkError,
   } = useCoworkStatus();
 
   const [activeTab, setActiveTab] = useState("providers");
@@ -65,16 +66,12 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     setValidationStatus((prev) => ({ ...prev, [provider]: "idle" }));
   };
 
-  const [validationError, setValidationError] = useState<
-    Record<string, string>
-  >({});
 
   const handleValidateKey = async (provider: ProviderType) => {
     const key = apiKeyInputs[provider];
     if (!key?.trim()) return;
 
     setValidationStatus((prev) => ({ ...prev, [provider]: "validating" }));
-    setValidationError((prev) => ({ ...prev, [provider]: "" }));
 
     try {
       const providerId = getProviderId(provider);
@@ -82,10 +79,6 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       setValidationStatus((prev) => ({ ...prev, [provider]: "valid" }));
     } catch (error) {
       setValidationStatus((prev) => ({ ...prev, [provider]: "invalid" }));
-      setValidationError((prev) => ({
-        ...prev,
-        [provider]: error instanceof Error ? error.message : String(error),
-      }));
     }
   };
 
@@ -167,6 +160,12 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
 
                 {/* Subscription Tab */}
                 <Tabs.Panel id="subscription" className="pt-4 space-y-4">
+                  {coworkError && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex items-center gap-2">
+                      <Zap className="size-3" />
+                      <span>Failed to load: {coworkError}</span>
+                    </div>
+                  )}
                   <Card className="p-4">
                     <div className="space-y-4">
                       {/* Plan Header */}

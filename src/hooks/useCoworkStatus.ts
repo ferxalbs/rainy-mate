@@ -87,7 +87,7 @@ export function useCoworkStatus(): UseCoworkStatusResult {
 
     // Computed values
     const hasPaidPlan = status?.has_paid_plan ?? false;
-    const plan = status?.plan ?? 'free';
+    const plan = (status?.plan ?? 'free') as CoworkPlan;
     const planName = status?.plan_name ?? 'Free';
     const isValid = status?.is_valid ?? true;
 

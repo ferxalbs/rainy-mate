@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 // API base URL - in Tauri we call through the backend
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.enosislabs.com';
 
 export interface CoworkApiKey {
     id: string;
