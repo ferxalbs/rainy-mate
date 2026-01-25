@@ -70,8 +70,9 @@ export function useAIProvider(): UseAIProviderResult {
         try {
             return await tauri.validateApiKey(provider, apiKey);
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-            return false;
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
         }
     }, []);
 

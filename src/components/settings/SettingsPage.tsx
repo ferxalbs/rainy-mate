@@ -158,21 +158,30 @@ export function SettingsPage({
     setValidationStatus((prev) => ({ ...prev, [provider]: "idle" }));
   };
 
+  const [validationError, setValidationError] = useState<
+    Record<string, string>
+  >({});
+
   const handleValidateKey = async (provider: ProviderType) => {
     const key = apiKeyInputs[provider];
     if (!key?.trim()) return;
 
     setValidationStatus((prev) => ({ ...prev, [provider]: "validating" }));
+    setValidationError((prev) => ({ ...prev, [provider]: "" }));
 
     try {
       const providerId = getProviderId(provider);
-      const isValid = await validateApiKey(providerId, key);
+      await validateApiKey(providerId, key);
       setValidationStatus((prev) => ({
         ...prev,
-        [provider]: isValid ? "valid" : "invalid",
+        [provider]: "valid",
       }));
-    } catch {
+    } catch (error) {
       setValidationStatus((prev) => ({ ...prev, [provider]: "invalid" }));
+      setValidationError((prev) => ({
+        ...prev,
+        [provider]: error instanceof Error ? error.message : String(error),
+      }));
     }
   };
 
@@ -546,9 +555,16 @@ export function SettingsPage({
                             </p>
                           )}
                           {status === "invalid" && (
-                            <p className="text-xs text-red-600 flex items-center gap-1">
-                              <X className="size-3" /> Invalid API key
-                            </p>
+                            <div className="flex flex-col gap-1">
+                              <p className="text-xs text-red-600 flex items-center gap-1">
+                                <X className="size-3" /> Invalid API key
+                              </p>
+                              {validationError[provider.id] && (
+                                <p className="text-xs text-red-500/80 pl-4">
+                                  {validationError[provider.id]}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
                       ) : (

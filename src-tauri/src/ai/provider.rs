@@ -181,23 +181,21 @@ impl AIProviderManager {
         match provider {
             "rainy_api" => {
                 // Validate generic Rainy API key
-                match RainyClient::with_api_key(api_key) {
-                    Ok(client) => match client.list_available_models().await {
-                        Ok(_) => Ok(true),
-                        Err(_) => Ok(false),
-                    },
-                    Err(_) => Ok(false),
-                }
+                let client = RainyClient::with_api_key(api_key).map_err(|e| e.to_string())?;
+                client
+                    .list_available_models()
+                    .await
+                    .map(|_| true)
+                    .map_err(|e| e.to_string())
             }
             "cowork_api" => {
                 // Validate Cowork key and profile
-                match RainyClient::with_api_key(api_key) {
-                    Ok(client) => match client.get_cowork_profile().await {
-                        Ok(_) => Ok(true),
-                        Err(_) => Ok(false),
-                    },
-                    Err(_) => Ok(false),
-                }
+                let client = RainyClient::with_api_key(api_key).map_err(|e| e.to_string())?;
+                client
+                    .get_cowork_profile()
+                    .await
+                    .map(|_| true)
+                    .map_err(|e| e.to_string())
             }
             "gemini" => self
                 .gemini

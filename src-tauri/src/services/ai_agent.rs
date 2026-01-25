@@ -279,12 +279,22 @@ impl CoworkAgent {
         // Check capabilities (refresh if needed)
         let caps = provider.get_capabilities().await;
 
+        tracing::info!(
+            "AI Agent Selection: Model='{}', PlanPaid={}, AvailableCoworkModels={:?}",
+            selected_model,
+            caps.profile.plan.is_paid(),
+            caps.models
+        );
+
         // 1. Try User Selected Model
         // Is it a Cowork model supported by current plan?
-        if caps.profile.plan.is_paid() && caps.models.contains(&selected_model) {
+        // We trust the provider level check to validate the model if the user is paid.
+        // This avoids double-checking and potential string mismatch issues.
+        let trimmed_model = selected_model.trim();
+        if caps.profile.plan.is_paid() {
             if caps.can_make_request() {
                 match provider
-                    .execute_prompt(&ProviderType::CoworkApi, &selected_model, prompt, |_, _| {})
+                    .execute_prompt(&ProviderType::CoworkApi, trimmed_model, prompt, |_, _| {})
                     .await
                 {
                     Ok(response) => {
@@ -292,7 +302,7 @@ impl CoworkAgent {
                             response,
                             ModelInfo {
                                 provider: "Cowork Subscription".to_string(),
-                                model: selected_model,
+                                model: trimmed_model.to_string(),
                                 plan_tier: caps.profile.plan.name.clone(),
                             },
                         ));
