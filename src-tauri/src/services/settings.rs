@@ -112,10 +112,25 @@ impl SettingsManager {
     }
 
     /// Get available models based on user's tier
-    pub fn get_available_models(is_paid: bool, paid_models: &[String]) -> Vec<ModelOption> {
+    pub fn get_available_models(_is_paid: bool, cowork_models: &[String]) -> Vec<ModelOption> {
         let mut models = vec![];
 
-        // Free tier Gemini BYOK models
+        // Cowork Subscription models (available for both free and paid users)
+        // These come from the Rainy API /cowork/models endpoint
+        for model_id in cowork_models {
+            let (name, desc) = Self::get_cowork_model_info(model_id);
+            models.push(ModelOption {
+                id: model_id.clone(),
+                name,
+                description: desc,
+                thinking_level: "n/a".to_string(),
+                is_premium: false, // Available to all users with cowork access
+                is_available: true,
+                provider: "Cowork Subscription".to_string(),
+            });
+        }
+
+        // Free tier Gemini BYOK models (user's own API key)
         models.push(ModelOption {
             id: "gemini-3-flash-minimal".to_string(),
             name: "Gemini 3 Flash (Fast)".to_string(),
@@ -136,59 +151,60 @@ impl SettingsManager {
             provider: "Google Gemini".to_string(),
         });
 
-        models.push(ModelOption {
-            id: "gemini-2.5-flash-lite".to_string(),
-            name: "Gemini 2.5 Flash Lite".to_string(),
-            description: "Lightweight, cost-effective responses".to_string(),
-            thinking_level: "none".to_string(),
-            is_premium: false,
-            is_available: true,
-            provider: "Google Gemini".to_string(),
-        });
-
-        // Premium models from Rainy API
-        if is_paid {
-            for model_id in paid_models {
-                let (name, desc) = Self::get_model_info(model_id);
-                models.push(ModelOption {
-                    id: model_id.clone(),
-                    name,
-                    description: desc,
-                    thinking_level: "n/a".to_string(),
-                    is_premium: true,
-                    is_available: true,
-                    provider: "Rainy API".to_string(),
-                });
-            }
-        } else {
-            // Show locked premium models
-            for (id, name, desc) in [
-                ("gpt-4o", "GPT-4o", "OpenAI's flagship multimodal model"),
-                ("gpt-5", "GPT-5", "OpenAI's most advanced reasoning model"),
-                (
-                    "claude-sonnet-4",
-                    "Claude Sonnet 4",
-                    "Anthropic's balanced model",
-                ),
-                (
-                    "gemini-2.5-pro",
-                    "Gemini 2.5 Pro",
-                    "Google's most capable model",
-                ),
-            ] {
-                models.push(ModelOption {
-                    id: id.to_string(),
-                    name: name.to_string(),
-                    description: desc.to_string(),
-                    thinking_level: "n/a".to_string(),
-                    is_premium: true,
-                    is_available: false,
-                    provider: "Rainy API".to_string(),
-                });
-            }
+        // Premium models from Rainy API (pay-as-you-go)
+        // Show locked premium models for users without paid Rainy API access
+        for (id, name, desc) in [
+            ("gpt-4o", "GPT-4o", "OpenAI's flagship multimodal model"),
+            ("gpt-5", "GPT-5", "OpenAI's most advanced reasoning model"),
+            (
+                "claude-sonnet-4",
+                "Claude Sonnet 4",
+                "Anthropic's balanced model",
+            ),
+            (
+                "gemini-2.5-pro",
+                "Gemini 2.5 Pro",
+                "Google's most capable model",
+            ),
+        ] {
+            models.push(ModelOption {
+                id: id.to_string(),
+                name: name.to_string(),
+                description: desc.to_string(),
+                thinking_level: "n/a".to_string(),
+                is_premium: true,
+                is_available: false, // Locked unless user has rainy_api key
+                provider: "Rainy API".to_string(),
+            });
         }
 
         models
+    }
+
+    fn get_cowork_model_info(model_id: &str) -> (String, String) {
+        match model_id {
+            "gemini-2.5-flash-lite" => (
+                "Gemini 2.5 Flash Lite".to_string(),
+                "Lightweight, cost-effective responses".to_string(),
+            ),
+            "gemini-flash-lite-latest" => (
+                "Gemini Flash Lite".to_string(),
+                "Fast and efficient responses".to_string(),
+            ),
+            "llama-3.1-8b-instant" => (
+                "Llama 3.1 8B Instant".to_string(),
+                "Meta's fast open-source model".to_string(),
+            ),
+            "gemini-3-flash-minimal" => (
+                "Gemini 3 Flash (Minimal)".to_string(),
+                "Fast responses with minimal thinking".to_string(),
+            ),
+            "gemini-3-flash-high" => (
+                "Gemini 3 Flash (High)".to_string(),
+                "Deep reasoning for complex tasks".to_string(),
+            ),
+            _ => (model_id.to_string(), "AI model from Cowork".to_string()),
+        }
     }
 
     fn get_model_info(model_id: &str) -> (String, String) {
@@ -229,7 +245,7 @@ impl SettingsManager {
                 "Gemini 2.5 Flash".to_string(),
                 "Fast multimodal responses".to_string(),
             ),
-            _ => (model_id.to_string(), "AI model".to_string()),
+            _ => (model_id.to_string(), "Premium AI model".to_string()),
         }
     }
 }

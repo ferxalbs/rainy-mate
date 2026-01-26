@@ -101,7 +101,7 @@ export function CoworkPanel({
   ];
 
   // Cowork status for validation
-  const { hasPaidPlan, isLoading: statusLoading } = useCoworkStatus();
+  const { isLoading: statusLoading } = useCoworkStatus();
 
   // AI provider for API key checks
   const { hasApiKey } = useAIProvider();
@@ -109,40 +109,50 @@ export function CoworkPanel({
   // Find the current model in available models to get provider info
   const currentModelInfo = availableModels.find(model => model.id === currentModel);
 
-  // Check if current model is actually available
+  // Check if current model is actually available based on provider and API keys
   const isModelAvailable = useMemo(() => {
     if (!currentModelInfo) return false;
 
-    switch (currentModelInfo.provider) {
-      case "Rainy API":
-        return hasApiKey("rainy_api");
-      case "Cowork Subscription":
-        // Allow Cowork models for both paid and free users (if API key exists)
-        return hasApiKey("cowork_api") || hasApiKey("rainy_api");
-      case "Google Gemini":
-        return hasApiKey("gemini");
-      default:
-        return false;
+    // Strict provider matching to avoid confusion between Cowork and BYOK
+    const provider = currentModelInfo.provider;
+    
+    // Rainy API models (pay-as-you-go, premium models)
+    if (provider === "Rainy API") {
+      return hasApiKey("rainy_api");
     }
-  }, [currentModelInfo, hasPaidPlan, hasApiKey]);
+    
+    // Cowork Subscription models (available for both free and paid plans with API key)
+    if (provider === "Cowork Subscription") {
+      // Cowork models work with either cowork_api or rainy_api key
+      return hasApiKey("cowork_api") || hasApiKey("rainy_api");
+    }
+    
+    // Google Gemini BYOK models (user's own API key)
+    if (provider === "Google Gemini") {
+      return hasApiKey("gemini");
+    }
 
-  // Determine model display logic based on actual provider
-  const isCoworkModel = currentModelInfo?.provider === "Rainy API" || currentModelInfo?.provider === "Cowork Subscription";
-  const isCoworkApiModel = currentModelInfo?.provider === "Cowork Subscription"; // Specifically Cowork API
+    return false;
+  }, [currentModelInfo, hasApiKey]);
+
+  // Determine model type based on provider (strict matching)
+  const isRainyApiModel = currentModelInfo?.provider === "Rainy API";
+  const isCoworkApiModel = currentModelInfo?.provider === "Cowork Subscription";
   const isByokModel = currentModelInfo?.provider === "Google Gemini";
+  
+  // Fallback state: model not available or no model info
   const isFallback = !isModelAvailable && !statusLoading;
 
-  // Display model name - show actual for available Cowork models, fallback for unavailable
-  const modelDisplay = isCoworkApiModel && !isModelAvailable
+  // Display model name
+  const modelDisplay = isFallback
     ? "Gemini Flash (Fallback)"
-    : isFallback
-      ? "Gemini Flash (Fallback)"
-      : currentModelInfo?.name || currentModel || "Loading...";
+    : currentModelInfo?.name || currentModel || "Loading...";
 
-  const isCoworkBadge = isCoworkModel && isModelAvailable && !isCoworkApiModel; // Regular Cowork models
-  const isCoworkApiBadge = isCoworkApiModel && isModelAvailable; // Available Cowork API models
-  const isCoworkApiFallbackBadge = isCoworkApiModel && !isModelAvailable; // Unavailable Cowork API models
+  // Badge states for UI display
+  const isRainyApiBadge = isRainyApiModel && isModelAvailable;
+  const isCoworkApiBadge = isCoworkApiModel && isModelAvailable;
   const isByokBadge = isByokModel && isModelAvailable;
+  const isFallbackBadge = isFallback;
 
   return (
     <div className="flex flex-col h-full bg-neutral-950/50 backdrop-blur-xl rounded-2xl border border-white/10">
@@ -159,28 +169,28 @@ export function CoworkPanel({
             className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border cursor-pointer hover:bg-white/5 transition-colors ${
               isCoworkApiBadge
                 ? "bg-purple-500/10 border-purple-500/30 text-purple-300"
-                : isCoworkApiFallbackBadge
-                  ? "bg-green-500/10 border-green-500/30 text-green-300"
-                  : isFallback
-                    ? "bg-orange-500/10 border-orange-500/30 text-orange-300"
-                    : isCoworkBadge
-                      ? "bg-purple-500/10 border-purple-500/30 text-purple-300"
-                      : isByokBadge
-                        ? "bg-blue-500/10 border-blue-500/30 text-blue-300"
-                        : "bg-gray-500/10 border-gray-500/30 text-gray-300"
+                : isRainyApiBadge
+                  ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-300"
+                  : isByokBadge
+                    ? "bg-blue-500/10 border-blue-500/30 text-blue-300"
+                    : isFallbackBadge
+                      ? "bg-orange-500/10 border-orange-500/30 text-orange-300"
+                      : "bg-gray-500/10 border-gray-500/30 text-gray-300"
             }`}
             onClick={onOpenSettings}
             title={
               isCoworkApiBadge
-                ? "Using Cowork API models"
-                : isCoworkApiFallbackBadge
-                  ? "Cowork API available but showing fallback display"
-                  : isFallback
-                    ? "Subscription required. Using free model fallback."
-                    : "Click to change model in settings"
+                ? "Using Cowork Subscription models (available for free and paid plans)"
+                : isRainyApiBadge
+                  ? "Using Rainy API pay-as-you-go models"
+                  : isByokBadge
+                    ? "Using your own Gemini API key (BYOK)"
+                    : isFallbackBadge
+                      ? "Model not available. Configure API keys in settings."
+                      : "Click to change model in settings"
             }
           >
-            {isCoworkApiFallbackBadge || isFallback ? (
+            {isFallbackBadge ? (
               <AlertCircle className="w-3 h-3" />
             ) : (
               <BrainCircuit className="w-3 h-3" />
@@ -189,7 +199,15 @@ export function CoworkPanel({
               {modelDisplay}
             </span>
             <span className="opacity-60 text-[10px] uppercase tracking-wider">
-              {isCoworkApiBadge ? "COWORK" : isCoworkApiFallbackBadge ? "FREE" : isFallback ? "FREE" : isCoworkBadge ? "COWORK" : isByokBadge ? "BYOK" : "UNKNOWN"}
+              {isCoworkApiBadge 
+                ? "COWORK" 
+                : isRainyApiBadge 
+                  ? "RAINY" 
+                  : isByokBadge 
+                    ? "BYOK" 
+                    : isFallbackBadge 
+                      ? "FALLBACK" 
+                      : "UNKNOWN"}
             </span>
           </div>
         </div>
