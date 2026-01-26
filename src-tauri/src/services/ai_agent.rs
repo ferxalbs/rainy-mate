@@ -290,82 +290,102 @@ impl CoworkAgent {
             caps.profile.plan.name
         );
 
-        // 1. Try User Selected Model
-        // Is it a Cowork model supported by current plan?
-        // We trust the provider level check to validate the model if the user is paid.
-        // This avoids double-checking and potential string mismatch issues.
-        let trimmed_model = selected_model.trim();
+        // Get available models to determine correct provider
+        let available_models = crate::services::settings::SettingsManager::get_available_models(
+            caps.profile.plan.is_paid(),
+            &caps.models,
+        );
+
+        // Find the selected model in available models to get its provider
+        let model_info = available_models.iter().find(|m| m.id == selected_model);
         
-        // Check if we can use Cowork features (any plan with available requests)
-        if caps.can_make_request() {
-            match self.ai_provider
-                .execute_prompt(&ProviderType::CoworkApi, trimmed_model, prompt, |_, _| {})
-                .await
-            {
-                Ok(response) => {
-                    println!("✅ AI Agent: Successfully used Cowork API for model '{}'", trimmed_model);
-                    return Ok((
-                        response,
-                        ModelInfo {
-                            provider: "Cowork Subscription".to_string(),
-                            model: trimmed_model.to_string(),
-                            plan_tier: caps.profile.plan.name.clone(),
-                        },
-                    ));
-                }
-                Err(e) => {
-                    println!("❌ AI Agent: Selected Cowork model failed: {}", e);
-                }
-            }
-        }
-        
-        // Is it a generic Rainy API model? (If key exists)
-        if self.ai_provider.has_api_key("rainy_api").await.unwrap_or(false) {
-            // Rainy API usually supports most models. We try it if the name looks valid or just attempt it.
-            // For safety, we only route known OpenAI/Anthropic style IDs or if it matches "gpt" / "claude"
-            if selected_model.contains("gpt") || selected_model.contains("claude") {
-                match self.ai_provider
-                    .execute_prompt(&ProviderType::RainyApi, &selected_model, prompt, |_, _| {})
-                    .await
-                {
-                    Ok(response) => {
-                        return Ok((
-                            response,
-                            ModelInfo {
-                                provider: "Rainy API".to_string(),
-                                model: selected_model.to_string(),
-                                plan_tier: "Pay-As-You-Go".to_string(),
-                            },
-                        ));
-                    }
-                    Err(e) => {
-                        println!("❌ AI Agent: Selected Rainy API model failed: {}", e);
+        if let Some(model) = model_info {
+            println!("📋 Found model info: provider='{}', name='{}'", model.provider, model.name);
+            
+            // Route to correct provider based on model's provider field
+            match model.provider.as_str() {
+                "Cowork Subscription" => {
+                    // Verify model is in caps.models and we can make requests
+                    if caps.models.contains(&selected_model) && caps.can_make_request() {
+                        match self.ai_provider
+                            .execute_prompt(&ProviderType::CoworkApi, &selected_model, prompt, |_, _| {})
+                            .await
+                        {
+                            Ok(response) => {
+                                println!("✅ AI Agent: Successfully used Cowork API for model '{}'", selected_model);
+                                return Ok((
+                                    response,
+                                    ModelInfo {
+                                        provider: "Cowork Subscription".to_string(),
+                                        model: selected_model.to_string(),
+                                        plan_tier: caps.profile.plan.name.clone(),
+                                    },
+                                ));
+                            }
+                            Err(e) => {
+                                println!("❌ AI Agent: Cowork model '{}' failed: {}", selected_model, e);
+                            }
+                        }
+                    } else {
+                        println!("⚠️ AI Agent: Cowork model '{}' not available in plan or no requests left", selected_model);
                     }
                 }
-            }
-        }
-        // Is it a Gemini BYOK model?
-        else if selected_model.starts_with("gemini")
-            && self.ai_provider.has_api_key("gemini").await.unwrap_or(false)
-        {
-            match self.ai_provider
-                .execute_prompt(&ProviderType::Gemini, &selected_model, prompt, |_, _| {})
-                .await
-            {
-                Ok(response) => {
-                    return Ok((
-                        response,
-                        ModelInfo {
-                            provider: "Google Gemini".to_string(),
-                            model: selected_model.to_string(),
-                            plan_tier: "BYOK".to_string(),
-                        },
-                    ));
+                "Rainy API" => {
+                    if self.ai_provider.has_api_key("rainy_api").await.unwrap_or(false) {
+                        match self.ai_provider
+                            .execute_prompt(&ProviderType::RainyApi, &selected_model, prompt, |_, _| {})
+                            .await
+                        {
+                            Ok(response) => {
+                                println!("✅ AI Agent: Successfully used Rainy API for model '{}'", selected_model);
+                                return Ok((
+                                    response,
+                                    ModelInfo {
+                                        provider: "Rainy API".to_string(),
+                                        model: selected_model.to_string(),
+                                        plan_tier: "Pay-As-You-Go".to_string(),
+                                    },
+                                ));
+                            }
+                            Err(e) => {
+                                println!("❌ AI Agent: Rainy API model '{}' failed: {}", selected_model, e);
+                            }
+                        }
+                    } else {
+                        println!("⚠️ AI Agent: No Rainy API key configured");
+                    }
                 }
-                Err(e) => {
-                    println!("❌ AI Agent: Selected Gemini model failed: {}", e);
+                "Google Gemini" => {
+                    if self.ai_provider.has_api_key("gemini").await.unwrap_or(false) {
+                        match self.ai_provider
+                            .execute_prompt(&ProviderType::Gemini, &selected_model, prompt, |_, _| {})
+                            .await
+                        {
+                            Ok(response) => {
+                                println!("✅ AI Agent: Successfully used Gemini BYOK for model '{}'", selected_model);
+                                return Ok((
+                                    response,
+                                    ModelInfo {
+                                        provider: "Google Gemini".to_string(),
+                                        model: selected_model.to_string(),
+                                        plan_tier: "BYOK".to_string(),
+                                    },
+                                ));
+                            }
+                            Err(e) => {
+                                println!("❌ AI Agent: Gemini BYOK model '{}' failed: {}", selected_model, e);
+                            }
+                        }
+                    } else {
+                        println!("⚠️ AI Agent: No Gemini API key configured");
+                    }
+                }
+                _ => {
+                    println!("⚠️ AI Agent: Unknown provider '{}' for model '{}'", model.provider, selected_model);
                 }
             }
+        } else {
+            println!("⚠️ AI Agent: Selected model '{}' not found in available models", selected_model);
         }
 
         // ============ FALLBACK LOGIC ============
