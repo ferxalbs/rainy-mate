@@ -279,10 +279,12 @@ impl CoworkAgent {
         let caps = self.ai_provider.get_capabilities().await;
 
         tracing::info!(
-            "AI Agent Selection: Model='{}', PlanPaid={}, AvailableCoworkModels={:?}",
+            "AI Agent Selection: Model='{}', PlanPaid={}, AvailableCoworkModels={:?}, CanMakeRequest={}, PlanName='{}'",
             selected_model,
             caps.profile.plan.is_paid(),
-            caps.models
+            caps.models,
+            caps.can_make_request(),
+            caps.profile.plan.name
         );
 
         // 1. Try User Selected Model
@@ -290,30 +292,32 @@ impl CoworkAgent {
         // We trust the provider level check to validate the model if the user is paid.
         // This avoids double-checking and potential string mismatch issues.
         let trimmed_model = selected_model.trim();
-        if caps.profile.plan.is_paid() {
-            if caps.can_make_request() {
-                match self.ai_provider
-                    .execute_prompt(&ProviderType::CoworkApi, trimmed_model, prompt, |_, _| {})
-                    .await
-                {
-                    Ok(response) => {
-                        return Ok((
-                            response,
-                            ModelInfo {
-                                provider: "Cowork Subscription".to_string(),
-                                model: trimmed_model.to_string(),
-                                plan_tier: caps.profile.plan.name.clone(),
-                            },
-                        ));
-                    }
-                    Err(e) => {
-                        tracing::warn!("Selected Cowork model failed, falling back: {}", e);
-                    }
+        
+        // Check if we can use Cowork features (paid plan with available requests)
+        if caps.profile.plan.is_paid() && caps.can_make_request() {
+            match self.ai_provider
+                .execute_prompt(&ProviderType::CoworkApi, trimmed_model, prompt, |_, _| {})
+                .await
+            {
+                Ok(response) => {
+                    tracing::info!("Successfully used Cowork API for model: {}", trimmed_model);
+                    return Ok((
+                        response,
+                        ModelInfo {
+                            provider: "Cowork Subscription".to_string(),
+                            model: trimmed_model.to_string(),
+                            plan_tier: caps.profile.plan.name.clone(),
+                        },
+                    ));
+                }
+                Err(e) => {
+                    tracing::warn!("Selected Cowork model failed, falling back: {}", e);
                 }
             }
         }
+        
         // Is it a generic Rainy API model? (If key exists)
-        else if self.ai_provider.has_api_key("rainy_api").await.unwrap_or(false) {
+        if self.ai_provider.has_api_key("rainy_api").await.unwrap_or(false) {
             // Rainy API usually supports most models. We try it if the name looks valid or just attempt it.
             // For safety, we only route known OpenAI/Anthropic style IDs or if it matches "gpt" / "claude"
             if selected_model.contains("gpt") || selected_model.contains("claude") {

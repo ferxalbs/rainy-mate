@@ -74,8 +74,24 @@ impl AIProviderManager {
 
     /// Get Rainy SDK client for Cowork if API key is configured (with connection pooling)
     async fn get_cowork_client(&self) -> Option<Arc<RainyClient>> {
-        let api_key = self.keychain.get_key("cowork_api").ok()??;
-        self.get_or_create_client("cowork_api", &api_key).await
+        // Try multiple key sources for cowork access:
+        // 1. Dedicated cowork_api key
+        // 2. General rainy_api key (might have cowork subscription)
+        // 3. Any other available key that might work
+        let api_key = self.keychain.get_key("cowork_api")
+            .ok()
+            .flatten()
+            .or_else(|| self.keychain.get_key("rainy_api").ok().flatten());
+        
+        if let Some(key) = api_key {
+            tracing::info!("Using key for cowork client: cowork_api={}, rainy_api={}", 
+                self.keychain.get_key("cowork_api").is_ok_and(|k| k.is_some()),
+                self.keychain.get_key("rainy_api").is_ok_and(|k| k.is_some()));
+            return self.get_or_create_client("cowork_api", &key).await;
+        }
+        
+        tracing::warn!("No suitable API key found for cowork client");
+        None
     }
 
     /// Get or create a pooled RainyClient instance
@@ -122,11 +138,18 @@ impl AIProviderManager {
                     capabilities: caps.clone(),
                     fetched_at: Instant::now(),
                 });
+                tracing::info!("Cowork capabilities loaded successfully: plan={}, paid={}", 
+                    caps.profile.plan.name, caps.profile.plan.is_paid());
                 return caps;
+            } else {
+                tracing::warn!("Failed to fetch cowork capabilities with available key");
             }
+        } else {
+            tracing::warn!("No cowork API key available for capabilities check");
         }
 
         // Fallback to free plan
+        tracing::info!("Using free plan fallback");
         CoworkCapabilities::free()
     }
 
@@ -344,14 +367,20 @@ impl AIProviderManager {
                 // But get_capabilities uses "rainy_api" key in get_rainy_client().
                 // We should separate keys storage.
 
+                // Try cowork_api key first, fallback to rainy_api key (same SDK supports both)
                 let api_key = self
                     .keychain
                     .get_key("cowork_api")
-                    .map_err(|e| e.to_string())?
-                    .ok_or("No Cowork API key found")?;
+                    .ok()
+                    .or_else(|| self.keychain.get_key("rainy_api").ok())
+                    .ok_or_else(|| "No Cowork API key found".to_string())?;
+                
+                tracing::info!("Executing with Cowork API using key: cowork_api={}, rainy_api={}", 
+                    self.keychain.get_key("cowork_api").is_ok_and(|k| k.is_some()),
+                    self.keychain.get_key("rainy_api").is_ok_and(|k| k.is_some()));
 
                 on_progress(10, Some("Connecting to Cowork API...".to_string()));
-                let client = self.get_or_create_client("cowork_api", &api_key).await
+                let client = self.get_or_create_client("cowork_api", api_key.as_ref().unwrap()).await
                     .ok_or("Failed to create Cowork API client")?;
 
                 on_progress(30, Some("Sending request...".to_string()));
