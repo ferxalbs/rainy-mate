@@ -26,15 +26,44 @@ pub async fn create_task(
 #[tauri::command]
 pub async fn set_task_manager_workspace(
     workspace_id: String,
-    workspace_manager: State<'_, crate::services::WorkspaceManager>,
+    folder_manager: State<'_, crate::services::FolderManager>,
     task_manager: State<'_, TaskManager>,
 ) -> Result<(), String> {
-    let uuid = uuid::Uuid::parse_str(&workspace_id)
-        .map_err(|e| format!("Invalid workspace ID: {}", e))?;
+    let folder = folder_manager
+        .get_folder(&workspace_id)
+        .await
+        .ok_or_else(|| format!("Folder not found: {}", workspace_id))?;
 
-    let workspace = workspace_manager
-        .load_workspace(&uuid)
-        .map_err(|e| format!("Failed to load workspace: {}", e))?;
+    // Parse folder ID as UUID
+    let uuid = uuid::Uuid::parse_str(&folder.id)
+        .map_err(|e| format!("Invalid folder ID: {}", e))?;
+
+    // Convert folder to workspace for task manager
+    let workspace = crate::services::workspace::Workspace {
+        id: uuid,
+        name: folder.name,
+        allowed_paths: vec![folder.path.clone()],
+        permissions: crate::services::workspace::WorkspacePermissions {
+            can_read: true,
+            can_write: true,
+            can_execute: true,
+            can_delete: true,
+            can_create_agents: true,
+        },
+        permission_overrides: vec![],
+        agents: vec![],
+        memory: crate::services::workspace::WorkspaceMemory {
+            max_size: 1000000, // 1MB default
+            current_size: 0,
+            retention_policy: "30d".to_string(),
+        },
+        settings: crate::services::workspace::WorkspaceSettings {
+            theme: "dark".to_string(),
+            language: "en".to_string(),
+            auto_save: true,
+            notifications_enabled: true,
+        },
+    };
 
     task_manager.set_workspace(workspace).await;
     tracing::info!("Workspace context set for task manager: {}", workspace_id);

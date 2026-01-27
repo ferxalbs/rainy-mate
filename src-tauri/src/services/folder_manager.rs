@@ -104,6 +104,12 @@ impl FolderManager {
         folders
     }
 
+    /// Get a folder by ID
+    pub async fn get_folder(&self, id: &str) -> Option<UserFolder> {
+        let folders = self.folders.read().await;
+        folders.iter().find(|f| f.id == id).cloned()
+    }
+
     /// Update last accessed timestamp for a folder
     pub async fn update_last_accessed(&self, id: &str) -> Result<(), String> {
         {

@@ -106,6 +106,7 @@ function App() {
     async (folder: Folder) => {
       try {
         await tauri.setWorkspace(folder.path, folder.name);
+        await tauri.setTaskManagerWorkspace(folder.id);
         await tauri.updateFolderAccess(folder.id);
         setActiveFolder(folder);
         // Refresh folders to get new ordering (most recent first)

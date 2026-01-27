@@ -206,6 +206,10 @@ export async function getWorkspace(): Promise<Workspace | null> {
     return invoke<Workspace | null>('get_workspace');
 }
 
+export async function setTaskManagerWorkspace(workspaceId: string): Promise<void> {
+    return invoke<void>('set_task_manager_workspace', { workspaceId });
+}
+
 export async function listDirectory(path: string): Promise<FileEntry[]> {
     return invoke<FileEntry[]>('list_directory', { path });
 }
