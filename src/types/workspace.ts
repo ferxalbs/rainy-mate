@@ -13,6 +13,15 @@ export interface WorkspacePermissions {
 }
 
 /**
+ * Permission override for a specific path
+ */
+export interface PermissionOverride {
+    path: string;
+    permissions: WorkspacePermissions;
+    inherited: boolean;
+}
+
+/**
  * Workspace settings
  */
 export interface WorkspaceSettings {
@@ -49,6 +58,7 @@ export interface Workspace {
     name: string;
     allowedPaths: string[];
     permissions: WorkspacePermissions;
+    permissionOverrides: PermissionOverride[];
     agents: AgentConfig[];
     memory: WorkspaceMemory;
     settings: WorkspaceSettings;

@@ -530,6 +530,17 @@ export interface AdvancedWorkspace {
         canDelete: boolean;
         canCreateAgents: boolean;
     };
+    permissionOverrides: Array<{
+        path: string;
+        permissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        inherited: boolean;
+    }>;
     agents: Array<{
         id: string;
         name: string;
@@ -575,5 +586,308 @@ export async function listWorkspaces(): Promise<string[]> {
 
 export async function deleteWorkspace(id: string): Promise<void> {
     return invoke<void>('delete_workspace', { id });
+}
+
+export async function getWorkspaceTemplates(): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    defaultPermissions: {
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    };
+    defaultSettings: {
+        theme: string;
+        language: string;
+        autoSave: boolean;
+        notificationsEnabled: boolean;
+    };
+    defaultMemory: {
+        maxSize: number;
+        currentSize: number;
+        retentionPolicy: string;
+    };
+    suggestedPaths: string[];
+}>> {
+    return invoke<Array<{
+        id: string;
+        name: string;
+        description: string;
+        category: string;
+        defaultPermissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        defaultSettings: {
+            theme: string;
+            language: string;
+            autoSave: boolean;
+            notificationsEnabled: boolean;
+        };
+        defaultMemory: {
+            maxSize: number;
+            currentSize: number;
+            retentionPolicy: string;
+        };
+        suggestedPaths: string[];
+    }>>('get_workspace_templates');
+}
+
+export async function createWorkspaceFromTemplate(
+    templateId: string,
+    name: string,
+    customPaths?: string[]
+): Promise<AdvancedWorkspace> {
+    return invoke<AdvancedWorkspace>('create_workspace_from_template', {
+        templateId,
+        name,
+        customPaths,
+    });
+}
+
+export async function saveWorkspaceTemplate(template: {
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    defaultPermissions: {
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    };
+    defaultSettings: {
+        theme: string;
+        language: string;
+        autoSave: boolean;
+        notificationsEnabled: boolean;
+    };
+    defaultMemory: {
+        maxSize: number;
+        currentSize: number;
+        retentionPolicy: string;
+    };
+    suggestedPaths: string[];
+}): Promise<void> {
+    return invoke<void>('save_workspace_template', { template });
+}
+
+export async function deleteWorkspaceTemplate(templateId: string): Promise<void> {
+    return invoke<void>('delete_workspace_template', { templateId });
+}
+
+export async function getWorkspaceAnalytics(
+    workspaceId: string
+): Promise<{
+        workspaceId: string;
+        totalFiles: number;
+        totalFolders: number;
+        totalOperations: number;
+        tasksCompleted: number;
+        tasksFailed: number;
+        memoryUsed: number;
+        lastActivity: string;
+    }> {
+    const analytics = await invoke<{
+        workspaceId: string;
+        totalFiles: number;
+        totalFolders: number;
+        totalOperations: number;
+        tasksCompleted: number;
+        tasksFailed: number;
+        memoryUsed: number;
+        lastActivity: string;
+    }>('get_workspace_analytics', { workspaceId });
+
+    return {
+        workspaceId: analytics.workspaceId,
+        totalFiles: analytics.totalFiles,
+        totalFolders: analytics.totalFolders,
+        totalOperations: analytics.totalOperations,
+        tasksCompleted: analytics.tasksCompleted,
+        tasksFailed: analytics.tasksFailed,
+        memoryUsed: analytics.memoryUsed,
+        lastActivity: analytics.lastActivity,
+    };
+}
+
+export async function addPermissionOverride(
+    workspaceId: string,
+    path: string,
+    permissions: {
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    }
+): Promise<void> {
+    return invoke<void>('add_permission_override', { workspaceId, path, permissions });
+}
+
+export async function removePermissionOverride(
+    workspaceId: string,
+    path: string
+): Promise<void> {
+    return invoke<void>('remove_permission_override', { workspaceId, path });
+}
+
+export async function getPermissionOverrides(
+    workspaceId: string
+): Promise<
+    Array<{
+        path: string;
+        permissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        inherited: boolean;
+    }>
+> {
+    return invoke<
+        Array<{
+            path: string;
+            permissions: {
+                canRead: boolean;
+                canWrite: boolean;
+                canExecute: boolean;
+                canDelete: boolean;
+                canCreateAgents: boolean;
+            };
+            inherited: boolean;
+        }>
+    >('get_permission_overrides', { workspaceId });
+}
+
+export async function getEffectivePermissions(
+    workspaceId: string,
+    path: string
+): Promise<{
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    }> {
+    return invoke<{
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    }>('get_effective_permissions', { workspaceId, path });
+}
+
+// ============ File Versioning Types ============
+
+export interface FileVersion {
+    id: string;
+    filePath: string;
+    versionNumber: number;
+    timestamp: string;
+    description: string;
+    contentHash: string;
+    size: number;
+    versionPath: string;
+}
+
+export interface FileVersionInfo {
+    filePath: string;
+    currentVersion: number;
+    totalVersions: number;
+    versions: FileVersion[];
+}
+
+export type TransactionState = 'active' | 'committed' | 'rolled_back' | 'failed';
+
+export interface Transaction {
+    id: string;
+    description: string;
+    state: TransactionState;
+    startTime: string;
+    endTime?: string;
+    operations: FileOpChange[];
+    snapshots: FileVersion[];
+}
+
+// ============ File Versioning Commands ============
+
+export async function createFileVersion(
+    filePath: string,
+    description: string
+): Promise<FileVersion> {
+    return invoke<FileVersion>('create_file_version', { filePath, description });
+}
+
+export async function getFileVersions(
+    filePath: string
+): Promise<FileVersionInfo> {
+    return invoke<FileVersionInfo>('get_file_versions', { filePath });
+}
+
+export async function restoreFileVersion(
+    filePath: string,
+    versionId: string
+): Promise<FileOpChange> {
+    return invoke<FileOpChange>('restore_file_version', { filePath, versionId });
+}
+
+// ============ Transaction Commands ============
+
+export async function beginFileTransaction(
+    description: string
+): Promise<string> {
+    return invoke<string>('begin_file_transaction', { description });
+}
+
+export async function commitFileTransaction(
+    transactionId: string
+): Promise<FileOpChange[]> {
+    return invoke<FileOpChange[]>('commit_file_transaction', { transactionId });
+}
+
+export async function rollbackFileTransaction(
+    transactionId: string
+): Promise<FileOpChange[]> {
+    return invoke<FileOpChange[]>('rollback_file_transaction', { transactionId });
+}
+
+export async function getFileTransaction(
+    transactionId: string
+): Promise<Transaction | null> {
+    return invoke<Transaction | null>('get_file_transaction', { transactionId });
+}
+
+// ============ Enhanced Undo/Redo Commands ============
+
+export async function undoFileOperationEnhanced(
+    operationId: string
+): Promise<FileOpChange[]> {
+    return invoke<FileOpChange[]>('undo_file_operation_enhanced', { operationId });
+}
+
+export async function redoFileOperation(): Promise<FileOpChange[]> {
+    return invoke<FileOpChange[]>('redo_file_operation');
+}
+
+export async function listEnhancedFileOperations(): Promise<[string, string, string, string | null][]> {
+    return invoke<[string, string, string, string | null][]>('list_enhanced_file_operations');
+}
+
+export async function setFileOpsWorkspace(
+    workspaceId: string
+): Promise<void> {
+    return invoke<void>('set_file_ops_workspace', { workspaceId });
 }
 

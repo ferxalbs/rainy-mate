@@ -11,6 +11,7 @@ pub struct Workspace {
     pub name: String,
     pub allowed_paths: Vec<String>,
     pub permissions: WorkspacePermissions,
+    pub permission_overrides: Vec<PermissionOverride>,
     pub agents: Vec<AgentConfig>,
     pub memory: WorkspaceMemory,
     pub settings: WorkspaceSettings,
@@ -23,6 +24,37 @@ pub struct WorkspacePermissions {
     pub can_execute: bool,
     pub can_delete: bool,
     pub can_create_agents: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PermissionOverride {
+    pub path: String,
+    pub permissions: WorkspacePermissions,
+    pub inherited: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceTemplate {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub default_permissions: WorkspacePermissions,
+    pub default_settings: WorkspaceSettings,
+    pub default_memory: WorkspaceMemory,
+    pub suggested_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceAnalytics {
+    pub workspace_id: Uuid,
+    pub total_files: u64,
+    pub total_folders: u64,
+    pub total_operations: u64,
+    pub tasks_completed: u64,
+    pub tasks_failed: u64,
+    pub memory_used: u64,
+    pub last_activity: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,6 +116,7 @@ impl WorkspaceManager {
                 can_delete: false,
                 can_create_agents: true,
             },
+            permission_overrides: Vec::new(),
             agents: Vec::new(),
             memory: WorkspaceMemory {
                 max_size: 1024 * 1024 * 100, // 100MB
@@ -203,18 +236,21 @@ impl WorkspaceManager {
     }
 
     /// Validate if an operation is permitted based on workspace permissions
-    pub fn validate_operation(&self, workspace: &Workspace, operation: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn validate_operation(&self, workspace: &Workspace, path: &str, operation: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Get effective permissions for the specific path
+        let effective_permissions = self.get_effective_permissions(workspace, path);
+
         let permitted = match operation {
-            "read" => workspace.permissions.can_read,
-            "write" => workspace.permissions.can_write,
-            "execute" => workspace.permissions.can_execute,
-            "delete" => workspace.permissions.can_delete,
-            "create_agents" => workspace.permissions.can_create_agents,
+            "read" => effective_permissions.can_read,
+            "write" => effective_permissions.can_write,
+            "execute" => effective_permissions.can_execute,
+            "delete" => effective_permissions.can_delete,
+            "create_agents" => effective_permissions.can_create_agents,
             _ => return Err(format!("Unknown operation: {}", operation).into()),
         };
 
         if !permitted {
-            return Err(format!("Operation '{}' is not permitted in this workspace", operation).into());
+            return Err(format!("Operation '{}' is not permitted for path '{}' in this workspace", operation, path).into());
         }
 
         Ok(())
@@ -223,6 +259,272 @@ impl WorkspaceManager {
     /// Validate both path and operation for a workspace
     pub fn validate_path_and_operation(&self, workspace: &Workspace, path: &str, operation: &str) -> Result<(), Box<dyn std::error::Error>> {
         self.validate_path(workspace, path)?;
-        self.validate_operation(workspace, operation)
+        self.validate_operation(workspace, path, operation)
+    }
+
+    /// Get effective permissions for a specific path, considering overrides
+    pub fn get_effective_permissions(&self, workspace: &Workspace, path: &str) -> WorkspacePermissions {
+        use std::path::Path;
+
+        // Check for path-specific overrides
+        for override in &workspace.permission_overrides {
+            let override_path = Path::new(&override.path);
+            let target_path = Path::new(path);
+
+            // Check if the target path is within the override path
+            if let Ok(canonical_override) = override_path.canonicalize() {
+                if let Ok(canonical_target) = target_path.canonicalize() {
+                    if canonical_target.starts_with(&canonical_override) {
+                        return override.permissions.clone();
+                    }
+                }
+            }
+        }
+
+        // Fall back to workspace-level permissions
+        workspace.permissions.clone()
+    }
+
+    /// Add a permission override for a specific path
+    pub fn add_permission_override(
+        &self,
+        workspace: &mut Workspace,
+        path: String,
+        permissions: WorkspacePermissions,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Validate that the path is within allowed paths
+        self.validate_path(workspace, &path)?;
+
+        // Check if an override already exists for this path
+        if let Some(existing) = workspace.permission_overrides.iter_mut().find(|o| o.path == path) {
+            existing.permissions = permissions;
+            existing.inherited = false;
+        } else {
+            workspace.permission_overrides.push(PermissionOverride {
+                path,
+                permissions,
+                inherited: false,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Remove a permission override for a specific path
+    pub fn remove_permission_override(
+        &self,
+        workspace: &mut Workspace,
+        path: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        workspace.permission_overrides.retain(|o| o.path != path);
+        Ok(())
+    }
+
+    /// Get all permission overrides for a workspace
+    pub fn get_permission_overrides(&self, workspace: &Workspace) -> Vec<PermissionOverride> {
+        workspace.permission_overrides.clone()
+    }
+
+    /// Get all available workspace templates
+    pub fn get_templates(&self) -> Result<Vec<WorkspaceTemplate>, Box<dyn std::error::Error>> {
+        let templates_dir = self.workspaces_dir.join("templates");
+
+        // Create templates directory if it doesn't exist
+        if !templates_dir.exists() {
+            fs::create_dir_all(&templates_dir)?;
+        }
+
+        let mut templates = Vec::new();
+
+        // Define default templates
+        templates.push(WorkspaceTemplate {
+            id: "development".to_string(),
+            name: "Development Workspace".to_string(),
+            description: "Full-featured workspace for software development with code analysis agents".to_string(),
+            category: "Development".to_string(),
+            default_permissions: WorkspacePermissions {
+                can_read: true,
+                can_write: true,
+                can_execute: true,
+                can_delete: false,
+                can_create_agents: true,
+            },
+            default_settings: WorkspaceSettings {
+                theme: "dark".to_string(),
+                language: "en".to_string(),
+                auto_save: true,
+                notifications_enabled: true,
+            },
+            default_memory: WorkspaceMemory {
+                max_size: 1024 * 1024 * 100, // 100MB
+                current_size: 0,
+                retention_policy: "fifo".to_string(),
+            },
+            suggested_paths: vec!["src".to_string(), "tests".to_string(), "docs".to_string()],
+        });
+
+        templates.push(WorkspaceTemplate {
+            id: "research".to_string(),
+            name: "Research Workspace".to_string(),
+            description: "Workspace optimized for research and documentation with AI research agents".to_string(),
+            category: "Research".to_string(),
+            default_permissions: WorkspacePermissions {
+                can_read: true,
+                can_write: true,
+                can_execute: false,
+                can_delete: false,
+                can_create_agents: true,
+            },
+            default_settings: WorkspaceSettings {
+                theme: "light".to_string(),
+                language: "en".to_string(),
+                auto_save: true,
+                notifications_enabled: true,
+            },
+            default_memory: WorkspaceMemory {
+                max_size: 1024 * 1024 * 500, // 500MB
+                current_size: 0,
+                retention_policy: "lru".to_string(),
+            },
+            suggested_paths: vec!["research".to_string(), "notes".to_string(), "references".to_string()],
+        });
+
+        templates.push(WorkspaceTemplate {
+            id: "minimal".to_string(),
+            name: "Minimal Workspace".to_string(),
+            description: "Basic workspace with minimal permissions for simple file operations".to_string(),
+            category: "General".to_string(),
+            default_permissions: WorkspacePermissions {
+                can_read: true,
+                can_write: true,
+                can_execute: false,
+                can_delete: false,
+                can_create_agents: false,
+            },
+            default_settings: WorkspaceSettings {
+                theme: "system".to_string(),
+                language: "en".to_string(),
+                auto_save: false,
+                notifications_enabled: false,
+            },
+            default_memory: WorkspaceMemory {
+                max_size: 1024 * 1024 * 10, // 10MB
+                current_size: 0,
+                retention_policy: "fifo".to_string(),
+            },
+            suggested_paths: vec![],
+        });
+
+        // Load custom templates from files
+        if templates_dir.exists() {
+            for entry in fs::read_dir(&templates_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+
+                if path.extension().map_or(None, |ext| ext == "json" || ext == "toml").is_some() {
+                    let content = fs::read_to_string(&path)?;
+                    if let Ok(template) = serde_json::from_str::<WorkspaceTemplate>(&content)
+                        .or_else(|_| toml::from_str(&content).map_err(|e| e.into())) {
+                        templates.push(template);
+                    }
+                }
+            }
+        }
+
+        Ok(templates)
+    }
+
+    /// Create a workspace from a template
+    pub fn create_from_template(
+        &self,
+        template_id: &str,
+        name: String,
+        custom_paths: Option<Vec<String>>,
+    ) -> Result<Workspace, Box<dyn std::error::Error>> {
+        let templates = self.get_templates()?;
+
+        let template = templates
+            .iter()
+            .find(|t| t.id == template_id)
+            .ok_or_else(|| format!("Template '{}' not found", template_id))?;
+
+        let allowed_paths = custom_paths.unwrap_or_else(|| template.suggested_paths.clone());
+
+        let workspace = Workspace {
+            id: Uuid::new_v4(),
+            name,
+            allowed_paths,
+            permissions: template.default_permissions.clone(),
+            permission_overrides: Vec::new(),
+            agents: Vec::new(),
+            memory: template.default_memory.clone(),
+            settings: template.default_settings.clone(),
+        };
+
+        // Save the workspace
+        self.save_workspace(&workspace, ConfigFormat::Json)?;
+
+        Ok(workspace)
+    }
+
+    /// Save a custom template
+    pub fn save_template(&self, template: &WorkspaceTemplate) -> Result<(), Box<dyn std::error::Error>> {
+        let templates_dir = self.workspaces_dir.join("templates");
+
+        // Create templates directory if it doesn't exist
+        if !templates_dir.exists() {
+            fs::create_dir_all(&templates_dir)?;
+        }
+
+        let template_path = templates_dir.join(format!("{}.json", template.id));
+
+        let content = serde_json::to_string_pretty(template)?;
+        fs::write(template_path, content)?;
+
+        Ok(())
+    }
+
+    /// Delete a custom template
+    pub fn delete_template(&self, template_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let templates_dir = self.workspaces_dir.join("templates");
+
+        let json_path = templates_dir.join(format!("{}.json", template_id));
+        let toml_path = templates_dir.join(format!("{}.toml", template_id));
+
+        let mut deleted = false;
+        if json_path.exists() {
+            fs::remove_file(json_path)?;
+            deleted = true;
+        }
+        if toml_path.exists() {
+            fs::remove_file(toml_path)?;
+            deleted = true;
+        }
+
+        if !deleted {
+            return Err(format!("Template '{}' not found", template_id).into());
+        }
+
+        Ok(())
+    }
+
+    /// Get analytics for a workspace
+    pub fn get_analytics(&self, workspace_id: &Uuid) -> Result<WorkspaceAnalytics, Box<dyn std::error::Error>> {
+        // Load workspace
+        let workspace = self.load_workspace(workspace_id)?;
+
+        // Calculate analytics (simplified for now)
+        let analytics = WorkspaceAnalytics {
+            workspace_id: workspace.id.clone(),
+            total_files: workspace.allowed_paths.len() as u64,
+            total_folders: workspace.allowed_paths.len() as u64,
+            total_operations: 0, // Would need to track operations separately
+            tasks_completed: 0, // Would need to track tasks separately
+            tasks_failed: 0, // Would need to track tasks separately
+            memory_used: workspace.memory.current_size,
+            last_activity: Utc::now(),
+        };
+
+        Ok(analytics)
     }
 }

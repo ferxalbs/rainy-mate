@@ -16,6 +16,84 @@ interface UseWorkspaceResult {
     deleteWorkspace: (id: string) => Promise<void>;
     refreshWorkspaces: () => Promise<void>;
     selectWorkspace: (workspace: Workspace | null) => void;
+    addPermissionOverride: (workspaceId: string, path: string, permissions: {
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    }) => Promise<void>;
+    removePermissionOverride: (workspaceId: string, path: string) => Promise<void>;
+    getPermissionOverrides: (workspaceId: string) => Promise<Array<{
+        path: string;
+        permissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        inherited: boolean;
+    }>>;
+    getEffectivePermissions: (workspaceId: string, path: string) => Promise<{
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    }>;
+    getWorkspaceTemplates: () => Promise<Array<{
+        id: string;
+        name: string;
+        description: string;
+        category: string;
+        defaultPermissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        defaultSettings: {
+            theme: string;
+            language: string;
+            autoSave: boolean;
+            notificationsEnabled: boolean;
+        };
+        defaultMemory: {
+            maxSize: number;
+            currentSize: number;
+            retentionPolicy: string;
+        };
+        suggestedPaths: string[];
+    }>>;
+    createWorkspaceFromTemplate: (templateId: string, name: string, customPaths?: string[]) => Promise<Workspace>;
+    saveWorkspaceTemplate: (template: {
+        id: string;
+        name: string;
+        description: string;
+        category: string;
+        defaultPermissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        defaultSettings: {
+            theme: string;
+            language: string;
+            autoSave: boolean;
+            notificationsEnabled: boolean;
+        };
+        defaultMemory: {
+            maxSize: number;
+            currentSize: number;
+            retentionPolicy: string;
+        };
+        suggestedPaths: string[];
+    }) => Promise<void>;
+    deleteWorkspaceTemplate: (templateId: string) => Promise<void>;
 }
 
 export function useWorkspace(): UseWorkspaceResult {
@@ -156,6 +234,203 @@ export function useWorkspace(): UseWorkspaceResult {
         setCurrentWorkspace(workspace);
     }, []);
 
+    const addPermissionOverride = useCallback(async (
+        workspaceId: string,
+        path: string,
+        permissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        }
+    ): Promise<void> => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            await tauri.addPermissionOverride(workspaceId, path, permissions);
+            await refreshWorkspaces();
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to add permission override';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [refreshWorkspaces]);
+
+    const removePermissionOverride = useCallback(async (workspaceId: string, path: string): Promise<void> => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            await tauri.removePermissionOverride(workspaceId, path);
+            await refreshWorkspaces();
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to remove permission override';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [refreshWorkspaces]);
+
+    const getPermissionOverrides = useCallback(async (workspaceId: string): Promise<Array<{
+        path: string;
+        permissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        inherited: boolean;
+    }>> => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const overrides = await tauri.getPermissionOverrides(workspaceId);
+            return overrides;
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to get permission overrides';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const getEffectivePermissions = useCallback(async (workspaceId: string, path: string): Promise<{
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    }> => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const permissions = await tauri.getEffectivePermissions(workspaceId, path);
+            return permissions;
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to get effective permissions';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const getWorkspaceTemplates = useCallback(async (): Promise<Array<{
+        id: string;
+        name: string;
+        description: string;
+        category: string;
+        defaultPermissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        defaultSettings: {
+            theme: string;
+            language: string;
+            autoSave: boolean;
+            notificationsEnabled: boolean;
+        };
+        defaultMemory: {
+            maxSize: number;
+            currentSize: number;
+            retentionPolicy: string;
+        };
+        suggestedPaths: string[];
+    }>> => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const templates = await tauri.getWorkspaceTemplates();
+            return templates;
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to get workspace templates';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const createWorkspaceFromTemplate = useCallback(async (
+        templateId: string,
+        name: string,
+        customPaths?: string[]
+    ): Promise<Workspace> => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const workspace = await tauri.createWorkspaceFromTemplate(templateId, name, customPaths);
+            await refreshWorkspaces();
+            return workspace;
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to create workspace from template';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [refreshWorkspaces]);
+
+    const saveWorkspaceTemplate = useCallback(async (template: {
+        id: string;
+        name: string;
+        description: string;
+        category: string;
+        defaultPermissions: {
+            canRead: boolean;
+            canWrite: boolean;
+            canExecute: boolean;
+            canDelete: boolean;
+            canCreateAgents: boolean;
+        };
+        defaultSettings: {
+            theme: string;
+            language: string;
+            autoSave: boolean;
+            notificationsEnabled: boolean;
+        };
+        defaultMemory: {
+            maxSize: number;
+            currentSize: number;
+            retentionPolicy: string;
+        };
+        suggestedPaths: string[];
+    }): Promise<void> => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            await tauri.saveWorkspaceTemplate(template);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to save workspace template';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const deleteWorkspaceTemplate = useCallback(async (templateId: string): Promise<void> => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            await tauri.deleteWorkspaceTemplate(templateId);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to delete workspace template';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
     // Load workspaces on mount
     useEffect(() => {
         refreshWorkspaces();
@@ -172,5 +447,13 @@ export function useWorkspace(): UseWorkspaceResult {
         deleteWorkspace,
         refreshWorkspaces,
         selectWorkspace,
+        addPermissionOverride,
+        removePermissionOverride,
+        getPermissionOverrides,
+        getEffectivePermissions,
+        getWorkspaceTemplates,
+        createWorkspaceFromTemplate,
+        saveWorkspaceTemplate,
+        deleteWorkspaceTemplate,
     };
 }

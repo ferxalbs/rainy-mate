@@ -198,6 +198,15 @@ pub fn run() {
             commands::save_workspace,
             commands::list_workspaces,
             commands::delete_workspace,
+            commands::add_permission_override,
+            commands::remove_permission_override,
+            commands::get_permission_overrides,
+            commands::get_effective_permissions,
+            commands::get_workspace_templates,
+            commands::create_workspace_from_template,
+            commands::save_workspace_template,
+            commands::delete_workspace_template,
+            commands::get_workspace_analytics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

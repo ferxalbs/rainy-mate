@@ -21,4 +21,4 @@ pub use image::ImageService;
 pub use settings::SettingsManager;
 pub use task_manager::TaskManager;
 pub use web_research::WebResearchService;
-pub use workspace::{ConfigFormat, Workspace, WorkspaceManager};
+pub use workspace::{ConfigFormat, PermissionOverride, Workspace, WorkspaceManager, WorkspaceAnalytics, WorkspaceTemplate};

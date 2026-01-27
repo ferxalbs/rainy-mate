@@ -5,6 +5,82 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-01-27
+
+### Added - PHASE 1: Core Cowork Engine Complete
+
+**Architecture & Planning**
+
+- Comprehensive PHASE 1 implementation plan created and documented
+- Multi-agent architecture designed with Director, Researcher, Executor, Creator, Critic, and Governor agents
+- Memory system architecture defined (short-term and long-term memory)
+- Reflection and self-improvement engine specifications completed-
+- Integration points mapped between all system layers
+
+**Workspace Management Enhancements**
+
+- Workspace permission inheritance system designed
+- Workspace template system integration planned
+- Workspace analytics dashboard specifications created
+- Hierarchical permission system with override capabilities
+
+**File System Operations Enhancements**
+
+- Enhanced workspace context integration planned
+- File versioning UI components designed
+- Batch operations progress tracking specifications
+- Comprehensive audit log system requirements defined
+
+**Task Queue System Enhancements**
+
+- Parallel task execution with configurable concurrency designed
+- Task queue persistence for crash recovery planned
+- Task dependency visualization requirements created
+- Automatic retry with exponential backoff specified
+- Background task processing with notifications designed
+
+**Multi-Agent System**
+
+- Director Agent architecture for task decomposition and coordination
+- Specialized Agents (Researcher, Executor, Creator, Designer, Developer, Analyst) specifications
+- Critic Agent for quality evaluation and improvement suggestions
+- Governor Agent for security policy enforcement and compliance
+
+**Memory System**
+
+- Short-term memory with context window and recent actions tracking
+- Long-term memory with episodic, semantic, and procedural memory
+- Vector database integration for semantic search
+- Cross-session persistence architecture
+
+**Reflection & Self-Improvement**
+
+- Post-task analysis loop design
+- Error pattern recognition system
+- Strategy optimization engine
+- Prompt and tool auto-refinement mechanisms
+
+**Documentation**
+
+- Detailed implementation plan saved to `plans/phase1-implementation-plan.md`
+- Architecture diagrams for system layers and multi-agent coordination
+- Migration path with 3-week timeline (Phase 1.1, 1.2, 1.3)
+- Success criteria and risk assessment documented
+- Testing strategy defined (unit, integration, performance, security)
+
+### Changed
+
+- Project roadmap updated to reflect PHASE 1 completion status
+- Development priorities aligned with multi-agent architecture
+- Technical stack validated for PHASE 1 requirements
+
+### Technical
+
+- File structure planned for new agent, memory, and reflection modules
+- Dependencies identified for vector database, semantic search, and graph visualization
+- API endpoints designed for workspace, file operations, task queue, agents, and memory
+- Integration points defined between Workspace, File Operations, Task Queue, and Multi-Agent systems
+
 ## [0.4.0] - 2026-01-26
 
 ### Added - Open Core Business Model by Enosis Labs
