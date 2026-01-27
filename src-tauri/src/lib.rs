@@ -115,6 +115,7 @@ pub fn run() {
             commands::cancel_task,
             commands::get_task,
             commands::list_tasks,
+            commands::set_task_manager_workspace,
             // AI commands
             commands::list_providers,
             commands::validate_api_key,
@@ -177,7 +178,7 @@ pub fn run() {
             commands::undo_file_operation_enhanced,
             commands::redo_file_operation,
             commands::list_enhanced_file_operations,
-            commands::set_file_ops_workspace_root,
+            commands::set_file_ops_workspace,
             // Agent commands (NEW - AI Agent)
             commands::plan_task,
             commands::execute_agent_task,

@@ -176,4 +176,53 @@ impl WorkspaceManager {
 
         Ok(())
     }
+
+    /// Validate if a path is allowed within a workspace
+    pub fn validate_path(&self, workspace: &Workspace, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        use std::path::Path;
+
+        let path_buf = Path::new(path);
+        let canonical_path = path_buf.canonicalize()
+            .map_err(|_| format!("Cannot canonicalize path: {}", path))?;
+
+        // Check if path is within allowed paths
+        let is_allowed = workspace.allowed_paths.iter().any(|allowed| {
+            let allowed_path = Path::new(allowed);
+            if let Ok(canonical_allowed) = allowed_path.canonicalize() {
+                canonical_path.starts_with(&canonical_allowed)
+            } else {
+                false
+            }
+        });
+
+        if !is_allowed {
+            return Err(format!("Path {} is not within allowed workspace paths", path).into());
+        }
+
+        Ok(())
+    }
+
+    /// Validate if an operation is permitted based on workspace permissions
+    pub fn validate_operation(&self, workspace: &Workspace, operation: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let permitted = match operation {
+            "read" => workspace.permissions.can_read,
+            "write" => workspace.permissions.can_write,
+            "execute" => workspace.permissions.can_execute,
+            "delete" => workspace.permissions.can_delete,
+            "create_agents" => workspace.permissions.can_create_agents,
+            _ => return Err(format!("Unknown operation: {}", operation).into()),
+        };
+
+        if !permitted {
+            return Err(format!("Operation '{}' is not permitted in this workspace", operation).into());
+        }
+
+        Ok(())
+    }
+
+    /// Validate both path and operation for a workspace
+    pub fn validate_path_and_operation(&self, workspace: &Workspace, path: &str, operation: &str) -> Result<(), Box<dyn std::error::Error>> {
+        self.validate_path(workspace, path)?;
+        self.validate_operation(workspace, operation)
+    }
 }

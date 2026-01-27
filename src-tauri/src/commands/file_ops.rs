@@ -263,16 +263,22 @@ pub async fn list_enhanced_file_operations(
         .collect())
 }
 
-/// Set workspace root for versioning context
+/// Set workspace context for file operations
 #[tauri::command]
-pub async fn set_file_ops_workspace_root(
-    workspace_path: String,
-    _state: State<'_, Arc<FileOperationEngine>>,
+pub async fn set_file_ops_workspace(
+    workspace_id: String,
+    workspace_manager: State<'_, Arc<crate::services::WorkspaceManager>>,
+    file_ops: State<'_, Arc<FileOperationEngine>>,
 ) -> Result<(), String> {
-    // Note: This is a simplified approach. In a real implementation,
-    // we'd need to make the engine mutable or use interior mutability
-    // For now, we'll just acknowledge the workspace path is set
-    tracing::info!("Workspace root set to: {}", workspace_path);
+    let uuid = uuid::Uuid::parse_str(&workspace_id)
+        .map_err(|e| format!("Invalid workspace ID: {}", e))?;
+
+    let workspace = workspace_manager
+        .load_workspace(&uuid)
+        .map_err(|e| format!("Failed to load workspace: {}", e))?;
+
+    file_ops.set_workspace(workspace).await;
+    tracing::info!("Workspace context set for file operations: {}", workspace_id);
     Ok(())
 }
 

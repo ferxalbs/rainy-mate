@@ -5,7 +5,7 @@ use crate::models::{ProviderType, Task, TaskEvent};
 use crate::services::TaskManager;
 use tauri::{ipc::Channel, State};
 
-/// Create a new task
+/// Create a new task with workspace validation
 #[tauri::command]
 pub async fn create_task(
     description: String,
@@ -17,9 +17,28 @@ pub async fn create_task(
     let mut task = Task::new(description, provider, model);
     task.workspace_path = workspace_path;
 
-    task_manager.add_task(task.clone()).await;
+    task_manager.add_task_validated(task.clone()).await?;
 
     Ok(task)
+}
+
+/// Set workspace context for task manager
+#[tauri::command]
+pub async fn set_task_manager_workspace(
+    workspace_id: String,
+    workspace_manager: State<'_, crate::services::WorkspaceManager>,
+    task_manager: State<'_, TaskManager>,
+) -> Result<(), String> {
+    let uuid = uuid::Uuid::parse_str(&workspace_id)
+        .map_err(|e| format!("Invalid workspace ID: {}", e))?;
+
+    let workspace = workspace_manager
+        .load_workspace(&uuid)
+        .map_err(|e| format!("Failed to load workspace: {}", e))?;
+
+    task_manager.set_workspace(workspace).await;
+    tracing::info!("Workspace context set for task manager: {}", workspace_id);
+    Ok(())
 }
 
 /// Execute a task with progress reporting

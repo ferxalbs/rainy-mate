@@ -62,6 +62,7 @@ pub struct Task {
     pub dependencies: Vec<String>, // Task IDs this task depends on
     pub provider: ProviderType,
     pub model: String,
+    pub workspace_id: Option<String>, // Workspace context for validation
     pub workspace_path: Option<String>,
     pub created_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
@@ -72,7 +73,7 @@ pub struct Task {
 
 impl Task {
     pub fn new(description: String, provider: ProviderType, model: String) -> Self {
-        Self::with_priority(description, provider, model, TaskPriority::Normal, Vec::new())
+        Self::with_workspace(description, provider, model, TaskPriority::Normal, Vec::new(), None)
     }
 
     pub fn with_priority(
@@ -81,6 +82,17 @@ impl Task {
         model: String,
         priority: TaskPriority,
         dependencies: Vec<String>,
+    ) -> Self {
+        Self::with_workspace(description, provider, model, priority, dependencies, None)
+    }
+
+    pub fn with_workspace(
+        description: String,
+        provider: ProviderType,
+        model: String,
+        priority: TaskPriority,
+        dependencies: Vec<String>,
+        workspace_id: Option<String>,
     ) -> Self {
         let id = Uuid::new_v4().to_string();
         let title = if description.len() > 50 {
@@ -99,6 +111,7 @@ impl Task {
             dependencies,
             provider,
             model,
+            workspace_id,
             workspace_path: None,
             created_at: Utc::now(),
             started_at: None,

@@ -3,6 +3,7 @@
 
 use crate::ai::AIProviderManager;
 use crate::models::{Task, TaskEvent, TaskPriority, TaskStatus};
+use crate::services::workspace::Workspace;
 use dashmap::DashMap;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
@@ -314,10 +315,12 @@ impl TaskQueue {
     }
 }
 
-/// Task manager for orchestrating AI task execution
+/// Task manager for orchestrating AI task execution with workspace context
 pub struct TaskManager {
     queue: Arc<TaskQueue>,
     ai_provider: Arc<AIProviderManager>,
+    /// Current workspace context (interior mutability for shared state)
+    workspace: Arc<Mutex<Option<Workspace>>>,
     /// Reserved for background processing feature
     #[allow(dead_code)]
     max_concurrent_tasks: usize,
@@ -331,14 +334,86 @@ impl TaskManager {
         Self {
             queue: Arc::new(TaskQueue::new()),
             ai_provider,
+            workspace: Arc::new(Mutex::new(None)),
             max_concurrent_tasks: 3, // Default concurrent task limit
             running_handles: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    /// Add a task to the manager
-    pub async fn add_task(&self, task: Task) {
+    /// Create TaskManager with workspace context
+    pub fn with_workspace(ai_provider: Arc<AIProviderManager>, workspace: Workspace) -> Self {
+        let manager = Self::new(ai_provider);
+        *manager.workspace.try_lock().unwrap() = Some(workspace);
+        manager
+    }
+
+    /// Set workspace context
+    pub async fn set_workspace(&self, workspace: Workspace) {
+        *self.workspace.lock().await = Some(workspace);
+    }
+
+    /// Get current workspace
+    pub async fn get_workspace(&self) -> Option<Workspace> {
+        self.workspace.lock().await.clone()
+    }
+
+    /// Validate if a task is allowed within the current workspace
+    pub async fn validate_task(&self, task: &Task) -> Result<(), String> {
+        let workspace = self.workspace.lock().await.as_ref()
+            .ok_or_else(|| "No workspace context set".to_string())?
+            .clone();
+
+        // Check if task belongs to this workspace
+        if let Some(task_workspace_id) = &task.workspace_id {
+            if task_workspace_id != &workspace.id.to_string() {
+                return Err(format!("Task belongs to different workspace: {}", task_workspace_id));
+            }
+        }
+
+        // Check if workspace allows task execution
+        if !workspace.permissions.can_execute {
+            return Err("Task execution not permitted in this workspace".to_string());
+        }
+
+        // Validate workspace path if specified
+        if let Some(workspace_path) = &task.workspace_path {
+            let is_allowed = workspace.allowed_paths.iter().any(|allowed| {
+                workspace_path.starts_with(allowed)
+            });
+
+            if !is_allowed {
+                return Err(format!("Task workspace path {} is not within allowed paths", workspace_path));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Add a task with workspace validation
+    pub async fn add_task_with_validation(&self, mut task: Task) -> Result<(), String> {
+        // Set workspace context if not already set
+        if task.workspace_id.is_none() {
+            if let Some(workspace) = self.workspace.lock().await.as_ref() {
+                task.workspace_id = Some(workspace.id.to_string());
+            }
+        }
+
+        // Validate the task
+        self.validate_task(&task).await?;
+
         self.queue.enqueue(task).await;
+        Ok(())
+    }
+
+    /// Add a task to the manager (legacy method - use add_task_with_validation for workspace-aware tasks)
+    pub async fn add_task(&self, task: Task) {
+        // For backward compatibility, try validation but don't fail
+        let _ = self.add_task_with_validation(task).await;
+    }
+
+    /// Add a task to the manager with validation
+    pub async fn add_task_validated(&self, task: Task) -> Result<(), String> {
+        self.add_task_with_validation(task).await
     }
 
     /// Get a task by ID
@@ -351,13 +426,16 @@ impl TaskManager {
         self.queue.get_all_tasks().await
     }
 
-    /// Execute the next available task from the queue
+    /// Execute the next available task from the queue with workspace validation
     pub async fn execute_next_task(&self, on_event: Channel<TaskEvent>) -> Result<(), String> {
         // Get next task from queue
         let task = match self.queue.dequeue().await {
             Some(task) => task,
             None => return Err("No tasks available to execute".to_string()),
         };
+
+        // Validate task against workspace
+        self.validate_task(&task).await?;
 
         let task_id = task.id.clone();
 
