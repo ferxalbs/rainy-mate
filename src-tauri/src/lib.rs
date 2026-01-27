@@ -2,6 +2,7 @@
 // Tauri 2 backend with AI workspace agent capabilities
 // Uses rainy-sdk for premium AI features
 
+mod agents;
 mod ai;
 mod commands;
 mod models;
