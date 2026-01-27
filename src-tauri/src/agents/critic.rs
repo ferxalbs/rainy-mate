@@ -8,7 +8,7 @@ use async_trait::async_trait;
 
 use crate::agents::{
     Agent, AgentConfig, AgentError, AgentInfo, AgentMessage,
-    AgentStatus, AgentType, Task, TaskResult,
+    AgentStatus, AgentType, Task, TaskResult, TaskPriority,
     BaseAgent, AgentRegistry,
 };
 
