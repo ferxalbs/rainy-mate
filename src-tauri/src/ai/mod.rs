@@ -25,7 +25,11 @@ pub use provider_types::{
 };
 pub use provider_trait::{AIProvider, AIProviderFactory, ProviderWithStats, ProviderStats};
 pub use provider_registry::ProviderRegistry;
-pub use providers::{RainySDKProvider, RainySDKProviderFactory};
+pub use providers::{
+    RainySDKProvider, RainySDKProviderFactory,
+    OpenAIProvider, OpenAIProviderFactory,
+    AnthropicProvider, AnthropicProviderFactory,
+};
 pub use router::{
     IntelligentRouter, LoadBalancer, CostOptimizer, CapabilityMatcher,
     FallbackChain, CircuitBreaker, CircuitState,

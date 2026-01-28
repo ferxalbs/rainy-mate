@@ -1,1 +1,43 @@
-{"mcpServers":{"context7":{"type":"streamable-http","url":"https://mcp.context7.com/mcp","headers":{"Authorization":"Bearer ctx7sk-40bb75f7-a28b-4825-a776-6ec00fe186ba"},"alwaysAllow":["resolve-library-id"],"disabled":false},"heroui-react":{"command":"npx","args":["-y","@heroui/react-mcp@latest"]},"mcp-server-neon":{"command":"npx","args":["-y","mcp-remote","https://mcp.neon.tech/sse"],"env":{},"disabled":true,"alwaysAllow":[]},"exa":{"command":"npx","args":["-y","mcp-remote","https://mcp.exa.ai/mcp"],"alwaysAllow":["web_search_exa","company_research_exa","get_code_context_exa"],"timeout":300}}}
+{
+    "mcpServers": {
+        "context7": {
+            "type": "streamable-http",
+            "url": "https://mcp.context7.com/mcp",
+            "headers": {
+                "Authorization": "Bearer ctx7sk-40bb75f7-a28b-4825-a776-6ec00fe186ba"
+            },
+            "alwaysAllow": [
+                "resolve-library-id"
+            ],
+            "disabled": false
+        },
+        "heroui-react": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@heroui/react-mcp@latest"
+            ]
+        },
+        "mcp-server-neon": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "mcp-remote",
+                "https://mcp.neon.tech/sse"
+            ],
+            "env": {},
+            "disabled": true,
+            "alwaysAllow": []
+        },
+        "exa": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "exa-mcp-server"
+            ],
+            "env": {
+                "EXA_API_KEY": "d8950c43-0ae1-4549-bac1-59347e294bcc"
+            }
+        }
+    }
+}

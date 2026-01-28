@@ -5,9 +5,12 @@ use crate::ai::{
     ProviderRegistry, ProviderId, ProviderType, ProviderConfig, ProviderCapabilities,
     ProviderHealth, ChatCompletionRequest, ChatCompletionResponse,
     EmbeddingRequest, EmbeddingResponse, StreamingChunk,
-    AIError, ProviderResult,
+    AIError, ProviderResult, AIProvider,
 };
-use crate::ai::providers::RainySDKProviderFactory;
+use crate::ai::providers::{
+    RainySDKProviderFactory, OpenAIProviderFactory, 
+    AnthropicProviderFactory
+};
 use crate::ai::provider_trait::AIProviderFactory;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -184,21 +187,34 @@ pub async fn register_provider(
         timeout: request.timeout,
     };
 
-    // For now, only Rainy SDK provider is implemented
-    if provider_type != ProviderType::RainySDK {
-        return Err(format!(
-            "Provider type {:?} is not yet implemented. Only Rainy SDK is available.",
-            provider_type
-        ));
-    }
+    // Create provider based on type
+    let provider: Arc<dyn AIProvider> = match provider_type {
+        ProviderType::RainySDK => {
+            <RainySDKProviderFactory as AIProviderFactory>::validate_config(&config)
+                .map_err(|e| format!("Invalid config: {}", e))?;
+            <RainySDKProviderFactory as AIProviderFactory>::create(config).await
+                .map_err(|e| format!("Failed to create provider: {}", e))?
+        }
+        ProviderType::OpenAI => {
+            <OpenAIProviderFactory as AIProviderFactory>::validate_config(&config)
+                .map_err(|e| format!("Invalid config: {}", e))?;
+            <OpenAIProviderFactory as AIProviderFactory>::create(config).await
+                .map_err(|e| format!("Failed to create provider: {}", e))?
+        }
+        ProviderType::Anthropic => {
+            <AnthropicProviderFactory as AIProviderFactory>::validate_config(&config)
+                .map_err(|e| format!("Invalid config: {}", e))?;
+            <AnthropicProviderFactory as AIProviderFactory>::create(config).await
+                .map_err(|e| format!("Failed to create provider: {}", e))?
+        }
 
-    // Validate config
-    <RainySDKProviderFactory as AIProviderFactory>::validate_config(&config)
-        .map_err(|e| format!("Invalid config: {}", e))?;
-
-    // Create provider
-    let provider = <RainySDKProviderFactory as AIProviderFactory>::create(config).await
-        .map_err(|e| format!("Failed to create provider: {}", e))?;
+        _ => {
+            return Err(format!(
+                "Provider type {:?} is not yet implemented.",
+                provider_type
+            ));
+        }
+    };
 
     // Register provider
     registry.0.register(provider)

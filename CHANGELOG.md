@@ -5,6 +5,47 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-01-28 - PHASE 3: Individual Provider Implementations
+
+### Added - PHASE 3: Individual AI Provider Implementations
+
+**Rust Backend (`src-tauri/src/`)**
+
+- `ai/providers/openai.rs` - OpenAI provider implementation:
+  - Direct integration with OpenAI API (GPT-4, GPT-4o, o1 models)
+  - Support for chat completions, streaming, and embeddings
+  - Full OpenAI API compatibility with customizable base URL
+  - Complete error handling with proper status code mapping
+  - OpenAIProviderFactory for provider creation
+
+- `ai/providers/anthropic.rs` - Anthropic provider implementation:
+  - Direct integration with Anthropic API (Claude 3.5/4, Opus, Sonnet, Haiku)
+  - Support for chat completions and streaming
+  - Messages API with proper system prompt handling
+  - Vision support for Claude 3.5 Sonnet
+  - AnthropicProviderFactory for provider creation
+
+- `ai/provider_types.rs` - Enhanced error handling:
+  - Added `Configuration` error variant for config-related errors
+  - Improved error messages across all error types
+
+- `ai/providers/mod.rs` - Updated exports:
+  - Exported new provider implementations (OpenAI, Anthropic)
+  - Exported corresponding factory types
+
+- `ai/mod.rs` - Updated module exports:
+  - Added exports for new provider types and factories
+
+- `commands/ai_providers.rs` - Enhanced provider registration:
+  - Support for registering OpenAI and Anthropic providers
+  - Dynamic provider creation based on provider type
+  - Proper validation for each provider type
+
+### Notes
+- Google Gemini provider already exists at `ai/gemini.rs` with full Gemini 3 support
+- Gemini 3 models include: gemini-3-flash-minimal, gemini-3-flash-high, gemini-2.5-flash-lite
+- Existing Gemini implementation supports thinking levels and multimodal capabilities
+
 ## [0.4.3] - 2026-01-28 - PHASE 3: AI Provider Integration Foundation
 
 ### Added - PHASE 3: AI Provider Integration

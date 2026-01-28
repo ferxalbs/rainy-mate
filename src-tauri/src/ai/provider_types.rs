@@ -320,6 +320,8 @@ pub enum AIError {
     ModelNotFound(String),
     /// Unsupported capability
     UnsupportedCapability(String),
+    /// Configuration error
+    Configuration(String),
     /// Internal error
     Internal(String),
 }
@@ -336,6 +338,7 @@ impl std::fmt::Display for AIError {
             AIError::ProviderNotFound(msg) => write!(f, "Provider not found: {}", msg),
             AIError::ModelNotFound(msg) => write!(f, "Model not found: {}", msg),
             AIError::UnsupportedCapability(msg) => write!(f, "Unsupported capability: {}", msg),
+            AIError::Configuration(msg) => write!(f, "Configuration error: {}", msg),
             AIError::Internal(msg) => write!(f, "Internal error: {}", msg),
         }
     }
