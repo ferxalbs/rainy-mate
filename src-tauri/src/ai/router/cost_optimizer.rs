@@ -6,7 +6,7 @@ use crate::ai::provider_types::{ProviderId, ProviderType};
 use std::collections::HashMap;
 
 /// Cost per 1K tokens for different providers
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ProviderCost {
     /// Input tokens cost per 1K
     pub input_cost_per_1k: f64,
