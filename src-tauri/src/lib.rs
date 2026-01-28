@@ -9,7 +9,7 @@ mod models;
 mod services;
 
 use agents::AgentRegistry;
-use ai::AIProviderManager;
+use ai::{AIProviderManager, ProviderRegistry};
 use services::{
     CoworkAgent, DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService,
     MemoryManager, SettingsManager, WebResearchService, WorkspaceManager,
@@ -22,6 +22,9 @@ use tokio::sync::Mutex;
 pub fn run() {
     // Initialize AI provider manager as Arc for thread-safe access
     let ai_provider = Arc::new(AIProviderManager::new());
+
+    // Initialize provider registry for PHASE 3
+    let provider_registry = Arc::new(ProviderRegistry::new());
 
     // Initialize task manager with Arc clone (needs its own reference)
     let task_manager = services::task_manager::TaskManager::new(ai_provider.clone());
@@ -80,6 +83,7 @@ pub fn run() {
         .manage(image_service)
         .manage(workspace_manager) // Arc<WorkspaceManager>
         .manage(ai_provider) // Arc<AIProviderManager>
+        .manage(commands::ai_providers::ProviderRegistryState(provider_registry)) // Arc<ProviderRegistry>
         .manage(settings_manager) // Arc<Mutex<SettingsManager>>
         .manage(commands::agents::AgentRegistryState(agent_registry)) // Arc<AgentRegistry>
         .manage(commands::reflection::ReflectionEngineState(reflection_engine)) // Arc<ReflectionEngine>
@@ -149,6 +153,22 @@ pub fn run() {
             commands::delete_api_key,
             commands::has_api_key,
             commands::get_provider_models,
+            // AI Provider commands (PHASE 3)
+            commands::list_all_providers,
+            commands::get_provider_info,
+            commands::register_provider,
+            commands::unregister_provider,
+            commands::set_default_provider,
+            commands::get_default_provider,
+            commands::get_provider_stats,
+            commands::get_all_provider_stats,
+            commands::test_provider_connection,
+            commands::get_provider_capabilities,
+            commands::complete_chat,
+            commands::generate_embeddings,
+            commands::get_provider_available_models,
+            commands::clear_providers,
+            commands::get_provider_count,
             // Cowork status commands
             commands::get_cowork_status,
             commands::get_cowork_models,

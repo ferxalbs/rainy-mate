@@ -11,6 +11,7 @@ pub mod provider_trait;
 pub mod provider_registry;
 pub mod providers;
 pub mod router;
+pub mod features;
 
 // Legacy exports (deprecated)
 pub use provider::AIProviderManager;
@@ -28,4 +29,11 @@ pub use providers::{RainySDKProvider, RainySDKProviderFactory};
 pub use router::{
     IntelligentRouter, LoadBalancer, CostOptimizer, CapabilityMatcher,
     FallbackChain, CircuitBreaker, CircuitState,
+};
+pub use features::{
+    EmbeddingService, StreamingService, WebSearchService, UsageAnalytics,
+    EmbeddingBatchRequest, EmbeddingBatchResponse,
+    StreamingRequest, StreamingResponse,
+    SearchResults, SearchWithAnswer, SearchResult,
+    ProviderUsage, TotalUsage, UsageStatistics, UsageReport,
 };

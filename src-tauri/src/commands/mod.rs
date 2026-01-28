@@ -3,6 +3,7 @@
 
 pub mod agents;
 pub mod ai;
+pub mod ai_providers;
 pub mod document;
 pub mod file;
 pub mod file_ops;
@@ -17,6 +18,7 @@ pub mod workspace;
 
 pub use agents::*;
 pub use ai::*;
+pub use ai_providers::*;
 pub use document::*;
 pub use file::*;
 pub use file_ops::*;

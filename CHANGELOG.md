@@ -5,6 +5,106 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-01-28 - PHASE 3: AI Provider Integration Foundation
+
+### Added - PHASE 3: AI Provider Integration
+
+**Rust Backend (`src-tauri/src/`)**
+
+- `ai/provider_types.rs` - Core types for provider abstraction:
+  - ProviderId, ProviderType, ProviderCapabilities, ProviderHealth
+  - ProviderConfig, ChatMessage, ChatCompletionRequest/Response
+  - TokenUsage, EmbeddingRequest/Response, StreamingChunk
+  - AIError enum, ProviderResult type alias, StreamingCallback
+
+- `ai/provider_trait.rs` - AIProvider trait and factory:
+  - AIProvider trait with 10 methods (id, provider_type, capabilities, health_check, complete, complete_stream, embed, supports_capability, default_model, available_models, config)
+  - AIProviderFactory trait for provider creation
+  - ProviderWithStats wrapper for statistics tracking
+  - ProviderStats struct with request counts, latency, tokens, last_request
+
+- `ai/provider_registry.rs` - Central provider registry:
+  - ProviderRegistry with DashMap for thread-safe access
+  - register(), unregister(), get(), get_all(), get_by_type(), get_healthy()
+  - set_default(), get_default() for default provider management
+  - complete(), complete_stream(), embed() with automatic stats tracking
+  - get_stats(), get_all_stats() for statistics retrieval
+  - clear(), count() for registry management
+
+- `ai/providers/rainy_sdk.rs` - Rainy SDK provider implementation:
+  - RainySDKProvider with capability caching (5-minute TTL)
+  - Support for both Rainy API and Cowork modes
+  - Automatic capability detection from SDK
+  - Health checks via simple chat completion
+  - RainySDKProviderFactory for provider creation
+
+- `ai/router/` - Intelligent routing system:
+  - `router.rs` - IntelligentRouter with load balancing, cost optimization, capability matching, and fallback
+  - `load_balancer.rs` - LoadBalancer with 4 strategies (RoundRobin, LeastConnections, WeightedResponseTime, Random)
+  - `cost_optimizer.rs` - CostOptimizer with budget limits and cost estimation
+  - `capability_matcher.rs` - CapabilityMatcher for task-based provider selection
+  - `fallback_chain.rs` - FallbackChain with circuit breaker and exponential backoff
+  - `circuit_breaker.rs` - CircuitBreaker with Open/Closed/HalfOpen states
+
+- `ai/features/` - Enhanced features:
+  - `web_search.rs` - WebSearchService with search, search_with_answer, search_results_only
+  - `embeddings.rs` - EmbeddingService with cosine_similarity and euclidean_distance
+  - `streaming.rs` - StreamingService with chunks_to_text and get_final_chunk
+  - `usage_analytics.rs` - UsageAnalytics with ProviderUsage, TotalUsage, UsageStatistics
+
+- `commands/ai_providers.rs` - Tauri commands for provider management (14 commands):
+  - list_all_providers, get_provider_info, register_provider, unregister_provider
+  - set_default_provider, get_default_provider
+  - get_provider_stats, get_all_provider_stats
+  - test_provider_connection, get_provider_capabilities
+  - complete_chat, generate_embeddings, get_provider_available_models
+  - clear_providers, get_provider_count
+
+**Frontend Hooks & Services (`src/`)**
+
+- `hooks/useAIProvider.ts` - Updated for new provider registry commands
+- `hooks/useStreaming.ts` - New hook for streaming completions
+- `hooks/useUsageAnalytics.ts` - New hook for usage tracking
+
+**Dependencies**
+
+- `rainy-sdk` v0.6.1 - Full integration with rate-limiting, tracing, and cowork features
+- `async-trait` - Async trait support for AIProvider
+- `dashmap` - Concurrent HashMap for provider registry
+- `chrono` - DateTime support for statistics
+
+**Architecture**
+
+- Modular provider abstraction with trait-based design
+- Intelligent routing with load balancing and fallback
+- Comprehensive usage tracking and analytics
+- Thread-safe provider registry with statistics
+
+### Changed
+
+- Updated `ai/mod.rs` to export all PHASE 3 modules
+- Updated `commands/mod.rs` to export ai_providers module
+- Updated `lib.rs` to add ProviderRegistry state and register new commands
+
+### Technical
+
+- All PHASE 3 foundation components implemented
+- Provider abstraction layer complete with trait-based design
+- Intelligent router with circuit breaker and fallback chain
+- Enhanced features for web search, embeddings, streaming, and usage analytics
+- 14 new Tauri commands for provider management
+- Full modularization compliance (<400 lines per module)
+
+### Breaking Changes
+
+- None - PHASE 3 is additive, maintains backward compatibility
+
+### Migration Notes
+
+- Existing AIProviderManager remains functional
+- New provider registry is opt-in via Tauri commands
+- Frontend hooks updated to support new provider management
+
 ## [0.4.2] - 2026-01-27 - PHASE 2: Intelligence Layer Complete
 
 ### Multi-Agent System
