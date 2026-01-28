@@ -1,7 +1,7 @@
 // Rainy Cowork - Streaming Chat Component (PHASE 3)
 // UI component for demonstrating streaming chat capabilities
 
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useStreaming } from '../../hooks/useStreaming';
 import { useAIProvider } from '../../hooks/useAIProvider';
 import type { ChatCompletionRequestDto } from '../../services/tauri';
@@ -59,7 +59,7 @@ export function StreamingChat() {
         };
 
         try {
-            await streamChat(request, (chunk) => {
+            await streamChat(request, (_chunk) => {
                 // Chunk is handled by useStreaming hook
             });
         } catch (err) {
