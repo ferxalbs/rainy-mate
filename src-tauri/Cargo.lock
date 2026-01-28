@@ -3865,6 +3865,7 @@ dependencies = [
  "kamadak-exif",
  "md5",
  "rainy-sdk",
+ "rand 0.8.5",
  "rayon",
  "regex",
  "reqwest 0.13.1",

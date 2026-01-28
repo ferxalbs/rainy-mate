@@ -236,10 +236,10 @@ reqwest = { version = "0.13", features = ["json", "stream"] }
 dashmap = "6"
 
 # New for PHASE 3
-futures = "0.3"
-tower = { version = "0.5", features = ["retry", "timeout"] }
-backoff = { version = "0.4", features = ["tokio"] }
-prometheus = { version = "0.13", optional = true } # For metrics
+futures = "0.3.31"
+tower = { version = "0.5.3", features = ["retry", "timeout"] }
+backoff = { version = "0.4.0", features = ["tokio"] }
+prometheus = { version = "0.14", optional = true } # For metrics
 ```
 
 ### Frontend Dependencies
@@ -272,7 +272,7 @@ prometheus = { version = "0.13", optional = true } # For metrics
 
 1. **Review PHASE 3 plan** at [`plans/phase3-implementation-plan.md`](plans/phase3-implementation-plan.md)
 2. **Begin implementation** starting with Provider Abstraction Layer
-3. **Update version to 0.5.0** in package.json, Cargo.toml, tauri.conf.json after PHASE 3 completion
+3. **Update version to 0.4.3** in package.json, Cargo.toml, tauri.conf.json after PHASE 3 completion
 
 ---
 
