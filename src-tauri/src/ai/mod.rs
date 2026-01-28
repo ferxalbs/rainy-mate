@@ -34,6 +34,6 @@ pub use features::{
     EmbeddingService, StreamingService, WebSearchService, UsageAnalytics,
     EmbeddingBatchRequest, EmbeddingBatchResponse,
     StreamingRequest, StreamingResponse,
-    SearchResults, SearchWithAnswer, SearchResult,
+    SearchResults, SearchResult,
     ProviderUsage, TotalUsage, UsageStatistics, UsageReport,
 };

@@ -1,29 +1,46 @@
-// Rainy Cowork - useAIProvider Hook
-// React hook for AI provider management with Keychain integration
+// Rainy Cowork - useAIProvider Hook (PHASE 3)
+// React hook for AI provider management using new Phase 3 commands
 
 import { useCallback, useEffect, useState, useRef } from 'react';
 import * as tauri from '../services/tauri';
-import type { AIProviderConfig } from '../services/tauri';
+import type {
+    ProviderInfo,
+    ProviderStatsDto,
+    RegisterProviderRequest,
+    ChatCompletionRequestDto,
+    ChatCompletionResponse,
+    EmbeddingRequestDto,
+    EmbeddingResponse,
+} from '../services/tauri';
 
 interface UseAIProviderResult {
-    providers: AIProviderConfig[];
+    providers: ProviderInfo[];
+    defaultProvider: ProviderInfo | null;
     isLoading: boolean;
     error: string | null;
-    hasApiKey: (provider: string) => boolean;
-    validateApiKey: (provider: string, apiKey: string) => Promise<boolean>;
-    storeApiKey: (provider: string, apiKey: string) => Promise<void>;
-    getApiKey: (provider: string) => Promise<string | null>;
-    deleteApiKey: (provider: string) => Promise<void>;
-    getModels: (provider: string) => Promise<string[]>;
+    providerCount: number;
     refreshProviders: () => Promise<void>;
+    getProviderInfo: (id: string) => Promise<ProviderInfo>;
+    registerProvider: (request: RegisterProviderRequest) => Promise<string>;
+    unregisterProvider: (id: string) => Promise<void>;
+    setDefaultProvider: (id: string) => Promise<void>;
+    getProviderStats: (id: string) => Promise<ProviderStatsDto>;
+    getAllProviderStats: () => Promise<[string, ProviderStatsDto][]>;
+    testProviderConnection: (id: string) => Promise<string>;
+    getProviderCapabilities: (id: string) => Promise<tauri.ProviderCapabilities>;
+    completeChat: (request: ChatCompletionRequestDto) => Promise<ChatCompletionResponse>;
+    generateEmbeddings: (request: EmbeddingRequestDto) => Promise<EmbeddingResponse>;
+    getProviderAvailableModels: (id: string) => Promise<string[]>;
+    clearProviders: () => Promise<void>;
 }
 
 export function useAIProvider(): UseAIProviderResult {
-    const [providers, setProviders] = useState<AIProviderConfig[]>([]);
-    const [storedKeys, setStoredKeys] = useState<Set<string>>(new Set());
+    const [providers, setProviders] = useState<ProviderInfo[]>([]);
+    const [defaultProvider, setDefaultProviderState] = useState<ProviderInfo | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    
+    const [providerCount, setProviderCount] = useState(0);
+
     // Debounce refresh calls to prevent excessive API calls
     const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const lastRefreshTime = useRef<number>(0);
@@ -44,31 +61,18 @@ export function useAIProvider(): UseAIProviderResult {
         setIsLoading(true);
         setError(null);
         try {
-            const providerList = await tauri.listProviders();
+            const providerList = await tauri.listAllProviders();
             setProviders(providerList);
+            setProviderCount(providerList.length);
 
-            // Batch key checks for better performance with error handling
-            const keyChecks = await Promise.allSettled(
-                providerList.map(async (p) => {
-                    let providerId = 'gemini';
-                    // Backend returns lowercase provider strings
-                    if (p.provider === 'rainyApi' || (p.provider as unknown as string) === 'rainyapi') {
-                        providerId = 'rainy_api';
-                    } else if (p.provider === 'coworkApi' || (p.provider as unknown as string) === 'coworkapi') {
-                        providerId = 'cowork_api';
-                    }
-                    
-                    const key = await tauri.getApiKey(providerId);
-                    return { provider: providerId, hasKey: key !== null };
-                })
-            );
-
-            const successfulChecks = keyChecks
-                .filter((result): result is PromiseFulfilledResult<{ provider: string; hasKey: boolean }> => 
-                    result.status === 'fulfilled')
-                .map(result => result.value);
-
-            setStoredKeys(new Set(successfulChecks.filter(k => k.hasKey).map(k => k.provider)));
+            // Get default provider
+            try {
+                const defaultProv = await tauri.getDefaultProvider();
+                setDefaultProviderState(defaultProv);
+            } catch (err) {
+                // No default provider set, that's okay
+                setDefaultProviderState(null);
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
         } finally {
@@ -80,17 +84,10 @@ export function useAIProvider(): UseAIProviderResult {
         refreshProviders();
     }, [refreshProviders]);
 
-    const hasApiKey = useCallback((provider: string): boolean => {
-        return storedKeys.has(provider);
-    }, [storedKeys]);
-
-    const validateApiKey = useCallback(async (
-        provider: string,
-        apiKey: string
-    ): Promise<boolean> => {
+    const getProviderInfo = useCallback(async (id: string): Promise<ProviderInfo> => {
         setError(null);
         try {
-            return await tauri.validateApiKey(provider, apiKey);
+            return await tauri.getProviderInfo(id);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             setError(message);
@@ -98,68 +95,168 @@ export function useAIProvider(): UseAIProviderResult {
         }
     }, []);
 
-    const storeApiKey = useCallback(async (provider: string, apiKey: string) => {
+    const registerProvider = useCallback(async (
+        request: RegisterProviderRequest
+    ): Promise<string> => {
         setError(null);
         try {
-            await tauri.storeApiKey(provider, apiKey);
-            setStoredKeys(prev => new Set([...prev, provider]));
-            // Force refresh after key change with debouncing
+            const id = await tauri.registerProvider(request);
+            // Force refresh after registration
+            refreshTimeoutRef.current = setTimeout(() => {
+                refreshProviders(true);
+            }, 500);
+            return id;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
+        }
+    }, [refreshProviders]);
+
+    const unregisterProvider = useCallback(async (id: string) => {
+        setError(null);
+        try {
+            await tauri.unregisterProvider(id);
+            // Force refresh after unregistration
             refreshTimeoutRef.current = setTimeout(() => {
                 refreshProviders(true);
             }, 500);
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-            throw err;
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
         }
     }, [refreshProviders]);
 
-    const deleteApiKey = useCallback(async (provider: string) => {
+    const setDefaultProvider = useCallback(async (id: string) => {
         setError(null);
         try {
-            await tauri.deleteApiKey(provider);
-            setStoredKeys(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(provider);
-                return newSet;
-            });
-            // Force refresh after key deletion with debouncing
+            await tauri.setDefaultProvider(id);
+            // Force refresh after setting default
             refreshTimeoutRef.current = setTimeout(() => {
                 refreshProviders(true);
             }, 500);
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-            throw err;
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
         }
     }, [refreshProviders]);
 
-    const getModels = useCallback(async (provider: string): Promise<string[]> => {
+    const getProviderStats = useCallback(async (id: string): Promise<ProviderStatsDto> => {
+        setError(null);
         try {
-            return await tauri.getProviderModels(provider);
+            return await tauri.getProviderStats(id);
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-            return [];
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
         }
     }, []);
 
-    const getApiKey = useCallback(async (provider: string): Promise<string | null> => {
+    const getAllProviderStats = useCallback(async (): Promise<[string, ProviderStatsDto][]> => {
+        setError(null);
         try {
-            return await tauri.getApiKey(provider);
+            return await tauri.getAllProviderStats();
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-            return null;
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
         }
     }, []);
+
+    const testProviderConnection = useCallback(async (id: string): Promise<string> => {
+        setError(null);
+        try {
+            return await tauri.testProviderConnection(id);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
+        }
+    }, []);
+
+    const getProviderCapabilities = useCallback(async (id: string): Promise<tauri.ProviderCapabilities> => {
+        setError(null);
+        try {
+            return await tauri.getProviderCapabilities(id);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
+        }
+    }, []);
+
+    const completeChat = useCallback(async (
+        request: ChatCompletionRequestDto
+    ): Promise<ChatCompletionResponse> => {
+        setError(null);
+        try {
+            return await tauri.completeChat(request);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
+        }
+    }, []);
+
+    const generateEmbeddings = useCallback(async (
+        request: EmbeddingRequestDto
+    ): Promise<EmbeddingResponse> => {
+        setError(null);
+        try {
+            return await tauri.generateEmbeddings(request);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
+        }
+    }, []);
+
+    const getProviderAvailableModels = useCallback(async (id: string): Promise<string[]> => {
+        setError(null);
+        try {
+            return await tauri.getProviderAvailableModels(id);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
+        }
+    }, []);
+
+    const clearProviders = useCallback(async () => {
+        setError(null);
+        try {
+            await tauri.clearProviders();
+            // Force refresh after clearing
+            refreshTimeoutRef.current = setTimeout(() => {
+                refreshProviders(true);
+            }, 500);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message);
+            throw new Error(message);
+        }
+    }, [refreshProviders]);
 
     return {
         providers,
+        defaultProvider,
         isLoading,
         error,
-        hasApiKey,
-        validateApiKey,
-        storeApiKey,
-        getApiKey, // Exposed
-        deleteApiKey,
-        getModels,
+        providerCount,
         refreshProviders,
+        getProviderInfo,
+        registerProvider,
+        unregisterProvider,
+        setDefaultProvider,
+        getProviderStats,
+        getAllProviderStats,
+        testProviderConnection,
+        getProviderCapabilities,
+        completeChat,
+        generateEmbeddings,
+        getProviderAvailableModels,
+        clearProviders,
     };
 }

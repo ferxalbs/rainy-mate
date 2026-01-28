@@ -2,6 +2,8 @@
 
 export { useTauriTask } from './useTauriTask';
 export { useAIProvider } from './useAIProvider';
+export { useStreaming } from './useStreaming';
+export { useUsageAnalytics } from './useUsageAnalytics';
 export { useCoworkStatus } from './useCoworkStatus';
 export { useAgent } from './useAgent';
 export { useFolderManager } from './useFolderManager';

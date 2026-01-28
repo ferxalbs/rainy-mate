@@ -895,3 +895,164 @@ export async function setFileOpsWorkspace(
     return invoke<void>('set_file_ops_workspace', { workspaceId });
 }
 
+// ============ PHASE 3: AI Provider Integration Types ============
+
+export interface ProviderCapabilities {
+    chat: boolean;
+    embeddings: boolean;
+    streaming: boolean;
+    web_search: boolean;
+    image_generation: boolean;
+    function_calling: boolean;
+}
+
+export interface ProviderInfo {
+    id: string;
+    provider_type: string;
+    model: string;
+    enabled: boolean;
+    priority: number;
+    health: string;
+    capabilities: ProviderCapabilities;
+}
+
+export interface ProviderStatsDto {
+    total_requests: number;
+    successful_requests: number;
+    failed_requests: number;
+    avg_latency_ms: number;
+    total_tokens: number;
+    last_request: string | null;
+}
+
+export interface RegisterProviderRequest {
+    id: string;
+    provider_type: string;
+    api_key?: string;
+    base_url?: string;
+    model: string;
+    enabled: boolean;
+    priority: number;
+    rate_limit?: number;
+    timeout: number;
+}
+
+export interface ChatMessageDto {
+    role: string;
+    content: string;
+    name?: string;
+}
+
+export interface ChatCompletionRequestDto {
+    provider_id?: string;
+    messages: ChatMessageDto[];
+    model?: string;
+    temperature?: number;
+    max_tokens?: number;
+    top_p?: number;
+    frequency_penalty?: number;
+    presence_penalty?: number;
+    stop?: string[];
+    stream: boolean;
+}
+
+export interface ChatCompletionResponse {
+    content: string;
+    model: string;
+    usage: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+    };
+    finish_reason: string;
+}
+
+export interface EmbeddingRequestDto {
+    provider_id?: string;
+    input: string;
+    model?: string;
+}
+
+export interface EmbeddingResponse {
+    embedding: number[];
+    model: string;
+    usage: {
+        prompt_tokens: number;
+        total_tokens: number;
+    };
+}
+
+export interface StreamingChunk {
+    content: string;
+    is_final: boolean;
+    finish_reason?: string;
+}
+
+// ============ PHASE 3: AI Provider Integration Commands ============
+
+export async function listAllProviders(): Promise<ProviderInfo[]> {
+    return invoke<ProviderInfo[]>('list_all_providers');
+}
+
+export async function getProviderInfo(id: string): Promise<ProviderInfo> {
+    return invoke<ProviderInfo>('get_provider_info', { id });
+}
+
+export async function registerProvider(
+    request: RegisterProviderRequest
+): Promise<string> {
+    return invoke<string>('register_provider', { request });
+}
+
+export async function unregisterProvider(id: string): Promise<void> {
+    return invoke<void>('unregister_provider', { id });
+}
+
+export async function setDefaultProvider(id: string): Promise<void> {
+    return invoke<void>('set_default_provider', { id });
+}
+
+export async function getDefaultProvider(): Promise<ProviderInfo> {
+    return invoke<ProviderInfo>('get_default_provider');
+}
+
+export async function getProviderStats(id: string): Promise<ProviderStatsDto> {
+    return invoke<ProviderStatsDto>('get_provider_stats', { id });
+}
+
+export async function getAllProviderStats(): Promise<[string, ProviderStatsDto][]> {
+    return invoke<[string, ProviderStatsDto][]>('get_all_provider_stats');
+}
+
+export async function testProviderConnection(id: string): Promise<string> {
+    return invoke<string>('test_provider_connection', { id });
+}
+
+export async function getProviderCapabilities(id: string): Promise<ProviderCapabilities> {
+    return invoke<ProviderCapabilities>('get_provider_capabilities', { id });
+}
+
+export async function completeChat(
+    request: ChatCompletionRequestDto
+): Promise<ChatCompletionResponse> {
+    return invoke<ChatCompletionResponse>('complete_chat', { request });
+}
+
+export async function generateEmbeddings(
+    request: EmbeddingRequestDto
+): Promise<EmbeddingResponse> {
+    return invoke<EmbeddingResponse>('generate_embeddings', { request });
+}
+
+export async function getProviderAvailableModels(id: string): Promise<string[]> {
+    return invoke<string[]>('get_provider_available_models', { id });
+}
+
+export async function clearProviders(): Promise<void> {
+    return invoke<void>('clear_providers');
+}
+
+export async function getProviderCount(): Promise<number> {
+    return invoke<number>('get_provider_count');
+}
+
