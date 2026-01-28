@@ -337,7 +337,7 @@ pub async fn get_task_status(
 #[tauri::command]
 pub async fn send_agent_message(
     registry: State<'_, AgentRegistryState>,
-    from_agent_id: String,
+    _from_agent_id: String,
     to_agent_id: String,
     message_type: String,
     message_data: serde_json::Value,

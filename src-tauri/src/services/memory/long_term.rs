@@ -116,8 +116,8 @@ impl LongTermMemory {
     ///
     /// # Arguments
     ///
-    /// * `query` - The search query string
-    /// * `limit` - Maximum number of results to return
+    /// * `_query` - The search query string
+    /// * `_limit` - Maximum number of results to return
     ///
     /// # Returns
     ///
@@ -142,7 +142,7 @@ impl LongTermMemory {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryEntry>, MemoryError> {
+    pub async fn search(&self, _query: &str, _limit: usize) -> Result<Vec<MemoryEntry>, MemoryError> {
         // TODO: Implement semantic search with embeddings
         // 1. Generate embedding for query
         // 2. Perform vector similarity search in LanceDB

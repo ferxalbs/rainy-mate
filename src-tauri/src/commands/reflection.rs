@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use tauri::State;
 
-use crate::agents::{AgentRegistry, Task, TaskResult, TaskPriority, TaskContext};
+use crate::agents::{Task, TaskResult, TaskPriority, TaskContext};
 use crate::agents::critic::QualityEvaluation;
 use crate::agents::governor::SecurityPolicy;
 use crate::services::reflection::{ReflectionEngine, Reflection, ErrorPattern, Strategy, OptimizationReport};
@@ -170,7 +170,7 @@ pub async fn evaluate_task_quality(
     output: String,
     errors: Vec<String>,
 ) -> Result<QualityEvaluation, String> {
-    let task = Task {
+    let _task = Task {
         id: task_id,
         description: task_description,
         priority: TaskPriority::Medium,
@@ -183,7 +183,7 @@ pub async fn evaluate_task_quality(
         },
     };
 
-    let result = TaskResult {
+    let _result = TaskResult {
         success,
         output,
         errors,

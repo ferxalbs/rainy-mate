@@ -3,6 +3,7 @@
 
 use crate::ai::provider_trait::ProviderWithStats;
 use crate::ai::provider_types::ProviderId;
+use rand::Rng;
 use std::sync::Arc;
 
 /// Load balancing strategy
@@ -146,7 +147,8 @@ impl LoadBalancer {
             return None;
         }
 
-        let index = rand::random::<usize>() % self.providers.len();
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..self.providers.len());
         self.providers.get(index).cloned()
     }
 
