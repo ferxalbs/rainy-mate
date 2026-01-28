@@ -5,6 +5,37 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-01-28 - PHASE 3: xAI Provider Implementation
+
+### Added - PHASE 3: xAI (Grok) Provider Implementation
+
+**Rust Backend (`src-tauri/src/`)**
+
+- `ai/providers/xai.rs` - xAI provider implementation:
+  - Direct integration with xAI API (Grok-3, Grok-3-fast, Grok-2, Grok-2-fast)
+  - Support for chat completions and streaming
+  - OpenAI-compatible API structure
+  - Full error handling with proper status code mapping
+  - XAIProviderFactory for provider creation
+  - Comprehensive test coverage for provider functionality
+
+- `ai/providers/mod.rs` - Updated exports:
+  - Exported xAI provider implementation and factory
+
+- `ai/mod.rs` - Updated module exports:
+  - Added exports for xAI provider types and factory
+
+- `commands/ai_providers.rs` - Enhanced provider registration:
+  - Support for registering xAI providers
+  - Dynamic provider creation based on provider type
+  - Proper validation for xAI provider type
+
+### Notes
+- xAI API uses OpenAI-compatible endpoints at https://api.x.ai/v1
+- Grok-3 is the default model with 131K context window
+- Streaming support via Server-Sent Events (SSE)
+- Embeddings not supported by xAI (returns UnsupportedCapability error)
+
 ## [0.5.1] - 2026-01-28 - PHASE 3: Individual Provider Implementations
 
 ### Added - PHASE 3: Individual AI Provider Implementations

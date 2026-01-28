@@ -5,11 +5,7 @@
             "url": "https://mcp.context7.com/mcp",
             "headers": {
                 "Authorization": "Bearer ctx7sk-40bb75f7-a28b-4825-a776-6ec00fe186ba"
-            },
-            "alwaysAllow": [
-                "resolve-library-id"
-            ],
-            "disabled": false
+            }
         },
         "heroui-react": {
             "command": "npx",

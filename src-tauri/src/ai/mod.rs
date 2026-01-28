@@ -29,6 +29,7 @@ pub use providers::{
     RainySDKProvider, RainySDKProviderFactory,
     OpenAIProvider, OpenAIProviderFactory,
     AnthropicProvider, AnthropicProviderFactory,
+    XAIProvider, XAIProviderFactory,
 };
 pub use router::{
     IntelligentRouter, LoadBalancer, CostOptimizer, CapabilityMatcher,

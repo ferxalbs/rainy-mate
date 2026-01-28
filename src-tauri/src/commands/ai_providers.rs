@@ -8,8 +8,8 @@ use crate::ai::{
     AIError, ProviderResult, AIProvider,
 };
 use crate::ai::providers::{
-    RainySDKProviderFactory, OpenAIProviderFactory, 
-    AnthropicProviderFactory
+    RainySDKProviderFactory, OpenAIProviderFactory,
+    AnthropicProviderFactory, XAIProviderFactory
 };
 use crate::ai::provider_trait::AIProviderFactory;
 use serde::{Deserialize, Serialize};
@@ -205,6 +205,12 @@ pub async fn register_provider(
             <AnthropicProviderFactory as AIProviderFactory>::validate_config(&config)
                 .map_err(|e| format!("Invalid config: {}", e))?;
             <AnthropicProviderFactory as AIProviderFactory>::create(config).await
+                .map_err(|e| format!("Failed to create provider: {}", e))?
+        }
+        ProviderType::XAI => {
+            <XAIProviderFactory as AIProviderFactory>::validate_config(&config)
+                .map_err(|e| format!("Invalid config: {}", e))?;
+            <XAIProviderFactory as AIProviderFactory>::create(config).await
                 .map_err(|e| format!("Failed to create provider: {}", e))?
         }
 

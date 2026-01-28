@@ -1,0 +1,504 @@
+// xAI Provider for Grok Models
+// Direct integration with xAI's Grok API using OpenAI-compatible endpoints
+
+use async_trait::async_trait;
+use reqwest::{Client, RequestBuilder};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use crate::ai::{
+    AIError, AIProvider, AIProviderFactory, ChatCompletionRequest, ChatCompletionResponse,
+    ChatMessage, EmbeddingRequest, EmbeddingResponse, ProviderCapabilities, ProviderConfig,
+    ProviderHealth, ProviderId, ProviderResult, StreamingCallback, StreamingChunk, TokenUsage,
+};
+use futures::StreamExt;
+
+/// xAI Provider implementation for Grok models
+#[derive(Clone, Debug)]
+pub struct XAIProvider {
+    /// HTTP client for API requests
+    client: Arc<Client>,
+    /// API key for authentication
+    api_key: Arc<str>,
+    /// Base URL for API requests
+    base_url: Arc<str>,
+    /// Provider configuration
+    config: ProviderConfig,
+}
+
+impl XAIProvider {
+    /// Create a new xAI provider instance
+    pub fn new(client: Client, config: ProviderConfig) -> Self {
+        let api_key = config.api_key.clone().unwrap_or_default();
+        let base_url = config.base_url.clone()
+            .unwrap_or_else(|| "https://api.x.ai/v1".to_string());
+
+        Self {
+            client: Arc::new(client),
+            api_key: Arc::from(api_key),
+            base_url: Arc::from(base_url),
+            config,
+        }
+    }
+
+    /// Get the base URL for API requests
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    /// Get the API key
+    fn api_key(&self) -> &str {
+        &self.api_key
+    }
+
+    /// Create the HTTP client with proper headers
+    fn create_client() -> Client {
+        Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .unwrap_or_default()
+    }
+}
+
+#[async_trait]
+impl AIProvider for XAIProvider {
+    /// Get the provider ID
+    fn id(&self) -> &ProviderId {
+        &self.config.id
+    }
+
+    /// Get the provider type
+    fn provider_type(&self) -> crate::ai::ProviderType {
+        self.config.provider_type
+    }
+
+    /// Get the default model
+    fn default_model(&self) -> &str {
+        &self.config.model
+    }
+
+    /// Get available models
+    async fn available_models(&self) -> ProviderResult<Vec<String>> {
+        Ok(vec![
+            "grok-3".to_string(),
+            "grok-3-fast".to_string(),
+            "grok-2".to_string(),
+            "grok-2-fast".to_string(),
+        ])
+    }
+
+    /// Get provider capabilities
+    async fn capabilities(&self) -> ProviderResult<ProviderCapabilities> {
+        Ok(ProviderCapabilities {
+            chat_completions: true,
+            embeddings: false,
+            streaming: true,
+            function_calling: true,
+            vision: true,
+            web_search: false,
+            max_context_tokens: 131_072,
+            max_output_tokens: 4096,
+            models: vec![
+                "grok-3".to_string(),
+                "grok-3-fast".to_string(),
+                "grok-2".to_string(),
+                "grok-2-fast".to_string(),
+            ],
+        })
+    }
+
+    /// Check provider health
+    async fn health_check(&self) -> ProviderResult<ProviderHealth> {
+        let request = self.client
+            .get(&format!("{}/models", self.base_url()))
+            .header("Authorization", format!("Bearer {}", self.api_key()));
+
+        match request.send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    Ok(ProviderHealth::Healthy)
+                } else {
+                    Ok(ProviderHealth::Unhealthy)
+                }
+            }
+            Err(_) => Ok(ProviderHealth::Unhealthy),
+        }
+    }
+
+    /// Execute a chat completion request
+    async fn complete(&self, request: ChatCompletionRequest) -> ProviderResult<ChatCompletionResponse> {
+        let request_body = XAIChatRequest::from(request.clone());
+        let request_builder = self.client
+            .post(&format!("{}/chat/completions", self.base_url()))
+            .header("Authorization", format!("Bearer {}", self.api_key()))
+            .header("Content-Type", "application/json")
+            .json(&request_body);
+
+        match self.execute_request(request_builder).await {
+            Ok(response) => Ok(response.to_completion_response(request.model)),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Execute a streaming chat completion request
+    async fn complete_stream(
+        &self,
+        request: ChatCompletionRequest,
+        callback: StreamingCallback,
+    ) -> ProviderResult<()> {
+        let request_body = XAIChatRequest::from(request.clone());
+        let request_builder = self.client
+            .post(&format!("{}/chat/completions", self.base_url()))
+            .header("Authorization", format!("Bearer {}", self.api_key()))
+            .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream")
+            .json(&request_body);
+
+        self.execute_stream_request(request_builder, callback).await
+    }
+
+    /// Generate embeddings
+    async fn embed(&self, _request: EmbeddingRequest) -> ProviderResult<EmbeddingResponse> {
+        Err(AIError::UnsupportedCapability("xAI does not support embeddings".to_string()))
+    }
+
+    /// Get the provider configuration
+    fn config(&self) -> &ProviderConfig {
+        &self.config
+    }
+
+    /// Check if a capability is supported
+    fn supports_capability(&self, capability: &str) -> bool {
+        match capability {
+            "chat" | "completions" => true,
+            "streaming" => true,
+            "embeddings" => false,
+            "tools" | "function_calling" => true,
+            "vision" => true,
+            "system_prompt" => true,
+            _ => false,
+        }
+    }
+}
+
+impl XAIProvider {
+    /// Execute a regular HTTP request
+    async fn execute_request(&self, builder: RequestBuilder) -> Result<XAIChatResponse, AIError> {
+        builder
+            .send()
+            .await
+            .map_err(|e| AIError::NetworkError(e.to_string()))?
+            .json()
+            .await
+            .map_err(|e| AIError::APIError(format!("Failed to parse xAI API response: {}", e)))
+    }
+
+    /// Execute a streaming request
+    async fn execute_stream_request(
+        &self,
+        builder: RequestBuilder,
+        callback: StreamingCallback,
+    ) -> Result<(), AIError> {
+        let response = builder
+            .send()
+            .await
+            .map_err(|e| AIError::NetworkError(e.to_string()))?;
+
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| AIError::NetworkError(e.to_string()))?;
+
+            let text = String::from_utf8_lossy(&chunk);
+            let lines: Vec<&str> = text.split('\n').filter(|l| !l.is_empty()).collect();
+
+            for line in lines {
+                if line.starts_with("data: ") {
+                    let data = &line[6..];
+                    if data == "[DONE]" {
+                        return Ok(());
+                    }
+
+                    // Parse SSE data
+                    if let Ok(chunk) = serde_json::from_str::<XAIStreamingChunk>(data) {
+                        if let Some(delta) = chunk.choices.first().and_then(|c| c.delta.content.clone()) {
+                            callback(StreamingChunk {
+                                content: delta,
+                                is_final: false,
+                                finish_reason: chunk.choices.first().and_then(|c| c.finish_reason.clone()),
+                            }).map_err(|e| AIError::Internal(format!("Streaming callback error: {}", e)))?;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// xAI Chat Request structure (OpenAI-compatible)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct XAIChatRequest {
+    pub model: String,
+    pub messages: Vec<XAIChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop: Option<Vec<String>>,
+    pub stream: bool,
+}
+
+impl From<ChatCompletionRequest> for XAIChatRequest {
+    fn from(req: ChatCompletionRequest) -> Self {
+        Self {
+            model: req.model.clone(),
+            messages: req.messages.into_iter().map(|m| m.into()).collect(),
+            temperature: req.temperature,
+            max_tokens: req.max_tokens,
+            top_p: req.top_p,
+            frequency_penalty: req.frequency_penalty,
+            presence_penalty: req.presence_penalty,
+            stop: req.stop,
+            stream: false,
+        }
+    }
+}
+
+/// xAI Chat Message structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct XAIChatMessage {
+    pub role: String,
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+impl From<ChatMessage> for XAIChatMessage {
+    fn from(msg: ChatMessage) -> Self {
+        Self {
+            role: msg.role,
+            content: msg.content,
+            name: msg.name,
+        }
+    }
+}
+
+/// xAI Chat Response structure (OpenAI-compatible)
+#[derive(Debug, Clone, Deserialize)]
+pub struct XAIChatResponse {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub model: String,
+    pub choices: Vec<XAIChoice>,
+    pub usage: Option<XAITokenUsage>,
+}
+
+impl XAIChatResponse {
+    /// Convert to standard ChatCompletionResponse
+    pub fn to_completion_response(&self, model: String) -> ChatCompletionResponse {
+        let content = self.choices.first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+
+        let usage = self.usage.as_ref().map(|u| TokenUsage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+        }).unwrap_or_else(|| TokenUsage::new(0, 0));
+
+        let finish_reason = self.choices.first()
+            .and_then(|c| c.finish_reason.clone())
+            .unwrap_or_else(|| "stop".to_string());
+
+        ChatCompletionResponse {
+            content,
+            model: self.model.clone(),
+            usage,
+            finish_reason,
+        }
+    }
+}
+
+/// xAI Choice structure
+#[derive(Debug, Clone, Deserialize)]
+pub struct XAIChoice {
+    pub index: u32,
+    pub message: XAIChatMessage,
+    pub finish_reason: Option<String>,
+    pub logprobs: Option<XAILogprobs>,
+}
+
+/// xAI Token Usage structure
+#[derive(Debug, Clone, Deserialize)]
+pub struct XAITokenUsage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
+}
+
+/// xAI Logprobs structure
+#[derive(Debug, Clone, Deserialize)]
+pub struct XAILogprobs {
+    pub content: Option<Vec<XAILogprobContent>>,
+}
+
+/// xAI Logprob Content structure
+#[derive(Debug, Clone, Deserialize)]
+pub struct XAILogprobContent {
+    pub token: String,
+    pub logprob: f32,
+    pub bytes: Option<Vec<u8>>,
+}
+
+/// xAI Streaming Chunk structure
+#[derive(Debug, Clone, Deserialize)]
+pub struct XAIStreamingChunk {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub model: String,
+    pub choices: Vec<XAIStreamingChoice>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct XAIStreamingChoice {
+    pub index: u32,
+    pub delta: XAIDelta,
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct XAIDelta {
+    pub role: Option<String>,
+    pub content: Option<String>,
+}
+
+/// xAI Provider Factory
+#[derive(Debug, Default)]
+pub struct XAIProviderFactory;
+
+#[async_trait]
+impl AIProviderFactory for XAIProviderFactory {
+    /// Validate provider configuration
+    fn validate_config(config: &ProviderConfig) -> ProviderResult<()> {
+        if config.api_key.is_none() {
+            return Err(AIError::Configuration("xAI API key is required".to_string()));
+        }
+        Ok(())
+    }
+
+    /// Create a new provider instance
+    async fn create(config: ProviderConfig) -> ProviderResult<Arc<dyn AIProvider>> {
+        Self::validate_config(&config)?;
+        let client = XAIProvider::create_client();
+        Ok(Arc::new(XAIProvider::new(client, config)) as Arc<dyn AIProvider>)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_xai_chat_request_from_completion_request() {
+        let request = ChatCompletionRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: "You are a helpful assistant.".to_string(),
+                    name: None,
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Hello!".to_string(),
+                    name: None,
+                },
+            ],
+            model: "grok-3".to_string(),
+            temperature: Some(0.7),
+            max_tokens: Some(100),
+            top_p: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            stop: None,
+            stream: false,
+        };
+
+        let xai_request = XAIChatRequest::from(request);
+
+        assert_eq!(xai_request.model, "grok-3");
+        assert_eq!(xai_request.messages.len(), 2);
+        assert_eq!(xai_request.messages[0].role, "system");
+        assert_eq!(xai_request.messages[1].role, "user");
+        assert_eq!(xai_request.temperature, Some(0.7));
+        assert_eq!(xai_request.max_tokens, Some(100));
+        assert!(!xai_request.stream);
+    }
+
+    #[test]
+    fn test_xai_provider_supports_capability() {
+        let config = ProviderConfig {
+            id: ProviderId::new("xai-test"),
+            provider_type: crate::ai::ProviderType::XAI,
+            api_key: Some("test-key".to_string()),
+            base_url: Some("https://api.x.ai/v1".to_string()),
+            model: "grok-3".to_string(),
+            params: std::collections::HashMap::new(),
+            enabled: true,
+            priority: 5,
+            rate_limit: Some(60),
+            timeout: 300,
+        };
+
+        let provider = XAIProvider::new(Client::new(), config);
+
+        assert!(provider.supports_capability("chat"));
+        assert!(provider.supports_capability("streaming"));
+        assert!(!provider.supports_capability("embeddings"));
+        assert!(provider.supports_capability("tools"));
+    }
+
+    #[test]
+    fn test_xai_factory_validate_config() {
+        let factory = XAIProviderFactory;
+
+        // Valid config
+        let valid_config = ProviderConfig {
+            id: ProviderId::new("xai-valid"),
+            provider_type: crate::ai::ProviderType::XAI,
+            api_key: Some("test-key".to_string()),
+            base_url: None,
+            model: "grok-3".to_string(),
+            params: std::collections::HashMap::new(),
+            enabled: true,
+            priority: 5,
+            rate_limit: None,
+            timeout: 300,
+        };
+        assert!(factory.validate_config(&valid_config).is_ok());
+
+        // Invalid config (no API key)
+        let invalid_config = ProviderConfig {
+            id: ProviderId::new("xai-invalid"),
+            provider_type: crate::ai::ProviderType::XAI,
+            api_key: None,
+            base_url: None,
+            model: "grok-3".to_string(),
+            params: std::collections::HashMap::new(),
+            enabled: true,
+            priority: 5,
+            rate_limit: None,
+            timeout: 300,
+        };
+        assert!(factory.validate_config(&invalid_config).is_err());
+    }
+}
