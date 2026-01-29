@@ -75,6 +75,55 @@ impl ManagedResearchService {
                     } else {
                         "No content in output".to_string()
                     }
+                } else if let Some(results) = map.get("_results") {
+                    // Handle case where _results is at the top level (as seen in user screenshot)
+                    if let Some(output) = results.get("output") {
+                        if let Some(output_arr) = output.as_array() {
+                            // Iterate backwards to find the last actual ASSISTANT message content
+                            let last_text = output_arr.iter().rev().find_map(|msg| {
+                                // 1. Check if role is 'assistant'
+                                let is_assistant = msg
+                                    .get("role")
+                                    .and_then(|r| r.as_str())
+                                    .map(|r| r == "assistant" || r == "model")
+                                    .unwrap_or(false);
+
+                                if !is_assistant {
+                                    return None;
+                                }
+
+                                // 2. Check for text content
+                                if let Some(content) = msg.get("content") {
+                                    if let Some(s) = content.as_str() {
+                                        if !s.trim().is_empty() {
+                                            return Some(s.to_string());
+                                        }
+                                    }
+                                }
+                                None
+                            });
+
+                            last_text.unwrap_or_else(|| {
+                                 if let Some(last) = output_arr.last() {
+                                     let role = last.get("role").and_then(|r| r.as_str()).unwrap_or("unknown");
+                                     if role == "tool_result" || role == "function" {
+                                         "Research completed but no final summary was generated. The agent might have stopped early.".to_string()
+                                     } else if role == "tool_call" || role == "assistant" {
+                                         "Research agent is processing...".to_string()
+                                     } else {
+                                          format!("Status: {}", role)
+                                     }
+                                 } else {
+                                     "No output content found.".to_string()
+                                 }
+                             })
+                        } else {
+                            output.to_string()
+                        }
+                    } else {
+                        // Fallback if no output in _results
+                        serde_json::Value::Object(map).to_string()
+                    }
                 } else if let Some(state) = map.get("state") {
                     // Deep nested Inngest state
                     // state -> _results -> output
