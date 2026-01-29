@@ -4,8 +4,8 @@
 //! It uses a ring buffer (VecDeque) to maintain a fixed-size cache of the most
 //! recent entries, automatically evicting the oldest entries when the buffer is full.
 
-use std::collections::VecDeque;
 use crate::agents::MemoryEntry;
+use std::collections::VecDeque;
 
 /// Short-term memory with ring buffer implementation
 ///
@@ -249,6 +249,7 @@ impl ShortTermMemory {
     /// # Returns
     ///
     /// The maximum number of entries that can be stored
+    #[allow(dead_code)]
     pub fn capacity(&self) -> usize {
         self.max_size
     }

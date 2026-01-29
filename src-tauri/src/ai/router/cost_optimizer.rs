@@ -55,6 +55,7 @@ impl Default for CostOptimizerConfig {
 }
 
 /// Cost optimizer for selecting cost-effective providers
+#[allow(dead_code)]
 pub struct CostOptimizer {
     /// Available providers
     providers: Vec<std::sync::Arc<ProviderWithStats>>,
@@ -62,6 +63,7 @@ pub struct CostOptimizer {
     config: CostOptimizerConfig,
 }
 
+#[allow(dead_code)]
 impl CostOptimizer {
     /// Create a new cost optimizer
     pub fn new(config: CostOptimizerConfig) -> Self {

@@ -73,9 +73,17 @@ pub struct Task {
 
 impl Task {
     pub fn new(description: String, provider: ProviderType, model: String) -> Self {
-        Self::with_workspace(description, provider, model, TaskPriority::Normal, Vec::new(), None)
+        Self::with_workspace(
+            description,
+            provider,
+            model,
+            TaskPriority::Normal,
+            Vec::new(),
+            None,
+        )
     }
 
+    #[allow(dead_code)]
     pub fn with_priority(
         description: String,
         provider: ProviderType,

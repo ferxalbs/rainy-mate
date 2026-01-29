@@ -1,10 +1,10 @@
+use chrono::{DateTime, Utc};
+use dirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
-use dirs;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workspace {
@@ -94,8 +94,7 @@ pub struct WorkspaceManager {
 
 impl WorkspaceManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let app_data_dir = dirs::data_dir()
-            .ok_or("Could not find app data directory")?;
+        let app_data_dir = dirs::data_dir().ok_or("Could not find app data directory")?;
         let workspaces_dir = app_data_dir.join("rainy-cowork").join("workspaces");
 
         // Create the directory if it doesn't exist
@@ -104,7 +103,11 @@ impl WorkspaceManager {
         Ok(Self { workspaces_dir })
     }
 
-    pub fn create_workspace(&self, name: String, allowed_paths: Vec<String>) -> Result<Workspace, Box<dyn std::error::Error>> {
+    pub fn create_workspace(
+        &self,
+        name: String,
+        allowed_paths: Vec<String>,
+    ) -> Result<Workspace, Box<dyn std::error::Error>> {
         let id = Uuid::new_v4();
         let workspace = Workspace {
             id,
@@ -153,7 +156,11 @@ impl WorkspaceManager {
         }
     }
 
-    pub fn save_workspace(&self, workspace: &Workspace, format: ConfigFormat) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_workspace(
+        &self,
+        workspace: &Workspace,
+        format: ConfigFormat,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let filename = match format {
             ConfigFormat::Json => format!("{}.json", workspace.id),
             ConfigFormat::Toml => format!("{}.toml", workspace.id),
@@ -212,11 +219,16 @@ impl WorkspaceManager {
     }
 
     /// Validate if a path is allowed within a workspace
-    pub fn validate_path(&self, workspace: &Workspace, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn validate_path(
+        &self,
+        workspace: &Workspace,
+        path: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         use std::path::Path;
 
         let path_buf = Path::new(path);
-        let canonical_path = path_buf.canonicalize()
+        let canonical_path = path_buf
+            .canonicalize()
             .map_err(|_| format!("Cannot canonicalize path: {}", path))?;
 
         // Check if path is within allowed paths
@@ -237,7 +249,13 @@ impl WorkspaceManager {
     }
 
     /// Validate if an operation is permitted based on workspace permissions
-    pub fn validate_operation(&self, workspace: &Workspace, path: &str, operation: &str) -> Result<(), Box<dyn std::error::Error>> {
+    #[allow(dead_code)]
+    pub fn validate_operation(
+        &self,
+        workspace: &Workspace,
+        path: &str,
+        operation: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Get effective permissions for the specific path
         let effective_permissions = self.get_effective_permissions(workspace, path);
 
@@ -251,20 +269,34 @@ impl WorkspaceManager {
         };
 
         if !permitted {
-            return Err(format!("Operation '{}' is not permitted for path '{}' in this workspace", operation, path).into());
+            return Err(format!(
+                "Operation '{}' is not permitted for path '{}' in this workspace",
+                operation, path
+            )
+            .into());
         }
 
         Ok(())
     }
 
     /// Validate both path and operation for a workspace
-    pub fn validate_path_and_operation(&self, workspace: &Workspace, path: &str, operation: &str) -> Result<(), Box<dyn std::error::Error>> {
+    #[allow(dead_code)]
+    pub fn validate_path_and_operation(
+        &self,
+        workspace: &Workspace,
+        path: &str,
+        operation: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.validate_path(workspace, path)?;
         self.validate_operation(workspace, path, operation)
     }
 
     /// Get effective permissions for a specific path, considering overrides
-    pub fn get_effective_permissions(&self, workspace: &Workspace, path: &str) -> WorkspacePermissions {
+    pub fn get_effective_permissions(
+        &self,
+        workspace: &Workspace,
+        path: &str,
+    ) -> WorkspacePermissions {
         use std::path::Path;
 
         // Check for path-specific overrides
@@ -297,7 +329,11 @@ impl WorkspaceManager {
         self.validate_path(workspace, &path)?;
 
         // Check if an override already exists for this path
-        if let Some(existing) = workspace.permission_overrides.iter_mut().find(|o| o.path == path) {
+        if let Some(existing) = workspace
+            .permission_overrides
+            .iter_mut()
+            .find(|o| o.path == path)
+        {
             existing.permissions = permissions;
             existing.inherited = false;
         } else {
@@ -341,7 +377,9 @@ impl WorkspaceManager {
         templates.push(WorkspaceTemplate {
             id: "development".to_string(),
             name: "Development Workspace".to_string(),
-            description: "Full-featured workspace for software development with code analysis agents".to_string(),
+            description:
+                "Full-featured workspace for software development with code analysis agents"
+                    .to_string(),
             category: "Development".to_string(),
             default_permissions: WorkspacePermissions {
                 can_read: true,
@@ -367,7 +405,9 @@ impl WorkspaceManager {
         templates.push(WorkspaceTemplate {
             id: "research".to_string(),
             name: "Research Workspace".to_string(),
-            description: "Workspace optimized for research and documentation with AI research agents".to_string(),
+            description:
+                "Workspace optimized for research and documentation with AI research agents"
+                    .to_string(),
             category: "Research".to_string(),
             default_permissions: WorkspacePermissions {
                 can_read: true,
@@ -387,13 +427,18 @@ impl WorkspaceManager {
                 current_size: 0,
                 retention_policy: "lru".to_string(),
             },
-            suggested_paths: vec!["research".to_string(), "notes".to_string(), "references".to_string()],
+            suggested_paths: vec![
+                "research".to_string(),
+                "notes".to_string(),
+                "references".to_string(),
+            ],
         });
 
         templates.push(WorkspaceTemplate {
             id: "minimal".to_string(),
             name: "Minimal Workspace".to_string(),
-            description: "Basic workspace with minimal permissions for simple file operations".to_string(),
+            description: "Basic workspace with minimal permissions for simple file operations"
+                .to_string(),
             category: "General".to_string(),
             default_permissions: WorkspacePermissions {
                 can_read: true,
@@ -422,7 +467,11 @@ impl WorkspaceManager {
                 let entry = entry?;
                 let path = entry.path();
 
-                if path.extension().map_or(None, |ext| Some(ext == "json" || ext == "toml")).is_some() {
+                if path
+                    .extension()
+                    .map_or(None, |ext| Some(ext == "json" || ext == "toml"))
+                    .is_some()
+                {
                     let content = fs::read_to_string(&path)?;
                     // Try JSON first, then TOML
                     if let Ok(template) = serde_json::from_str::<WorkspaceTemplate>(&content) {
@@ -471,7 +520,10 @@ impl WorkspaceManager {
     }
 
     /// Save a custom template
-    pub fn save_template(&self, template: &WorkspaceTemplate) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_template(
+        &self,
+        template: &WorkspaceTemplate,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let templates_dir = self.workspaces_dir.join("templates");
 
         // Create templates directory if it doesn't exist
@@ -512,7 +564,10 @@ impl WorkspaceManager {
     }
 
     /// Get analytics for a workspace
-    pub fn get_analytics(&self, workspace_id: &Uuid) -> Result<WorkspaceAnalytics, Box<dyn std::error::Error>> {
+    pub fn get_analytics(
+        &self,
+        workspace_id: &Uuid,
+    ) -> Result<WorkspaceAnalytics, Box<dyn std::error::Error>> {
         // Load workspace
         let workspace = self.load_workspace(workspace_id)?;
 
@@ -522,8 +577,8 @@ impl WorkspaceManager {
             total_files: workspace.allowed_paths.len() as u64,
             total_folders: workspace.allowed_paths.len() as u64,
             total_operations: 0, // Would need to track operations separately
-            tasks_completed: 0, // Would need to track tasks separately
-            tasks_failed: 0, // Would need to track tasks separately
+            tasks_completed: 0,  // Would need to track tasks separately
+            tasks_failed: 0,     // Would need to track tasks separately
             memory_used: workspace.memory.current_size,
             last_activity: Utc::now(),
         };

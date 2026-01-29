@@ -341,6 +341,7 @@ impl TaskManager {
     }
 
     /// Create TaskManager with workspace context
+    #[allow(dead_code)]
     pub fn with_workspace(ai_provider: Arc<AIProviderManager>, workspace: Workspace) -> Self {
         let manager = Self::new(ai_provider);
         *manager.workspace.try_lock().unwrap() = Some(workspace);
@@ -353,20 +354,28 @@ impl TaskManager {
     }
 
     /// Get current workspace
+    #[allow(dead_code)]
     pub async fn get_workspace(&self) -> Option<Workspace> {
         self.workspace.lock().await.clone()
     }
 
     /// Validate if a task is allowed within the current workspace
     pub async fn validate_task(&self, task: &Task) -> Result<(), String> {
-        let workspace = self.workspace.lock().await.as_ref()
+        let workspace = self
+            .workspace
+            .lock()
+            .await
+            .as_ref()
             .ok_or_else(|| "No workspace context set".to_string())?
             .clone();
 
         // Check if task belongs to this workspace
         if let Some(task_workspace_id) = &task.workspace_id {
             if task_workspace_id != &workspace.id.to_string() {
-                return Err(format!("Task belongs to different workspace: {}", task_workspace_id));
+                return Err(format!(
+                    "Task belongs to different workspace: {}",
+                    task_workspace_id
+                ));
             }
         }
 
@@ -377,12 +386,16 @@ impl TaskManager {
 
         // Validate workspace path if specified
         if let Some(workspace_path) = &task.workspace_path {
-            let is_allowed = workspace.allowed_paths.iter().any(|allowed| {
-                workspace_path.starts_with(allowed)
-            });
+            let is_allowed = workspace
+                .allowed_paths
+                .iter()
+                .any(|allowed| workspace_path.starts_with(allowed));
 
             if !is_allowed {
-                return Err(format!("Task workspace path {} is not within allowed paths", workspace_path));
+                return Err(format!(
+                    "Task workspace path {} is not within allowed paths",
+                    workspace_path
+                ));
             }
         }
 
@@ -406,6 +419,7 @@ impl TaskManager {
     }
 
     /// Add a task to the manager (legacy method - use add_task_with_validation for workspace-aware tasks)
+    #[allow(dead_code)]
     pub async fn add_task(&self, task: Task) {
         // For backward compatibility, try validation but don't fail
         let _ = self.add_task_with_validation(task).await;

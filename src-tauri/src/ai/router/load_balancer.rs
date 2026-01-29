@@ -93,7 +93,8 @@ impl LoadBalancer {
 
     /// Round-robin selection
     fn select_round_robin(&self) -> Option<Arc<ProviderWithStats>> {
-        let index = self.round_robin_index
+        let index = self
+            .round_robin_index
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             % self.providers.len();
         self.providers.get(index).cloned()
@@ -114,7 +115,8 @@ impl LoadBalancer {
         }
 
         // Calculate total weight
-        let total_weight: u32 = self.providers
+        let total_weight: u32 = self
+            .providers
             .iter()
             .filter_map(|p| self.config.weights.get(p.provider().id()))
             .sum();
@@ -157,16 +159,19 @@ impl LoadBalancer {
     }
 
     /// Check if load balancer has any providers
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()
     }
 
     /// Get configuration
+    #[allow(dead_code)]
     pub fn config(&self) -> &LoadBalancerConfig {
         &self.config
     }
 
     /// Set configuration
+    #[allow(dead_code)]
     pub fn set_config(&mut self, config: LoadBalancerConfig) {
         self.config = config;
     }

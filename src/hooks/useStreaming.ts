@@ -1,16 +1,28 @@
 // Rainy Cowork - useStreaming Hook (PHASE 3)
-// React hook for streaming chat completions using Phase 3 commands
+// React hook for streaming chat completions using intelligent routing
 
 import { useCallback, useState, useRef } from 'react';
 import * as tauri from '../services/tauri';
-import type { ChatCompletionRequestDto, StreamingChunk } from '../services/tauri';
+import type { 
+    ChatCompletionRequestDto, 
+    StreamingChunk, 
+    StreamingEvent,
+    RoutedChatRequest 
+} from '../services/tauri';
 
 interface UseStreamingResult {
     isStreaming: boolean;
     error: string | null;
     chunks: StreamingChunk[];
     fullText: string;
+    model: string | null;
+    providerId: string | null;
+    finishReason: string | null;
+    totalChunks: number;
+    
+    // Streaming methods
     streamChat: (request: ChatCompletionRequestDto, onChunk?: (chunk: StreamingChunk) => void) => Promise<void>;
+    streamWithRouting: (request: RoutedChatRequest, onEvent?: (event: StreamingEvent) => void) => Promise<void>;
     stopStreaming: () => void;
     resetStream: () => void;
 }
@@ -19,7 +31,11 @@ export function useStreaming(): UseStreamingResult {
     const [isStreaming, setIsStreaming] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [chunks, setChunks] = useState<StreamingChunk[]>([]);
-    const abortControllerRef = useRef<AbortController | null>(null);
+    const [model, setModel] = useState<string | null>(null);
+    const [providerId, setProviderId] = useState<string | null>(null);
+    const [finishReason, setFinishReason] = useState<string | null>(null);
+    const [totalChunks, setTotalChunks] = useState(0);
+    const abortRef = useRef(false);
 
     // Calculate full text from chunks
     const fullText = chunks
@@ -27,86 +43,119 @@ export function useStreaming(): UseStreamingResult {
         .map(chunk => chunk.content)
         .join('');
 
-    const streamChat = useCallback(async (
-        request: ChatCompletionRequestDto,
-        onChunk?: (chunk: StreamingChunk) => void
+    /**
+     * Stream chat using the intelligent router
+     * This is the primary streaming method that uses PHASE 3 routing
+     */
+    const streamWithRouting = useCallback(async (
+        request: RoutedChatRequest,
+        onEvent?: (event: StreamingEvent) => void
     ) => {
         // Reset state
         setIsStreaming(true);
         setError(null);
         setChunks([]);
-
-        // Create abort controller for cancellation
-        abortControllerRef.current = new AbortController();
+        setModel(null);
+        setProviderId(null);
+        setFinishReason(null);
+        setTotalChunks(0);
+        abortRef.current = false;
 
         try {
-            // Note: The current Phase 3 implementation doesn't support streaming yet
-            // This is a placeholder for future implementation
-            // For now, we'll use the non-streaming complete_chat command
+            await tauri.streamWithRouting(request, (event) => {
+                // Check if aborted
+                if (abortRef.current) {
+                    return;
+                }
 
-            const response = await tauri.completeChat({
-                ...request,
-                stream: false, // Force non-streaming for now
+                switch (event.event) {
+                    case 'started':
+                        setModel(event.data.model);
+                        setProviderId(event.data.providerId);
+                        break;
+                    
+                    case 'chunk': {
+                        const chunk: StreamingChunk = {
+                            content: event.data.content,
+                            is_final: event.data.isFinal,
+                        };
+                        setChunks(prev => [...prev, chunk]);
+                        break;
+                    }
+                    
+                    case 'finished':
+                        setFinishReason(event.data.finishReason);
+                        setTotalChunks(event.data.totalChunks);
+                        setIsStreaming(false);
+                        break;
+                    
+                    case 'error':
+                        setError(event.data.message);
+                        setIsStreaming(false);
+                        break;
+                }
+
+                // Forward event to caller
+                if (onEvent) {
+                    onEvent(event);
+                }
             });
-
-            // Simulate streaming by breaking the response into chunks
-            const content = response.content;
-            const chunkSize = 10; // Characters per chunk
-            const totalChunks = Math.ceil(content.length / chunkSize);
-
-            for (let i = 0; i < totalChunks; i++) {
-                // Check if streaming was cancelled
-                if (abortControllerRef.current?.signal.aborted) {
-                    break;
-                }
-
-                const start = i * chunkSize;
-                const end = Math.min(start + chunkSize, content.length);
-                const chunkContent = content.slice(start, end);
-
-                const chunk: StreamingChunk = {
-                    content: chunkContent,
-                    is_final: i === totalChunks - 1,
-                    finish_reason: i === totalChunks - 1 ? response.finish_reason : undefined,
-                };
-
-                setChunks(prev => [...prev, chunk]);
-
-                // Call the onChunk callback if provided
-                if (onChunk) {
-                    onChunk(chunk);
-                }
-
-                // Small delay to simulate streaming
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             setError(message);
-            throw new Error(message);
-        } finally {
             setIsStreaming(false);
-            abortControllerRef.current = null;
+            throw new Error(message);
         }
     }, []);
 
+    /**
+     * Legacy streaming method for backward compatibility
+     * Converts ChatCompletionRequestDto to RoutedChatRequest and uses router
+     */
+    const streamChat = useCallback(async (
+        request: ChatCompletionRequestDto,
+        onChunk?: (chunk: StreamingChunk) => void
+    ) => {
+        // Convert to routed request format
+        const routedRequest: RoutedChatRequest = {
+            messages: request.messages,
+            model: request.model,
+            temperature: request.temperature,
+            max_tokens: request.max_tokens,
+            top_p: request.top_p,
+            frequency_penalty: request.frequency_penalty,
+            presence_penalty: request.presence_penalty,
+            stop: request.stop,
+            preferred_provider: request.provider_id,
+        };
+
+        // Use router streaming
+        await streamWithRouting(routedRequest, (event) => {
+            // Convert to chunk callback for backward compatibility
+            if (event.event === 'chunk' && onChunk) {
+                const chunk: StreamingChunk = {
+                    content: event.data.content,
+                    is_final: event.data.isFinal,
+                };
+                onChunk(chunk);
+            }
+        });
+    }, [streamWithRouting]);
+
     const stopStreaming = useCallback(() => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
+        abortRef.current = true;
         setIsStreaming(false);
     }, []);
 
     const resetStream = useCallback(() => {
+        abortRef.current = false;
         setIsStreaming(false);
         setError(null);
         setChunks([]);
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
+        setModel(null);
+        setProviderId(null);
+        setFinishReason(null);
+        setTotalChunks(0);
     }, []);
 
     return {
@@ -114,7 +163,12 @@ export function useStreaming(): UseStreamingResult {
         error,
         chunks,
         fullText,
+        model,
+        providerId,
+        finishReason,
+        totalChunks,
         streamChat,
+        streamWithRouting,
         stopStreaming,
         resetStream,
     };

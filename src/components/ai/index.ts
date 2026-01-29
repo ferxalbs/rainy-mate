@@ -3,3 +3,4 @@
 export { ProviderManagementPanel } from './ProviderManagementPanel';
 export { ProviderStatsPanel } from './ProviderStatsPanel';
 export { StreamingChat } from './StreamingChat';
+export { RouterConfigPanel } from './RouterConfigPanel';

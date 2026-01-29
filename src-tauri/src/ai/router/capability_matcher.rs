@@ -2,7 +2,7 @@
 // Matches requests to providers based on required capabilities
 
 use crate::ai::provider_trait::ProviderWithStats;
-use crate::ai::provider_types::{ProviderId, ProviderCapabilities};
+use crate::ai::provider_types::{ProviderCapabilities, ProviderId};
 use std::collections::HashSet;
 
 /// Required capabilities for a request
@@ -53,36 +53,42 @@ impl RequiredCapabilities {
     }
 
     /// Require function calling
+    #[allow(dead_code)]
     pub fn require_function_calling(mut self) -> Self {
         self.function_calling = true;
         self
     }
 
     /// Require vision
+    #[allow(dead_code)]
     pub fn require_vision(mut self) -> Self {
         self.vision = true;
         self
     }
 
     /// Require web search
+    #[allow(dead_code)]
     pub fn require_web_search(mut self) -> Self {
         self.web_search = true;
         self
     }
 
     /// Set minimum context tokens
+    #[allow(dead_code)]
     pub fn min_context_tokens(mut self, tokens: u32) -> Self {
         self.min_context_tokens = Some(tokens);
         self
     }
 
     /// Set minimum output tokens
+    #[allow(dead_code)]
     pub fn min_output_tokens(mut self, tokens: u32) -> Self {
         self.min_output_tokens = Some(tokens);
         self
     }
 
     /// Require specific models
+    #[allow(dead_code)]
     pub fn require_models(mut self, models: Vec<String>) -> Self {
         self.required_models = Some(models.into_iter().collect());
         self
@@ -132,7 +138,9 @@ impl RequiredCapabilities {
         // Check required models
         if let Some(required_models) = &self.required_models {
             if !required_models.is_empty() {
-                let has_required_model = provider_caps.models.iter()
+                let has_required_model = provider_caps
+                    .models
+                    .iter()
                     .any(|model| required_models.contains(model));
                 if !has_required_model {
                     return false;
@@ -184,7 +192,7 @@ impl Default for CapabilityWeights {
             vision: 1.0,
             web_search: 1.0,
             context_window: 0.001, // Lower weight for large numbers
-            output_tokens: 0.001, // Lower weight for large numbers
+            output_tokens: 0.001,  // Lower weight for large numbers
         }
     }
 }
@@ -274,7 +282,7 @@ impl CapabilityMatcher {
     async fn score_provider(
         &self,
         provider: &std::sync::Arc<ProviderWithStats>,
-        required: &RequiredCapabilities,
+        _required: &RequiredCapabilities,
     ) -> f32 {
         let caps_result = provider.provider().capabilities().await;
         let weights = &self.config.weights;
@@ -339,26 +347,31 @@ impl CapabilityMatcher {
     }
 
     /// Get all providers
+    #[allow(dead_code)]
     pub fn providers(&self) -> &[std::sync::Arc<ProviderWithStats>] {
         &self.providers
     }
 
     /// Get number of providers
+    #[allow(dead_code)]
     pub fn provider_count(&self) -> usize {
         self.providers.len()
     }
 
     /// Check if matcher has any providers
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()
     }
 
     /// Get configuration
+    #[allow(dead_code)]
     pub fn config(&self) -> &CapabilityMatcherConfig {
         &self.config
     }
 
     /// Set configuration
+    #[allow(dead_code)]
     pub fn set_config(&mut self, config: CapabilityMatcherConfig) {
         self.config = config;
     }

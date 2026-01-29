@@ -10,8 +10,8 @@
 //! - Implement semantic search with vector similarity
 //! - Add batch operations for bulk storage/retrieval
 
-use std::path::PathBuf;
 use crate::agents::MemoryEntry;
+use std::path::PathBuf;
 
 /// Long-term memory with persistent storage
 ///
@@ -35,6 +35,7 @@ use crate::agents::MemoryEntry;
 #[derive(Debug, Clone)]
 pub struct LongTermMemory {
     /// Path to the database storage
+    #[allow(dead_code)]
     db_path: PathBuf,
     // TODO: Add LanceDB client when available
     // client: Option<lancedb::Connection>,
@@ -142,7 +143,11 @@ impl LongTermMemory {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn search(&self, _query: &str, _limit: usize) -> Result<Vec<MemoryEntry>, MemoryError> {
+    pub async fn search(
+        &self,
+        _query: &str,
+        _limit: usize,
+    ) -> Result<Vec<MemoryEntry>, MemoryError> {
         // TODO: Implement semantic search with embeddings
         // 1. Generate embedding for query
         // 2. Perform vector similarity search in LanceDB
@@ -266,6 +271,7 @@ impl LongTermMemory {
     /// # Returns
     ///
     /// The path to the database storage directory
+    #[allow(dead_code)]
     pub fn db_path(&self) -> &PathBuf {
         &self.db_path
     }
@@ -276,14 +282,17 @@ impl LongTermMemory {
 pub enum MemoryError {
     /// Storage-related errors
     #[error("Storage error: {0}")]
+    #[allow(dead_code)]
     Storage(String),
 
     /// Search-related errors
     #[error("Search error: {0}")]
+    #[allow(dead_code)]
     Search(String),
 
     /// Embedding generation errors
     #[error("Embedding error: {0}")]
+    #[allow(dead_code)]
     Embedding(String),
 
     /// IO errors
@@ -292,6 +301,7 @@ pub enum MemoryError {
 
     /// Serialization/deserialization errors
     #[error("Serialization error: {0}")]
+    #[allow(dead_code)]
     Serialization(String),
 }
 

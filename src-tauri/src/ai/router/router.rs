@@ -99,6 +99,7 @@ impl IntelligentRouter {
     }
 
     /// Get a provider by ID
+    #[allow(dead_code)]
     pub fn get_provider(&self, provider_id: &ProviderId) -> Option<Arc<ProviderWithStats>> {
         self.load_balancer
             .providers()

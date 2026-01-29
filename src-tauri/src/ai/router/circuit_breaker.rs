@@ -24,6 +24,7 @@ pub struct CircuitBreakerConfig {
     /// Number of successes before closing circuit (in half-open state)
     pub success_threshold: u32,
     /// Timeout before attempting to close circuit (in half-open state)
+    #[allow(dead_code)]
     pub timeout: Duration,
     /// Duration to keep circuit open before attempting recovery
     pub open_duration: Duration,
@@ -158,16 +159,19 @@ impl CircuitBreaker {
     }
 
     /// Get failure count
+    #[allow(dead_code)]
     pub async fn failure_count(&self) -> u32 {
         *self.failure_count.read().await
     }
 
     /// Get success count (in half-open state)
+    #[allow(dead_code)]
     pub async fn success_count(&self) -> u32 {
         *self.success_count.read().await
     }
 
     /// Reset circuit to closed state
+    #[allow(dead_code)]
     pub async fn reset(&self) {
         *self.state.write().await = CircuitState::Closed;
         *self.failure_count.write().await = 0;
@@ -176,6 +180,7 @@ impl CircuitBreaker {
     }
 
     /// Get configuration
+    #[allow(dead_code)]
     pub fn config(&self) -> &CircuitBreakerConfig {
         &self.config
     }

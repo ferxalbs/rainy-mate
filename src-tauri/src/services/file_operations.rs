@@ -326,6 +326,7 @@ impl FileOperationEngine {
     }
 
     /// Create engine with workspace context
+    #[allow(dead_code)]
     pub fn with_workspace(workspace: Workspace) -> Self {
         let engine = Self::new();
         // Set workspace using a blocking lock
@@ -353,18 +354,24 @@ impl FileOperationEngine {
     }
 
     /// Get current workspace
+    #[allow(dead_code)]
     pub async fn get_workspace(&self) -> Option<Workspace> {
         self.workspace.lock().await.clone()
     }
 
     /// Validate if a path is allowed within the current workspace
     pub async fn validate_path(&self, path: &str) -> FileOpResult<()> {
-        let workspace = self.workspace.lock().await.as_ref()
+        let workspace = self
+            .workspace
+            .lock()
+            .await
+            .as_ref()
             .ok_or_else(|| FileOpError::InvalidPath("No workspace context set".to_string()))?
             .clone();
 
         let path_buf = PathBuf::from(path);
-        let canonical_path = path_buf.canonicalize()
+        let canonical_path = path_buf
+            .canonicalize()
             .map_err(|_| FileOpError::InvalidPath(format!("Cannot canonicalize path: {}", path)))?;
 
         // Check if path is within allowed paths
@@ -379,7 +386,8 @@ impl FileOperationEngine {
 
         if !is_allowed {
             return Err(FileOpError::PermissionDenied(format!(
-                "Path {} is not within allowed workspace paths", path
+                "Path {} is not within allowed workspace paths",
+                path
             )));
         }
 
@@ -388,7 +396,11 @@ impl FileOperationEngine {
 
     /// Validate if an operation is permitted based on workspace permissions
     pub async fn validate_operation(&self, operation: FileOpType) -> FileOpResult<()> {
-        let workspace = self.workspace.lock().await.as_ref()
+        let workspace = self
+            .workspace
+            .lock()
+            .await
+            .as_ref()
             .ok_or_else(|| FileOpError::InvalidPath("No workspace context set".to_string()))?
             .clone();
 
@@ -402,7 +414,8 @@ impl FileOperationEngine {
 
         if !permitted {
             return Err(FileOpError::PermissionDenied(format!(
-                "Operation {:?} is not permitted in this workspace", operation
+                "Operation {:?} is not permitted in this workspace",
+                operation
             )));
         }
 
@@ -410,7 +423,11 @@ impl FileOperationEngine {
     }
 
     /// Validate both path and operation
-    pub async fn validate_path_and_operation(&self, path: &str, operation: FileOpType) -> FileOpResult<()> {
+    pub async fn validate_path_and_operation(
+        &self,
+        path: &str,
+        operation: FileOpType,
+    ) -> FileOpResult<()> {
         self.validate_path(path).await?;
         self.validate_operation(operation).await
     }
@@ -427,11 +444,17 @@ impl FileOperationEngine {
 
         for op in operations {
             // Validate workspace permissions and paths
-            if let Err(e) = self.validate_path_and_operation(&op.source, FileOpType::Move).await {
+            if let Err(e) = self
+                .validate_path_and_operation(&op.source, FileOpType::Move)
+                .await
+            {
                 errors.push(format!("{}: {}", op.source, e));
                 continue;
             }
-            if let Err(e) = self.validate_path_and_operation(&op.destination, FileOpType::Move).await {
+            if let Err(e) = self
+                .validate_path_and_operation(&op.destination, FileOpType::Move)
+                .await
+            {
                 errors.push(format!("{}: {}", op.destination, e));
                 continue;
             }
@@ -628,7 +651,10 @@ impl FileOperationEngine {
 
         for path_str in paths {
             // Validate workspace permissions and path
-            if let Err(e) = self.validate_path_and_operation(&path_str, FileOpType::Delete).await {
+            if let Err(e) = self
+                .validate_path_and_operation(&path_str, FileOpType::Delete)
+                .await
+            {
                 errors.push(format!("{}: {}", path_str, e));
                 continue;
             }
@@ -683,7 +709,8 @@ impl FileOperationEngine {
         dry_run: bool,
     ) -> FileOpResult<OrganizeResult> {
         // Validate workspace permissions and path
-        self.validate_path_and_operation(path, FileOpType::Move).await?;
+        self.validate_path_and_operation(path, FileOpType::Move)
+            .await?;
 
         let base_path = Path::new(path);
         if !base_path.exists() || !base_path.is_dir() {
@@ -861,7 +888,8 @@ impl FileOperationEngine {
     /// Analyze workspace and generate optimization suggestions with validation
     pub async fn analyze_workspace(&self, path: &str) -> FileOpResult<WorkspaceAnalysis> {
         // Validate workspace permissions and path
-        self.validate_path_and_operation(path, FileOpType::Create).await?; // Read access
+        self.validate_path_and_operation(path, FileOpType::Create)
+            .await?; // Read access
 
         let base_path = Path::new(path);
         if !base_path.exists() || !base_path.is_dir() {

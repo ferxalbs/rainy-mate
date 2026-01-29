@@ -2,7 +2,7 @@
 // Provides automatic fallback to alternative providers
 
 use crate::ai::provider_trait::ProviderWithStats;
-use crate::ai::provider_types::{ProviderId, ProviderHealth};
+use crate::ai::provider_types::{ProviderHealth, ProviderId};
 use std::sync::Arc;
 
 /// Fallback strategy
@@ -20,10 +20,13 @@ pub enum FallbackStrategy {
 #[derive(Debug, Clone)]
 pub struct FallbackChainConfig {
     /// Fallback strategy
+    #[allow(dead_code)]
     pub strategy: FallbackStrategy,
     /// Maximum number of fallback attempts
+    #[allow(dead_code)]
     pub max_attempts: usize,
     /// Timeout for each attempt (in seconds)
+    #[allow(dead_code)]
     pub attempt_timeout: u64,
 }
 
@@ -38,6 +41,7 @@ impl Default for FallbackChainConfig {
 }
 
 /// Fallback chain for provider resilience
+#[allow(dead_code)]
 pub struct FallbackChain {
     /// Provider chain (in priority order)
     chain: Vec<Arc<ProviderWithStats>>,
@@ -45,6 +49,7 @@ pub struct FallbackChain {
     config: FallbackChainConfig,
 }
 
+#[allow(dead_code)]
 impl FallbackChain {
     /// Create a new fallback chain
     pub fn new(config: FallbackChainConfig) -> Self {
@@ -129,7 +134,10 @@ impl FallbackChain {
     }
 
     /// Get next provider sequentially
-    fn get_next_sequential(&self, last_attempted: Option<&ProviderId>) -> Option<Arc<ProviderWithStats>> {
+    fn get_next_sequential(
+        &self,
+        last_attempted: Option<&ProviderId>,
+    ) -> Option<Arc<ProviderWithStats>> {
         if let Some(last_id) = last_attempted {
             // Find the index of the last attempted provider
             if let Some(index) = self.chain.iter().position(|p| p.provider().id() == last_id) {
@@ -150,9 +158,14 @@ impl FallbackChain {
     }
 
     /// Get next provider skipping unhealthy ones
-    async fn get_next_skip_unhealthy(&self, last_attempted: Option<&ProviderId>) -> Option<Arc<ProviderWithStats>> {
+    async fn get_next_skip_unhealthy(
+        &self,
+        last_attempted: Option<&ProviderId>,
+    ) -> Option<Arc<ProviderWithStats>> {
         let start_index = if let Some(last_id) = last_attempted {
-            self.chain.iter().position(|p| p.provider().id() == last_id)
+            self.chain
+                .iter()
+                .position(|p| p.provider().id() == last_id)
                 .map(|i| i + 1)
                 .unwrap_or(0)
         } else {
@@ -188,7 +201,9 @@ impl FallbackChain {
 
     /// Get the index of a provider in the chain
     pub fn index_of(&self, provider_id: &ProviderId) -> Option<usize> {
-        self.chain.iter().position(|p| p.provider().id() == provider_id)
+        self.chain
+            .iter()
+            .position(|p| p.provider().id() == provider_id)
     }
 
     /// Clear the chain
