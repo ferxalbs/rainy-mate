@@ -1,5 +1,4 @@
 import { Moon, Sun } from "lucide-react";
-import { Switch as HeroSwitch } from "@heroui/react";
 
 interface MacOSToggleProps {
   isDark: boolean;

@@ -66,6 +66,8 @@ function App() {
     type: "info",
   });
 
+  // @ts-ignore - Reserved for future file preview implementation
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const showPreview = useCallback((filename: string, content: string) => {
     setInspector({
       title: "File Preview",
