@@ -11,6 +11,11 @@ import {
   Plus,
   FileText,
   Search,
+  Timer,
+  CheckCircle2,
+  ListTodo,
+  Clock,
+  MessageSquare,
 } from "lucide-react";
 import { useState } from "react";
 import type { Folder } from "../../types";
@@ -53,6 +58,7 @@ export function FloatingSidebar({
     folders: true,
     tasks: true,
     aiStudio: true,
+    history: false,
     settings: false,
   });
 
@@ -98,27 +104,23 @@ export function FloatingSidebar({
 
       <Separator className="my-1 mx-2" />
 
-      {/* Cowork - Main Action */}
-      <div className="p-2 pt-1">
-        <SidebarItem
-          icon={<Sparkles className="size-4" />}
-          label="Cowork"
-          isActive={activeSection === "cowork" || activeSection === "running"}
-          onClick={() => onNavigate?.("cowork")}
-        />
-      </div>
-
       <Separator className="my-1 mx-2" />
 
-      {/* Tools Section */}
+      {/* AI Studio Section */}
       <div className="p-2 pt-1">
         <SectionHeader
-          label="Tools"
+          label="AI Studio"
           isExpanded={expandedSections.aiStudio}
           onToggle={() => toggleSection("aiStudio")}
         />
         {expandedSections.aiStudio && (
           <div className="space-y-0.5 mt-1">
+            <SidebarItem
+              icon={<MessageSquare className="size-4" />}
+              label="Cowork Chat"
+              isActive={activeSection === "cowork"}
+              onClick={() => onNavigate?.("cowork")}
+            />
             <SidebarItem
               icon={<FileText className="size-4" />}
               label="Documents"
@@ -130,6 +132,66 @@ export function FloatingSidebar({
               label="Research"
               isActive={activeSection === "research"}
               onClick={() => onNavigate?.("research")}
+            />
+          </div>
+        )}
+      </div>
+
+      <Separator className="my-1 mx-2" />
+
+      {/* Tasks Section */}
+      <div className="p-2 pt-1">
+        <SectionHeader
+          label="Tasks"
+          isExpanded={expandedSections.tasks}
+          onToggle={() => toggleSection("tasks")}
+        />
+        {expandedSections.tasks && (
+          <div className="space-y-0.5 mt-1">
+            <SidebarItem
+              icon={<Timer className="size-4 text-blue-500" />}
+              label="Running"
+              badge={_taskCounts.running > 0 ? _taskCounts.running : undefined}
+              badgeColor="blue"
+              isActive={activeSection === "running"}
+              onClick={() => onNavigate?.("running")}
+            />
+            <SidebarItem
+              icon={<ListTodo className="size-4 text-orange-500" />}
+              label="Queued"
+              badge={_taskCounts.queued > 0 ? _taskCounts.queued : undefined}
+              isActive={activeSection === "queued"}
+              onClick={() => onNavigate?.("queued")}
+            />
+            <SidebarItem
+              icon={<CheckCircle2 className="size-4 text-green-500" />}
+              label="Completed"
+              badge={
+                _taskCounts.completed > 0 ? _taskCounts.completed : undefined
+              }
+              isActive={activeSection === "completed"}
+              onClick={() => onNavigate?.("completed")}
+            />
+          </div>
+        )}
+      </div>
+
+      <Separator className="my-1 mx-2" />
+
+      {/* History Section */}
+      <div className="p-2 pt-1">
+        <SectionHeader
+          label="History"
+          isExpanded={expandedSections.history}
+          onToggle={() => toggleSection("history")}
+        />
+        {expandedSections.history && (
+          <div className="space-y-0.5 mt-1">
+            <SidebarItem
+              icon={<Clock className="size-4" />}
+              label="Last 7 days"
+              isActive={activeSection === "history-7d"}
+              onClick={() => onNavigate?.("history-7d")}
             />
           </div>
         )}
