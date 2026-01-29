@@ -1,16 +1,10 @@
 import { ReactNode, useState, useEffect } from "react";
 import { BackgroundManager } from "../backgrounds/BackgroundManager";
-import { FloatingSidebar } from "./FloatingSidebar";
-import { Button, Avatar, Switch } from "@heroui/react";
-import {
-  Settings,
-  Moon,
-  Sun,
-  Maximize2,
-  Minus,
-  X,
-  FolderOpen,
-} from "lucide-react";
+import { AppSidebar } from "./AppSidebar";
+import { InspectorPanel } from "./InspectorPanel";
+import { MacOSToggle } from "./MacOSToggle";
+import { Button, Tooltip } from "@heroui/react";
+import { Maximize2, Minus, X, FolderOpen, PanelRight } from "lucide-react";
 import type { Folder } from "../../types";
 import { useTheme } from "../../hooks/useTheme";
 
@@ -29,6 +23,11 @@ interface TahoeLayoutProps {
     running: number;
     queued: number;
   };
+  // Inspector Props
+  inspectorTitle?: string;
+  inspectorType?: "preview" | "info" | "process" | "links";
+  inspectorContent?: string;
+  inspectorFilename?: string;
 }
 
 export function TahoeLayout({
@@ -42,9 +41,15 @@ export function TahoeLayout({
   onSettingsClick,
   activeSection,
   taskCounts,
+  inspectorTitle,
+  inspectorType,
+  inspectorContent,
+  inspectorFilename,
 }: TahoeLayoutProps) {
   const { mode, setMode } = useTheme();
   const [isWindows, setIsWindows] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   useEffect(() => {
     // Detect OS
@@ -59,119 +64,125 @@ export function TahoeLayout({
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background overflow-hidden relative">
+    <div className="flex h-screen bg-transparent overflow-hidden relative font-sans">
       <BackgroundManager />
-      {/* Drag region - covers top area for window movement */}
-      <div
-        data-tauri-drag-region
-        className="absolute top-0 right-0 h-10 z-10"
-        style={{ left: 78 }}
+
+      {/* 1st Column: Integrated Sidebar */}
+      <AppSidebar
+        folders={folders}
+        activeFolderId={activeFolderId}
+        onFolderSelect={onFolderSelect}
+        onAddFolder={onAddFolder}
+        onNavigate={onNavigate}
+        onSettingsClick={onSettingsClick}
+        activeSection={activeSection}
+        taskCounts={taskCounts}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
-      {/* Header with controls - inline, not floating */}
-      <header className="flex items-center justify-between h-10 px-4 shrink-0 relative">
-        {/* Left Side: Workspace Info */}
-        <div
-          className={`relative z-20 window-no-drag flex items-center gap-2 max-w-[60%] overflow-hidden transition-[padding] duration-200 pointer-events-none ${!isWindows ? "pl-[78px]" : ""}`}
+      {/* 2nd & 3rd Column Wrapper */}
+      <div className="flex flex-col flex-1 min-w-0 h-full relative z-10 transition-all duration-300">
+        {/* Universal Header - Glass Effect with Mode Specifics */}
+        <header
+          className={`flex items-center justify-between h-14 px-6 shrink-0 border-b border-border/10 backdrop-blur-2xl transition-colors duration-300 ${isDark ? "bg-background/30" : "bg-background/60"}`}
         >
-          {workspacePath && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground animate-appear pointer-events-auto">
-              <FolderOpen className="size-4 shrink-0" />
-              <span
-                className="font-medium text-foreground truncate max-w-[300px]"
-                title={workspacePath}
-              >
-                {workspacePath.split("/").pop() || workspacePath}
-              </span>
-              <span
-                className="opacity-50 text-xs hidden sm:inline-block truncate max-w-[200px]"
-                title={workspacePath}
-              >
-                {workspacePath.replace(
-                  workspacePath.split("/").pop() || "",
-                  "",
-                )}
-              </span>
-            </div>
-          )}
-        </div>
+          {/* Drag region */}
+          <div data-tauri-drag-region className="absolute inset-0 h-10 -z-10" />
 
-        {/* Right Side: Window Controls */}
-        <div className="relative z-20 window-no-drag flex items-center gap-2">
-          {/* Theme Toggle */}
-          <div className="flex items-center gap-1.5">
-            <Sun className="size-3.5 text-muted-foreground" />
-            <Switch
-              isSelected={isDark}
-              onChange={toggleTheme}
-              size="sm"
-              aria-label="Toggle dark mode"
-            >
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-            </Switch>
-            <Moon className="size-3.5 text-muted-foreground" />
+          {/* Left Side: Workspace Info */}
+          <div className="window-no-drag flex items-center gap-3 min-w-0">
+            {workspacePath && (
+              <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 animate-appear shadow-sm">
+                <FolderOpen className="size-4 text-primary shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span
+                    className="text-xs font-semibold text-foreground truncate max-w-[200px]"
+                    title={workspacePath}
+                  >
+                    {workspacePath.split("/").pop() || workspacePath}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Settings */}
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Settings"
-            onPress={onSettingsClick}
-          >
-            <Settings className="size-4" />
-          </Button>
-
-          {/* Avatar */}
-          <Avatar size="sm">
-            <Avatar.Fallback>RC</Avatar.Fallback>
-          </Avatar>
-
-          {/* Windows Controls - only shown on Windows */}
-          {isWindows && (
-            <div className="windows-controls flex items-center gap-0.5 ml-2">
-              <Button variant="ghost" size="sm" aria-label="Minimize">
-                <Minus className="size-4" />
-              </Button>
-              <Button variant="ghost" size="sm" aria-label="Maximize">
-                <Maximize2 className="size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Close"
-                className="hover:bg-red-500 hover:text-white"
-              >
-                <X className="size-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden z-10 relative">
-        {/* Floating Sidebar with spacing */}
-        <div className="pl-4 py-4 shrink-0 flex flex-col pointer-events-none">
-          <div className="pointer-events-auto h-full">
-            <FloatingSidebar
-              folders={folders}
-              activeFolderId={activeFolderId}
-              onFolderSelect={onFolderSelect}
-              onAddFolder={onAddFolder}
-              onNavigate={onNavigate}
-              activeSection={activeSection}
-              taskCounts={taskCounts}
+          {/* Right Side: Global Controls */}
+          <div className="window-no-drag flex items-center gap-4">
+            {/* Custom macOS Toggle */}
+            <MacOSToggle
+              isDark={isDark}
+              onToggle={(checked) => toggleTheme(checked)}
             />
-          </div>
-        </div>
 
-        {/* Main Content - Transparent Surface with offset */}
-        <main className="flex-1 overflow-auto w-full h-full relative pl-6 pr-6">
-          <div className="w-full h-full select-text">{children}</div>
-        </main>
+            {/* Inspector Toggle */}
+            <Tooltip delay={500}>
+              <Button
+                variant={isInspectorOpen ? "secondary" : "ghost"}
+                size="sm"
+                isIconOnly
+                onPress={() => setIsInspectorOpen(!isInspectorOpen)}
+                className="rounded-full data-[hover=true]:bg-muted/30"
+              >
+                <PanelRight className="size-4 opacity-80" />
+              </Button>
+              <Tooltip.Content placement="bottom">
+                Toggle Inspector
+              </Tooltip.Content>
+            </Tooltip>
+
+            {/* Windows Controls */}
+            {isWindows && (
+              <div className="windows-controls flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isIconOnly
+                  aria-label="Minimize"
+                >
+                  <Minus className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isIconOnly
+                  aria-label="Maximize"
+                >
+                  <Maximize2 className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isIconOnly
+                  aria-label="Close"
+                  className="hover:bg-red-500 hover:text-white"
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* Content Area + 3rd Column (Inspector) */}
+        <div className="flex flex-1 min-w-0 overflow-hidden relative">
+          {/* Main Content */}
+          <main className="flex-1 overflow-auto relative p-6">
+            <div className="max-w-6xl mx-auto w-full h-full select-text">
+              {children}
+            </div>
+          </main>
+
+          {/* 3rd Column: Inspector */}
+          <InspectorPanel
+            isOpen={isInspectorOpen}
+            onClose={() => setIsInspectorOpen(false)}
+            title={inspectorTitle}
+            type={inspectorType}
+            content={inspectorContent}
+            filename={inspectorFilename}
+          />
+        </div>
       </div>
     </div>
   );

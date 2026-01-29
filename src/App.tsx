@@ -55,6 +55,26 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Inspector State
+  const [inspector, setInspector] = useState<{
+    title?: string;
+    type?: "preview" | "info" | "process" | "links";
+    content?: string;
+    filename?: string;
+  }>({
+    title: "System Status",
+    type: "info",
+  });
+
+  const showPreview = useCallback((filename: string, content: string) => {
+    setInspector({
+      title: "File Preview",
+      type: "preview",
+      content,
+      filename,
+    });
+  }, []);
+
   // Load tasks on mount
   useEffect(() => {
     refreshTasks();
@@ -206,6 +226,10 @@ function App() {
         onSettingsClick={handleSettingsClick}
         activeSection={activeSection}
         taskCounts={taskCounts}
+        inspectorTitle={inspector.title}
+        inspectorType={inspector.type}
+        inspectorContent={inspector.content}
+        inspectorFilename={inspector.filename}
       >
         <div className="space-y-6">
           {/* Error Display */}
