@@ -42,12 +42,28 @@ impl ManagedResearchService {
             .map_err(|e| e.to_string())?;
 
         if !response.success {
-            return Err(response
+            let msg = response
                 .message
-                .unwrap_or_else(|| "Unknown research error".to_string()));
+                .unwrap_or_else(|| "Unknown research error".to_string());
+            return Err(msg);
         }
 
-        let content = response.result.unwrap_or_default();
+        let result_value = response.result.unwrap_or(serde_json::Value::Null);
+
+        let content = match result_value {
+            serde_json::Value::String(s) => s,
+            serde_json::Value::Object(map) => {
+                if let Some(c) = map.get("content").and_then(|v| v.as_str()) {
+                    c.to_string()
+                } else if let Some(o) = map.get("output").and_then(|v| v.as_str()) {
+                    o.to_string()
+                } else {
+                    serde_json::Value::Object(map).to_string()
+                }
+            }
+            serde_json::Value::Null => String::new(),
+            _ => result_value.to_string(),
+        };
         let provider = response.provider.unwrap_or_else(|| "rainy".to_string());
 
         Ok(ResearchResult {

@@ -4,6 +4,18 @@ use rainy_sdk::{
 };
 use tauri::State;
 
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct ResearchCommandResponse {
+    pub success: bool,
+    pub content: Option<String>,
+    pub error: Option<String>,
+    pub network: Option<String>,
+    #[serde(rename = "generatedAt")]
+    pub generated_at: Option<String>,
+}
+
 #[tauri::command]
 pub async fn perform_research(
     topic: String,
@@ -12,7 +24,7 @@ pub async fn perform_research(
     provider: Option<String>,
     model: Option<String>,
     managed_research: State<'_, crate::services::managed_research::ManagedResearchService>,
-) -> Result<ResearchResult, String> {
+) -> Result<ResearchCommandResponse, String> {
     let depth_enum = match depth.as_deref() {
         Some("advanced") => ResearchDepth::Advanced,
         _ => ResearchDepth::Basic,
@@ -32,5 +44,14 @@ pub async fn perform_research(
         config = config.with_model(m);
     }
 
-    managed_research.perform_research(topic, Some(config)).await
+    match managed_research.perform_research(topic, Some(config)).await {
+        Ok(result) => Ok(ResearchCommandResponse {
+            success: true,
+            content: Some(result.content),
+            error: None,
+            network: Some(result.provider),
+            generated_at: Some(chrono::Utc::now().to_rfc3339()),
+        }),
+        Err(e) => Err(e),
+    }
 }
