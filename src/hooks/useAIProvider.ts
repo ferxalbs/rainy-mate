@@ -32,6 +32,13 @@ interface UseAIProviderResult {
     generateEmbeddings: (request: EmbeddingRequestDto) => Promise<EmbeddingResponse>;
     getProviderAvailableModels: (id: string) => Promise<string[]>;
     clearProviders: () => Promise<void>;
+
+    // Legacy/Compatible API Key Methods
+    hasApiKey: (provider: string) => boolean; // Synchronous check from cache
+    validateApiKey: (provider: string, apiKey: string) => Promise<boolean>;
+    storeApiKey: (provider: string, apiKey: string) => Promise<void>;
+    getApiKey: (provider: string) => Promise<string | null>;
+    deleteApiKey: (provider: string) => Promise<void>;
 }
 
 export function useAIProvider(): UseAIProviderResult {
@@ -40,6 +47,7 @@ export function useAIProvider(): UseAIProviderResult {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [providerCount, setProviderCount] = useState(0);
+    const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, boolean>>({});
 
     // Debounce refresh calls to prevent excessive API calls
     const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -70,9 +78,28 @@ export function useAIProvider(): UseAIProviderResult {
                 const defaultProv = await tauri.getDefaultProvider();
                 setDefaultProviderState(defaultProv);
             } catch (err) {
-                // No default provider set, that's okay
                 setDefaultProviderState(null);
             }
+
+            // Check API keys for common providers
+            // This is needed for legacy/sync compatibility
+            const keyStatus: Record<string, boolean> = {};
+            const commonProviders = ['rainy_api', 'cowork_api', 'gemini', 'openai', 'anthropic'];
+            
+            // Also check items from the list
+            const providerIds = new Set([...commonProviders, ...providerList.map(p => p.id)]);
+            
+            await Promise.all(Array.from(providerIds).map(async (pid) => {
+                try {
+                    const has = await tauri.hasApiKey(pid);
+                    keyStatus[pid] = has;
+                } catch (e) {
+                    keyStatus[pid] = false;
+                }
+            }));
+            
+            setApiKeyStatus(keyStatus);
+
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
         } finally {
@@ -239,6 +266,64 @@ export function useAIProvider(): UseAIProviderResult {
         }
     }, [refreshProviders]);
 
+    // Legacy/Compatible API Key Methods
+    const hasApiKey = useCallback((provider: string): boolean => {
+        return !!apiKeyStatus[provider];
+    }, [apiKeyStatus]);
+
+    const validateApiKey = useCallback(async (provider: string, apiKey: string): Promise<boolean> => {
+        try {
+            const isValid = await tauri.validateApiKey(provider, apiKey);
+            if (isValid) {
+                 // Optimistically update status
+                 setApiKeyStatus(prev => ({ ...prev, [provider]: true }));
+            }
+            return isValid;
+        } catch (err) {
+            console.error(`Error validating API key for ${provider}:`, err);
+            return false;
+        }
+    }, []);
+
+    const storeApiKey = useCallback(async (provider: string, apiKey: string): Promise<void> => {
+        try {
+            await tauri.storeApiKey(provider, apiKey);
+            // Optimistically update status
+            setApiKeyStatus(prev => ({ ...prev, [provider]: true }));
+            // Force refresh
+            refreshTimeoutRef.current = setTimeout(() => {
+                refreshProviders(true);
+            }, 500);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(message);
+        }
+    }, [refreshProviders]);
+
+    const getApiKey = useCallback(async (provider: string): Promise<string | null> => {
+        try {
+            return await tauri.getApiKey(provider);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(message);
+        }
+    }, []);
+
+    const deleteApiKey = useCallback(async (provider: string): Promise<void> => {
+        try {
+            await tauri.deleteApiKey(provider);
+            // Optimistically update status
+            setApiKeyStatus(prev => ({ ...prev, [provider]: false }));
+            // Force refresh
+            refreshTimeoutRef.current = setTimeout(() => {
+                refreshProviders(true);
+            }, 500);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(message);
+        }
+    }, [refreshProviders]);
+
     return {
         providers,
         defaultProvider,
@@ -258,5 +343,10 @@ export function useAIProvider(): UseAIProviderResult {
         generateEmbeddings,
         getProviderAvailableModels,
         clearProviders,
+        hasApiKey,
+        validateApiKey,
+        storeApiKey,
+        getApiKey,
+        deleteApiKey,
     };
 }
