@@ -16,6 +16,8 @@ pub struct ResearchCommandResponse {
     pub generated_at: Option<String>,
 }
 
+use rainy_sdk::search::ThinkingLevel;
+
 #[tauri::command]
 pub async fn perform_research(
     topic: String,
@@ -23,6 +25,7 @@ pub async fn perform_research(
     max_sources: Option<u32>,
     provider: Option<String>,
     model: Option<String>,
+    thinking_level: Option<String>,
     managed_research: State<'_, crate::services::managed_research::ManagedResearchService>,
 ) -> Result<ResearchCommandResponse, String> {
     let depth_enum = match depth.as_deref() {
@@ -44,14 +47,28 @@ pub async fn perform_research(
         config = config.with_model(m);
     }
 
+    if let Some(tl) = thinking_level {
+        let level = match tl.as_str() {
+            "minimal" => ThinkingLevel::Minimal,
+            "low" => ThinkingLevel::Low,
+            "medium" => ThinkingLevel::Medium,
+            "high" => ThinkingLevel::High,
+            _ => ThinkingLevel::Medium, // Default fallback
+        };
+        config = config.with_thinking_level(level);
+    }
+
     match managed_research.perform_research(topic, Some(config)).await {
-        Ok(result) => Ok(ResearchCommandResponse {
-            success: true,
-            content: Some(result.content),
-            error: None,
-            network: Some(result.provider),
-            generated_at: Some(chrono::Utc::now().to_rfc3339()),
-        }),
+        Ok(result) => {
+            let res: ResearchResult = result;
+            Ok(ResearchCommandResponse {
+                success: true,
+                content: Some(res.content),
+                error: None,
+                network: Some(res.provider),
+                generated_at: Some(chrono::Utc::now().to_rfc3339()),
+            })
+        }
         Err(e) => Err(e),
     }
 }

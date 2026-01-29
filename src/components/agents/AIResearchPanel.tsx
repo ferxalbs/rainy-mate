@@ -18,6 +18,7 @@ import {
 import { Search, Globe, Copy } from "lucide-react";
 import { useWebResearch } from "../../hooks/useWebResearch";
 import { useCoworkModels } from "../../hooks/useCoworkModels";
+import { MarkdownRenderer } from "../shared/MarkdownRenderer";
 
 export function AIResearchPanel() {
   const { researchTopic, researchResult, isResearching, error } =
@@ -28,6 +29,9 @@ export function AIResearchPanel() {
   const [depth, setDepth] = useState<"basic" | "advanced">("basic");
   const [provider, setProvider] = useState<"exa" | "tavily">("exa");
   const [selectedModel, setSelectedModel] = useState<string>("");
+  const [thinkingLevel, setThinkingLevel] = useState<
+    "minimal" | "low" | "medium" | "high"
+  >("medium");
   const [copied, setCopied] = useState(false);
 
   // Set default model when loaded
@@ -39,7 +43,14 @@ export function AIResearchPanel() {
 
   const handleResearch = async () => {
     if (!topic.trim()) return;
-    await researchTopic(topic, depth, 5, provider, selectedModel || undefined);
+    await researchTopic(
+      topic,
+      depth,
+      5,
+      provider,
+      selectedModel || undefined,
+      selectedModel?.includes("gemini-3") ? thinkingLevel : undefined,
+    );
   };
 
   const handleCopy = async () => {
@@ -48,6 +59,23 @@ export function AIResearchPanel() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const showThinkingLevel = selectedModel?.includes("gemini-3");
+  const isProModel = selectedModel?.includes("gemini-3-pro");
+  const availableLevels = isProModel
+    ? ["low", "high"]
+    : ["minimal", "low", "medium", "high"];
+
+  // Reset to valid level when switching models
+  useEffect(() => {
+    if (
+      showThinkingLevel &&
+      isProModel &&
+      (thinkingLevel === "minimal" || thinkingLevel === "medium")
+    ) {
+      setThinkingLevel("low");
+    }
+  }, [selectedModel, thinkingLevel, showThinkingLevel, isProModel]);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -77,7 +105,6 @@ export function AIResearchPanel() {
               onChange={(e) => setTopic(e.target.value)}
               disabled={isResearching}
               className="w-full bg-background/50 border-border/50 focus-within:bg-background transition-colors h-12"
-              size="lg"
             />
           </div>
 
@@ -112,7 +139,7 @@ export function AIResearchPanel() {
           {/* Model Selection */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">AI Model</Label>
-            <div className="flex gap-4">
+            <div className="flex gap-4 items-start flex-wrap">
               <Select
                 className="max-w-xs"
                 placeholder="Select an AI model"
@@ -137,9 +164,57 @@ export function AIResearchPanel() {
                   </ListBox>
                 </Select.Popover>
               </Select>
+
+              {showThinkingLevel && (
+                <div className="flex flex-col gap-2 min-w-[200px] animate-in fade-in slide-in-from-left-2">
+                  <Select
+                    className="w-full"
+                    placeholder="Thinking Level"
+                    selectedKey={thinkingLevel}
+                    onSelectionChange={(key) => {
+                      if (key) setThinkingLevel(key.toString() as any);
+                    }}
+                    isDisabled={isResearching}
+                  >
+                    <Label>Thinking Level</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {availableLevels.map((level) => (
+                          <ListBox.Item
+                            key={level}
+                            id={level}
+                            textValue={`⚡ ${level.charAt(0).toUpperCase() + level.slice(1)}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span>
+                                {level === "minimal"
+                                  ? "⚡"
+                                  : level === "low"
+                                    ? "⚡⚡"
+                                    : level === "medium"
+                                      ? "⚡⚡⚡"
+                                      : "⚡⚡⚡⚡"}
+                              </span>
+                              <span>
+                                {level.charAt(0).toUpperCase() + level.slice(1)}
+                              </span>
+                            </div>
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Select the AI model that will analyze your research.
+              Select the AI model that will analyze your research.{" "}
+              {showThinkingLevel &&
+                "Higher thinking levels provide deeper reasoning."}
             </p>
           </div>
 
@@ -226,13 +301,9 @@ export function AIResearchPanel() {
             </Card.Header>
             <Card.Content className="p-0">
               <div className="bg-background">
-                <div
-                  className="prose dark:prose-invert max-w-none p-8 max-h-[600px] overflow-auto custom-scrollbar"
-                  dangerouslySetInnerHTML={{
-                    __html:
-                      researchResult.content?.replace(/\n/g, "<br>") || "",
-                  }}
-                />
+                <div className="p-8 max-h-[600px] overflow-auto custom-scrollbar">
+                  <MarkdownRenderer content={researchResult.content || ""} />
+                </div>
               </div>
             </Card.Content>
             <Card.Footer className="px-6 py-3 bg-muted/30 border-t border-border/50 text-xs text-muted-foreground flex justify-between">

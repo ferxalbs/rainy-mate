@@ -53,10 +53,58 @@ impl ManagedResearchService {
         let content = match result_value {
             serde_json::Value::String(s) => s,
             serde_json::Value::Object(map) => {
+                // Check standard content fields
                 if let Some(c) = map.get("content").and_then(|v| v.as_str()) {
                     c.to_string()
                 } else if let Some(o) = map.get("output").and_then(|v| v.as_str()) {
                     o.to_string()
+                } else if let Some(output_arr) = map.get("output").and_then(|v| v.as_array()) {
+                    // Handle Inngest agent output array
+                    // Check for last message content
+                    if let Some(last_msg) = output_arr.last() {
+                        if let Some(content) = last_msg.get("content") {
+                            if let Some(s) = content.as_str() {
+                                s.to_string()
+                            } else {
+                                content.to_string()
+                            }
+                        } else {
+                            // Fallback to searching inside the array items for text
+                            serde_json::Value::Array(output_arr.clone()).to_string()
+                        }
+                    } else {
+                        "No content in output".to_string()
+                    }
+                } else if let Some(state) = map.get("state") {
+                    // Deep nested Inngest state
+                    // state -> _results -> output
+                    if let Some(results) = state.get("_results") {
+                        if let Some(output) = results.get("output") {
+                            if let Some(output_arr) = output.as_array() {
+                                // Try to find the last assistant message that is NOT just a tool call
+                                // Or just dump the last message's content
+                                if let Some(last) = output_arr.last() {
+                                    if let Some(c) = last.get("content") {
+                                        if let Some(s) = c.as_str() {
+                                            s.to_string()
+                                        } else {
+                                            c.to_string()
+                                        }
+                                    } else {
+                                        output.to_string()
+                                    }
+                                } else {
+                                    output.to_string()
+                                }
+                            } else {
+                                output.to_string()
+                            }
+                        } else {
+                            state.to_string()
+                        }
+                    } else {
+                        state.to_string()
+                    }
                 } else {
                     serde_json::Value::Object(map).to_string()
                 }
