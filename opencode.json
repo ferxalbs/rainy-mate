@@ -1,0 +1,28 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "ctx7sk-40bb75f7-a28b-4825-a776-6ec00fe186ba"
+      }
+    },
+    "exa": {
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp",
+      "enabled": true,
+      "headers": {
+        "EXA_API_KEY": "d8950c43-0ae1-4549-bac1-59347e294bcc"
+      }
+    }
+  },
+  "permission": {
+    "skill": {
+      "*": "allow",
+      "rust-expert": "allow",
+      "internal-*": "deny",
+      "experimental-*": "ask"
+    }
+}
+}
