@@ -234,7 +234,7 @@ impl CoworkAgent {
                 can_read: true,
                 can_write: true,
                 can_execute: false,
-                can_delete: true,  // Allow delete for organize/cleanup operations
+                can_delete: true, // Allow delete for organize/cleanup operations
                 can_create_agents: false,
             },
             permission_overrides: Vec::new(),
@@ -328,26 +328,44 @@ impl CoworkAgent {
         );
 
         println!("📋 Available models count: {}", available_models.len());
-        println!("📋 Available models: {:?}", available_models.iter().map(|m| &m.id).collect::<Vec<_>>());
+        println!(
+            "📋 Available models: {:?}",
+            available_models.iter().map(|m| &m.id).collect::<Vec<_>>()
+        );
 
         // Find the selected model in available models to get its provider
         let model_info = available_models.iter().find(|m| m.id == selected_model);
-        
+
         if let Some(model) = model_info {
-            println!("📋 Found model info: provider='{}', name='{}', available={}", model.provider, model.name, model.is_available);
-            
+            println!(
+                "📋 Found model info: provider='{}', name='{}', available={}",
+                model.provider, model.name, model.is_available
+            );
+
             // Route to correct provider based on model's provider field
             match model.provider.as_str() {
                 "Cowork Subscription" => {
                     // Verify model is in caps.models and we can make requests
                     if caps.models.contains(&selected_model) && caps.can_make_request() {
-                        println!("✅ Model '{}' is in caps.models and can make request", selected_model);
-                        match self.ai_provider
-                            .execute_prompt(&ProviderType::CoworkApi, &selected_model, prompt, |_, _| {})
+                        println!(
+                            "✅ Model '{}' is in caps.models and can make request",
+                            selected_model
+                        );
+                        match self
+                            .ai_provider
+                            .execute_prompt(
+                                &ProviderType::CoworkApi,
+                                &selected_model,
+                                prompt,
+                                |_, _| {},
+                            )
                             .await
                         {
                             Ok(response) => {
-                                println!("✅ AI Agent: Successfully used Cowork API for model '{}'", selected_model);
+                                println!(
+                                    "✅ AI Agent: Successfully used Cowork API for model '{}'",
+                                    selected_model
+                                );
                                 return Ok((
                                     response,
                                     ModelInfo {
@@ -358,26 +376,49 @@ impl CoworkAgent {
                                 ));
                             }
                             Err(e) => {
-                                println!("❌ AI Agent: Cowork model '{}' failed: {}", selected_model, e);
+                                println!(
+                                    "❌ AI Agent: Cowork model '{}' failed: {}",
+                                    selected_model, e
+                                );
                             }
                         }
                     } else {
                         if !caps.models.contains(&selected_model) {
-                            println!("⚠️ AI Agent: Model '{}' NOT in caps.models. Available: {:?}", selected_model, caps.models);
+                            println!(
+                                "⚠️ AI Agent: Model '{}' NOT in caps.models. Available: {:?}",
+                                selected_model, caps.models
+                            );
                         }
                         if !caps.can_make_request() {
-                            println!("⚠️ AI Agent: Cannot make request. Used: {}/{}", caps.profile.usage.used, caps.profile.usage.limit);
+                            println!(
+                                "⚠️ AI Agent: Cannot make request. Used: {}/{}",
+                                caps.profile.usage.used, caps.profile.usage.limit
+                            );
                         }
                     }
                 }
                 "Rainy API" => {
-                    if self.ai_provider.has_api_key("rainy_api").await.unwrap_or(false) {
-                        match self.ai_provider
-                            .execute_prompt(&ProviderType::RainyApi, &selected_model, prompt, |_, _| {})
+                    if self
+                        .ai_provider
+                        .has_api_key("rainy_api")
+                        .await
+                        .unwrap_or(false)
+                    {
+                        match self
+                            .ai_provider
+                            .execute_prompt(
+                                &ProviderType::RainyApi,
+                                &selected_model,
+                                prompt,
+                                |_, _| {},
+                            )
                             .await
                         {
                             Ok(response) => {
-                                println!("✅ AI Agent: Successfully used Rainy API for model '{}'", selected_model);
+                                println!(
+                                    "✅ AI Agent: Successfully used Rainy API for model '{}'",
+                                    selected_model
+                                );
                                 return Ok((
                                     response,
                                     ModelInfo {
@@ -388,7 +429,10 @@ impl CoworkAgent {
                                 ));
                             }
                             Err(e) => {
-                                println!("❌ AI Agent: Rainy API model '{}' failed: {}", selected_model, e);
+                                println!(
+                                    "❌ AI Agent: Rainy API model '{}' failed: {}",
+                                    selected_model, e
+                                );
                             }
                         }
                     } else {
@@ -396,13 +440,27 @@ impl CoworkAgent {
                     }
                 }
                 "Google Gemini" => {
-                    if self.ai_provider.has_api_key("gemini").await.unwrap_or(false) {
-                        match self.ai_provider
-                            .execute_prompt(&ProviderType::Gemini, &selected_model, prompt, |_, _| {})
+                    if self
+                        .ai_provider
+                        .has_api_key("gemini")
+                        .await
+                        .unwrap_or(false)
+                    {
+                        match self
+                            .ai_provider
+                            .execute_prompt(
+                                &ProviderType::Gemini,
+                                &selected_model,
+                                prompt,
+                                |_, _| {},
+                            )
                             .await
                         {
                             Ok(response) => {
-                                println!("✅ AI Agent: Successfully used Gemini BYOK for model '{}'", selected_model);
+                                println!(
+                                    "✅ AI Agent: Successfully used Gemini BYOK for model '{}'",
+                                    selected_model
+                                );
                                 return Ok((
                                     response,
                                     ModelInfo {
@@ -413,7 +471,10 @@ impl CoworkAgent {
                                 ));
                             }
                             Err(e) => {
-                                println!("❌ AI Agent: Gemini BYOK model '{}' failed: {}", selected_model, e);
+                                println!(
+                                    "❌ AI Agent: Gemini BYOK model '{}' failed: {}",
+                                    selected_model, e
+                                );
                             }
                         }
                     } else {
@@ -421,21 +482,37 @@ impl CoworkAgent {
                     }
                 }
                 _ => {
-                    println!("⚠️ AI Agent: Unknown provider '{}' for model '{}'", model.provider, selected_model);
+                    println!(
+                        "⚠️ AI Agent: Unknown provider '{}' for model '{}'",
+                        model.provider, selected_model
+                    );
                 }
             }
         } else {
-            println!("⚠️ AI Agent: Selected model '{}' not found in available models", selected_model);
+            println!(
+                "⚠️ AI Agent: Selected model '{}' not found in available models",
+                selected_model
+            );
             println!("⚠️ Attempting to use as Gemini BYOK if it starts with 'gemini'");
-            
+
             // If model starts with "gemini", try it as BYOK
-            if selected_model.starts_with("gemini") && self.ai_provider.has_api_key("gemini").await.unwrap_or(false) {
-                match self.ai_provider
+            if selected_model.starts_with("gemini")
+                && self
+                    .ai_provider
+                    .has_api_key("gemini")
+                    .await
+                    .unwrap_or(false)
+            {
+                match self
+                    .ai_provider
                     .execute_prompt(&ProviderType::Gemini, &selected_model, prompt, |_, _| {})
                     .await
                 {
                     Ok(response) => {
-                        println!("✅ AI Agent: Successfully used Gemini BYOK for model '{}'", selected_model);
+                        println!(
+                            "✅ AI Agent: Successfully used Gemini BYOK for model '{}'",
+                            selected_model
+                        );
                         return Ok((
                             response,
                             ModelInfo {
@@ -460,7 +537,8 @@ impl CoworkAgent {
         if caps.can_make_request() && !caps.models.is_empty() {
             let preferred_model = caps.models.first().unwrap();
             println!("🔄 Trying Cowork fallback with model: {}", preferred_model);
-            if let Ok(response) = self.ai_provider
+            if let Ok(response) = self
+                .ai_provider
                 .execute_prompt(&ProviderType::CoworkApi, preferred_model, prompt, |_, _| {})
                 .await
             {
@@ -477,14 +555,23 @@ impl CoworkAgent {
                 println!("❌ Cowork fallback failed");
             }
         } else {
-            println!("⚠️ Cannot use Cowork fallback: can_make_request={}, models_count={}", 
-                caps.can_make_request(), caps.models.len());
+            println!(
+                "⚠️ Cannot use Cowork fallback: can_make_request={}, models_count={}",
+                caps.can_make_request(),
+                caps.models.len()
+            );
         }
 
         // 2. Try Rainy API default
-        if self.ai_provider.has_api_key("rainy_api").await.unwrap_or(false) {
+        if self
+            .ai_provider
+            .has_api_key("rainy_api")
+            .await
+            .unwrap_or(false)
+        {
             println!("🔄 Trying Rainy API fallback");
-            if let Ok(response) = self.ai_provider
+            if let Ok(response) = self
+                .ai_provider
                 .execute_prompt(&ProviderType::RainyApi, "gpt-4o", prompt, |_, _| {})
                 .await
             {
@@ -505,10 +592,19 @@ impl CoworkAgent {
         }
 
         // 3. Try Gemini BYOK fallback (only if API key is configured)
-        if self.ai_provider.has_api_key("gemini").await.unwrap_or(false) {
+        if self
+            .ai_provider
+            .has_api_key("gemini")
+            .await
+            .unwrap_or(false)
+        {
             let gemini_model = "gemini-3-flash-high";
-            println!("🔄 Trying Gemini BYOK fallback with model: {}", gemini_model);
-            match self.ai_provider
+            println!(
+                "🔄 Trying Gemini BYOK fallback with model: {}",
+                gemini_model
+            );
+            match self
+                .ai_provider
                 .execute_prompt(&ProviderType::Gemini, gemini_model, prompt, |_, _| {})
                 .await
             {
@@ -551,7 +647,7 @@ USER INSTRUCTION: "{}"
 
 FIRST, classify the intent:
 1. QUESTION - User is asking about files/folders (e.g., "What files are here?", "How many images?")
-2. COMMAND - User wants to perform an operation (e.g., "Organize by type", "Delete old files")
+2. COMMAND - User wants to perform an operation (e.g., "Organize by type", "Delete old files", "Create a file")
 
 Generate a JSON response with this structure:
 
@@ -575,7 +671,7 @@ For COMMANDS:
       "destination": "dest path" (for move),
       "pattern": "rename pattern" (for batch_rename),
       "files": ["file1", "file2"] (for batch_rename),
-      "content": "file content" (for create),
+      "content": "COMPREHENSIVE file content - see CONTENT QUALITY RULES below" (for create),
       "description": "Human readable description of this step"
     }}
   ],
@@ -590,6 +686,40 @@ RULES:
 4. Include clear descriptions for each step
 5. If unsure whether it's a question or command, treat it as a question
 6. For "organize", prefer "by_type" strategy unless user specifies otherwise
+
+CONTENT QUALITY RULES (CRITICAL - for create_file operations):
+When creating file content, you MUST generate COMPREHENSIVE, PROFESSIONAL, and DETAILED content:
+
+1. **Length**: Generate substantial content. A biography should be 2000+ words. A list should be complete. A report should be thorough. NEVER create stub or placeholder content.
+
+2. **Research Quality**: Include accurate, detailed information. For biographies: include birth date, early life, career timeline, discography/filmography, achievements, quotes, personal life, legacy. For lists: include ALL items with details like dates, context, and significance.
+
+3. **Structure**: Use proper formatting:
+   - Clear sections with headers
+   - Bullet points or numbered lists where appropriate  
+   - Chronological ordering for timelines
+   - Tables for comparative data
+
+4. **Depth**: Go deep, not shallow. If asked about an artist's albums, list ALL albums with:
+   - Release year
+   - Number of tracks
+   - Notable songs
+   - Chart performance
+   - Critical reception
+   - Thematic content
+
+5. **Professional Tone**: Write as if creating professional documentation or articles. Use proper grammar, complete sentences, and engaging prose.
+
+6. **No Placeholders**: NEVER use placeholder text like "..." or "[continue here]" or "etc.". Complete the content fully.
+
+7. **Maximum Output**: Use your full output capacity. Models support up to 65,000+ output tokens. A 20-line file when 2000+ lines are possible is UNACCEPTABLE.
+
+Example of GOOD content for "Create a file about Lana Del Rey albums":
+- Should list ALL 9 studio albums with full details
+- Include EPs, singles, collaborations
+- Add critical reception and awards
+- Include quotes and notable lyrics
+- At minimum 3000+ words
 
 Respond ONLY with valid JSON, no other text."#,
             context.path,
@@ -950,7 +1080,12 @@ Respond ONLY with valid JSON, no other text."#,
                     );
 
                     self.ai_provider
-                        .execute_prompt(&ProviderType::Gemini, "gemini-2.5-flash", &prompt, |_, _| {})
+                        .execute_prompt(
+                            &ProviderType::Gemini,
+                            "gemini-2.5-flash",
+                            &prompt,
+                            |_, _| {},
+                        )
                         .await
                         .map_err(|e| e.to_string())?
                 };

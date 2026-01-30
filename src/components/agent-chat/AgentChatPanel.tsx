@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Button,
   TextArea,
@@ -92,12 +92,10 @@ export function AgentChatPanel({
     }
   };
 
-  // Determine if we are in "Deep Processing" mode based on model
-  const isDeepProcessing = useMemo(() => {
-    return (
-      currentModelId.includes("cowork") || currentModelId.includes("claude")
-    );
-  }, [currentModelId]);
+  // Always use agent capabilities (plan -> execute flow)
+  // This ensures file editing, research, and other agent features work
+  // regardless of which model is selected
+  const isDeepProcessing = true;
 
   const renderInputArea = (centered: boolean) => (
     <div
