@@ -65,7 +65,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const [theme, setThemeState] = useState<ThemeName>(() => {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return (stored as ThemeName) || "cosmic-gold";
+    return (stored as ThemeName) || "rainy-tahoe";
   });
 
   const [mode, setModeState] = useState<ThemeMode>(() => {

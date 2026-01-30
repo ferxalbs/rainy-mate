@@ -1,16 +1,17 @@
 // Theme System Types
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = "light" | "dark";
 
 export type ThemeName =
-  | 'cosmic-gold'
-  | 'cosmic-night'
-  | 'jujutsu-kaisen'
-  | 'anime-style'
-  | 'cyberpunk-neon'
-  | 'ghibli-forest'
-  | 'eva-01'
-  | 'high-contrast'
-  | 'focus-minimal';
+  | "rainy-tahoe"
+  | "cosmic-gold"
+  | "cosmic-night"
+  | "jujutsu-kaisen"
+  | "anime-style"
+  | "cyberpunk-neon"
+  | "ghibli-forest"
+  | "eva-01"
+  | "high-contrast"
+  | "focus-minimal";
 
 export interface Theme {
   name: ThemeName;
@@ -49,7 +50,6 @@ export interface ThemeColors {
   sidebarAccent: string;
   sidebarBorder: string;
 }
-
 
 export interface ThemeConfig {
   theme: ThemeName;

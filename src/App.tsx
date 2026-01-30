@@ -363,7 +363,7 @@ function App() {
  */
 function NoFolderGate({ onAddFolder }: { onAddFolder: () => void }) {
   return (
-    <Card className="p-8 text-center animate-appear">
+    <Card className="p-12 text-center animate-appear bg-sidebar/30 backdrop-blur-2xl border-white/5 shadow-2xl max-w-lg mx-auto">
       <div className="space-y-4">
         <div className="size-16 mx-auto bg-primary/10 rounded-2xl flex items-center justify-center">
           <FolderPlus className="size-8 text-primary" />
@@ -381,7 +381,7 @@ function NoFolderGate({ onAddFolder }: { onAddFolder: () => void }) {
           variant="primary"
           size="md"
           onPress={onAddFolder}
-          className="mt-2"
+          className="mt-2 font-medium"
         >
           <FolderPlus className="size-4" />
           Add Folder
