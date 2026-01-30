@@ -18,6 +18,13 @@ export interface AgentMessage {
   plan?: TaskPlan;
   result?: ExecutionResult;
   isLoading?: boolean;
+  thought?: string; // AI reasoning/thinking content (for models with thinking capabilities)
+  thinkingLevel?: "minimal" | "low" | "medium" | "high"; // Level of thinking depth
+  modelUsed?: {
+    name: string;
+    provider: string;
+    thinkingEnabled?: boolean;
+  };
 }
 
 export interface UseCoworkAgentReturn {

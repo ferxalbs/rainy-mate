@@ -13,6 +13,7 @@ import {
 import { Button, Card } from "@heroui/react";
 import type { AgentMessage } from "../../hooks/useCoworkAgent";
 import * as tauri from "../../services/tauri";
+import { ThoughtDisplay, ThoughtBadge } from "./ThoughtDisplay";
 
 // Map step types to icons
 const stepIcons: Record<string, React.ElementType> = {
@@ -93,6 +94,21 @@ export function MessageBubble({
             </span>
           ) : null}
         </div>
+
+        {/* Thought/Reasoning Display (Only for Agent with thinking) */}
+        {!isUser && message.thought && (
+          <ThoughtDisplay
+            thought={message.thought}
+            thinkingLevel={message.thinkingLevel || "medium"}
+            modelName={message.modelUsed?.name}
+            className="w-full max-w-md"
+          />
+        )}
+
+        {/* Compact Thought Badge (when thinking is enabled but content not shown) */}
+        {!isUser && !message.thought && message.modelUsed?.thinkingEnabled && (
+          <ThoughtBadge thinkingLevel={message.thinkingLevel || "medium"} />
+        )}
 
         {/* Plan Display (Only for Agent) */}
         {!isUser && message.plan && (

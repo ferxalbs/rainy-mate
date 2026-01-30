@@ -32,9 +32,11 @@ export interface UnifiedModel {
     vision: boolean;
     web_search: boolean;
     max_context: number;
+    thinking?: boolean; // Supports reasoning/thinking
   };
   enabled: boolean;
   processing_mode: "rainy_api" | "cowork" | "direct";
+  thinkingLevel?: "minimal" | "low" | "medium" | "high"; // Available thinking levels
 }
 
 interface UnifiedModelSelectorProps {
@@ -158,6 +160,25 @@ export function UnifiedModelSelector({
     }
   };
 
+  // Helper to check if model supports thinking/reasoning
+  const supportsThinking = (modelId: string): boolean => {
+    return modelId.includes("gemini-3") || 
+           modelId.includes("gemini-2.5") ||
+           modelId.includes("claude") ||
+           modelId.includes("kimi");
+  };
+
+  // Get thinking level for a model
+  const getThinkingLevel = (modelId: string): string | null => {
+    if (modelId.includes("gemini-3-pro")) return "high";
+    if (modelId.includes("gemini-3-flash")) return "medium";
+    if (modelId.includes("gemini-2.5-pro")) return "high";
+    if (modelId.includes("gemini-2.5-flash")) return "medium";
+    if (modelId.includes("claude")) return "high";
+    if (modelId.includes("kimi")) return "high";
+    return null;
+  };
+
   return (
     <Popover isOpen={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
       <PopoverTrigger>
@@ -264,6 +285,11 @@ export function UnifiedModelSelector({
                             <Globe className="size-2.5" /> web
                           </span>
                         )}
+                        {supportsThinking(model.id) && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-amber-500 bg-amber-500/10 px-1 rounded font-medium">
+                            <Brain className="size-2.5" /> {getThinkingLevel(model.id)}
+                          </span>
+                        )}
                       </div>
                     </div>
                     {selectedModelId === model.id && (
@@ -297,10 +323,29 @@ export function UnifiedModelSelector({
 }
 
 // Fallback data for development
+// Enterprise-grade model selection with Gemini 3, Kimi K2, and advanced reasoning
 const MOCK_MODELS: UnifiedModel[] = [
+  // GEMINI 3 SERIES - Latest with thinking capabilities via Rainy API
   {
-    id: "rainy:gemini-2.0-flash",
-    name: "Gemini 2.0 Flash",
+    id: "rainy:gemini-3-pro-preview",
+    name: "Gemini 3 Pro (Preview)",
+    provider: "rainy",
+    capabilities: {
+      chat: true,
+      streaming: true,
+      function_calling: true,
+      vision: true,
+      web_search: true,
+      max_context: 2000000,
+      thinking: true,
+    },
+    enabled: true,
+    processing_mode: "rainy_api",
+    thinkingLevel: "high",
+  },
+  {
+    id: "rainy:gemini-3-flash-preview",
+    name: "Gemini 3 Flash (Preview)",
     provider: "rainy",
     capabilities: {
       chat: true,
@@ -309,6 +354,95 @@ const MOCK_MODELS: UnifiedModel[] = [
       vision: true,
       web_search: true,
       max_context: 1000000,
+      thinking: true,
+    },
+    enabled: true,
+    processing_mode: "rainy_api",
+    thinkingLevel: "medium",
+  },
+  // KIMI K2 SERIES - Via Groq for high-speed inference
+  {
+    id: "rainy:kimi-k2-0905",
+    name: "Kimi K2 (Groq)",
+    provider: "rainy",
+    capabilities: {
+      chat: true,
+      streaming: true,
+      function_calling: true,
+      vision: false,
+      web_search: false,
+      max_context: 256000,
+      thinking: true,
+    },
+    enabled: true,
+    processing_mode: "rainy_api",
+    thinkingLevel: "high",
+  },
+  // GEMINI 2.5 SERIES - Thinking budget support
+  {
+    id: "cowork:gemini-2.5-pro",
+    name: "Gemini 2.5 Pro",
+    provider: "cowork",
+    capabilities: {
+      chat: true,
+      streaming: true,
+      function_calling: true,
+      vision: true,
+      web_search: true,
+      max_context: 2000000,
+      thinking: true,
+    },
+    enabled: true,
+    processing_mode: "cowork",
+    thinkingLevel: "high",
+  },
+  {
+    id: "cowork:gemini-2.5-flash",
+    name: "Gemini 2.5 Flash",
+    provider: "cowork",
+    capabilities: {
+      chat: true,
+      streaming: true,
+      function_calling: true,
+      vision: true,
+      web_search: true,
+      max_context: 1000000,
+      thinking: true,
+    },
+    enabled: true,
+    processing_mode: "cowork",
+    thinkingLevel: "medium",
+  },
+  // CLAUDE SERIES
+  {
+    id: "cowork:claude-3-5-sonnet",
+    name: "Claude 3.5 Sonnet",
+    provider: "cowork",
+    capabilities: {
+      chat: true,
+      streaming: true,
+      function_calling: true,
+      vision: true,
+      web_search: false,
+      max_context: 200000,
+      thinking: true,
+    },
+    enabled: true,
+    processing_mode: "cowork",
+    thinkingLevel: "high",
+  },
+  // OPENAI SERIES - Fallback options
+  {
+    id: "rainy:gpt-4o",
+    name: "GPT-4o",
+    provider: "rainy",
+    capabilities: {
+      chat: true,
+      streaming: true,
+      function_calling: true,
+      vision: true,
+      web_search: false,
+      max_context: 128000,
     },
     enabled: true,
     processing_mode: "rainy_api",
@@ -327,35 +461,5 @@ const MOCK_MODELS: UnifiedModel[] = [
     },
     enabled: true,
     processing_mode: "rainy_api",
-  },
-  {
-    id: "cowork:gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    provider: "cowork",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: true,
-      max_context: 2000000,
-    },
-    enabled: true,
-    processing_mode: "cowork",
-  },
-  {
-    id: "cowork:claude-3-5-sonnet",
-    name: "Claude 3.5 Sonnet",
-    provider: "cowork",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: false,
-      max_context: 200000,
-    },
-    enabled: true,
-    processing_mode: "cowork",
   },
 ];
