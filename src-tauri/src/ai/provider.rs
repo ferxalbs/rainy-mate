@@ -318,25 +318,23 @@ impl AIProviderManager {
                 // Note: OpenAI and Anthropic models are not currently available via Rainy API
                 if let Ok(api_key) = self.keychain.get_key("rainy_api") {
                     if let Some(key) = api_key {
-                        let client = RainyClient::with_api_key(&key)
-                            .map_err(|e| format!("Failed to create client: {}", e))?;
-                        let available = client
-                            .list_available_models()
-                            .await
-                            .map_err(|e| format!("Failed to fetch models: {}", e))?;
-                        
-                        // Flatten all models from all providers
-                        let mut all_models: Vec<String> = Vec::new();
-                        for (_provider_name, models) in available.providers {
-                            all_models.extend(models);
-                        }
-                        
-                        if !all_models.is_empty() {
-                            return Ok(all_models);
+                        if let Ok(client) = RainyClient::with_api_key(&key) {
+                            // SDK call may fail (e.g., API format mismatch) - fall through to hardcoded list
+                            if let Ok(available) = client.list_available_models().await {
+                                // Flatten all models from all providers
+                                let mut all_models: Vec<String> = Vec::new();
+                                for (_provider_name, models) in available.providers {
+                                    all_models.extend(models);
+                                }
+
+                                if !all_models.is_empty() {
+                                    return Ok(all_models);
+                                }
+                            }
                         }
                     }
                 }
-                
+
                 // Fallback: Return models that are confirmed to exist in the SDK
                 // These are the actual models available via the Rainy API
                 Ok(vec![
@@ -422,7 +420,7 @@ impl AIProviderManager {
     }
 
     /// Execute a prompt using the specified provider
-    /// 
+    ///
     /// # Arguments
     /// * `provider` - The provider type to use
     /// * `model` - The model name to use
@@ -461,16 +459,18 @@ impl AIProviderManager {
                     Some(token_callback) => {
                         // STREAMING PATH
                         on_progress(30, Some("Starting stream...".to_string()));
-                        
-                        let request = ChatCompletionRequest::new(model, vec![
-                            ChatMessage::user(prompt)
-                        ]).with_stream(true);
-                        
-                        let mut stream = client.create_chat_completion_stream(request).await
+
+                        let request =
+                            ChatCompletionRequest::new(model, vec![ChatMessage::user(prompt)])
+                                .with_stream(true);
+
+                        let mut stream = client
+                            .create_chat_completion_stream(request)
+                            .await
                             .map_err(|e| e.to_string())?;
-                        
+
                         let mut full_response = String::new();
-                        
+
                         while let Some(chunk_result) = stream.next().await {
                             match chunk_result {
                                 Ok(chunk) => {
@@ -491,7 +491,7 @@ impl AIProviderManager {
                                 }
                             }
                         }
-                        
+
                         on_progress(100, Some("Complete".to_string()));
                         Ok(full_response)
                     }
@@ -570,21 +570,26 @@ impl AIProviderManager {
                     Some(token_callback) => {
                         // STREAMING PATH
                         on_progress(30, Some("Starting stream...".to_string()));
-                        println!("📤 Sending streaming chat request: model='{}', prompt_length={}",
-                            model, prompt.len());
-                        
-                        let request = ChatCompletionRequest::new(model, vec![
-                            ChatMessage::user(prompt)
-                        ]).with_stream(true);
-                        
-                        let mut stream = client.create_chat_completion_stream(request).await
+                        println!(
+                            "📤 Sending streaming chat request: model='{}', prompt_length={}",
+                            model,
+                            prompt.len()
+                        );
+
+                        let request =
+                            ChatCompletionRequest::new(model, vec![ChatMessage::user(prompt)])
+                                .with_stream(true);
+
+                        let mut stream = client
+                            .create_chat_completion_stream(request)
+                            .await
                             .map_err(|e| {
                                 println!("❌ Stream request failed: {}", e);
                                 e.to_string()
                             })?;
-                        
+
                         let mut full_response = String::new();
-                        
+
                         while let Some(chunk_result) = stream.next().await {
                             match chunk_result {
                                 Ok(chunk) => {
@@ -606,7 +611,7 @@ impl AIProviderManager {
                                 }
                             }
                         }
-                        
+
                         println!(
                             "✅ Streaming chat request successful, response_length={}",
                             full_response.len()

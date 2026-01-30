@@ -151,29 +151,108 @@ impl SettingsManager {
             provider: "Google Gemini".to_string(),
         });
 
-        // Premium models from Rainy API (pay-as-you-go)
-        // Show locked premium models for users without paid Rainy API access
-        for (id, name, desc) in [
+        // Rainy API models (static list from rainy-sdk - pay-as-you-go)
+        // These are ALL available models via Rainy API
+        let rainy_api_models = [
+            // OpenAI models
             ("gpt-4o", "GPT-4o", "OpenAI's flagship multimodal model"),
             ("gpt-5", "GPT-5", "OpenAI's most advanced reasoning model"),
+            (
+                "gpt-5-pro",
+                "GPT-5 Pro",
+                "Maximum capability for complex tasks",
+            ),
+            ("o3", "O3", "OpenAI's reasoning-focused model"),
+            ("o4-mini", "O4 Mini", "Fast and efficient reasoning"),
+            // Anthropic models
             (
                 "claude-sonnet-4",
                 "Claude Sonnet 4",
                 "Anthropic's balanced model",
             ),
             (
+                "claude-opus-4-1",
+                "Claude Opus 4.1",
+                "Anthropic's most capable model",
+            ),
+            // Google Gemini 2.5 models
+            (
                 "gemini-2.5-pro",
                 "Gemini 2.5 Pro",
                 "Google's most capable model",
             ),
-        ] {
+            (
+                "gemini-2.5-flash",
+                "Gemini 2.5 Flash",
+                "Fast multimodal responses",
+            ),
+            (
+                "gemini-2.5-flash-lite",
+                "Gemini 2.5 Flash Lite",
+                "Lightweight cost-effective AI",
+            ),
+            // Google Gemini 3 models (advanced reasoning)
+            (
+                "gemini-3-pro-preview",
+                "Gemini 3 Pro",
+                "Advanced reasoning model",
+            ),
+            (
+                "gemini-3-flash-preview",
+                "Gemini 3 Flash",
+                "Fast thinking with reasoning",
+            ),
+            (
+                "gemini-3-pro-image-preview",
+                "Gemini 3 Pro Image",
+                "Multimodal reasoning",
+            ),
+            // Groq models
+            (
+                "llama-3.1-8b-instant",
+                "Llama 3.1 8B Instant",
+                "Meta's fast open-source model",
+            ),
+            (
+                "llama-3.3-70b-versatile",
+                "Llama 3.3 70B Versatile",
+                "Meta's versatile model",
+            ),
+            (
+                "moonshotai/kimi-k2-instruct-0905",
+                "Kimi K2",
+                "Moonshot AI's instruction model",
+            ),
+            // Cerebras models
+            (
+                "cerebras/llama3.1-8b",
+                "Cerebras Llama 3.1 8B",
+                "Cerebras-accelerated Llama",
+            ),
+            // Enosis Labs models
+            ("astronomer-1", "Astronomer 1", "Enosis Labs base model"),
+            (
+                "astronomer-1-max",
+                "Astronomer 1 Max",
+                "Enhanced Astronomer model",
+            ),
+            ("astronomer-1.5", "Astronomer 1.5", "Improved Astronomer"),
+            ("astronomer-2", "Astronomer 2", "Next-gen Astronomer"),
+            (
+                "astronomer-2-pro",
+                "Astronomer 2 Pro",
+                "Enosis Labs flagship model",
+            ),
+        ];
+
+        for (id, name, desc) in rainy_api_models {
             models.push(ModelOption {
                 id: id.to_string(),
                 name: name.to_string(),
                 description: desc.to_string(),
                 thinking_level: "n/a".to_string(),
-                is_premium: true,
-                is_available: false, // Locked unless user has rainy_api key
+                is_premium: true,   // Rainy API models are pay-as-you-go
+                is_available: true, // Available if user has rainy_api key
                 provider: "Rainy API".to_string(),
             });
         }

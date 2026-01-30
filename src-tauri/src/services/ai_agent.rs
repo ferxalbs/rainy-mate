@@ -343,8 +343,9 @@ impl CoworkAgent {
             );
 
             // Route to correct provider based on model's provider field
+            // Route to correct provider based on model's provider field
             match model.provider.as_str() {
-                "Cowork Subscription" => {
+                "Cowork" => {
                     // Verify model is in caps.models and we can make requests
                     if caps.models.contains(&selected_model) && caps.can_make_request() {
                         println!(
@@ -355,10 +356,9 @@ impl CoworkAgent {
                             .ai_provider
                             .execute_prompt(
                                 &ProviderType::CoworkApi,
-                                &selected_model,
+                                &model.name,
                                 prompt,
-                                |_, _| {},
-                                None::<fn(String)>,
+                                |_, _| {}, None::<fn(String)>,
                             )
                             .await
                         {
@@ -371,7 +371,7 @@ impl CoworkAgent {
                                     response,
                                     ModelInfo {
                                         provider: "Cowork Subscription".to_string(),
-                                        model: selected_model.to_string(),
+                                        model: model.name.clone(),
                                         plan_tier: caps.profile.plan.name.clone(),
                                     },
                                 ));
@@ -407,13 +407,7 @@ impl CoworkAgent {
                     {
                         match self
                             .ai_provider
-                            .execute_prompt(
-                                &ProviderType::RainyApi,
-                                &selected_model,
-                                prompt,
-                                |_, _| {},
-                                None::<fn(String)>,
-                            )
+                            .execute_prompt(&ProviderType::RainyApi, &model.name, prompt, |_, _| {}, None::<fn(String)>)
                             .await
                         {
                             Ok(response) => {
@@ -425,7 +419,7 @@ impl CoworkAgent {
                                     response,
                                     ModelInfo {
                                         provider: "Rainy API".to_string(),
-                                        model: selected_model.to_string(),
+                                        model: model.name.clone(),
                                         plan_tier: "Pay-As-You-Go".to_string(),
                                     },
                                 ));
@@ -450,13 +444,7 @@ impl CoworkAgent {
                     {
                         match self
                             .ai_provider
-                            .execute_prompt(
-                                &ProviderType::Gemini,
-                                &selected_model,
-                                prompt,
-                                |_, _| {},
-                                None::<fn(String)>,
-                            )
+                            .execute_prompt(&ProviderType::Gemini, &model.name, prompt, |_, _| {}, None::<fn(String)>)
                             .await
                         {
                             Ok(response) => {
@@ -468,7 +456,7 @@ impl CoworkAgent {
                                     response,
                                     ModelInfo {
                                         provider: "Google Gemini".to_string(),
-                                        model: selected_model.to_string(),
+                                        model: model.name.clone(),
                                         plan_tier: "BYOK".to_string(),
                                     },
                                 ));
@@ -498,7 +486,7 @@ impl CoworkAgent {
             );
             println!("⚠️ Attempting to use as Gemini BYOK if it starts with 'gemini'");
 
-            // If model starts with "gemini", try it as BYOK
+            // If model starts with "gemini", try it as BYOK (manually strip prefix)
             if selected_model.starts_with("gemini")
                 && self
                     .ai_provider
@@ -506,9 +494,16 @@ impl CoworkAgent {
                     .await
                     .unwrap_or(false)
             {
+                // Strip "gemini:" prefix if present
+                let raw_model_name = if let Some((_, name)) = selected_model.split_once(':') {
+                    name
+                } else {
+                    &selected_model
+                };
+
                 match self
                     .ai_provider
-                    .execute_prompt(&ProviderType::Gemini, &selected_model, prompt, |_, _| {}, None::<fn(String)>)
+                    .execute_prompt(&ProviderType::Gemini, raw_model_name, prompt, |_, _| {}, None::<fn(String)>)
                     .await
                 {
                     Ok(response) => {
@@ -520,7 +515,7 @@ impl CoworkAgent {
                             response,
                             ModelInfo {
                                 provider: "Google Gemini".to_string(),
-                                model: selected_model.to_string(),
+                                model: raw_model_name.to_string(),
                                 plan_tier: "BYOK".to_string(),
                             },
                         ));
@@ -542,7 +537,13 @@ impl CoworkAgent {
             println!("🔄 Trying Cowork fallback with model: {}", preferred_model);
             if let Ok(response) = self
                 .ai_provider
-                .execute_prompt(&ProviderType::CoworkApi, preferred_model, prompt, |_, _| {}, None::<fn(String)>)
+                .execute_prompt(
+                    &ProviderType::CoworkApi,
+                    preferred_model,
+                    prompt,
+                    |_, _| {},
+                    None::<fn(String)>,
+                )
                 .await
             {
                 println!("✅ Cowork fallback successful");
@@ -575,7 +576,13 @@ impl CoworkAgent {
             println!("🔄 Trying Rainy API fallback");
             if let Ok(response) = self
                 .ai_provider
-                .execute_prompt(&ProviderType::RainyApi, "gemini-2.5-flash", prompt, |_, _| {}, None::<fn(String)>)
+                .execute_prompt(
+                    &ProviderType::RainyApi,
+                    "gemini-2.5-flash",
+                    prompt,
+                    |_, _| {},
+                    None::<fn(String)>,
+                )
                 .await
             {
                 println!("✅ Rainy API fallback successful");
@@ -608,7 +615,13 @@ impl CoworkAgent {
             );
             match self
                 .ai_provider
-                .execute_prompt(&ProviderType::Gemini, gemini_model, prompt, |_, _| {}, None::<fn(String)>)
+                .execute_prompt(
+                    &ProviderType::Gemini,
+                    gemini_model,
+                    prompt,
+                    |_, _| {},
+                    None::<fn(String)>,
+                )
                 .await
             {
                 Ok(response) => {

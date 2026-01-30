@@ -4,7 +4,7 @@
 use crate::ai::mode_selector::{ModeSelector, TaskComplexity, UseCase};
 use crate::ai::provider::AIProviderManager;
 use crate::models::ProviderType;
-use rainy_sdk::RainyClient;
+// RainyClient import removed - using static model lists instead of API calls
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
@@ -96,78 +96,93 @@ pub async fn get_unified_models(
     Ok(models)
 }
 
-/// Get models from Rainy SDK
-async fn get_rainy_sdk_models(app: &AppHandle) -> Result<Vec<UnifiedModel>, String> {
+/// Get models from Rainy SDK (static list - no API calls needed)
+/// Uses the same static model list as rainy-sdk/src/models.rs
+async fn get_rainy_sdk_models(_app: &AppHandle) -> Result<Vec<UnifiedModel>, String> {
+    use crate::ai::keychain::KeychainManager;
     let mut models = Vec::new();
+    let keychain = KeychainManager::new();
 
-    // Try to get Rainy API key
-    let api_key = match get_rainy_api_key(app).await {
-        Ok(key) => {
-            println!(
-                "DEBUG: Found Rainy/Cowork API key: {}...",
-                &key[0..5.min(key.len())]
-            );
-            key
-        }
-        Err(e) => {
-            println!("DEBUG: No Rainy/Cowork API key found: {}", e);
-            return Ok(vec![]);
-        } // Return empty if no key
-    };
+    // Check which keys are available
+    let has_cowork = keychain
+        .get_key("cowork_api")
+        .map(|k| k.is_some())
+        .unwrap_or(false);
+    let has_rainy = keychain
+        .get_key("rainy_api")
+        .map(|k| k.is_some())
+        .unwrap_or(false);
 
-    // Create Rainy client
-    let client = RainyClient::with_api_key(&api_key)
-        .map_err(|e| format!("Failed to create Rainy client: {}", e))?;
+    // Static model list from rainy-sdk (no API calls needed)
+    let rainy_api_models = [
+        // OpenAI models
+        "gpt-4o",
+        "gpt-5",
+        "gpt-5-pro",
+        "o3",
+        "o4-mini",
+        // Anthropic models
+        "claude-sonnet-4",
+        "claude-opus-4-1",
+        // Google Gemini 2.5 models
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        // Google Gemini 3 models (advanced reasoning)
+        "gemini-3-pro-preview",
+        "gemini-3-flash-preview",
+        "gemini-3-pro-image-preview",
+        // Groq models
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "moonshotai/kimi-k2-instruct-0905",
+        // Cerebras models
+        "cerebras/llama3.1-8b",
+        // Enosis Labs models
+        "astronomer-1",
+        "astronomer-1-max",
+        "astronomer-1.5",
+        "astronomer-2",
+        "astronomer-2-pro",
+    ];
 
-    // Get available models from Rainy SDK
-    let available_models = client
-        .list_available_models()
-        .await
-        .map_err(|e| format!("Failed to get available models: {}", e))?;
-
-    // Determine processing mode based on API key
-    let processing_mode = if api_key.starts_with("ra-cowork") {
-        "cowork".to_string()
-    } else {
-        "rainy_api".to_string()
-    };
-
-    // Convert to unified models
-    println!(
-        "DEBUG: Processing SDK models. Provider count: {}",
-        available_models.providers.len()
-    );
-    for (_provider, model_list) in &available_models.providers {
-        println!(
-            "DEBUG: Processing provider models. Count: {}",
-            model_list.len()
-        );
-        for model_name in model_list {
-            // Use processing_mode (rainy/cowork) as prefix to ensure correct routing
-            // instead of the upstream provider name (e.g. gemini)
-            let prefix = if processing_mode == "cowork" {
-                "cowork"
-            } else {
-                "rainy"
-            };
-
-            // Set provider name explicitly to distinguish from direct providers
-            // This ensures "Cowork", "Rainy API", and "Gemini" appear as separate groups
-            let provider_display = if prefix == "cowork" {
-                "Cowork".to_string()
-            } else {
-                "Rainy API".to_string()
-            };
-
-            let model = UnifiedModel {
-                id: format!("{}:{}", prefix, model_name),
-                name: model_name.clone(),
-                provider: provider_display,
+    // Add Rainy API models if user has rainy_api key
+    if has_rainy {
+        for model_name in &rainy_api_models {
+            models.push(UnifiedModel {
+                id: format!("rainy:{}", model_name),
+                name: model_name.to_string(),
+                provider: "Rainy API".to_string(),
                 capabilities: get_default_capabilities(),
                 enabled: true,
-                processing_mode: processing_mode.clone(),
+                processing_mode: "rainy_api".to_string(),
+            });
+        }
+    }
+
+    // Add Cowork models if user has cowork_api key
+    // Note: Cowork may have a subset of models based on plan
+    if has_cowork {
+        // Cowork typically has these models (subset of Rainy API)
+        let cowork_models = [
+            "gemini-2.5-flash-lite",
+            "llama-3.1-8b-instant",
+            "gemini-3-flash-preview",
+            "gemini-2.5-flash",
+        ];
+        for model_name in &cowork_models {
+            let model = UnifiedModel {
+                id: format!("cowork:{}", model_name),
+                name: model_name.to_string(),
+                provider: "Cowork".to_string(),
+                capabilities: get_default_capabilities(),
+                enabled: true,
+                processing_mode: "cowork".to_string(),
             };
-            models.push(model);
+            // Avoid duplicates
+            if !models.iter().any(|m: &UnifiedModel| m.id == model.id) {
+                models.push(model);
+            }
         }
     }
 
@@ -381,10 +396,16 @@ pub async fn send_unified_message(
     };
 
     let result = provider_manager
-        .execute_prompt(&provider_type, model_name, &prompt, |progress, message| {
-            // Progress callback
-            println!("Progress: {}% - {:?}", progress, message);
-        }, None::<fn(String)>)  // No streaming for non-stream calls
+        .execute_prompt(
+            &provider_type,
+            model_name,
+            &prompt,
+            |progress, message| {
+                // Progress callback
+                println!("Progress: {}% - {:?}", progress, message);
+            },
+            None::<fn(String)>,
+        ) // No streaming for non-stream calls
         .await
         .map_err(|e| e.to_string())?;
 
