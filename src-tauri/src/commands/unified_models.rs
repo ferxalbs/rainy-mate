@@ -384,7 +384,7 @@ pub async fn send_unified_message(
         .execute_prompt(&provider_type, model_name, &prompt, |progress, message| {
             // Progress callback
             println!("Progress: {}% - {:?}", progress, message);
-        })
+        }, None::<fn(String)>)  // No streaming for non-stream calls
         .await
         .map_err(|e| e.to_string())?;
 
@@ -493,22 +493,31 @@ pub async fn unified_chat_stream(
         _ => ProviderType::RainyApi,
     };
 
-    // Execute prompt (blocking for now)
+    // Execute prompt with real streaming
     let prompt = message; // In real chat, we'd process history
+    let channel = on_event.clone();
 
     let result = provider_manager
-        .execute_prompt(&provider_type, model_name, &prompt, |_progress, _msg| {
-            // In future, if execute_prompt supports real streaming, we'd emit tokens here
-        })
+        .execute_prompt(
+            &provider_type,
+            model_name,
+            &prompt,
+            |_progress, _msg| {
+                // Progress updates are optional for streaming
+            },
+            Some(move |token: String| {
+                // Called for each token as it arrives from the AI
+                let _ = channel.send(StreamEvent {
+                    event: "token".to_string(),
+                    data: token,
+                });
+            }),
+        )
         .await;
 
     match result {
-        Ok(response) => {
-            // Simulate streaming by sending the whole chunk
-            let _ = on_event.send(StreamEvent {
-                event: "token".to_string(),
-                data: response,
-            });
+        Ok(_response) => {
+            // Stream complete - send done event
             let _ = on_event.send(StreamEvent {
                 event: "done".to_string(),
                 data: "".to_string(),

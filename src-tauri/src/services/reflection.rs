@@ -61,7 +61,7 @@ impl ReflectionEngine {
         );
 
         let response = self.ai_provider
-            .execute_prompt(&ProviderType::RainyApi, "gpt-4", &prompt, |_, _| {})
+            .execute_prompt(&ProviderType::RainyApi, "gpt-4", &prompt, |_, _| {}, None::<fn(String)>)
             .await
             .map_err(|e| AgentError::TaskExecutionFailed(e.to_string()))?;
 
@@ -100,7 +100,7 @@ impl ReflectionEngine {
         );
 
         let response = self.ai_provider
-            .execute_prompt(&ProviderType::RainyApi, "gpt-4", &prompt, |_, _| {})
+            .execute_prompt(&ProviderType::RainyApi, "gpt-4", &prompt, |_, _| {}, None::<fn(String)>)
             .await
             .map_err(|e: String| AgentError::TaskExecutionFailed(e))?;
 

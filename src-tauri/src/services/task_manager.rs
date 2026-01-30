@@ -471,6 +471,7 @@ impl TaskManager {
                 move |progress, _message| {
                     tracing::debug!("Task {} progress: {}%", task_id_for_closure, progress);
                 },
+                None::<fn(String)>,
             )
             .await;
 
@@ -608,6 +609,7 @@ impl TaskManager {
                                             progress
                                         );
                                     },
+                                    None::<fn(String)>,
                                 )
                                 .await;
 

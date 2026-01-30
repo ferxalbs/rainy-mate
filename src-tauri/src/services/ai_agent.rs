@@ -358,6 +358,7 @@ impl CoworkAgent {
                                 &selected_model,
                                 prompt,
                                 |_, _| {},
+                                None::<fn(String)>,
                             )
                             .await
                         {
@@ -411,6 +412,7 @@ impl CoworkAgent {
                                 &selected_model,
                                 prompt,
                                 |_, _| {},
+                                None::<fn(String)>,
                             )
                             .await
                         {
@@ -453,6 +455,7 @@ impl CoworkAgent {
                                 &selected_model,
                                 prompt,
                                 |_, _| {},
+                                None::<fn(String)>,
                             )
                             .await
                         {
@@ -505,7 +508,7 @@ impl CoworkAgent {
             {
                 match self
                     .ai_provider
-                    .execute_prompt(&ProviderType::Gemini, &selected_model, prompt, |_, _| {})
+                    .execute_prompt(&ProviderType::Gemini, &selected_model, prompt, |_, _| {}, None::<fn(String)>)
                     .await
                 {
                     Ok(response) => {
@@ -539,7 +542,7 @@ impl CoworkAgent {
             println!("🔄 Trying Cowork fallback with model: {}", preferred_model);
             if let Ok(response) = self
                 .ai_provider
-                .execute_prompt(&ProviderType::CoworkApi, preferred_model, prompt, |_, _| {})
+                .execute_prompt(&ProviderType::CoworkApi, preferred_model, prompt, |_, _| {}, None::<fn(String)>)
                 .await
             {
                 println!("✅ Cowork fallback successful");
@@ -572,7 +575,7 @@ impl CoworkAgent {
             println!("🔄 Trying Rainy API fallback");
             if let Ok(response) = self
                 .ai_provider
-                .execute_prompt(&ProviderType::RainyApi, "gpt-4o", prompt, |_, _| {})
+                .execute_prompt(&ProviderType::RainyApi, "gpt-4o", prompt, |_, _| {}, None::<fn(String)>)
                 .await
             {
                 println!("✅ Rainy API fallback successful");
@@ -605,7 +608,7 @@ impl CoworkAgent {
             );
             match self
                 .ai_provider
-                .execute_prompt(&ProviderType::Gemini, gemini_model, prompt, |_, _| {})
+                .execute_prompt(&ProviderType::Gemini, gemini_model, prompt, |_, _| {}, None::<fn(String)>)
                 .await
             {
                 Ok(response) => {
@@ -1134,6 +1137,7 @@ Respond ONLY with valid JSON, no other text."#,
                             "gemini-2.5-flash",
                             &prompt,
                             |_, _| {},
+                            None::<fn(String)>,
                         )
                         .await
                         .map_err(|e| e.to_string())?

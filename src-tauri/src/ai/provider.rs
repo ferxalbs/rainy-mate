@@ -3,7 +3,8 @@
 
 use crate::ai::{gemini::GeminiProvider, keychain::KeychainManager};
 use crate::models::{AIProviderConfig, ProviderType};
-use rainy_sdk::{CoworkCapabilities, CoworkPlan, RainyClient};
+use futures::StreamExt;
+use rainy_sdk::{ChatCompletionRequest, ChatMessage, CoworkCapabilities, CoworkPlan, RainyClient};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -381,15 +382,24 @@ impl AIProviderManager {
     }
 
     /// Execute a prompt using the specified provider
-    pub async fn execute_prompt<F>(
+    /// 
+    /// # Arguments
+    /// * `provider` - The provider type to use
+    /// * `model` - The model name to use
+    /// * `prompt` - The prompt text
+    /// * `on_progress` - Callback for progress updates (percentage, message)
+    /// * `on_token` - Optional callback for streaming tokens (called for each token chunk)
+    pub async fn execute_prompt<F, S>(
         &self,
         provider: &ProviderType,
         model: &str,
         prompt: &str,
         on_progress: F,
+        on_token: Option<S>,
     ) -> Result<String, String>
     where
         F: Fn(u8, Option<String>) + Send + Sync + 'static,
+        S: Fn(String) + Send + Sync + 'static,
     {
         match provider {
             ProviderType::RainyApi => {
@@ -407,14 +417,55 @@ impl AIProviderManager {
                     .await
                     .ok_or("Failed to create Rainy API client")?;
 
-                on_progress(30, Some("Sending request...".to_string()));
-                let result = client
-                    .simple_chat(model, prompt)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                match on_token {
+                    Some(token_callback) => {
+                        // STREAMING PATH
+                        on_progress(30, Some("Starting stream...".to_string()));
+                        
+                        let request = ChatCompletionRequest::new(model, vec![
+                            ChatMessage::user(prompt)
+                        ]).with_stream(true);
+                        
+                        let mut stream = client.create_chat_completion_stream(request).await
+                            .map_err(|e| e.to_string())?;
+                        
+                        let mut full_response = String::new();
+                        
+                        while let Some(chunk_result) = stream.next().await {
+                            match chunk_result {
+                                Ok(chunk) => {
+                                    if let Some(choice) = chunk.choices.first() {
+                                        if let Some(content) = &choice.delta.content {
+                                            token_callback(content.clone());
+                                            full_response.push_str(content);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!("Stream error: {}", e);
+                                    if full_response.is_empty() {
+                                        return Err(e.to_string());
+                                    }
+                                    // Otherwise, return partial response
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        on_progress(100, Some("Complete".to_string()));
+                        Ok(full_response)
+                    }
+                    None => {
+                        // EXISTING BLOCKING PATH
+                        let result = client
+                            .simple_chat(model, prompt)
+                            .await
+                            .map_err(|e| e.to_string())?;
 
-                on_progress(100, Some("Complete".to_string()));
-                Ok(result)
+                        on_progress(100, Some("Complete".to_string()));
+                        Ok(result)
+                    }
+                }
             }
             ProviderType::CoworkApi => {
                 println!(
@@ -475,23 +526,75 @@ impl AIProviderManager {
                     .ok_or("Failed to create Cowork API client")?;
                 println!("🔗 Cowork API client created successfully");
 
-                on_progress(30, Some("Sending request...".to_string()));
-                println!(
-                    "📤 Sending chat request: model='{}', prompt_length={}",
-                    model,
-                    prompt.len()
-                );
-                let result = client.simple_chat(model, prompt).await.map_err(|e| {
-                    println!("❌ Chat request failed: {}", e);
-                    e.to_string()
-                })?;
+                match on_token {
+                    Some(token_callback) => {
+                        // STREAMING PATH
+                        on_progress(30, Some("Starting stream...".to_string()));
+                        println!("📤 Sending streaming chat request: model='{}', prompt_length={}",
+                            model, prompt.len());
+                        
+                        let request = ChatCompletionRequest::new(model, vec![
+                            ChatMessage::user(prompt)
+                        ]).with_stream(true);
+                        
+                        let mut stream = client.create_chat_completion_stream(request).await
+                            .map_err(|e| {
+                                println!("❌ Stream request failed: {}", e);
+                                e.to_string()
+                            })?;
+                        
+                        let mut full_response = String::new();
+                        
+                        while let Some(chunk_result) = stream.next().await {
+                            match chunk_result {
+                                Ok(chunk) => {
+                                    if let Some(choice) = chunk.choices.first() {
+                                        if let Some(content) = &choice.delta.content {
+                                            token_callback(content.clone());
+                                            full_response.push_str(content);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!("Stream error: {}", e);
+                                    println!("⚠️ Stream error: {}", e);
+                                    if full_response.is_empty() {
+                                        return Err(e.to_string());
+                                    }
+                                    // Otherwise, return partial response
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        println!(
+                            "✅ Streaming chat request successful, response_length={}",
+                            full_response.len()
+                        );
+                        on_progress(100, Some("Complete".to_string()));
+                        Ok(full_response)
+                    }
+                    None => {
+                        // EXISTING BLOCKING PATH
+                        on_progress(30, Some("Sending request...".to_string()));
+                        println!(
+                            "📤 Sending chat request: model='{}', prompt_length={}",
+                            model,
+                            prompt.len()
+                        );
+                        let result = client.simple_chat(model, prompt).await.map_err(|e| {
+                            println!("❌ Chat request failed: {}", e);
+                            e.to_string()
+                        })?;
 
-                println!(
-                    "✅ Chat request successful, response_length={}",
-                    result.len()
-                );
-                on_progress(100, Some("Complete".to_string()));
-                Ok(result)
+                        println!(
+                            "✅ Chat request successful, response_length={}",
+                            result.len()
+                        );
+                        on_progress(100, Some("Complete".to_string()));
+                        Ok(result)
+                    }
+                }
             }
             ProviderType::Gemini => {
                 // Use direct Gemini (free tier)

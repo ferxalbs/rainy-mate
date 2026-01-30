@@ -168,7 +168,7 @@ impl BaseAgent {
         // Execute prompt using AI provider manager
         let response = self
             .ai_provider
-            .execute_prompt(&provider_type, &self.config.model, prompt, |_, _| {})
+            .execute_prompt(&provider_type, &self.config.model, prompt, |_, _| {}, None::<fn(String)>)
             .await
             .map_err(|e| AgentError::TaskExecutionFailed(e.to_string()))?;
 
