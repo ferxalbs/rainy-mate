@@ -416,7 +416,6 @@ pub struct StreamEvent {
 /// Stream chat response (simulated for now)
 #[tauri::command]
 pub async fn unified_chat_stream(
-    _app: AppHandle,
     provider_manager: tauri::State<'_, Arc<AIProviderManager>>,
     message: String,
     model_id: String,
