@@ -130,28 +130,8 @@ impl SettingsManager {
             });
         }
 
-        // Free tier Gemini BYOK models (user's own API key)
-        models.push(ModelOption {
-            id: "gemini-3-flash-minimal".to_string(),
-            name: "Gemini 3 Flash (Fast)".to_string(),
-            description: "Fast responses with minimal thinking".to_string(),
-            thinking_level: "minimal".to_string(),
-            is_premium: false,
-            is_available: true,
-            provider: "Google Gemini".to_string(),
-        });
-
-        models.push(ModelOption {
-            id: "gemini-3-flash-high".to_string(),
-            name: "Gemini 3 Flash (Smart)".to_string(),
-            description: "Deep reasoning for complex tasks".to_string(),
-            thinking_level: "high".to_string(),
-            is_premium: false,
-            is_available: true,
-            provider: "Google Gemini".to_string(),
-        });
-
         // Rainy API models (static list from rainy-sdk - pay-as-you-go)
+        // Note: Gemini BYOK is handled separately when user selects gemini: prefix
         // These are ALL available models via Rainy API
 
         // OpenAI models

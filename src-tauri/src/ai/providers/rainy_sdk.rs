@@ -40,31 +40,50 @@ impl RainySDKProvider {
         })
     }
 
-    /// Get the rainy client
-    pub fn client(&self) -> &RainyClient {
-        &self.client
-    }
-
-    /// Convert chat messages to a single prompt string
-    fn convert_messages_to_prompt(messages: &[ChatMessage]) -> String {
-        messages
-            .iter()
-            .map(|msg| {
-                let role = match msg.role.as_str() {
-                    "system" => "System",
-                    "user" => "User",
-                    "assistant" => "Assistant",
-                    _ => "User",
-                };
-                format!("{}: {}", role, msg.content)
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n")
-    }
-
     /// Check if this is a Cowork API key
     fn is_cowork_key(api_key: &str) -> bool {
         api_key.starts_with("ra-cowork")
+    }
+
+    /// Map virtual model IDs to real model IDs and thinking config
+    fn map_model_id(model_id: &str) -> (String, Option<rainy_sdk::models::ThinkingConfig>) {
+        use rainy_sdk::models::{ThinkingConfig, ThinkingLevel};
+
+        let mut thinking_config = ThinkingConfig::default();
+        thinking_config.include_thoughts = Some(true); // Always include thoughts for thinking models
+
+        match model_id {
+            // Gemini 3 Flash mappings
+            "gemini-3-flash-minimal" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Minimal);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
+            "gemini-3-flash-low" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Low);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
+            "gemini-3-flash-medium" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Medium);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
+            "gemini-3-flash-high" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::High);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
+
+            // Gemini 3 Pro mappings
+            "gemini-3-pro-low" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Low);
+                ("gemini-3-pro-preview".to_string(), Some(thinking_config))
+            }
+            "gemini-3-pro-high" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::High);
+                ("gemini-3-pro-preview".to_string(), Some(thinking_config))
+            }
+
+            // Pass through others
+            _ => (model_id.to_string(), None),
+        }
     }
 }
 
@@ -168,21 +187,62 @@ impl AIProvider for RainySDKProvider {
         &self,
         request: ChatCompletionRequest,
     ) -> ProviderResult<ChatCompletionResponse> {
-        let prompt = Self::convert_messages_to_prompt(&request.messages);
+        let (model_id, thinking_config) = Self::map_model_id(&request.model);
 
-        let response = self
+        // Convert strict ChatMessage to rainy-sdk ChatMessage
+        let messages = request
+            .messages
+            .iter()
+            .map(|msg| match msg.role.as_str() {
+                "system" => rainy_sdk::models::ChatMessage::system(&msg.content),
+                "user" => rainy_sdk::models::ChatMessage::user(&msg.content),
+                "assistant" => rainy_sdk::models::ChatMessage::assistant(&msg.content),
+                _ => rainy_sdk::models::ChatMessage::user(&msg.content),
+            })
+            .collect();
+
+        // Build request
+        let mut sdk_request =
+            rainy_sdk::models::ChatCompletionRequest::new(model_id.clone(), messages);
+
+        if let Some(config) = thinking_config {
+            sdk_request = sdk_request.with_thinking_config(config);
+        }
+
+        if let Some(max_tokens) = request.max_tokens {
+            sdk_request = sdk_request.with_max_tokens(max_tokens);
+        }
+
+        if let Some(temperature) = request.temperature {
+            sdk_request = sdk_request.with_temperature(temperature);
+        }
+
+        let (response, _) = self
             .client
-            .simple_chat(&request.model, &prompt)
+            .chat_completion(sdk_request)
             .await
             .map_err(|e| AIError::APIError(format!("Chat completion failed: {}", e)))?;
 
+        // Extract content from first choice
+        let content = response
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+
         Ok(ChatCompletionResponse {
-            content: response,
+            content,
             model: request.model.clone(),
-            usage: crate::ai::provider_types::TokenUsage {
-                prompt_tokens: 0, // rainy-sdk doesn't provide token counts
-                completion_tokens: 0,
-                total_tokens: 0,
+            usage: {
+                let (prompt, completion, total) = match response.usage.as_ref() {
+                    Some(u) => (u.prompt_tokens, u.completion_tokens, u.total_tokens),
+                    None => (0, 0, 0),
+                };
+                crate::ai::provider_types::TokenUsage {
+                    prompt_tokens: prompt,
+                    completion_tokens: completion,
+                    total_tokens: total,
+                }
             },
             finish_reason: "stop".to_string(),
         })
@@ -261,19 +321,5 @@ mod tests {
             "ra-cowork12345678901234567890123456789012345678901234567890"
         ));
         assert!(!RainySDKProvider::is_cowork_key("ra-1234567890"));
-    }
-
-    #[test]
-    fn test_convert_messages_to_prompt() {
-        let messages = vec![
-            ChatMessage::system("You are a helpful assistant"),
-            ChatMessage::user("Hello"),
-            ChatMessage::assistant("Hi there!"),
-        ];
-
-        let prompt = RainySDKProvider::convert_messages_to_prompt(&messages);
-        assert!(prompt.contains("System: You are a helpful assistant"));
-        assert!(prompt.contains("User: Hello"));
-        assert!(prompt.contains("Assistant: Hi there!"));
     }
 }

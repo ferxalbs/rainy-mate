@@ -4,7 +4,10 @@
 use crate::ai::{gemini::GeminiProvider, keychain::KeychainManager};
 use crate::models::{AIProviderConfig, ProviderType};
 use futures::StreamExt;
-use rainy_sdk::{ChatCompletionRequest, ChatMessage, CoworkCapabilities, CoworkPlan, RainyClient};
+use rainy_sdk::{
+    models::{ThinkingConfig, ThinkingLevel},
+    ChatCompletionRequest, ChatMessage, CoworkCapabilities, CoworkPlan, RainyClient,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -455,14 +458,21 @@ impl AIProviderManager {
                     .await
                     .ok_or("Failed to create Rainy API client")?;
 
+                let (real_model_id, thinking_config) = Self::map_model_id(model);
                 match on_token {
                     Some(token_callback) => {
                         // STREAMING PATH
                         on_progress(30, Some("Starting stream...".to_string()));
 
-                        let request =
-                            ChatCompletionRequest::new(model, vec![ChatMessage::user(prompt)])
-                                .with_stream(true);
+                        let mut request = ChatCompletionRequest::new(
+                            real_model_id.clone(),
+                            vec![ChatMessage::user(prompt)],
+                        )
+                        .with_stream(true);
+
+                        if let Some(config) = thinking_config.clone() {
+                            request = request.with_thinking_config(config);
+                        }
 
                         let mut stream = client
                             .create_chat_completion_stream(request)
@@ -497,10 +507,25 @@ impl AIProviderManager {
                     }
                     None => {
                         // EXISTING BLOCKING PATH
-                        let result = client
-                            .simple_chat(model, prompt)
+                        let mut request = ChatCompletionRequest::new(
+                            real_model_id,
+                            vec![ChatMessage::user(prompt)],
+                        );
+
+                        if let Some(config) = thinking_config {
+                            request = request.with_thinking_config(config);
+                        }
+
+                        let (response, _) = client
+                            .chat_completion(request)
                             .await
                             .map_err(|e| e.to_string())?;
+
+                        let result = response
+                            .choices
+                            .first()
+                            .map(|c| c.message.content.clone())
+                            .unwrap_or_default();
 
                         on_progress(100, Some("Complete".to_string()));
                         Ok(result)
@@ -522,10 +547,13 @@ impl AIProviderManager {
                     caps.can_make_request()
                 );
 
-                if !caps.can_use_model(model) {
+                let (real_model_id, thinking_config) = Self::map_model_id(model);
+
+                // Check against real ID
+                if !caps.can_use_model(&real_model_id) {
                     println!(
-                        "❌ Model '{}' not available. Available models: {:?}",
-                        model, caps.models
+                        "❌ Model '{}' (mapped to '{}') not available. Available models: {:?}",
+                        model, real_model_id, caps.models
                     );
                     return Err(format!(
                         "Model {} not available on {} plan",
@@ -571,14 +599,21 @@ impl AIProviderManager {
                         // STREAMING PATH
                         on_progress(30, Some("Starting stream...".to_string()));
                         println!(
-                            "📤 Sending streaming chat request: model='{}', prompt_length={}",
+                            "📤 Sending streaming chat request: model='{}' (mapped to '{}'), prompt_length={}",
                             model,
+                            real_model_id,
                             prompt.len()
                         );
 
-                        let request =
-                            ChatCompletionRequest::new(model, vec![ChatMessage::user(prompt)])
-                                .with_stream(true);
+                        let mut request = ChatCompletionRequest::new(
+                            real_model_id.clone(),
+                            vec![ChatMessage::user(prompt)],
+                        )
+                        .with_stream(true);
+
+                        if let Some(config) = thinking_config.clone() {
+                            request = request.with_thinking_config(config);
+                        }
 
                         let mut stream = client
                             .create_chat_completion_stream(request)
@@ -623,14 +658,31 @@ impl AIProviderManager {
                         // EXISTING BLOCKING PATH
                         on_progress(30, Some("Sending request...".to_string()));
                         println!(
-                            "📤 Sending chat request: model='{}', prompt_length={}",
+                            "📤 Sending chat request: model='{}' (mapped to '{}'), prompt_length={}",
                             model,
+                            real_model_id,
                             prompt.len()
                         );
-                        let result = client.simple_chat(model, prompt).await.map_err(|e| {
+
+                        let mut request = ChatCompletionRequest::new(
+                            real_model_id,
+                            vec![ChatMessage::user(prompt)],
+                        );
+
+                        if let Some(config) = thinking_config {
+                            request = request.with_thinking_config(config);
+                        }
+
+                        let (response, _) = client.chat_completion(request).await.map_err(|e| {
                             println!("❌ Chat request failed: {}", e);
                             e.to_string()
                         })?;
+
+                        let result = response
+                            .choices
+                            .first()
+                            .map(|c| c.message.content.clone())
+                            .unwrap_or_default();
 
                         println!(
                             "✅ Chat request successful, response_length={}",
@@ -684,6 +736,45 @@ impl AIProviderManager {
         });
 
         futures::future::join_all(futures).await
+    }
+
+    /// Map virtual model IDs to real model IDs and thinking config
+    fn map_model_id(model_id: &str) -> (String, Option<ThinkingConfig>) {
+        let mut thinking_config = ThinkingConfig::default();
+        thinking_config.include_thoughts = Some(true); // Always include thoughts for thinking models
+
+        match model_id {
+            // Gemini 3 Flash mappings
+            "gemini-3-flash-minimal" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Minimal);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
+            "gemini-3-flash-low" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Low);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
+            "gemini-3-flash-medium" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Medium);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
+            "gemini-3-flash-high" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::High);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
+
+            // Gemini 3 Pro mappings
+            "gemini-3-pro-low" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Low);
+                ("gemini-3-pro-preview".to_string(), Some(thinking_config))
+            }
+            "gemini-3-pro-high" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::High);
+                ("gemini-3-pro-preview".to_string(), Some(thinking_config))
+            }
+
+            // Pass through others
+            _ => (model_id.to_string(), None),
+        }
     }
 }
 

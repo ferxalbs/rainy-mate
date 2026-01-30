@@ -363,10 +363,26 @@ impl CoworkAgent {
                 model.provider, model.name, model.is_available
             );
 
-            // Route to correct provider based on model's provider field
-            // Route to correct provider based on model's provider field
-            match model.provider.as_str() {
-                "Cowork" => {
+            // CRITICAL: Route based on MODEL ID PREFIX first, then fall back to model.provider
+            // The prefix in selected_model (rainy:, cowork:, gemini:) takes priority!
+            let effective_provider = if selected_model.starts_with("rainy:") {
+                "Rainy API" // Force Rainy API routing for rainy: prefix
+            } else if selected_model.starts_with("cowork:") {
+                "Cowork Subscription" // Force Cowork routing for cowork: prefix
+            } else if selected_model.starts_with("gemini:") {
+                "Google Gemini" // Force Gemini BYOK for gemini: prefix
+            } else {
+                model.provider.as_str() // Fall back to model's provider field
+            };
+
+            println!(
+                "🎯 Effective provider (prefix-priority): '{}'",
+                effective_provider
+            );
+
+            // Route to correct provider based on effective provider
+            match effective_provider {
+                "Cowork" | "Cowork Subscription" => {
                     // Verify model is in caps.models and we can make requests
                     if caps.models.contains(&selected_model) && caps.can_make_request() {
                         println!(
@@ -431,7 +447,7 @@ impl CoworkAgent {
                             .ai_provider
                             .execute_prompt(
                                 &ProviderType::RainyApi,
-                                &model.name,
+                                raw_model_id, // Use raw model ID, NOT model.name (display name)!
                                 prompt,
                                 |_, _| {},
                                 None::<fn(String)>,
