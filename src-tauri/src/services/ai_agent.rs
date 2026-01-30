@@ -2,6 +2,7 @@
 // Orchestrates AI-driven file operations with natural language understanding
 // Part of Phase 1: Core AI File Operations Engine
 
+use crate::ai::provider_types::StreamingChunk;
 use crate::ai::AIProviderManager;
 use crate::models::ProviderType;
 use crate::services::file_operations::{
@@ -91,6 +92,8 @@ pub struct TaskPlan {
     pub intent: TaskIntent,
     /// Direct answer for questions (None for commands)
     pub answer: Option<String>,
+    /// Thinking process (if available)
+    pub thought: Option<String>,
     /// Information about the AI model used
     pub model_used: Option<ModelInfo>,
     pub steps: Vec<PlannedStep>,
@@ -279,13 +282,14 @@ impl CoworkAgent {
         let prompt = self.build_planning_prompt(instruction, &context);
 
         // Smart provider selection with fallback
-        let (ai_response, model_info) = self.execute_with_best_provider(&prompt).await?;
+        let (ai_response, model_info, thought) = self.execute_with_best_provider(&prompt).await?;
 
         // Parse AI response into TaskPlan
         let mut plan = self.parse_ai_response(&ai_response, instruction)?;
 
-        // Add model attribution
+        // Add model attribution and thought
         plan.model_used = Some(model_info);
+        plan.thought = thought;
 
         // Store pending plan
         self.pending_plans
@@ -300,7 +304,7 @@ impl CoworkAgent {
     async fn execute_with_best_provider(
         &self,
         prompt: &str,
-    ) -> Result<(String, ModelInfo), String> {
+    ) -> Result<(String, ModelInfo, Option<String>), String> {
         println!("🤖 AI Agent: execute_with_best_provider called");
 
         let selected_model = {
@@ -389,6 +393,9 @@ impl CoworkAgent {
                             "✅ Model '{}' is in caps.models and can make request",
                             selected_model
                         );
+                        let thought_acc = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+                        let thought_writer = thought_acc.clone();
+
                         match self
                             .ai_provider
                             .execute_prompt(
@@ -396,7 +403,13 @@ impl CoworkAgent {
                                 &model.name,
                                 prompt,
                                 |_, _| {},
-                                None::<fn(String)>,
+                                Some(move |chunk: StreamingChunk| {
+                                    if let Some(t) = chunk.thought {
+                                        if let Ok(mut g) = thought_writer.lock() {
+                                            g.push_str(&t);
+                                        }
+                                    }
+                                }),
                             )
                             .await
                         {
@@ -405,6 +418,14 @@ impl CoworkAgent {
                                     "✅ AI Agent: Successfully used Cowork API for model '{}'",
                                     selected_model
                                 );
+                                let thought = {
+                                    let g = thought_acc.lock().unwrap();
+                                    if g.is_empty() {
+                                        None
+                                    } else {
+                                        Some(g.clone())
+                                    }
+                                };
                                 return Ok((
                                     response,
                                     ModelInfo {
@@ -412,6 +433,7 @@ impl CoworkAgent {
                                         model: model.name.clone(),
                                         plan_tier: caps.profile.plan.name.clone(),
                                     },
+                                    thought,
                                 ));
                             }
                             Err(e) => {
@@ -443,6 +465,9 @@ impl CoworkAgent {
                         .await
                         .unwrap_or(false)
                     {
+                        let thought_acc = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+                        let thought_writer = thought_acc.clone();
+
                         match self
                             .ai_provider
                             .execute_prompt(
@@ -450,7 +475,13 @@ impl CoworkAgent {
                                 raw_model_id, // Use raw model ID, NOT model.name (display name)!
                                 prompt,
                                 |_, _| {},
-                                None::<fn(String)>,
+                                Some(move |chunk: StreamingChunk| {
+                                    if let Some(t) = chunk.thought {
+                                        if let Ok(mut g) = thought_writer.lock() {
+                                            g.push_str(&t);
+                                        }
+                                    }
+                                }),
                             )
                             .await
                         {
@@ -459,6 +490,14 @@ impl CoworkAgent {
                                     "✅ AI Agent: Successfully used Rainy API for model '{}'",
                                     selected_model
                                 );
+                                let thought = {
+                                    let g = thought_acc.lock().unwrap();
+                                    if g.is_empty() {
+                                        None
+                                    } else {
+                                        Some(g.clone())
+                                    }
+                                };
                                 return Ok((
                                     response,
                                     ModelInfo {
@@ -466,6 +505,7 @@ impl CoworkAgent {
                                         model: model.name.clone(),
                                         plan_tier: "Pay-As-You-Go".to_string(),
                                     },
+                                    thought,
                                 ));
                             }
                             Err(e) => {
@@ -486,6 +526,9 @@ impl CoworkAgent {
                         .await
                         .unwrap_or(false)
                     {
+                        let thought_acc = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+                        let thought_writer = thought_acc.clone();
+
                         match self
                             .ai_provider
                             .execute_prompt(
@@ -493,7 +536,13 @@ impl CoworkAgent {
                                 &model.name,
                                 prompt,
                                 |_, _| {},
-                                None::<fn(String)>,
+                                Some(move |chunk: StreamingChunk| {
+                                    if let Some(t) = chunk.thought {
+                                        if let Ok(mut g) = thought_writer.lock() {
+                                            g.push_str(&t);
+                                        }
+                                    }
+                                }),
                             )
                             .await
                         {
@@ -502,6 +551,14 @@ impl CoworkAgent {
                                     "✅ AI Agent: Successfully used Gemini BYOK for model '{}'",
                                     selected_model
                                 );
+                                let thought = {
+                                    let g = thought_acc.lock().unwrap();
+                                    if g.is_empty() {
+                                        None
+                                    } else {
+                                        Some(g.clone())
+                                    }
+                                };
                                 return Ok((
                                     response,
                                     ModelInfo {
@@ -509,6 +566,7 @@ impl CoworkAgent {
                                         model: model.name.clone(),
                                         plan_tier: "BYOK".to_string(),
                                     },
+                                    thought,
                                 ));
                             }
                             Err(e) => {
@@ -551,7 +609,7 @@ impl CoworkAgent {
                             raw_model_id,
                             prompt,
                             |_, _| {},
-                            None::<fn(String)>,
+                            None::<fn(StreamingChunk)>,
                         )
                         .await
                     {
@@ -567,6 +625,7 @@ impl CoworkAgent {
                                     model: raw_model_id.to_string(),
                                     plan_tier: "Pay-As-You-Go".to_string(),
                                 },
+                                None,
                             ));
                         }
                         Err(e) => {
@@ -586,7 +645,7 @@ impl CoworkAgent {
                             raw_model_id,
                             prompt,
                             |_, _| {},
-                            None::<fn(String)>,
+                            None::<fn(StreamingChunk)>,
                         )
                         .await
                     {
@@ -602,6 +661,7 @@ impl CoworkAgent {
                                     model: raw_model_id.to_string(),
                                     plan_tier: caps.profile.plan.name.clone(),
                                 },
+                                None,
                             ));
                         }
                         Err(e) => {
@@ -624,7 +684,7 @@ impl CoworkAgent {
                             raw_model_id,
                             prompt,
                             |_, _| {},
-                            None::<fn(String)>,
+                            None::<fn(StreamingChunk)>,
                         )
                         .await
                     {
@@ -640,6 +700,7 @@ impl CoworkAgent {
                                     model: raw_model_id.to_string(),
                                     plan_tier: "BYOK".to_string(),
                                 },
+                                None,
                             ));
                         }
                         Err(e) => {
@@ -660,6 +721,10 @@ impl CoworkAgent {
         if caps.can_make_request() && !caps.models.is_empty() {
             let preferred_model = caps.models.first().unwrap();
             println!("🔄 Trying Cowork fallback with model: {}", preferred_model);
+
+            let thought_acc = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+            let thought_writer = thought_acc.clone();
+
             if let Ok(response) = self
                 .ai_provider
                 .execute_prompt(
@@ -667,11 +732,25 @@ impl CoworkAgent {
                     preferred_model,
                     prompt,
                     |_, _| {},
-                    None::<fn(String)>,
+                    Some(move |chunk: StreamingChunk| {
+                        if let Some(t) = chunk.thought {
+                            if let Ok(mut g) = thought_writer.lock() {
+                                g.push_str(&t);
+                            }
+                        }
+                    }),
                 )
                 .await
             {
                 println!("✅ Cowork fallback successful");
+                let thought = {
+                    let g = thought_acc.lock().unwrap();
+                    if g.is_empty() {
+                        None
+                    } else {
+                        Some(g.clone())
+                    }
+                };
                 return Ok((
                     response,
                     ModelInfo {
@@ -679,6 +758,7 @@ impl CoworkAgent {
                         model: preferred_model.to_string(),
                         plan_tier: caps.profile.plan.name.clone(),
                     },
+                    thought,
                 ));
             } else {
                 println!("❌ Cowork fallback failed");
@@ -698,6 +778,8 @@ impl CoworkAgent {
             .await
             .unwrap_or(false)
         {
+            let thought_acc = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+            let thought_writer = thought_acc.clone();
             println!("🔄 Trying Rainy API fallback");
             if let Ok(response) = self
                 .ai_provider
@@ -706,11 +788,25 @@ impl CoworkAgent {
                     "gemini-2.5-flash",
                     prompt,
                     |_, _| {},
-                    None::<fn(String)>,
+                    Some(move |chunk: StreamingChunk| {
+                        if let Some(t) = chunk.thought {
+                            if let Ok(mut g) = thought_writer.lock() {
+                                g.push_str(&t);
+                            }
+                        }
+                    }),
                 )
                 .await
             {
                 println!("✅ Rainy API fallback successful");
+                let thought = {
+                    let g = thought_acc.lock().unwrap();
+                    if g.is_empty() {
+                        None
+                    } else {
+                        Some(g.clone())
+                    }
+                };
                 return Ok((
                     response,
                     ModelInfo {
@@ -718,6 +814,7 @@ impl CoworkAgent {
                         model: "gemini-2.5-flash".to_string(),
                         plan_tier: "Pay-As-You-Go".to_string(),
                     },
+                    thought,
                 ));
             } else {
                 println!("❌ Rainy API fallback failed");
@@ -734,6 +831,8 @@ impl CoworkAgent {
             .unwrap_or(false)
         {
             let gemini_model = "gemini-3-flash-high";
+            let thought_acc = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+            let thought_writer = thought_acc.clone();
             println!(
                 "🔄 Trying Gemini BYOK fallback with model: {}",
                 gemini_model
@@ -745,12 +844,26 @@ impl CoworkAgent {
                     gemini_model,
                     prompt,
                     |_, _| {},
-                    None::<fn(String)>,
+                    Some(move |chunk: StreamingChunk| {
+                        if let Some(t) = chunk.thought {
+                            if let Ok(mut g) = thought_writer.lock() {
+                                g.push_str(&t);
+                            }
+                        }
+                    }),
                 )
                 .await
             {
                 Ok(response) => {
                     println!("✅ Gemini BYOK fallback successful");
+                    let thought = {
+                        let g = thought_acc.lock().unwrap();
+                        if g.is_empty() {
+                            None
+                        } else {
+                            Some(g.clone())
+                        }
+                    };
                     return Ok((
                         response,
                         ModelInfo {
@@ -758,6 +871,7 @@ impl CoworkAgent {
                             model: gemini_model.to_string(),
                             plan_tier: "Free / BYOK".to_string(),
                         },
+                        thought,
                     ));
                 }
                 Err(e) => {
@@ -907,6 +1021,7 @@ Respond ONLY with valid JSON, no other text."#,
                 instruction: instruction.to_string(),
                 intent: TaskIntent::Question,
                 answer: Some("I received your request but couldn't process it properly. Could you please rephrase your question or command?".to_string()),
+                thought: None,
                 model_used: None,
                 steps: vec![],
                 estimated_changes: 0,
@@ -930,6 +1045,7 @@ Respond ONLY with valid JSON, no other text."#,
                     instruction: instruction.to_string(),
                     intent: TaskIntent::Question,
                     answer: Some(response.to_string()),
+                    thought: None,
                     model_used: None,
                     steps: vec![],
                     estimated_changes: 0,
@@ -996,6 +1112,7 @@ Respond ONLY with valid JSON, no other text."#,
             instruction: instruction.to_string(),
             intent,
             answer,
+            thought: None,    // Will be set by caller
             model_used: None, // Will be set by caller with actual model info
             steps: steps.clone(),
             estimated_changes: steps.len() as u32,
@@ -1275,7 +1392,7 @@ Respond ONLY with valid JSON, no other text."#,
                             "gemini-2.5-flash",
                             &prompt,
                             |_, _| {},
-                            None::<fn(String)>,
+                            None::<fn(StreamingChunk)>,
                         )
                         .await
                         .map_err(|e| e.to_string())?

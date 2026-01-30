@@ -415,6 +415,7 @@ export interface TaskPlan {
   instruction: string;
   intent: TaskIntent;
   answer?: string;
+  thought?: string;
   modelUsed?: ModelInfo;
   steps: PlannedStep[];
   estimatedChanges: number;
@@ -563,7 +564,7 @@ export async function agentAnalyzeWorkspace(
 // ============ Unified Chat Commands ============
 
 export interface StreamEvent {
-  event: "token" | "error" | "done";
+  event: "token" | "error" | "done" | "thinking";
   data: string;
 }
 

@@ -3,9 +3,10 @@
 //! The ReflectionEngine analyzes task results, learns from errors and successes,
 //! and provides optimization strategies for continuous system improvement.
 
-use std::sync::Arc;
-use crate::agents::{Task, TaskResult, AgentError};
+use crate::agents::{AgentError, Task, TaskResult};
+use crate::ai::provider_types::StreamingChunk;
 use crate::models::ProviderType;
+use std::sync::Arc;
 
 /// ReflectionEngine for self-improvement and optimization
 pub struct ReflectionEngine {
@@ -25,7 +26,11 @@ impl ReflectionEngine {
     }
 
     /// Analyze task result and learn from it
-    pub async fn analyze_result(&self, task: &Task, result: &TaskResult) -> Result<Reflection, AgentError> {
+    pub async fn analyze_result(
+        &self,
+        task: &Task,
+        result: &TaskResult,
+    ) -> Result<Reflection, AgentError> {
         if !result.success {
             // Analyze error
             self.analyze_error(task, result).await?;
@@ -56,18 +61,24 @@ impl ReflectionEngine {
             - error_type (string)\n\
             - root_cause (string)\n\
             - prevention_strategy (string)",
-            task.description,
-            result.errors
+            task.description, result.errors
         );
 
-        let response = self.ai_provider
-            .execute_prompt(&ProviderType::RainyApi, "gpt-4", &prompt, |_, _| {}, None::<fn(String)>)
+        let response = self
+            .ai_provider
+            .execute_prompt(
+                &ProviderType::RainyApi,
+                "gemini-2.5-flash",
+                &prompt,
+                |_, _| {},
+                None::<fn(StreamingChunk)>,
+            )
             .await
             .map_err(|e| AgentError::TaskExecutionFailed(e.to_string()))?;
 
         // Parse and store error pattern
-        let pattern: ErrorPattern = serde_json::from_str(&response)
-            .unwrap_or_else(|_| ErrorPattern {
+        let pattern: ErrorPattern =
+            serde_json::from_str(&response).unwrap_or_else(|_| ErrorPattern {
                 id: uuid::Uuid::new_v4().to_string(),
                 error_type: "unknown".to_string(),
                 root_cause: "unknown".to_string(),
@@ -95,23 +106,28 @@ impl ReflectionEngine {
             - name (string)\n\
             - description (string)\n\
             - effectiveness (number 0-1)",
-            task.description,
-            result.output
+            task.description, result.output
         );
 
-        let response = self.ai_provider
-            .execute_prompt(&ProviderType::RainyApi, "gpt-4", &prompt, |_, _| {}, None::<fn(String)>)
+        let response = self
+            .ai_provider
+            .execute_prompt(
+                &ProviderType::RainyApi,
+                "gpt-4",
+                &prompt,
+                |_, _| {},
+                None::<fn(StreamingChunk)>,
+            )
             .await
             .map_err(|e: String| AgentError::TaskExecutionFailed(e))?;
 
         // Parse and store strategy
-        let strategy: Strategy = serde_json::from_str(&response)
-            .unwrap_or_else(|_| Strategy {
-                id: uuid::Uuid::new_v4().to_string(),
-                name: "unknown".to_string(),
-                description: "unknown".to_string(),
-                effectiveness: 0.5,
-            });
+        let strategy: Strategy = serde_json::from_str(&response).unwrap_or_else(|_| Strategy {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "unknown".to_string(),
+            description: "unknown".to_string(),
+            effectiveness: 0.5,
+        });
 
         let mut strategies = self.strategies.write().await;
         strategies.push(strategy);

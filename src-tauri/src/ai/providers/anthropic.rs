@@ -1,18 +1,16 @@
 // Anthropic Provider
 // Direct integration with Anthropic API for Claude 3.5/4, Opus, Sonnet, Haiku models
 
+use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
+use crate::ai::provider_types::{
+    AIError, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, EmbeddingRequest,
+    EmbeddingResponse, ProviderCapabilities, ProviderConfig, ProviderHealth, ProviderId,
+    ProviderResult, ProviderType, StreamingCallback, StreamingChunk, TokenUsage,
+};
 use async_trait::async_trait;
 use futures::StreamExt;
-use std::sync::Arc;
-use crate::ai::provider_types::{
-    ProviderId, ProviderType, ProviderConfig, ProviderCapabilities, ProviderHealth,
-    ChatCompletionRequest, ChatCompletionResponse,
-    EmbeddingRequest, EmbeddingResponse,
-    StreamingChunk, StreamingCallback,
-    ProviderResult, AIError, ChatMessage, TokenUsage,
-};
-use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// Anthropic API base URL
 const ANTHROPIC_API_BASE: &str = "https://api.anthropic.com/v1";
@@ -120,10 +118,14 @@ struct ContentBlockDelta {
 impl AnthropicProvider {
     /// Create a new Anthropic provider
     pub fn new(config: ProviderConfig) -> ProviderResult<Self> {
-        let api_key = config.api_key.clone()
+        let api_key = config
+            .api_key
+            .clone()
             .ok_or_else(|| AIError::Authentication("API key is required".to_string()))?;
 
-        let base_url = config.base_url.clone()
+        let base_url = config
+            .base_url
+            .clone()
             .unwrap_or_else(|| ANTHROPIC_API_BASE.to_string());
 
         let client = reqwest::Client::builder()
@@ -179,7 +181,9 @@ impl AnthropicProvider {
             reqwest::StatusCode::UNAUTHORIZED => AIError::Authentication(error.error.message),
             reqwest::StatusCode::TOO_MANY_REQUESTS => AIError::RateLimit(error.error.message),
             reqwest::StatusCode::BAD_REQUEST => AIError::InvalidRequest(error.error.message),
-            reqwest::StatusCode::SERVICE_UNAVAILABLE => AIError::APIError(format!("Service unavailable: {}", error.error.message)),
+            reqwest::StatusCode::SERVICE_UNAVAILABLE => {
+                AIError::APIError(format!("Service unavailable: {}", error.error.message))
+            }
             _ => AIError::APIError(format!("Anthropic API error: {}", error.error.message)),
         }
     }
@@ -221,8 +225,8 @@ impl AIProvider for AnthropicProvider {
             embeddings: false, // Anthropic doesn't provide embeddings
             streaming: true,
             function_calling: true,
-            vision: true, // Claude 3.5 Sonnet supports vision
-            web_search: false, // Not directly supported
+            vision: true,               // Claude 3.5 Sonnet supports vision
+            web_search: false,          // Not directly supported
             max_context_tokens: 200000, // Claude 3.5 Sonnet context window
             max_output_tokens: 8192,
             models: Self::available_models(),
@@ -245,17 +249,24 @@ impl AIProvider for AnthropicProvider {
         }
     }
 
-    async fn complete(&self, request: ChatCompletionRequest) -> ProviderResult<ChatCompletionResponse> {
+    async fn complete(
+        &self,
+        request: ChatCompletionRequest,
+    ) -> ProviderResult<ChatCompletionResponse> {
         let (system, messages) = Self::convert_messages(&request.messages);
 
         if messages.is_empty() {
-            return Err(AIError::InvalidRequest("At least one message is required".to_string()));
+            return Err(AIError::InvalidRequest(
+                "At least one message is required".to_string(),
+            ));
         }
 
         let anthropic_request = AnthropicChatRequest {
             model: request.model.clone(),
             messages,
-            max_tokens: request.max_tokens.or_else(|| Some(Self::default_max_tokens(&request.model))),
+            max_tokens: request
+                .max_tokens
+                .or_else(|| Some(Self::default_max_tokens(&request.model))),
             temperature: request.temperature,
             top_p: request.top_p,
             stop_sequences: request.stop,
@@ -263,7 +274,8 @@ impl AIProvider for AnthropicProvider {
             stream: false,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", ANTHROPIC_API_VERSION)
@@ -276,22 +288,30 @@ impl AIProvider for AnthropicProvider {
         let status = response.status();
 
         if !status.is_success() {
-            let error: AnthropicError = response.json().await
+            let error: AnthropicError = response
+                .json()
+                .await
                 .map_err(|e| AIError::APIError(format!("Failed to parse error: {}", e)))?;
             return Err(Self::map_error(status, error));
         }
 
-        let chat_response: AnthropicChatResponse = response.json().await
+        let chat_response: AnthropicChatResponse = response
+            .json()
+            .await
             .map_err(|e| AIError::APIError(format!("Failed to parse response: {}", e)))?;
 
         // Extract text content from content blocks
-        let content = chat_response.content.iter()
+        let content = chat_response
+            .content
+            .iter()
             .filter_map(|block| block.text.clone())
             .collect::<Vec<_>>()
             .join("");
 
         if content.is_empty() {
-            return Err(AIError::APIError("Empty response from Anthropic".to_string()));
+            return Err(AIError::APIError(
+                "Empty response from Anthropic".to_string(),
+            ));
         }
 
         Ok(ChatCompletionResponse {
@@ -302,7 +322,9 @@ impl AIProvider for AnthropicProvider {
                 completion_tokens: chat_response.usage.output_tokens,
                 total_tokens: chat_response.usage.input_tokens + chat_response.usage.output_tokens,
             },
-            finish_reason: chat_response.stop_reason.unwrap_or_else(|| "stop".to_string()),
+            finish_reason: chat_response
+                .stop_reason
+                .unwrap_or_else(|| "stop".to_string()),
         })
     }
 
@@ -314,13 +336,17 @@ impl AIProvider for AnthropicProvider {
         let (system, messages) = Self::convert_messages(&request.messages);
 
         if messages.is_empty() {
-            return Err(AIError::InvalidRequest("At least one message is required".to_string()));
+            return Err(AIError::InvalidRequest(
+                "At least one message is required".to_string(),
+            ));
         }
 
         let anthropic_request = AnthropicChatRequest {
             model: request.model.clone(),
             messages,
-            max_tokens: request.max_tokens.or_else(|| Some(Self::default_max_tokens(&request.model))),
+            max_tokens: request
+                .max_tokens
+                .or_else(|| Some(Self::default_max_tokens(&request.model))),
             temperature: request.temperature,
             top_p: request.top_p,
             stop_sequences: request.stop,
@@ -328,7 +354,8 @@ impl AIProvider for AnthropicProvider {
             stream: true,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", ANTHROPIC_API_VERSION)
@@ -341,7 +368,9 @@ impl AIProvider for AnthropicProvider {
         let status = response.status();
 
         if !status.is_success() {
-            let error: AnthropicError = response.json().await
+            let error: AnthropicError = response
+                .json()
+                .await
                 .map_err(|e| AIError::APIError(format!("Failed to parse error: {}", e)))?;
             return Err(Self::map_error(status, error));
         }
@@ -365,9 +394,12 @@ impl AIProvider for AnthropicProvider {
                     if let Ok(event) = serde_json::from_str::<AnthropicStreamEvent>(data) {
                         match event.event_type.as_str() {
                             "content_block_delta" => {
-                                if let Ok(delta) = serde_json::from_value::<ContentBlockDelta>(event.data) {
+                                if let Ok(delta) =
+                                    serde_json::from_value::<ContentBlockDelta>(event.data)
+                                {
                                     callback(StreamingChunk {
                                         content: delta.text,
+                                        thought: None,
                                         is_final: false,
                                         finish_reason: None,
                                     });
@@ -376,6 +408,7 @@ impl AIProvider for AnthropicProvider {
                             "message_stop" => {
                                 callback(StreamingChunk {
                                     content: String::new(),
+                                    thought: None,
                                     is_final: true,
                                     finish_reason: Some("stop".to_string()),
                                 });
@@ -442,9 +475,10 @@ impl AIProviderFactory for AnthropicProviderFactory {
         if !valid_models.contains(&config.model) {
             // Allow custom model names that start with "claude-"
             if !config.model.starts_with("claude-") {
-                return Err(AIError::InvalidRequest(
-                    format!("Model '{}' is not supported. Use a Claude model.", config.model)
-                ));
+                return Err(AIError::InvalidRequest(format!(
+                    "Model '{}' is not supported. Use a Claude model.",
+                    config.model
+                )));
             }
         }
 
@@ -473,9 +507,7 @@ mod tests {
 
     #[test]
     fn test_convert_messages_no_system() {
-        let messages = vec![
-            ChatMessage::user("Hello"),
-        ];
+        let messages = vec![ChatMessage::user("Hello")];
 
         let (system, anthropic_messages) = AnthropicProvider::convert_messages(&messages);
         assert_eq!(system, None);
@@ -493,7 +525,10 @@ mod tests {
     #[test]
     fn test_default_max_tokens() {
         assert_eq!(AnthropicProvider::default_max_tokens("claude-3-opus"), 4096);
-        assert_eq!(AnthropicProvider::default_max_tokens("claude-3-5-sonnet"), 8192);
+        assert_eq!(
+            AnthropicProvider::default_max_tokens("claude-3-5-sonnet"),
+            8192
+        );
     }
 
     #[test]
@@ -506,7 +541,8 @@ mod tests {
             },
         };
 
-        let error = AnthropicProvider::map_error(reqwest::StatusCode::UNAUTHORIZED, anthropic_error);
+        let error =
+            AnthropicProvider::map_error(reqwest::StatusCode::UNAUTHORIZED, anthropic_error);
         assert!(matches!(error, AIError::Authentication(_)));
     }
 }

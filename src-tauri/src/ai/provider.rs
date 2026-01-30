@@ -440,7 +440,7 @@ impl AIProviderManager {
     ) -> Result<String, String>
     where
         F: Fn(u8, Option<String>) + Send + Sync + 'static,
-        S: Fn(String) + Send + Sync + 'static,
+        S: Fn(crate::ai::provider_types::StreamingChunk) + Send + Sync + 'static,
     {
         match provider {
             ProviderType::RainyApi => {
@@ -485,9 +485,20 @@ impl AIProviderManager {
                             match chunk_result {
                                 Ok(chunk) => {
                                     if let Some(choice) = chunk.choices.first() {
-                                        if let Some(content) = &choice.delta.content {
-                                            token_callback(content.clone());
-                                            full_response.push_str(content);
+                                        let content =
+                                            choice.delta.content.clone().unwrap_or_default();
+                                        let thought = choice.delta.thought.clone();
+
+                                        if !content.is_empty() || thought.is_some() {
+                                            let chunk_data =
+                                                crate::ai::provider_types::StreamingChunk {
+                                                    content: content.clone(),
+                                                    thought,
+                                                    is_final: false,
+                                                    finish_reason: None,
+                                                };
+                                            token_callback(chunk_data);
+                                            full_response.push_str(&content);
                                         }
                                     }
                                 }
@@ -629,9 +640,20 @@ impl AIProviderManager {
                             match chunk_result {
                                 Ok(chunk) => {
                                     if let Some(choice) = chunk.choices.first() {
-                                        if let Some(content) = &choice.delta.content {
-                                            token_callback(content.clone());
-                                            full_response.push_str(content);
+                                        let content =
+                                            choice.delta.content.clone().unwrap_or_default();
+                                        let thought = choice.delta.thought.clone();
+
+                                        if !content.is_empty() || thought.is_some() {
+                                            let chunk_data =
+                                                crate::ai::provider_types::StreamingChunk {
+                                                    content: content.clone(),
+                                                    thought,
+                                                    is_final: false,
+                                                    finish_reason: None,
+                                                };
+                                            token_callback(chunk_data);
+                                            full_response.push_str(&content);
                                         }
                                     }
                                 }
@@ -761,6 +783,11 @@ impl AIProviderManager {
                 thinking_config.thinking_level = Some(ThinkingLevel::High);
                 ("gemini-3-flash-preview".to_string(), Some(thinking_config))
             }
+            // Default for base model ID
+            "gemini-3-flash-preview" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Medium);
+                ("gemini-3-flash-preview".to_string(), Some(thinking_config))
+            }
 
             // Gemini 3 Pro mappings
             "gemini-3-pro-low" => {
@@ -769,6 +796,11 @@ impl AIProviderManager {
             }
             "gemini-3-pro-high" => {
                 thinking_config.thinking_level = Some(ThinkingLevel::High);
+                ("gemini-3-pro-preview".to_string(), Some(thinking_config))
+            }
+            // Default for base model ID
+            "gemini-3-pro-preview" => {
+                thinking_config.thinking_level = Some(ThinkingLevel::Medium);
                 ("gemini-3-pro-preview".to_string(), Some(thinking_config))
             }
 

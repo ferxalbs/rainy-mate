@@ -293,6 +293,8 @@ pub struct EmbeddingResponse {
 pub struct StreamingChunk {
     /// Content chunk
     pub content: String,
+    /// Thought chunk (reasoning content)
+    pub thought: Option<String>,
     /// Whether this is the final chunk
     pub is_final: bool,
     /// Finish reason (if final)

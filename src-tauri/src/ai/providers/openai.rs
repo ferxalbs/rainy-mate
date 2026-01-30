@@ -1,18 +1,16 @@
 // OpenAI Provider
 // Direct integration with OpenAI API for GPT-4, GPT-4o, o1 models
 
+use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
+use crate::ai::provider_types::{
+    AIError, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, EmbeddingRequest,
+    EmbeddingResponse, ProviderCapabilities, ProviderConfig, ProviderHealth, ProviderId,
+    ProviderResult, ProviderType, StreamingCallback, StreamingChunk, TokenUsage,
+};
 use async_trait::async_trait;
 use futures::StreamExt;
-use std::sync::Arc;
-use crate::ai::provider_types::{
-    ProviderId, ProviderType, ProviderConfig, ProviderCapabilities, ProviderHealth,
-    ChatCompletionRequest, ChatCompletionResponse,
-    EmbeddingRequest, EmbeddingResponse,
-    StreamingChunk, StreamingCallback,
-    ProviderResult, AIError, ChatMessage, TokenUsage,
-};
-use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// OpenAI API base URL
 const OPENAI_API_BASE: &str = "https://api.openai.com/v1";
@@ -154,10 +152,14 @@ struct OpenAIErrorDetail {
 impl OpenAIProvider {
     /// Create a new OpenAI provider
     pub fn new(config: ProviderConfig) -> ProviderResult<Self> {
-        let api_key = config.api_key.clone()
+        let api_key = config
+            .api_key
+            .clone()
             .ok_or_else(|| AIError::Authentication("API key is required".to_string()))?;
 
-        let base_url = config.base_url.clone()
+        let base_url = config
+            .base_url
+            .clone()
             .unwrap_or_else(|| OPENAI_API_BASE.to_string());
 
         let client = reqwest::Client::builder()
@@ -180,7 +182,8 @@ impl OpenAIProvider {
 
     /// Convert chat messages to OpenAI format
     fn convert_messages(messages: &[ChatMessage]) -> Vec<OpenAIMessage> {
-        messages.iter()
+        messages
+            .iter()
             .map(|msg| OpenAIMessage {
                 role: msg.role.clone(),
                 content: msg.content.clone(),
@@ -230,8 +233,8 @@ impl AIProvider for OpenAIProvider {
             embeddings: true,
             streaming: true,
             function_calling: true,
-            vision: true, // GPT-4o supports vision
-            web_search: false, // Not directly supported
+            vision: true,               // GPT-4o supports vision
+            web_search: false,          // Not directly supported
             max_context_tokens: 128000, // GPT-4o context window
             max_output_tokens: 4096,
             models: Self::available_models(),
@@ -240,7 +243,8 @@ impl AIProvider for OpenAIProvider {
 
     async fn health_check(&self) -> ProviderResult<ProviderHealth> {
         // Try a simple models list request to check health
-        let response = self.client
+        let response = self
+            .client
             .get(format!("{}/models", self.base_url))
             .bearer_auth(&self.api_key)
             .send()
@@ -260,7 +264,10 @@ impl AIProvider for OpenAIProvider {
         }
     }
 
-    async fn complete(&self, request: ChatCompletionRequest) -> ProviderResult<ChatCompletionResponse> {
+    async fn complete(
+        &self,
+        request: ChatCompletionRequest,
+    ) -> ProviderResult<ChatCompletionResponse> {
         let openai_request = OpenAIChatRequest {
             model: request.model.clone(),
             messages: Self::convert_messages(&request.messages),
@@ -273,7 +280,8 @@ impl AIProvider for OpenAIProvider {
             stream: false,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
             .json(&openai_request)
@@ -284,15 +292,21 @@ impl AIProvider for OpenAIProvider {
         let status = response.status();
 
         if !status.is_success() {
-            let error: OpenAIError = response.json().await
+            let error: OpenAIError = response
+                .json()
+                .await
                 .map_err(|e| AIError::APIError(format!("Failed to parse error: {}", e)))?;
             return Err(Self::map_error(status, error));
         }
 
-        let chat_response: OpenAIChatResponse = response.json().await
+        let chat_response: OpenAIChatResponse = response
+            .json()
+            .await
             .map_err(|e| AIError::APIError(format!("Failed to parse response: {}", e)))?;
 
-        let choice = chat_response.choices.into_iter()
+        let choice = chat_response
+            .choices
+            .into_iter()
             .next()
             .ok_or_else(|| AIError::APIError("No response choices".to_string()))?;
 
@@ -325,7 +339,8 @@ impl AIProvider for OpenAIProvider {
             stream: true,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
             .json(&openai_request)
@@ -336,7 +351,9 @@ impl AIProvider for OpenAIProvider {
         let status = response.status();
 
         if !status.is_success() {
-            let error: OpenAIError = response.json().await
+            let error: OpenAIError = response
+                .json()
+                .await
                 .map_err(|e| AIError::APIError(format!("Failed to parse error: {}", e)))?;
             return Err(Self::map_error(status, error));
         }
@@ -360,6 +377,7 @@ impl AIProvider for OpenAIProvider {
                     if data == "[DONE]" {
                         callback(StreamingChunk {
                             content: String::new(),
+                            thought: None,
                             is_final: true,
                             finish_reason: Some("stop".to_string()),
                         });
@@ -371,6 +389,7 @@ impl AIProvider for OpenAIProvider {
                             if let Some(content) = &choice.delta.content {
                                 callback(StreamingChunk {
                                     content: content.clone(),
+                                    thought: None,
                                     is_final: choice.finish_reason.is_some(),
                                     finish_reason: choice.finish_reason.clone(),
                                 });
@@ -390,7 +409,8 @@ impl AIProvider for OpenAIProvider {
             input: request.input.clone(),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/embeddings", self.base_url))
             .bearer_auth(&self.api_key)
             .json(&embedding_request)
@@ -401,15 +421,21 @@ impl AIProvider for OpenAIProvider {
         let status = response.status();
 
         if !status.is_success() {
-            let error: OpenAIError = response.json().await
+            let error: OpenAIError = response
+                .json()
+                .await
                 .map_err(|e| AIError::APIError(format!("Failed to parse error: {}", e)))?;
             return Err(Self::map_error(status, error));
         }
 
-        let embedding_response: OpenAIEmbeddingResponse = response.json().await
+        let embedding_response: OpenAIEmbeddingResponse = response
+            .json()
+            .await
             .map_err(|e| AIError::APIError(format!("Failed to parse response: {}", e)))?;
 
-        let data = embedding_response.data.into_iter()
+        let data = embedding_response
+            .data
+            .into_iter()
             .next()
             .ok_or_else(|| AIError::APIError("No embedding data".to_string()))?;
 

@@ -1,16 +1,16 @@
 // xAI Provider for Grok Models
 // Direct integration with xAI's Grok API using OpenAI-compatible endpoints
 
-use async_trait::async_trait;
-use reqwest::{Client, RequestBuilder};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use crate::ai::{
     AIError, AIProvider, AIProviderFactory, ChatCompletionRequest, ChatCompletionResponse,
     ChatMessage, EmbeddingRequest, EmbeddingResponse, ProviderCapabilities, ProviderConfig,
     ProviderHealth, ProviderId, ProviderResult, StreamingCallback, StreamingChunk, TokenUsage,
 };
+use async_trait::async_trait;
 use futures::StreamExt;
+use reqwest::{Client, RequestBuilder};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// xAI Provider implementation for Grok models
 #[derive(Clone, Debug)]
@@ -29,7 +29,9 @@ impl XAIProvider {
     /// Create a new xAI provider instance
     pub fn new(client: Client, config: ProviderConfig) -> Self {
         let api_key = config.api_key.clone().unwrap_or_default();
-        let base_url = config.base_url.clone()
+        let base_url = config
+            .base_url
+            .clone()
             .unwrap_or_else(|| "https://api.x.ai/v1".to_string());
 
         Self {
@@ -136,7 +138,8 @@ impl AIProvider for XAIProvider {
 
     /// Check provider health
     async fn health_check(&self) -> ProviderResult<ProviderHealth> {
-        let request = self.client
+        let request = self
+            .client
             .get(&format!("{}/models", self.base_url()))
             .header("Authorization", format!("Bearer {}", self.api_key()));
 
@@ -153,9 +156,13 @@ impl AIProvider for XAIProvider {
     }
 
     /// Execute a chat completion request
-    async fn complete(&self, request: ChatCompletionRequest) -> ProviderResult<ChatCompletionResponse> {
+    async fn complete(
+        &self,
+        request: ChatCompletionRequest,
+    ) -> ProviderResult<ChatCompletionResponse> {
         let request_body = XAIChatRequest::from(request.clone());
-        let request_builder = self.client
+        let request_builder = self
+            .client
             .post(&format!("{}/chat/completions", self.base_url()))
             .header("Authorization", format!("Bearer {}", self.api_key()))
             .header("Content-Type", "application/json")
@@ -174,7 +181,8 @@ impl AIProvider for XAIProvider {
         callback: StreamingCallback,
     ) -> ProviderResult<()> {
         let request_body = XAIChatRequest::from(request.clone());
-        let request_builder = self.client
+        let request_builder = self
+            .client
             .post(&format!("{}/chat/completions", self.base_url()))
             .header("Authorization", format!("Bearer {}", self.api_key()))
             .header("Content-Type", "application/json")
@@ -186,7 +194,9 @@ impl AIProvider for XAIProvider {
 
     /// Generate embeddings
     async fn embed(&self, _request: EmbeddingRequest) -> ProviderResult<EmbeddingResponse> {
-        Err(AIError::UnsupportedCapability("xAI does not support embeddings".to_string()))
+        Err(AIError::UnsupportedCapability(
+            "xAI does not support embeddings".to_string(),
+        ))
     }
 
     /// Get the provider configuration
@@ -248,11 +258,17 @@ impl XAIProvider {
 
                     // Parse SSE data
                     if let Ok(chunk) = serde_json::from_str::<XAIStreamingChunk>(data) {
-                        if let Some(delta) = chunk.choices.first().and_then(|c| c.delta.content.clone()) {
+                        if let Some(delta) =
+                            chunk.choices.first().and_then(|c| c.delta.content.clone())
+                        {
                             let _ = callback(StreamingChunk {
                                 content: delta,
+                                thought: None,
                                 is_final: false,
-                                finish_reason: chunk.choices.first().and_then(|c| c.finish_reason.clone()),
+                                finish_reason: chunk
+                                    .choices
+                                    .first()
+                                    .and_then(|c| c.finish_reason.clone()),
                             });
                         }
                     }
@@ -333,17 +349,25 @@ pub struct XAIChatResponse {
 impl XAIChatResponse {
     /// Convert to standard ChatCompletionResponse
     pub fn to_completion_response(&self, model: String) -> ChatCompletionResponse {
-        let content = self.choices.first()
+        let content = self
+            .choices
+            .first()
             .map(|c| c.message.content.clone())
             .unwrap_or_default();
 
-        let usage = self.usage.as_ref().map(|u| TokenUsage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-        }).unwrap_or_else(|| TokenUsage::new(0, 0));
+        let usage = self
+            .usage
+            .as_ref()
+            .map(|u| TokenUsage {
+                prompt_tokens: u.prompt_tokens,
+                completion_tokens: u.completion_tokens,
+                total_tokens: u.total_tokens,
+            })
+            .unwrap_or_else(|| TokenUsage::new(0, 0));
 
-        let finish_reason = self.choices.first()
+        let finish_reason = self
+            .choices
+            .first()
             .and_then(|c| c.finish_reason.clone())
             .unwrap_or_else(|| "stop".to_string());
 
@@ -419,7 +443,9 @@ impl AIProviderFactory for XAIProviderFactory {
     /// Validate provider configuration
     fn validate_config(config: &ProviderConfig) -> ProviderResult<()> {
         if config.api_key.is_none() {
-            return Err(AIError::Configuration("xAI API key is required".to_string()));
+            return Err(AIError::Configuration(
+                "xAI API key is required".to_string(),
+            ));
         }
         Ok(())
     }

@@ -3,6 +3,7 @@
 
 use crate::ai::mode_selector::{ModeSelector, TaskComplexity, UseCase};
 use crate::ai::provider::AIProviderManager;
+use crate::ai::provider_types::StreamingChunk;
 use crate::models::ProviderType;
 // RainyClient import removed - using static model lists instead of API calls
 use serde::{Deserialize, Serialize};
@@ -410,7 +411,7 @@ pub async fn send_unified_message(
                 // Progress callback
                 println!("Progress: {}% - {:?}", progress, message);
             },
-            None::<fn(String)>,
+            None::<fn(StreamingChunk)>,
         ) // No streaming for non-stream calls
         .await
         .map_err(|e| e.to_string())?;
@@ -532,12 +533,22 @@ pub async fn unified_chat_stream(
             |_progress, _msg| {
                 // Progress updates are optional for streaming
             },
-            Some(move |token: String| {
-                // Called for each token as it arrives from the AI
-                let _ = channel.send(StreamEvent {
-                    event: "token".to_string(),
-                    data: token,
-                });
+            Some(move |chunk: crate::ai::provider_types::StreamingChunk| {
+                // Emit content token if present
+                if !chunk.content.is_empty() {
+                    let _ = channel.send(StreamEvent {
+                        event: "token".to_string(),
+                        data: chunk.content,
+                    });
+                }
+
+                // Emit thinking chunk if present
+                if let Some(thought) = chunk.thought {
+                    let _ = channel.send(StreamEvent {
+                        event: "thinking".to_string(),
+                        data: thought,
+                    });
+                }
             }),
         )
         .await;

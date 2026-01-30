@@ -471,7 +471,7 @@ impl TaskManager {
                 move |progress, _message| {
                     tracing::debug!("Task {} progress: {}%", task_id_for_closure, progress);
                 },
-                None::<fn(String)>,
+                None::<fn(crate::ai::provider_types::StreamingChunk)>,
             )
             .await;
 
@@ -609,7 +609,7 @@ impl TaskManager {
                                             progress
                                         );
                                     },
-                                    None::<fn(String)>,
+                                    None::<fn(crate::ai::provider_types::StreamingChunk)>,
                                 )
                                 .await;
 

@@ -104,6 +104,7 @@ export function useCoworkAgent(): UseCoworkAgentReturn {
         if (plan.intent === "question" && plan.answer) {
           updateMessage(thinkingId, {
             content: plan.answer + modelFooter,
+            thought: plan.thought,
             isLoading: false,
           });
           // Don't set currentPlan for questions
@@ -127,6 +128,7 @@ export function useCoworkAgent(): UseCoworkAgentReturn {
           updateMessage(thinkingId, {
             content: `I've created a plan with ${plan.steps.length} step(s):\n\n${planSummary}${plan.warnings.length > 0 ? `\n\n⚠️ Warnings:\n${plan.warnings.join("\n")}` : ""}${modelFooter}`,
             isLoading: false,
+            thought: plan.thought,
             plan,
           });
 
@@ -164,6 +166,7 @@ export function useCoworkAgent(): UseCoworkAgentReturn {
       });
 
       let accumulatedContent = "";
+      let accumulatedThought = "";
 
       try {
         // Use default model if empty
@@ -176,6 +179,13 @@ export function useCoworkAgent(): UseCoworkAgentReturn {
               accumulatedContent = event.data;
               updateMessage(responseId, {
                 content: accumulatedContent,
+                isLoading: true,
+              });
+              break;
+            case "thinking":
+              accumulatedThought += event.data;
+              updateMessage(responseId, {
+                thought: accumulatedThought,
                 isLoading: true,
               });
               break;

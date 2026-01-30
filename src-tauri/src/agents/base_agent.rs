@@ -33,6 +33,7 @@ use crate::agents::agent_trait::{Agent, AgentConfig, AgentError};
 use crate::agents::message_bus::MessageBus;
 use crate::agents::types::{AgentInfo, AgentMessage, AgentStatus, AgentType, Task, TaskResult};
 use crate::ai::provider::AIProviderManager;
+use crate::ai::provider_types::StreamingChunk;
 use crate::models::ProviderType;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -129,7 +130,11 @@ impl BaseAgent {
         message: AgentMessage,
     ) -> Result<(), AgentError> {
         self.message_bus
-            .send(self.config.agent_id.clone(), target_agent.to_string(), message)
+            .send(
+                self.config.agent_id.clone(),
+                target_agent.to_string(),
+                message,
+            )
             .await
     }
 
@@ -168,7 +173,13 @@ impl BaseAgent {
         // Execute prompt using AI provider manager
         let response = self
             .ai_provider
-            .execute_prompt(&provider_type, &self.config.model, prompt, |_, _| {}, None::<fn(String)>)
+            .execute_prompt(
+                &provider_type,
+                &self.config.model,
+                prompt,
+                |_, _| {},
+                None::<fn(StreamingChunk)>,
+            )
             .await
             .map_err(|e| AgentError::TaskExecutionFailed(e.to_string()))?;
 
@@ -233,8 +244,7 @@ impl Agent for BaseAgent {
         // Base implementation - specialized agents should override this
         let prompt = format!(
             "Task: {}\n\nContext: {}\n\nPlease complete this task.",
-            task.description,
-            task.context.user_instruction
+            task.description, task.context.user_instruction
         );
 
         let response = self.query_ai(&prompt).await?;
