@@ -164,14 +164,14 @@ export function UnifiedModelSelector({
             shadow-sm hover:shadow-md
             ${
               selectedModel?.provider === "Cowork"
-                ? "bg-purple-100/60 dark:bg-purple-900/30 border-purple-200/50 dark:border-purple-700/30 text-purple-900 dark:text-purple-100"
+                ? "bg-purple-100/60 dark:bg-primary/30 border-primary/50 dark:border-primary/30 text-purple-900 dark:text-purple-100"
                 : selectedModel?.provider === "Rainy API" ||
                     selectedModel?.provider === "Rainy"
-                  ? "bg-amber-100/60 dark:bg-amber-900/30 border-amber-200/50 dark:border-amber-700/30 text-amber-900 dark:text-amber-100"
+                  ? "bg-amber-900/60 dark:bg-primary/30 border-primary/50 dark:border-primary/30 text-amber-900 dark:text-amber-100"
                   : selectedModel?.provider === "OpenAI"
-                    ? "bg-green-100/60 dark:bg-green-900/30 border-green-200/50 dark:border-green-700/30 text-green-900 dark:text-green-100"
+                    ? "bg-green-100/60 dark:bg-primary/30 border-primary/50 dark:border-primary/30 text-green-900 dark:text-green-100"
                     : selectedModel?.provider === "Anthropic"
-                      ? "bg-orange-100/60 dark:bg-orange-900/30 border-orange-200/50 dark:border-orange-700/30 text-orange-900 dark:text-orange-100"
+                      ? "bg-orange-100/60 dark:bg-primary/30 border-primary/50 dark:border-primary/30 text-orange-900 dark:text-orange-100"
                       : "bg-white/60 dark:bg-black/30 border-black/5 dark:border-white/5"
             }
             backdrop-blur-2xl
