@@ -12,6 +12,7 @@ import {
   Search,
   Plus,
   LayoutGrid,
+  Settings,
 } from "lucide-react";
 import { MacOSToggle } from "./MacOSToggle";
 import { useTheme } from "../../hooks/useTheme";
@@ -296,7 +297,7 @@ export function AppSidebar({
               onPress={onSettingsClick}
               className="text-muted-foreground hover:bg-muted/50"
             >
-              <Palette className="size-4" />
+              <Settings className="size-4" />
             </Button>
             <Tooltip.Content>Settings</Tooltip.Content>
           </Tooltip>
