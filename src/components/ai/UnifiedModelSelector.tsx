@@ -156,7 +156,9 @@ export function UnifiedModelSelector({
       normalizedId.includes("gpt") ||
       normalizedName.includes("gpt") ||
       normalizedId.includes("o1") ||
-      normalizedId.includes("o3")
+      normalizedId.includes("o3") ||
+      normalizedId.includes("o4") ||
+      normalizedId.includes("o5")
     ) {
       return (
         <RenderTintedIcon
@@ -189,6 +191,32 @@ export function UnifiedModelSelector({
         <RenderTintedIcon
           src="/google.svg"
           colorClass="text-[#4285F4] dark:text-[#4285F4]"
+        />
+      );
+    }
+
+    if (
+      normalizedProvider.includes("moonshot") ||
+      normalizedId.includes("kimi") ||
+      normalizedName.includes("kimi")
+    ) {
+      return (
+        <RenderTintedIcon
+          src="/moonshot.svg"
+          colorClass="text-foreground dark:text-foreground"
+        />
+      );
+    }
+
+    if (
+      normalizedProvider.includes("meta") ||
+      normalizedId.includes("llama") ||
+      normalizedName.includes("llama")
+    ) {
+      return (
+        <RenderTintedIcon
+          src="/meta.svg"
+          colorClass="text-[#0668E1] dark:text-[#0668E1]"
         />
       );
     }
@@ -290,7 +318,7 @@ export function UnifiedModelSelector({
                     }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left transition-all duration-200 group ${
                       selectedModelId === model.id
-                        ? "bg-accent/80 text-accent-foreground"
+                        ? "bg-secondary/80 text-foreground ring-1 ring-border/50 shadow-sm"
                         : "hover:bg-muted/50 text-foreground/80 hover:text-foreground"
                     }`}
                   >
