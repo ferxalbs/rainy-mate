@@ -254,6 +254,12 @@ export function AppSidebar({
             icon={Search}
             colorClass="text-green-500"
           />
+          <NavItem
+            id="atm-bootstrap"
+            label="Run on Cloud"
+            icon={Sparkles}
+            colorClass="text-amber-500"
+          />
         </div>
       </div>
 

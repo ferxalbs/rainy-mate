@@ -4,6 +4,7 @@
 pub mod agents;
 pub mod ai;
 pub mod ai_providers;
+pub mod atm;
 pub mod cowork;
 pub mod document;
 pub mod file;
@@ -23,6 +24,7 @@ pub mod workspace;
 pub use agents::*;
 pub use ai::*;
 pub use ai_providers::*;
+pub use atm::*;
 pub use cowork::*;
 pub use document::*;
 pub use file::*;

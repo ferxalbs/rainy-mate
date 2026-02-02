@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { TahoeLayout, AIDocumentPanel, AIResearchPanel } from "./components";
 import { SettingsPage } from "./components/settings";
 import { AgentChatPanel } from "./components/agent-chat/AgentChatPanel";
+import { AtmBootstrap } from "./components/AtmBootstrap";
 import { Button, Card } from "@heroui/react";
 import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
@@ -93,7 +94,8 @@ function App() {
         isImmersive={
           !isSettingsSection &&
           activeSection !== "documents" &&
-          activeSection !== "research"
+          activeSection !== "research" &&
+          activeSection !== "atm-bootstrap"
         }
       >
         {/* Main Content Area - Dynamic based on section */}
@@ -137,6 +139,13 @@ function App() {
               ) : (
                 <NoFolderGate onAddFolder={addFolder} />
               )}
+            </div>
+          )}
+
+          {/* ATM Bootstrap */}
+          {activeSection === "atm-bootstrap" && (
+            <div className="flex-1 flex items-center justify-center p-6 bg-content1/50">
+              <AtmBootstrap />
             </div>
           )}
 

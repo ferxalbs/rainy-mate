@@ -11,8 +11,9 @@ mod services;
 use agents::AgentRegistry;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
-    CoworkAgent, DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService,
-    MemoryManager, ReflectionEngine, SettingsManager, WebResearchService, WorkspaceManager,
+    ATMClient, CoworkAgent, DocumentService, FileManager, FileOperationEngine, FolderManager,
+    ImageService, ManagedResearchService, MemoryManager, ReflectionEngine, SettingsManager,
+    WebResearchService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -46,8 +47,7 @@ pub fn run() {
     ));
 
     // Initialize web research service (Phase 3 AI features)
-    let managed_research =
-        services::managed_research::ManagedResearchService::new(ai_provider.clone());
+    let managed_research = ManagedResearchService::new(ai_provider.clone());
 
     // Initialize legacy web scraper service
     let web_research = WebResearchService::new();
@@ -70,6 +70,13 @@ pub fn run() {
 
     // Initialize intelligent router for PHASE 3
     let intelligent_router = Arc::new(RwLock::new(IntelligentRouter::default()));
+
+    // Initialize ATM Client (Rainy ATM)
+    // TODO: Load API Key from secure storage if available
+    let atm_client = ATMClient::new(
+        "https://rainy-atm-cfe3gvcwua-uc.a.run.app".to_string(),
+        None,
+    );
 
     // Initialize folder manager (requires app handle for data dir)
     // We'll initialize it in setup since we need the app handle
@@ -100,6 +107,7 @@ pub fn run() {
             reflection_engine,
         )) // Arc<ReflectionEngine>
         .manage(commands::router::IntelligentRouterState(intelligent_router)) // Arc<RwLock<IntelligentRouter>>
+        .manage(atm_client) // ATMClient
         .setup(|app| {
             use tauri::Manager;
 
@@ -323,6 +331,11 @@ pub fn run() {
             commands::send_unified_message,
             commands::get_recommended_model,
             commands::unified_chat_stream,
+            // ATM Commands (Rainy ATM)
+            commands::bootstrap_atm,
+            commands::create_atm_agent,
+            commands::list_atm_agents,
+            commands::set_atm_credentials,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
