@@ -336,6 +336,7 @@ pub fn run() {
             commands::create_atm_agent,
             commands::list_atm_agents,
             commands::set_atm_credentials,
+            commands::generate_pairing_code,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

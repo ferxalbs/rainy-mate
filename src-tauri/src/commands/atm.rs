@@ -34,6 +34,13 @@ pub async fn list_atm_agents(client: State<'_, ATMClient>) -> Result<serde_json:
 }
 
 #[command]
+pub async fn generate_pairing_code(
+    client: State<'_, ATMClient>,
+) -> Result<crate::services::atm_client::PairingCodeResponse, String> {
+    client.generate_pairing_code().await
+}
+
+#[command]
 pub async fn set_atm_credentials(
     client: State<'_, ATMClient>,
     api_key: String,

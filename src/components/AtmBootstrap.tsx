@@ -12,6 +12,8 @@ export function AtmBootstrap() {
   const [error, setError] = useState("");
   const [agentResult, setAgentResult] = useState<any>(null);
   const [isDeploying, setIsDeploying] = useState(false);
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [pairingExpires, setPairingExpires] = useState<number | null>(null);
 
   const handleBootstrap = async () => {
     setStatus("loading");
@@ -28,6 +30,16 @@ export function AtmBootstrap() {
       console.error(err);
       setError(typeof err === "string" ? err : JSON.stringify(err));
       setStatus("error");
+    }
+  };
+
+  const handleGeneratePairingCode = async () => {
+    try {
+      const res: any = await invoke("generate_pairing_code");
+      setPairingCode(res.code);
+      setPairingExpires(res.expiresAt);
+    } catch (err: any) {
+      setError(typeof err === "string" ? err : JSON.stringify(err));
     }
   };
 
@@ -103,19 +115,60 @@ export function AtmBootstrap() {
                   </div>
                 )}
               </div>
+
+              <Separator />
+
+              <div className="flex flex-col gap-2 pt-2">
+                <h3 className="font-bold text-lg">📱 Connect Mobile</h3>
+                <p className="text-small text-default-500">
+                  Control this workspace from Telegram or WhatsApp.
+                </p>
+
+                {pairingCode ? (
+                  <div className="bg-default-50 p-6 rounded-xl flex flex-col items-center justify-center text-center space-y-4 border border-default-200">
+                    <div className="text-4xl font-mono font-bold tracking-[0.2em] text-primary">
+                      {pairingCode}
+                    </div>
+                    <div className="text-sm text-default-500 max-w-xs">
+                      Send this code to <b>@RainyMateBot</b> on Telegram or
+                      WhatsApp to pair your device.
+                    </div>
+                    <div className="text-xs text-default-400">
+                      Expires at{" "}
+                      {pairingExpires
+                        ? new Date(pairingExpires).toLocaleTimeString()
+                        : ""}{" "}
+                      (15 mins)
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Button
+                      variant="ghost"
+                      className="text-primary font-medium"
+                      onPress={handleGeneratePairingCode}
+                    >
+                      Generate Pairing Code
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">
-                  Master Key (Encryption Key)
+                  Rainy Platform API Key
                 </label>
                 <Input
-                  placeholder="Enter the 32-byte hex key..."
+                  placeholder="rk_live_..."
                   value={masterKey}
                   onChange={(e) => setMasterKey(e.target.value)}
                   type="password"
                 />
+                <p className="text-xs text-default-400">
+                  Get your key at platform.rainymate.com
+                </p>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">Workspace Name</label>
