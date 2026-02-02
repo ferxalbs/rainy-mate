@@ -1368,3 +1368,53 @@ export async function getRouterProviders(): Promise<string[]> {
 export async function routerHasProviders(): Promise<boolean> {
   return invoke<boolean>("router_has_providers");
 }
+
+// ============ Neural System Types ============
+
+export type AirlockLevel = 'Safe' | 'Sensitive' | 'Dangerous';
+
+export interface ApprovalRequest {
+  id: string;
+  timestamp: string; // ISO
+  command_type: string;
+  payload: any;
+  level: AirlockLevel;
+  requester_id?: string;
+}
+
+export interface SkillManifest {
+  name: string;
+  version: string;
+  description: string;
+  capabilities: string[];
+}
+
+export interface NeuralNodeInfo {
+    id: string;
+    status: DesktopNodeStatus;
+    cloud_url: string;
+}
+
+export type DesktopNodeStatus = 
+    | 'pending-pairing' 
+    | 'connected' 
+    | 'offline' 
+    | 'error';
+
+// ============ Neural System Commands ============
+
+export async function registerNode(skills: SkillManifest[]): Promise<string> {
+    return invoke('register_node', { skills });
+}
+
+export async function sendHeartbeat(): Promise<void> {
+    return invoke('send_heartbeat');
+}
+
+export async function respondToAirlock(requestId: string, approved: boolean): Promise<void> {
+    return invoke('respond_to_airlock', { requestId, approved });
+}
+
+export async function getPendingAirlockApprovals(): Promise<ApprovalRequest[]> {
+    return invoke('get_pending_airlock_approvals');
+}
