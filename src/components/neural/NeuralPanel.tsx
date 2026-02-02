@@ -16,6 +16,8 @@ import {
   setNeuralCredentials,
   loadNeuralCredentials,
 } from "../../services/tauri";
+import { AgentList } from "./AgentList";
+import { CreateAgentForm } from "./CreateAgentForm";
 
 export function NeuralPanel() {
   const {
@@ -33,6 +35,7 @@ export function NeuralPanel() {
   const [userApiKey, setUserApiKey] = useState("");
   const [isPairing, setIsPairing] = useState(false);
   const [hasCredentials, setHasCredentials] = useState(false);
+  const [isCreatingAgent, setIsCreatingAgent] = useState(false);
 
   // Check for existing credentials on mount
   useEffect(() => {
@@ -211,6 +214,20 @@ export function NeuralPanel() {
           </div>
         )}
       </Card>
+
+      {/* Agent Management Section */}
+      {status === "connected" && hasCredentials && (
+        <Card className="p-6">
+          {isCreatingAgent ? (
+            <CreateAgentForm
+              onSuccess={() => setIsCreatingAgent(false)}
+              onCancel={() => setIsCreatingAgent(false)}
+            />
+          ) : (
+            <AgentList onCreateClick={() => setIsCreatingAgent(true)} />
+          )}
+        </Card>
+      )}
 
       {/* Settings Card */}
       <Card className="p-6">

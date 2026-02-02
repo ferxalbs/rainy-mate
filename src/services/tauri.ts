@@ -1446,3 +1446,17 @@ export async function loadNeuralCredentials(): Promise<boolean> {
 export async function hasNeuralCredentials(): Promise<boolean> {
   return invoke("has_neural_credentials");
 }
+
+// ============ Agent Management Commands ============
+
+export async function listAtmAgents(): Promise<any> {
+  return invoke("list_atm_agents");
+}
+
+export async function createAtmAgent(
+  name: string,
+  type: string,
+  config: any,
+): Promise<any> {
+  return invoke("create_atm_agent", { name, type_: type, config });
+}
