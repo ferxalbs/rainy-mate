@@ -8,6 +8,7 @@ import {
   ApprovalRequest,
   SkillManifest,
   DesktopNodeStatus,
+  setHeadlessMode,
 } from "../services/tauri";
 import { toast } from "@heroui/react";
 
@@ -105,6 +106,19 @@ export function useNeuralService() {
     }
   }, []);
 
+  const [isHeadless, setIsHeadless] = useState(false);
+
+  const toggleHeadless = useCallback(async (enabled: boolean) => {
+    try {
+      await setHeadlessMode(enabled);
+      setIsHeadless(enabled);
+      toast.success(`Headless Mode ${enabled ? "Enabled" : "Disabled"}`);
+    } catch (error) {
+      console.error("Failed to set headless mode:", error);
+      toast.danger("Failed to update settings");
+    }
+  }, []);
+
   return {
     status,
     nodeId,
@@ -113,5 +127,7 @@ export function useNeuralService() {
     connect,
     respond,
     isPending: status === "pending-pairing",
+    isHeadless,
+    toggleHeadless,
   };
 }

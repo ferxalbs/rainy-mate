@@ -37,3 +37,17 @@ pub async fn get_pending_airlock_approvals(
         Err("Airlock service not initialized".to_string())
     }
 }
+/// Set headless mode (auto-approve sensitive commands)
+#[command]
+pub async fn set_headless_mode(
+    state: State<'_, AirlockServiceState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let guard = state.0.lock().await;
+    if let Some(airlock) = guard.as_ref() {
+        airlock.set_headless_mode(enabled);
+        Ok(())
+    } else {
+        Err("Airlock service not initialized".to_string())
+    }
+}

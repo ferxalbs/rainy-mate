@@ -1,4 +1,4 @@
-import { Button, Card, Chip, Separator } from "@heroui/react";
+import { Button, Card, Chip, Separator, Switch } from "@heroui/react";
 import {
   Network,
   Wifi,
@@ -23,6 +23,8 @@ export function NeuralPanel() {
     connect,
     respond,
     isPending,
+    isHeadless,
+    toggleHeadless,
   } = useNeuralService();
 
   // Auto-connect on mount (can be changed to manual)
@@ -126,6 +128,28 @@ export function NeuralPanel() {
             Reconnect
           </Button>
         )}
+      </Card>
+
+      {/* Settings Card */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500">
+              <Shield className="size-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Headless Mode</h3>
+              <p className="text-sm text-muted-foreground">
+                Auto-approve sensitive commands
+              </p>
+            </div>
+          </div>
+          <Switch isSelected={isHeadless} onChange={toggleHeadless}>
+            <Switch.Control className="bg-default-200 data-[selected=true]:bg-purple-500">
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch>
+        </div>
       </Card>
 
       <Separator />

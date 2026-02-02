@@ -365,6 +365,7 @@ pub fn run() {
             // Airlock Commands (Security)
             commands::respond_to_airlock,
             commands::get_pending_airlock_approvals,
+            commands::set_headless_mode,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1371,7 +1371,7 @@ export async function routerHasProviders(): Promise<boolean> {
 
 // ============ Neural System Types ============
 
-export type AirlockLevel = 'Safe' | 'Sensitive' | 'Dangerous';
+export type AirlockLevel = "Safe" | "Sensitive" | "Dangerous";
 
 export interface ApprovalRequest {
   id: string;
@@ -1390,31 +1390,38 @@ export interface SkillManifest {
 }
 
 export interface NeuralNodeInfo {
-    id: string;
-    status: DesktopNodeStatus;
-    cloud_url: string;
+  id: string;
+  status: DesktopNodeStatus;
+  cloud_url: string;
 }
 
-export type DesktopNodeStatus = 
-    | 'pending-pairing' 
-    | 'connected' 
-    | 'offline' 
-    | 'error';
+export type DesktopNodeStatus =
+  | "pending-pairing"
+  | "connected"
+  | "offline"
+  | "error";
 
 // ============ Neural System Commands ============
 
 export async function registerNode(skills: SkillManifest[]): Promise<string> {
-    return invoke('register_node', { skills });
+  return invoke("register_node", { skills });
 }
 
 export async function sendHeartbeat(): Promise<void> {
-    return invoke('send_heartbeat');
+  return invoke("send_heartbeat");
 }
 
-export async function respondToAirlock(requestId: string, approved: boolean): Promise<void> {
-    return invoke('respond_to_airlock', { requestId, approved });
+export async function respondToAirlock(
+  requestId: string,
+  approved: boolean,
+): Promise<void> {
+  return invoke("respond_to_airlock", { requestId, approved });
 }
 
 export async function getPendingAirlockApprovals(): Promise<ApprovalRequest[]> {
-    return invoke('get_pending_airlock_approvals');
+  return invoke("get_pending_airlock_approvals");
+}
+
+export async function setHeadlessMode(enabled: boolean): Promise<void> {
+  return invoke("set_headless_mode", { enabled });
 }
