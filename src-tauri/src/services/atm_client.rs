@@ -103,7 +103,9 @@ impl ATMClient {
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
-            return Err(format!("Bootstrap failed: {}", res.status()));
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!("Bootstrap failed: {} - {}", status, err_text));
         }
 
         let body: BootstrapResponse = res.json().await.map_err(|e| e.to_string())?;
