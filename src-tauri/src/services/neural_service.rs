@@ -91,6 +91,23 @@ impl NeuralService {
         Ok(())
     }
 
+    /// Clear authentication credentials (Logout/Reset)
+    pub async fn clear_credentials(&self) -> Result<(), String> {
+        // 1. Clear In-Memory State
+        let mut metadata = self.metadata.lock().await;
+        metadata.platform_key = None;
+        metadata.user_api_key = None;
+        metadata.node_id = None;
+
+        // 2. Remove from Keychain
+        let keychain = crate::ai::keychain::KeychainManager::new();
+        // Ignore errors if keys don't exist
+        let _ = keychain.delete_key("neural_platform_key");
+        let _ = keychain.delete_key("neural_user_api_key");
+
+        Ok(())
+    }
+
     /// Load credentials from Keychain (call on app startup)
     pub async fn load_credentials_from_keychain(&self) -> Result<bool, String> {
         let keychain = crate::ai::keychain::KeychainManager::new();

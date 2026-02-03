@@ -63,6 +63,11 @@ pub async fn set_neural_credentials(
 }
 
 #[command]
+pub async fn clear_neural_credentials(state: State<'_, NeuralServiceState>) -> Result<(), String> {
+    state.0.clear_credentials().await
+}
+
+#[command]
 pub async fn load_neural_credentials(state: State<'_, NeuralServiceState>) -> Result<bool, String> {
     state.0.load_credentials_from_keychain().await
 }

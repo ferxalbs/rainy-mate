@@ -49,3 +49,19 @@ pub async fn set_atm_credentials(
     client.set_credentials(api_key).await;
     Ok(())
 }
+
+#[command]
+pub async fn reset_neural_workspace(
+    client: State<'_, ATMClient>,
+    neural: State<'_, crate::commands::neural::NeuralServiceState>,
+    master_key: String,
+    user_api_key: String,
+) -> Result<(), String> {
+    // 1. Delete workspace on server
+    client.reset_workspace(master_key, user_api_key).await?;
+
+    // 2. Clear local credentials
+    neural.0.clear_credentials().await?;
+
+    Ok(())
+}

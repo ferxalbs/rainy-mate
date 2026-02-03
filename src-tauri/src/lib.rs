@@ -356,6 +356,7 @@ pub fn run() {
             commands::list_atm_agents,
             commands::set_atm_credentials,
             commands::generate_pairing_code,
+            commands::reset_neural_workspace,
             // Neural System Commands (Desktop Nerve Center)
             commands::set_neural_workspace_id,
             commands::register_node,
@@ -367,6 +368,7 @@ pub fn run() {
             commands::load_neural_credentials,
             commands::has_neural_credentials,
             commands::get_neural_credentials_values,
+            commands::clear_neural_credentials,
             // Airlock Commands (Security)
             commands::respond_to_airlock,
             commands::get_pending_airlock_approvals,

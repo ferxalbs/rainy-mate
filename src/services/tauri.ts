@@ -1465,6 +1465,10 @@ export async function getNeuralCredentialsValues(): Promise<
   return invoke("get_neural_credentials_values");
 }
 
+export async function clearNeuralCredentials(): Promise<void> {
+  return invoke("clear_neural_credentials");
+}
+
 // ============ Agent Management Commands ============
 
 export async function listAtmAgents(): Promise<any> {
@@ -1500,4 +1504,11 @@ export async function generatePairingCode(): Promise<{
   expiresAt: number;
 }> {
   return invoke("generate_pairing_code");
+}
+
+export async function resetNeuralWorkspace(
+  masterKey: string,
+  userApiKey: string,
+): Promise<void> {
+  return invoke("reset_neural_workspace", { masterKey, userApiKey });
 }

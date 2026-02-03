@@ -343,6 +343,59 @@ export function NeuralPanel() {
                 </Button>
               )}
             </div>
+
+            <Separator />
+
+            {/* Disconnect Section */}
+            <div className="bg-red-50/50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/50 p-4 rounded-lg">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-semibold text-red-600 dark:text-red-400">
+                    Disconnect Workspace
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    Delete workspace from server and reset all credentials
+                  </p>
+                </div>
+                <Button
+                  variant="danger"
+                  onPress={async () => {
+                    if (
+                      confirm(
+                        "⚠️ This will permanently delete your workspace from the server. Are you sure?",
+                      )
+                    ) {
+                      try {
+                        // Get stored credentials from Keychain
+                        const {
+                          getNeuralCredentialsValues,
+                          resetNeuralWorkspace,
+                        } = await import("../../services/tauri");
+                        const creds = await getNeuralCredentialsValues();
+
+                        if (!creds || !creds[0] || !creds[1]) {
+                          toast.danger("No stored credentials found");
+                          return;
+                        }
+
+                        await resetNeuralWorkspace(creds[0], creds[1]);
+                        setPlatformKey("");
+                        setUserApiKey("");
+                        setWorkspace(null);
+                        setStatus("idle");
+                        setPairingCode(null);
+                        toast.success("Workspace deleted successfully!");
+                      } catch (e: any) {
+                        console.error("Failed to reset workspace:", e);
+                        toast.danger(e?.message || "Failed to reset workspace");
+                      }
+                    }
+                  }}
+                >
+                  Delete Workspace
+                </Button>
+              </div>
+            </div>
           </div>
         ) : (
           // FORM STATE - For connection
@@ -468,6 +521,50 @@ export function NeuralPanel() {
       </Card>
 
       <Separator />
+
+      {/* Danger Zone */}
+      <Card className="p-6 border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-900/10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-red-600 dark:text-red-400">
+              Danger Zone
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Reset connection and clear stored credentials
+            </p>
+          </div>
+          <Button
+            variant="danger"
+            isDisabled={!platformKey.trim() || !userApiKey.trim()}
+            onPress={async () => {
+              if (
+                confirm(
+                  "⚠️ This will permanently delete your workspace from the server and clear all credentials. Are you sure?",
+                )
+              ) {
+                try {
+                  const { resetNeuralWorkspace } =
+                    await import("../../services/tauri");
+                  await resetNeuralWorkspace(platformKey, userApiKey);
+                  setPlatformKey("");
+                  setUserApiKey("");
+                  setWorkspace(null);
+                  setStatus("idle");
+                  setPairingCode(null);
+                  toast.success(
+                    "Workspace deleted. You can now create a new one.",
+                  );
+                } catch (e: any) {
+                  console.error("Failed to reset workspace:", e);
+                  toast.danger(e?.message || "Failed to reset workspace");
+                }
+              }
+            }}
+          >
+            Delete Workspace
+          </Button>
+        </div>
+      </Card>
 
       {/* Pending Approvals */}
       <div>

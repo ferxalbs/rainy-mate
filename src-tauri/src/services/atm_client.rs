@@ -117,6 +117,35 @@ impl ATMClient {
         }
     }
 
+    /// Delete workspace from the server (reset)
+    pub async fn reset_workspace(
+        &self,
+        master_key: String,
+        user_api_key: String,
+    ) -> Result<(), String> {
+        let state = self.state.lock().await;
+        let url = format!("{}/bootstrap", state.base_url);
+
+        let res = self
+            .http
+            .delete(&url)
+            .json(&serde_json::json!({
+                "masterKey": master_key,
+                "apiKey": user_api_key
+            }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!("Reset failed: {} - {}", status, err_text));
+        }
+
+        Ok(())
+    }
+
     pub async fn create_agent(
         &self,
         params: CreateAgentParams,
