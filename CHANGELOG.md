@@ -26,8 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `services/skill_executor.rs` - Updated path resolution to handle Cloud workspaces:
   - First tries to load local workspace by ID
   - Falls back to Cloud-provided `allowedPaths` from command payload
-  - Validates paths against allowed directories
-  - Better error messages for debugging
+  - **New:** Allows absolute paths to serve as ad-hoc workspace roots (bootstrapping)
+  - Improved error messages to guide Agent ("Please provide an absolute path")
 
 - `models/neural.rs` - Added `allowedPaths` field to `RainyPayload`
 

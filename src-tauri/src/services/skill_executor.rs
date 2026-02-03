@@ -95,9 +95,15 @@ impl SkillExecutor {
             Err(_) => {
                 // Fallback to allowed_paths from command payload (Cloud-provided)
                 if allowed_paths.is_empty() {
+                    // SECOND FALLBACK: If the requested path is absolute, use it as the allowed path
+                    // This allows "bootstrapping" a workspace from a single absolute path command
+                    let path_buf = PathBuf::from(path_str);
+                    if path_buf.is_absolute() {
+                        return Ok(path_buf); // It is its own root
+                    }
+
                     return Err(format!(
-                        "Workspace '{}' not found locally and no allowed_paths in command",
-                        workspace_id
+                        "No workspace context found. Please provide an absolute path (e.g. /Users/name/Projects) to start.",
                     ));
                 }
                 allowed_paths.to_vec()
