@@ -131,6 +131,12 @@ impl NeuralService {
         metadata.platform_key.is_some() && metadata.user_api_key.is_some()
     }
 
+    /// Check if node is registered (has a node_id from the server)
+    pub async fn is_registered(&self) -> bool {
+        let metadata = self.metadata.lock().await;
+        metadata.node_id.is_some()
+    }
+
     /// Retrieve credentials (for session persistence in UI)
     pub async fn get_credentials(&self) -> Option<(String, String)> {
         let metadata = self.metadata.lock().await;

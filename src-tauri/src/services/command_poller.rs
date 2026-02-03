@@ -64,6 +64,12 @@ impl CommandPoller {
     async fn poll_and_execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         // 1. Send heartbeat and get commands via NeuralService
         if !self.neural_service.has_credentials().await {
+            return Ok(()); // Silently skip if not authenticated
+        }
+
+        // Check if node is registered (has node_id)
+        if !self.neural_service.is_registered().await {
+            // Node not registered yet - silently skip to avoid log spam
             return Ok(());
         }
 
@@ -75,7 +81,11 @@ impl CommandPoller {
         let commands = match pending_commands_result {
             Ok(cmds) => cmds,
             Err(e) => {
-                return Err(format!("Heartbeat failed: {}", e).into());
+                // Only log if it's not a "Node not registered" error (already handled above)
+                if !e.contains("Node not registered") {
+                    eprintln!("[CommandPoller] Heartbeat error: {}", e);
+                }
+                return Ok(()); // Don't propagate as error to avoid log spam
             }
         };
 
