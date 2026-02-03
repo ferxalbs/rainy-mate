@@ -11,9 +11,9 @@ mod services;
 use agents::AgentRegistry;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
-    ATMClient, CoworkAgent, DocumentService, FileManager, FileOperationEngine, FolderManager,
-    ImageService, ManagedResearchService, MemoryManager, NeuralService, ReflectionEngine,
-    SettingsManager, WebResearchService, WorkspaceManager,
+    ATMClient, CommandPoller, CoworkAgent, DocumentService, FileManager, FileOperationEngine,
+    FolderManager, ImageService, ManagedResearchService, MemoryManager, NeuralService,
+    ReflectionEngine, SettingsManager, SkillExecutor, WebResearchService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -84,6 +84,16 @@ pub fn run() {
         "pending-pairing".to_string(), // Initial state, will be updated after pairing
     );
 
+    // Initialize Skill Executor
+    let skill_executor = Arc::new(SkillExecutor::new(workspace_manager.clone()));
+
+    // Initialize Command Poller
+    // Note: It starts "stopped". Setup will start it if credentials exist.
+    let command_poller = Arc::new(CommandPoller::new(
+        neural_service.clone(),
+        skill_executor.clone(),
+    ));
+
     // Initialize folder manager (requires app handle for data dir)
     // We'll initialize it in setup since we need the app handle
 
@@ -115,6 +125,8 @@ pub fn run() {
         .manage(commands::router::IntelligentRouterState(intelligent_router)) // Arc<RwLock<IntelligentRouter>>
         .manage(atm_client) // ATMClient
         .manage(commands::neural::NeuralServiceState(neural_service)) // NeuralService
+        .manage(command_poller) // Arc<CommandPoller>
+        .manage(skill_executor) // Arc<SkillExecutor>
         .manage(commands::airlock::AirlockServiceState(Arc::new(
             Mutex::new(None),
         ))) // Placeholder, initialized in setup
@@ -168,6 +180,16 @@ pub fn run() {
                 let mut guard = tauri::async_runtime::block_on(airlock_state.0.lock());
                 *guard = Some(airlock);
             }
+
+            // Start Command Poller
+            // Check if we have credentials, if so start polling
+            let poller = (*app.state::<Arc<CommandPoller>>()).clone();
+            tauri::async_runtime::spawn(async move {
+                // Wait a bit for app to stabilize
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                // If credentials exist (handled internally by poll_and_execute check), start loop
+                poller.start().await;
+            });
 
             Ok(())
         })
