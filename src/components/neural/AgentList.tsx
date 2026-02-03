@@ -1,5 +1,5 @@
 import { Card, Chip, Button, Spinner } from "@heroui/react";
-import { Bot, RefreshCw, Plus } from "lucide-react";
+import { Bot, RefreshCw, Plus, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { listAtmAgents } from "../../services/tauri";
 import { toast } from "@heroui/react";
@@ -10,6 +10,11 @@ interface Agent {
   type: string;
   status: string;
   created_at: string;
+  config?: {
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  };
 }
 
 export function AgentList({ onCreateClick }: { onCreateClick: () => void }) {
@@ -90,6 +95,14 @@ export function AgentList({ onCreateClick }: { onCreateClick: () => void }) {
                     <span className="text-xs text-muted-foreground uppercase">
                       {agent.type}
                     </span>
+                    {agent.config?.model && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <Sparkles className="size-3 text-amber-500" />
+                        <span className="text-xs text-muted-foreground">
+                          {agent.config.model.replace(/-preview$/, "")}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <Chip
