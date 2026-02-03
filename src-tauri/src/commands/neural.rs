@@ -17,8 +17,9 @@ pub async fn set_neural_workspace_id(
 pub async fn register_node(
     state: State<'_, NeuralServiceState>,
     skills: Vec<SkillManifest>,
+    allowed_paths: Vec<String>,
 ) -> Result<String, String> {
-    state.0.register(skills).await
+    state.0.register(skills, allowed_paths).await
 }
 
 #[command]

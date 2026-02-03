@@ -5,6 +5,50 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-02-03 - Workspace Sync Fixes
+
+### Fixed - Workspace Path Synchronization
+
+**Cloud (`rainy-atm/src/`)**
+
+- `services/command-bridge.ts` - Commands now include `allowedPaths` from workspace config:
+  - Fetches workspace config to get configured paths
+  - Includes `allowedPaths` in every command payload
+  - Fallback: extracts root path from command params (e.g., `/Users/fer/Projects` from `/Users/fer/Projects/myapp/file.ts`)
+
+- `routes/nodes.ts` - Node registration now stores `allowedPaths` in workspace config:
+  - Accepts optional `allowedPaths` array from Desktop during registration
+  - Merges new paths with existing config (additive, no overwrite)
+  - Logs path updates for debugging
+
+**Desktop (`src-tauri/src/`)**
+
+- `services/skill_executor.rs` - Updated path resolution to handle Cloud workspaces:
+  - First tries to load local workspace by ID
+  - Falls back to Cloud-provided `allowedPaths` from command payload
+  - Validates paths against allowed directories
+  - Better error messages for debugging
+
+- `models/neural.rs` - Added `allowedPaths` field to `RainyPayload`
+
+- `services/neural_service.rs` - Updated registration to send `allowedPaths`
+
+- `commands/neural.rs` - Added `allowedPaths` parameter to `register_node` command
+
+**Frontend (`src/`)**
+
+- `services/tauri.ts` - Updated `registerNode` function signature
+- `hooks/useNeuralService.ts` - Updated to pass empty paths (Cloud provides per-command)
+- `components/neural/NeuralPanel.tsx` - Updated registration call
+
+### Technical
+
+- Resolves "Workspace not found locally and no allowed_paths in command" error
+- Cloud workspace IDs now work with Desktop without requiring local workspace files
+- Path extraction fallback enables file operations without prior workspace configuration
+
+---
+
 ## [0.5.5] - 2026-02-02 - Neural Link UI
 
 ### Added - Frontend Pairing Interface

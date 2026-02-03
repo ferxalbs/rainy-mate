@@ -177,8 +177,9 @@ export function NeuralPanel() {
       await setNeuralWorkspaceId(ws.id);
 
       // Step 4: Register this Desktop Node with the Cloud Cortex
+      // Note: allowedPaths will be provided per-command by the Cloud
       console.log("Step 4: Registering desktop node...");
-      const nodeId = await registerNode(DEFAULT_SKILLS);
+      const nodeId = await registerNode(DEFAULT_SKILLS, []);
       console.log("Node registered with ID:", nodeId);
 
       // Success!

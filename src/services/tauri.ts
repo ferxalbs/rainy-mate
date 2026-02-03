@@ -1427,8 +1427,11 @@ export type DesktopNodeStatus =
 
 // ============ Neural System Commands ============
 
-export async function registerNode(skills: SkillManifest[]): Promise<string> {
-  return invoke("register_node", { skills });
+export async function registerNode(
+  skills: SkillManifest[],
+  allowedPaths: string[],
+): Promise<string> {
+  return invoke("register_node", { skills, allowedPaths });
 }
 
 export async function setNeuralWorkspaceId(workspaceId: string): Promise<void> {

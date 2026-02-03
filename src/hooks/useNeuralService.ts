@@ -87,7 +87,7 @@ export function useNeuralService() {
   const connect = useCallback(async () => {
     try {
       console.log("Registering Neural Node...");
-      const id = await registerNode(DEFAULT_SKILLS);
+      const id = await registerNode(DEFAULT_SKILLS, []);
       setNodeId(id);
       setStatus("connected");
       toast.success("Connected to Neural Network");

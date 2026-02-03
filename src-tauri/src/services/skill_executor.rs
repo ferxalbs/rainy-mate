@@ -26,9 +26,12 @@ impl SkillExecutor {
             None => return self.error("Missing workspace ID in command"),
         };
 
+        // Get allowed_paths from payload (Cloud sends these from workspace config)
+        let allowed_paths = &payload.allowed_paths;
+
         match skill {
             "filesystem" => {
-                self.execute_filesystem(workspace_id, method, &payload.params)
+                self.execute_filesystem(workspace_id, method, &payload.params, allowed_paths)
                     .await
             }
             _ => CommandResult {
@@ -45,6 +48,7 @@ impl SkillExecutor {
         workspace_id: String,
         method: &str,
         params: &Option<Value>,
+        allowed_paths: &[String],
     ) -> CommandResult {
         let params = match params {
             Some(p) => p,
@@ -52,10 +56,22 @@ impl SkillExecutor {
         };
 
         match method {
-            "read_file" => self.handle_read_file(workspace_id, params).await,
-            "list_files" => self.handle_list_files(workspace_id, params).await,
-            "search_files" => self.handle_search_files(workspace_id, params).await,
-            "write_file" => self.handle_write_file(workspace_id, params).await,
+            "read_file" => {
+                self.handle_read_file(workspace_id, params, allowed_paths)
+                    .await
+            }
+            "list_files" => {
+                self.handle_list_files(workspace_id, params, allowed_paths)
+                    .await
+            }
+            "search_files" => {
+                self.handle_search_files(workspace_id, params, allowed_paths)
+                    .await
+            }
+            "write_file" => {
+                self.handle_write_file(workspace_id, params, allowed_paths)
+                    .await
+            }
             _ => CommandResult {
                 success: false,
                 output: None,
@@ -65,46 +81,70 @@ impl SkillExecutor {
         }
     }
 
-    async fn resolve_path(&self, workspace_id: String, path_str: &str) -> Result<PathBuf, String> {
-        let workspace = self
-            .workspace_manager
-            .load_workspace(&workspace_id)
-            .map_err(|e| format!("Failed to load workspace: {}", e))?;
+    /// Resolve a path within the workspace. First tries to load local workspace,
+    /// falls back to using allowed_paths from the command payload (Cloud-provided).
+    async fn resolve_path(
+        &self,
+        workspace_id: String,
+        path_str: &str,
+        allowed_paths: &[String],
+    ) -> Result<PathBuf, String> {
+        // Try to load workspace locally first
+        let workspace_allowed_paths = match self.workspace_manager.load_workspace(&workspace_id) {
+            Ok(ws) => ws.allowed_paths,
+            Err(_) => {
+                // Fallback to allowed_paths from command payload (Cloud-provided)
+                if allowed_paths.is_empty() {
+                    return Err(format!(
+                        "Workspace '{}' not found locally and no allowed_paths in command",
+                        workspace_id
+                    ));
+                }
+                allowed_paths.to_vec()
+            }
+        };
 
-        // Assume first allowed path is the root request is relative to
-        // If allowed_paths is empty, access is denied
-        if workspace.allowed_paths.is_empty() {
+        if workspace_allowed_paths.is_empty() {
             return Err("Workspace has no allowed paths".to_string());
         }
 
-        let root_str = &workspace.allowed_paths[0];
+        let root_str = &workspace_allowed_paths[0];
         let root = PathBuf::from(root_str);
 
-        // Prevent absolute paths escaping valid roots if user provided absolute path
-        // But for "relative path" tool, we join with root.
+        // Build target path
         let target_path = root.join(path_str);
 
-        // Use WorkspaceManager's generic validation which checks against all allowed paths
-        // But first we must produce a path string to check
+        // Validate path is within allowed paths
         let target_path_str = target_path.to_string_lossy().to_string();
+        let is_allowed = workspace_allowed_paths
+            .iter()
+            .any(|allowed| target_path_str.starts_with(allowed));
 
-        if let Err(e) = self
-            .workspace_manager
-            .validate_path(&workspace, &target_path_str)
-        {
-            return Err(e.to_string());
+        if !is_allowed {
+            return Err(format!(
+                "Path '{}' is outside allowed workspace paths",
+                path_str
+            ));
         }
 
         Ok(target_path)
     }
 
-    async fn handle_read_file(&self, workspace_id: String, params: &Value) -> CommandResult {
+    async fn handle_read_file(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+    ) -> CommandResult {
         let path_str = match params.get("path").and_then(|v| v.as_str()) {
             Some(p) => p,
             None => return self.error("Missing path parameter"),
         };
 
-        let path = match self.resolve_path(workspace_id, path_str).await {
+        let path = match self
+            .resolve_path(workspace_id, path_str, allowed_paths)
+            .await
+        {
             Ok(p) => p,
             Err(e) => return self.error(&e),
         };
@@ -112,7 +152,7 @@ impl SkillExecutor {
         match fs::read_to_string(path).await {
             Ok(content) => CommandResult {
                 success: true,
-                output: Some(content), // Return raw content
+                output: Some(content),
                 error: None,
                 exit_code: Some(0),
             },
@@ -120,9 +160,17 @@ impl SkillExecutor {
         }
     }
 
-    async fn handle_list_files(&self, workspace_id: String, params: &Value) -> CommandResult {
+    async fn handle_list_files(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+    ) -> CommandResult {
         let path_str = params.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-        let path = match self.resolve_path(workspace_id, path_str).await {
+        let path = match self
+            .resolve_path(workspace_id, path_str, allowed_paths)
+            .await
+        {
             Ok(p) => p,
             Err(e) => return self.error(&e),
         };
@@ -151,12 +199,22 @@ impl SkillExecutor {
         }
     }
 
-    async fn handle_search_files(&self, _workspace_id: String, _params: &Value) -> CommandResult {
+    async fn handle_search_files(
+        &self,
+        _workspace_id: String,
+        _params: &Value,
+        _allowed_paths: &[String],
+    ) -> CommandResult {
         // Placeholder
         self.error("search_files not implemented yet")
     }
 
-    async fn handle_write_file(&self, workspace_id: String, params: &Value) -> CommandResult {
+    async fn handle_write_file(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+    ) -> CommandResult {
         let path_str = match params.get("path").and_then(|v| v.as_str()) {
             Some(p) => p,
             None => return self.error("Missing path parameter"),
@@ -166,7 +224,10 @@ impl SkillExecutor {
             None => return self.error("Missing content parameter"),
         };
 
-        let path = match self.resolve_path(workspace_id, path_str).await {
+        let path = match self
+            .resolve_path(workspace_id, path_str, allowed_paths)
+            .await
+        {
             Ok(p) => p,
             Err(e) => return self.error(&e),
         };

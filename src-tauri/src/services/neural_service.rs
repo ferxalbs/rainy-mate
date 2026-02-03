@@ -148,7 +148,11 @@ impl NeuralService {
     }
 
     /// Registers this Desktop Node with the Cloud Cortex
-    pub async fn register(&self, skills: Vec<SkillManifest>) -> Result<String, String> {
+    pub async fn register(
+        &self,
+        skills: Vec<SkillManifest>,
+        allowed_paths: Vec<String>,
+    ) -> Result<String, String> {
         let mut metadata = self.metadata.lock().await;
 
         // If already registered, return existing ID (or maybe re-register?)
@@ -169,7 +173,8 @@ impl NeuralService {
             "workspaceId": metadata.workspace_id,
             "hostname": metadata.hostname,
             "platform": metadata.platform,
-            "skills": skills
+            "skills": skills,
+            "allowedPaths": allowed_paths
         });
 
         let res = self

@@ -134,6 +134,9 @@ pub struct RainyPayload {
     pub method: Option<String>,
     pub params: Option<serde_json::Value>,
     pub content: Option<String>,
+    /// Allowed paths for this command (from workspace config)
+    #[serde(default)]
+    pub allowed_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
