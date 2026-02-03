@@ -175,6 +175,8 @@ pub fn run() {
 
             // Initialize Airlock Service with app handle
             let airlock = AirlockService::new(app.handle().clone());
+            let airlock_for_poller = airlock.clone();
+
             let airlock_state = app.state::<commands::airlock::AirlockServiceState>();
             {
                 let mut guard = tauri::async_runtime::block_on(airlock_state.0.lock());
@@ -185,6 +187,9 @@ pub fn run() {
             // Check if we have credentials, if so start polling
             let poller = (*app.state::<Arc<CommandPoller>>()).clone();
             tauri::async_runtime::spawn(async move {
+                // Inject Airlock service
+                poller.set_airlock_service(airlock_for_poller).await;
+
                 // Wait a bit for app to stabilize
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 // If credentials exist (handled internally by poll_and_execute check), start loop

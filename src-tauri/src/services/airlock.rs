@@ -17,8 +17,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{oneshot, Mutex};
 
-// @RESERVED - Used when emitting approval request events to frontend
-#[allow(dead_code)]
+// Used when emitting approval request events to frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApprovalRequest {
@@ -37,8 +36,7 @@ pub enum ApprovalResult {
     Timeout,
 }
 
-// @RESERVED - Used during command execution when Airlock integration is complete
-#[allow(dead_code)]
+// Used during command execution
 #[derive(Clone)]
 pub struct AirlockService {
     app: AppHandle,
@@ -64,8 +62,7 @@ impl AirlockService {
         self.headless_mode.load(Ordering::Relaxed)
     }
 
-    // @RESERVED - Called during command execution flow
-    #[allow(dead_code)]
+    // Called during command execution flow
     pub async fn check_permission(&self, command: &QueuedCommand) -> Result<bool, String> {
         match command.airlock_level {
             AirlockLevel::Safe => {
@@ -91,22 +88,15 @@ impl AirlockService {
             }
             AirlockLevel::Dangerous => {
                 // Level 2: Execution operations
-                // Even in headless mode, Dangerous commands might require checking a rigorous policy
-                // For now, we still require approval or deny if headless (since no user to click)
-                // OR we could allow if headless mode implies "Do whatever".
-                // Let's keep it safe: Dangerous always asks, but effectively fails if headless?
-                // Actually, if headless, who approves?
-                // User asked: "auto-approve commands or run in the background".
-                // I will allow Dangerous in Headless Mode IF explicitly configured, but for now
-                // I'll stick to mostly Sensitive.
-                // Strategy: If headless, Dangerous commands are REJECTED by default for safety,
-                // unless we implement a specific whitelist.
+                // Prioritize user safety: dangerous commands always require approval unless explicit override (not implemented yet)
+                // Using headless mode for dangerous commands is risky.
+                // For now, treat same as sensitive if user enabled headless mode (means they trust the agent).
                 if self.is_headless_mode() {
                     tracing::info!(
                         "Airlock: Auto-approved DANGEROUS command {} (Headless Mode - HIGH RISK)",
                         command.id
                     );
-                    Ok(true) // User requested "auto-approve", so we trust them for now.
+                    Ok(true)
                 } else {
                     tracing::warn!(
                         "Airlock: DANGEROUS command {} requires explicit approval",
@@ -118,8 +108,7 @@ impl AirlockService {
         }
     }
 
-    // @RESERVED - Internal implementation for user approval flow
-    #[allow(dead_code)]
+    // Internal implementation for user approval flow
     async fn request_approval(
         &self,
         command: &QueuedCommand,

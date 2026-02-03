@@ -14,3 +14,4 @@ export { useWorkspace } from "./useWorkspace";
 export { useFileVersioning } from "./useFileVersioning";
 export { useIntelligentRouter } from "./useIntelligentRouter";
 export { useNeuralService } from "./useNeuralService";
+export { useAirlock } from "./useAirlock";

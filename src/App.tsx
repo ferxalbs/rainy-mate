@@ -3,7 +3,7 @@ import { TahoeLayout, AIDocumentPanel, AIResearchPanel } from "./components";
 import { SettingsPage } from "./components/settings";
 import { AgentChatPanel } from "./components/agent-chat/AgentChatPanel";
 import { AtmBootstrap } from "./components/AtmBootstrap";
-import { NeuralPanel } from "./components/neural";
+import { NeuralPanel, AirlockEvents } from "./components/neural";
 import { Button, Card, Toast } from "@heroui/react";
 import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
@@ -188,6 +188,7 @@ function App() {
 
       {/* Toast Container for notifications */}
       <Toast.Container className="bg-background/20" />
+      <AirlockEvents />
     </>
   );
 }

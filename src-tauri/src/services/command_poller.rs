@@ -1,8 +1,10 @@
+use crate::models::neural::CommandResult;
+use crate::services::airlock::AirlockService;
 use crate::services::neural_service::NeuralService;
 use crate::services::skill_executor::SkillExecutor;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::sleep;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
@@ -12,6 +14,7 @@ pub struct CommandPoller {
     neural_service: NeuralService,
     skill_executor: Arc<SkillExecutor>,
     is_running: Arc<Mutex<bool>>,
+    airlock_service: Arc<RwLock<Option<AirlockService>>>,
 }
 
 impl CommandPoller {
@@ -20,7 +23,13 @@ impl CommandPoller {
             neural_service,
             skill_executor,
             is_running: Arc::new(Mutex::new(false)),
+            airlock_service: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub async fn set_airlock_service(&self, service: AirlockService) {
+        let mut lock = self.airlock_service.write().await;
+        *lock = Some(service);
     }
 
     pub async fn start(&self) {
@@ -54,11 +63,7 @@ impl CommandPoller {
 
     async fn poll_and_execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         // 1. Send heartbeat and get commands via NeuralService
-        // NeuralService handles auth and node_id internally
-
-        // We only poll if we are authenticated/registered
         if !self.neural_service.has_credentials().await {
-            // Not authenticated yet, skip polling
             return Ok(());
         }
 
@@ -70,7 +75,6 @@ impl CommandPoller {
         let commands = match pending_commands_result {
             Ok(cmds) => cmds,
             Err(e) => {
-                // Return error effectively
                 return Err(format!("Heartbeat failed: {}", e).into());
             }
         };
@@ -78,6 +82,50 @@ impl CommandPoller {
         // 2. Process commands if any
         for command in commands {
             println!("[CommandPoller] Received command: {:?}", command.id);
+
+            // AIRLOCK CHECK
+            let allowed = {
+                let lock = self.airlock_service.read().await;
+                if let Some(airlock) = &*lock {
+                    match airlock.check_permission(&command).await {
+                        Ok(true) => true,
+                        Ok(false) => false,
+                        Err(e) => {
+                            eprintln!(
+                                "[CommandPoller] Airlock error for command {}: {}",
+                                command.id, e
+                            );
+                            false
+                        }
+                    }
+                } else {
+                    eprintln!(
+                        "[CommandPoller] Airlock service not initialized! Rejecting command {}",
+                        command.id
+                    );
+                    false
+                }
+            };
+
+            if !allowed {
+                println!(
+                    "[CommandPoller] Command {} REJECTED by Airlock or User",
+                    command.id
+                );
+                let _ = self
+                    .neural_service
+                    .complete_command(
+                        &command.id,
+                        CommandResult {
+                            success: false,
+                            output: None,
+                            error: Some("Rejected by Airlock/User".into()),
+                            exit_code: Some(1),
+                        },
+                    )
+                    .await;
+                continue;
+            }
 
             // Notify start
             let _ = self.neural_service.start_command(&command.id).await;
