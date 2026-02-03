@@ -58,9 +58,10 @@ pub struct ParameterSchema {
 // The Airlock (Security Firewall)
 // ──────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd, Default)]
 #[repr(u8)]
 pub enum AirlockLevel {
+    #[default]
     Safe = 0,
     Sensitive = 1,
     Dangerous = 2,
@@ -79,17 +80,19 @@ pub enum RainyIntent {
     System,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CommandPriority {
     High,
+    #[default]
     Normal,
     Low,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CommandStatus {
+    #[default]
     Pending,
     Approved,
     Running,
@@ -135,17 +138,27 @@ pub struct RainyPayload {
 #[serde(rename_all = "camelCase")]
 pub struct QueuedCommand {
     pub id: String,
-    pub workspace_id: String,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
     pub desktop_node_id: Option<String>,
     pub intent: RainyIntent,
     pub payload: RainyPayload,
+    #[serde(default)]
     pub priority: CommandPriority,
+    #[serde(default)]
     pub status: CommandStatus,
+    #[serde(default)]
     pub airlock_level: AirlockLevel,
+    #[serde(default)]
     pub approved_by: Option<String>,
+    #[serde(default)]
     pub result: Option<CommandResult>,
-    pub created_at: i64,
+    #[serde(default)]
+    pub created_at: Option<i64>,
+    #[serde(default)]
     pub started_at: Option<i64>,
+    #[serde(default)]
     pub completed_at: Option<i64>,
 }
 

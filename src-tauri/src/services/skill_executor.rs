@@ -21,7 +21,11 @@ impl SkillExecutor {
         let payload = &command.payload;
         let skill = payload.skill.as_deref().unwrap_or("unknown");
         let method = payload.method.as_deref().unwrap_or("unknown");
-        let workspace_id_str = &command.workspace_id;
+
+        let workspace_id_str = match &command.workspace_id {
+            Some(id) => id.as_str(),
+            None => return self.error("Missing workspace ID in command"),
+        };
 
         let workspace_id = match Uuid::parse_str(workspace_id_str) {
             Ok(uuid) => uuid,
