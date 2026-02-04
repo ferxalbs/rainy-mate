@@ -563,9 +563,9 @@ export function NeuralPanel() {
 
           {/* CREATE AGENT MODAL - Floating & Blurry */}
           <Modal isOpen={isCreatingAgent} onOpenChange={setIsCreatingAgent}>
-            <Modal.Backdrop className="backdrop-blur-xl bg-black/60">
+            <Modal.Backdrop className="backdrop-blur-2xl bg-white/60 dark:bg-background/20">
               <Modal.Container>
-                <Modal.Dialog className="bg-zinc-900 border border-white/10 shadow-2xl shadow-black/50 max-w-2xl w-full rounded-3xl relative z-[100]">
+                <Modal.Dialog className="bg-background/30 border border-white/10 max-w-2xl w-full rounded-3xl relative z-[100]">
                   <Modal.Header className="px-8 pt-8 pb-4 border-b border-white/5">
                     <div className="flex items-center gap-4">
                       <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -575,7 +575,7 @@ export function NeuralPanel() {
                         <Modal.Heading className="text-xl font-bold tracking-tight text-foreground">
                           Deploy Cloud Agent
                         </Modal.Heading>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mt-0.5">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mt-2">
                           New Instance
                         </p>
                       </div>
