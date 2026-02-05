@@ -12,7 +12,7 @@ export type TaskStatus =
   | "completed"
   | "failed"
   | "cancelled";
-export type ProviderType = "rainyApi" | "gemini";
+export type ProviderType = "rainyapi" | "gemini";
 export type FileOperation = "create" | "modify" | "delete" | "move" | "rename";
 
 export interface Task {

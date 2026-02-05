@@ -116,7 +116,7 @@ export function useAgentChat() {
         // Hardcoded "default" provider/model for task loop for now, or fetch from settings
         const task = await createTask(
           instruction,
-          "rainyApi",
+          "rainyapi",
           "gemini-2.0-flash",
         );
 

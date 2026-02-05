@@ -111,7 +111,7 @@ export function SettingsPage({
   // API key handlers
   // API key handlers
   const getProviderId = (type: ProviderType) => {
-    if (type === "rainyApi") return "rainy_api";
+    if (type === "rainyapi") return "rainy_api";
     return "gemini";
   };
 

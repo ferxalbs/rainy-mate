@@ -26,7 +26,7 @@ export type TaskStatus =
  * - rainyApi: Enosis Labs backend (GPT-4, Claude, etc. via OpenAI format)
  * - gemini: User's own Google Gemini API key
  */
-export type ProviderType = "rainyApi" | "gemini";
+export type ProviderType = "rainyapi" | "gemini";
 
 /**
  * File operation types for tracking changes
@@ -118,7 +118,7 @@ export interface AppSettings {
  */
 export const AI_PROVIDERS: AIProvider[] = [
   {
-    id: "rainyApi",
+    id: "rainyapi",
     name: "Rainy API (Pay-As-You-Go)",
     model: "gpt-4o",
     isAvailable: true,
@@ -139,7 +139,7 @@ export const AI_PROVIDERS: AIProvider[] = [
  * Model options per provider
  */
 export const PROVIDER_MODELS: Record<ProviderType, string[]> = {
-  rainyApi: [
+  rainyapi: [
     "gpt-4o",
     "gpt-4o-mini",
     "gpt-4-turbo",

@@ -102,31 +102,9 @@ pub async fn get_unified_models(
 /// - Rainy API: static list (all available models)
 async fn get_rainy_sdk_models(_app: &AppHandle) -> Result<Vec<UnifiedModel>, String> {
     use crate::ai::keychain::KeychainManager;
-    use rainy_sdk::RainyClient;
 
     let mut models = Vec::new();
     let keychain = KeychainManager::new();
-
-    // Get Cowork API key and fetch models dynamically from API
-    if let Ok(Some(cowork_key)) = keychain.get_key("cowork_api") {
-        if let Ok(client) = RainyClient::with_api_key(&cowork_key) {
-            // Fetch models from Cowork API (dynamic based on plan)
-            if let Ok(available) = client.list_available_models().await {
-                for (_provider, model_list) in &available.providers {
-                    for model_name in model_list {
-                        models.push(UnifiedModel {
-                            id: format!("cowork:{}", model_name),
-                            name: model_name.clone(),
-                            provider: "Cowork".to_string(),
-                            capabilities: get_default_capabilities(),
-                            enabled: true,
-                            processing_mode: "cowork".to_string(),
-                        });
-                    }
-                }
-            }
-        }
-    }
 
     // Check if user has Rainy API key
     let has_rainy = keychain
@@ -180,7 +158,7 @@ async fn get_rainy_sdk_models(_app: &AppHandle) -> Result<Vec<UnifiedModel>, Str
         for model_name in &rainy_api_models {
             // Avoid duplicates with Cowork models
             let model_id = format!("rainy:{}", model_name);
-            if !models.iter().any(|m| m.id == model_id) {
+            if !models.iter().any(|m: &UnifiedModel| m.id == model_id) {
                 models.push(UnifiedModel {
                     id: model_id,
                     name: model_name.to_string(),
@@ -212,7 +190,6 @@ async fn get_provider_manager_models(
         let (provider_str_opt, prefix, provider_display) = match config.provider {
             ProviderType::Gemini => (Some("gemini"), "gemini", "Google Gemini"),
             ProviderType::RainyApi => (Some("rainy_api"), "rainy", "Rainy API"),
-            ProviderType::CoworkApi => (Some("cowork_api"), "cowork", "Cowork"),
             #[allow(unreachable_patterns)]
             _ => (None, "", ""),
         };
@@ -223,7 +200,6 @@ async fn get_provider_manager_models(
                 for model_name in provider_models {
                     // Determine processing mode based on provider type
                     let processing_mode = match config.provider {
-                        ProviderType::CoworkApi => "cowork".to_string(),
                         ProviderType::RainyApi => "rainy_api".to_string(),
                         _ => "direct".to_string(),
                     };
@@ -269,9 +245,6 @@ async fn get_rainy_api_key(_app: &AppHandle) -> Result<String, String> {
     let keychain = KeychainManager::new();
 
     // Try cowork key first, then rainy key
-    if let Ok(Some(key)) = keychain.get_key("cowork_api") {
-        return Ok(key);
-    }
 
     if let Ok(Some(key)) = keychain.get_key("rainy_api") {
         return Ok(key);
@@ -397,7 +370,6 @@ pub async fn send_unified_message(
     // Map string provider name back to ProviderType for manager
     let provider_type = match provider_name {
         "rainy_api" | "rainy" => ProviderType::RainyApi,
-        "cowork_api" | "cowork" => ProviderType::CoworkApi,
         "gemini" => ProviderType::Gemini,
         _ => ProviderType::RainyApi,
     };
@@ -516,7 +488,6 @@ pub async fn unified_chat_stream(
     // Map string provider name to ProviderType
     let provider_type = match provider_name {
         "rainy_api" | "rainy" => ProviderType::RainyApi,
-        "cowork_api" | "cowork" => ProviderType::CoworkApi,
         "gemini" => ProviderType::Gemini,
         _ => ProviderType::RainyApi,
     };

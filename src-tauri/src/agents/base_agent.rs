@@ -105,7 +105,6 @@ impl BaseAgent {
         // Map provider name to ProviderType
         let provider_type = match self.config.ai_provider.as_str() {
             "rainy_api" => ProviderType::RainyApi,
-            "cowork_api" => ProviderType::CoworkApi,
             "gemini" => ProviderType::Gemini,
             _ => {
                 return Err(AgentError::InvalidConfig(format!(

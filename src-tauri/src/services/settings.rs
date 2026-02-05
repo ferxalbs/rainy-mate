@@ -111,24 +111,9 @@ impl SettingsManager {
         self.save_to_disk()
     }
 
-    /// Get available models based on user's tier
-    pub fn get_available_models(_is_paid: bool, cowork_models: &[String]) -> Vec<ModelOption> {
+    /// Get available models
+    pub fn get_available_models() -> Vec<ModelOption> {
         let mut models = vec![];
-
-        // Cowork Subscription models (available for both free and paid users)
-        // These come from the Rainy API /cowork/models endpoint
-        for model_id in cowork_models {
-            let (name, desc) = Self::get_cowork_model_info(model_id);
-            models.push(ModelOption {
-                id: model_id.clone(),
-                name,
-                description: desc,
-                thinking_level: "n/a".to_string(),
-                is_premium: false, // Available to all users with cowork access
-                is_available: true,
-                provider: "Cowork Subscription".to_string(),
-            });
-        }
 
         // Rainy API models (static list from rainy-sdk - pay-as-you-go)
         // Note: Gemini BYOK is handled separately when user selects gemini: prefix
@@ -367,32 +352,6 @@ impl SettingsManager {
         }
 
         models
-    }
-
-    fn get_cowork_model_info(model_id: &str) -> (String, String) {
-        match model_id {
-            "gemini-2.5-flash-lite" => (
-                "Gemini 2.5 Flash Lite".to_string(),
-                "Lightweight, cost-effective responses".to_string(),
-            ),
-            "gemini-flash-lite-latest" => (
-                "Gemini Flash Lite".to_string(),
-                "Fast and efficient responses".to_string(),
-            ),
-            "llama-3.1-8b-instant" => (
-                "Llama 3.1 8B Instant".to_string(),
-                "Meta's fast open-source model".to_string(),
-            ),
-            "gemini-3-flash-minimal" => (
-                "Gemini 3 Flash (Minimal)".to_string(),
-                "Fast responses with minimal thinking".to_string(),
-            ),
-            "gemini-3-flash-high" => (
-                "Gemini 3 Flash (High)".to_string(),
-                "Deep reasoning for complex tasks".to_string(),
-            ),
-            _ => (model_id.to_string(), "AI model from Cowork".to_string()),
-        }
     }
 
     /// Reserved for future Rainy API model info display
