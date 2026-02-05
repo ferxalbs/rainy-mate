@@ -61,6 +61,17 @@ pub async fn write_file(
     file_manager.write_file(&path, &content, task_id).await
 }
 
+/// Append content to file with automatic versioning
+#[tauri::command]
+pub async fn append_file(
+    path: String,
+    content: String,
+    task_id: Option<String>,
+    file_manager: State<'_, Arc<FileManager>>,
+) -> Result<FileChange, String> {
+    file_manager.append_file(&path, &content, task_id).await
+}
+
 /// Create a version snapshot before modification
 #[tauri::command]
 pub async fn create_snapshot(

@@ -166,6 +166,47 @@ impl FileManager {
         Ok(change)
     }
 
+    /// Append content to file with automatic versioning
+    pub async fn append_file(
+        &self,
+        path: &str,
+        content: &str,
+        task_id: Option<String>,
+    ) -> Result<FileChange, String> {
+        let path_buf = PathBuf::from(path);
+
+        if !path_buf.exists() {
+            return Err(format!("File does not exist: {}", path));
+        }
+
+        // Create snapshot
+        let version_id = if let Some(ref tid) = task_id {
+            Some(self.create_snapshot(path, tid).await?)
+        } else {
+            None
+        };
+
+        // Append to file
+        use tokio::io::AsyncWriteExt;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(&path_buf)
+            .await
+            .map_err(|e| format!("Failed to open file for appending: {}", e))?;
+
+        file.write_all(content.as_bytes())
+            .await
+            .map_err(|e| format!("Failed to append content: {}", e))?;
+
+        // Record change
+        let mut change = FileChange::new(path.to_string(), FileOperation::Modify, task_id);
+        change.version_id = version_id;
+        self.changes.insert(change.id.clone(), change.clone());
+
+        Ok(change)
+    }
+
     /// Create a version snapshot before modification
     pub async fn create_snapshot(&self, path: &str, task_id: &str) -> Result<String, String> {
         let workspace = self

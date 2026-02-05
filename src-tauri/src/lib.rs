@@ -234,6 +234,7 @@ pub fn run() {
             commands::list_directory,
             commands::read_file,
             commands::write_file,
+            commands::append_file,
             commands::create_snapshot,
             commands::rollback_file,
             commands::list_file_changes,

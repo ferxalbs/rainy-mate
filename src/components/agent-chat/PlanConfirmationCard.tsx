@@ -14,6 +14,7 @@ interface PlanConfirmationCardProps {
 
 const methodIcons: Record<string, React.ElementType> = {
   write_file: FileCode,
+  append_file: FileCode,
   read_file: FileText,
   list_files: FolderOpen,
   search_files: Search,
@@ -22,6 +23,7 @@ const methodIcons: Record<string, React.ElementType> = {
 
 const methodColors: Record<string, string> = {
   write_file: "text-purple-400 bg-purple-400/10 border-purple-400/20",
+  append_file: "text-green-400 bg-green-400/10 border-green-400/20",
   read_file: "text-blue-400 bg-blue-400/10 border-blue-400/20",
   list_files: "text-yellow-400 bg-yellow-400/10 border-yellow-400/20",
   search_files: "text-pink-400 bg-pink-400/10 border-pink-400/20",

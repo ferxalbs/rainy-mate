@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 
 #[derive(Clone)]
 pub struct SkillExecutor {
@@ -70,6 +71,10 @@ impl SkillExecutor {
             }
             "write_file" => {
                 self.handle_write_file(workspace_id, params, allowed_paths)
+                    .await
+            }
+            "append_file" => {
+                self.handle_append_file(workspace_id, params, allowed_paths)
                     .await
             }
             _ => CommandResult {
@@ -381,6 +386,55 @@ impl SkillExecutor {
                 exit_code: Some(0),
             },
             Err(e) => self.error(&format!("Failed to write file: {}", e)),
+        }
+    }
+
+    async fn handle_append_file(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+    ) -> CommandResult {
+        let path_str = match params.get("path").and_then(|v| v.as_str()) {
+            Some(p) => p,
+            None => return self.error("Missing path parameter"),
+        };
+        let content = match params.get("content").and_then(|v| v.as_str()) {
+            Some(c) => c,
+            None => return self.error("Missing content parameter"),
+        };
+
+        let path = match self
+            .resolve_path(workspace_id, path_str, allowed_paths)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => return self.error(&e),
+        };
+
+        // Ensure file exists or create it?
+        // Typically append works if file exists. If not, OpenOptions.create(true)
+        // But let's assume strict append. Or create(true) to be safe?
+        // User said "append text", implying file exists. But allowing creation is often safer.
+
+        let file_res = fs::OpenOptions::new()
+            .write(true)
+            .append(true)
+            .create(true)
+            .open(path)
+            .await;
+
+        match file_res {
+            Ok(mut file) => match file.write_all(content.as_bytes()).await {
+                Ok(_) => CommandResult {
+                    success: true,
+                    output: Some("Content appended successfully".to_string()),
+                    error: None,
+                    exit_code: Some(0),
+                },
+                Err(e) => self.error(&format!("Failed to append content: {}", e)),
+            },
+            Err(e) => self.error(&format!("Failed to open file for appending: {}", e)),
         }
     }
 

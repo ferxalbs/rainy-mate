@@ -38,6 +38,17 @@ export function useAgentChat() {
       });
     }
 
+    // Pattern: append_file("path", "content")
+    const appendFileRegex =
+      /append_file\s*\(\s*["']([^"']+)["']\s*,\s*["']?([^)]*?)["']?\s*\)/gi;
+    while ((match = appendFileRegex.exec(content)) !== null) {
+      toolCalls.push({
+        skill: "filesystem",
+        method: "append_file",
+        params: { path: match[1], content: match[2] || "" },
+      });
+    }
+
     // Pattern: read_file("path")
     const readFileRegex = /read_file\s*\(\s*["']([^"']+)["']\s*\)/gi;
     while ((match = readFileRegex.exec(content)) !== null) {

@@ -84,6 +84,7 @@ export function AgentChatPanel({
     const hiddenContext = isDeepProcessing
       ? `[SYSTEM: You are a Planning Agent with access to these FILE OPERATIONS:
 - write_file(path, content) - Creates or overwrites a file
+- append_file(path, content) - Appends content to a file
 - read_file(path) - Reads file contents
 - list_files(path) - Lists files in a directory
 - search_files(query, path) - Searches for content in files
