@@ -141,12 +141,20 @@ impl WorkflowStep for ThinkStep {
         let mut messages: Vec<crate::ai::provider_types::ChatMessage> = state
             .messages
             .iter()
-            .map(|m| crate::ai::provider_types::ChatMessage {
-                role: m.role.clone(),
-                content: m.content.clone(),
-                name: None,
-                tool_calls: m.tool_calls.clone(),
-                tool_call_id: m.tool_call_id.clone(),
+            .map(|m| {
+                if m.role == "system" {
+                    crate::ai::provider_types::ChatMessage::system(m.content.clone())
+                } else if m.role == "user" {
+                    crate::ai::provider_types::ChatMessage::user(m.content.clone())
+                } else {
+                    crate::ai::provider_types::ChatMessage {
+                        role: m.role.clone(),
+                        content: m.content.clone().into(),
+                        name: None,
+                        tool_calls: m.tool_calls.clone(),
+                        tool_call_id: m.tool_call_id.clone(),
+                    }
+                }
             })
             .collect();
 
@@ -169,13 +177,7 @@ impl WorkflowStep for ThinkStep {
                 // For now, simpler to just prepend
                 messages.insert(
                     0,
-                    crate::ai::provider_types::ChatMessage {
-                        role: "system".to_string(),
-                        content: system_ctx,
-                        name: None,
-                        tool_calls: None,
-                        tool_call_id: None,
-                    },
+                    crate::ai::provider_types::ChatMessage::system(system_ctx),
                 );
             }
         }

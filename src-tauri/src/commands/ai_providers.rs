@@ -78,7 +78,7 @@ impl From<ChatMessageDto> for crate::ai::ChatMessage {
     fn from(dto: ChatMessageDto) -> Self {
         crate::ai::ChatMessage {
             role: dto.role,
-            content: dto.content,
+            content: dto.content.into(),
             name: dto.name,
             tool_calls: None,
             tool_call_id: None,

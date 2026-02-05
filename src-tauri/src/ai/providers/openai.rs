@@ -2,6 +2,7 @@
 // Direct integration with OpenAI API for GPT-4, GPT-4o, o1 models
 
 use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
+use crate::ai::provider_types::MessageContent;
 use crate::ai::provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, EmbeddingRequest,
     EmbeddingResponse, ProviderCapabilities, ProviderConfig, ProviderHealth, ProviderId,
@@ -51,7 +52,8 @@ struct OpenAIChatRequest {
 #[derive(Debug, Serialize, Deserialize)]
 struct OpenAIMessage {
     role: String,
-    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<MessageContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
 }
@@ -166,7 +168,7 @@ impl OpenAIProvider {
             .iter()
             .map(|msg| OpenAIMessage {
                 role: msg.role.clone(),
-                content: msg.content.clone(),
+                content: Some(msg.content.clone()),
                 name: msg.name.clone(),
             })
             .collect()
@@ -291,7 +293,11 @@ impl AIProvider for OpenAIProvider {
             .ok_or_else(|| AIError::APIError("No response choices".to_string()))?;
 
         Ok(ChatCompletionResponse {
-            content: Some(choice.message.content),
+            content: choice
+                .message
+                .content
+                .as_ref()
+                .map(|c: &MessageContent| c.text()),
             tool_calls: None,
             model: chat_response.model,
             usage: TokenUsage {
@@ -476,7 +482,7 @@ mod tests {
         let messages = vec![
             ChatMessage {
                 role: "system".to_string(),
-                content: "You are a helpful assistant".to_string(),
+                content: "You are a helpful assistant".into(),
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
@@ -484,7 +490,7 @@ mod tests {
             ChatMessage::user("Hello"),
             ChatMessage {
                 role: "assistant".to_string(),
-                content: "Hi there!".to_string(),
+                content: "Hi there!".into(),
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,

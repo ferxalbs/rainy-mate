@@ -1,6 +1,7 @@
 // xAI Provider for Grok Models
 // Direct integration with xAI's Grok API using OpenAI-compatible endpoints
 
+use crate::ai::provider_types::MessageContent;
 use crate::ai::{
     AIError, AIProvider, AIProviderFactory, ChatCompletionRequest, ChatCompletionResponse,
     ChatMessage, EmbeddingRequest, EmbeddingResponse, ProviderCapabilities, ProviderConfig,
@@ -307,7 +308,8 @@ impl From<ChatCompletionRequest> for XAIChatRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct XAIChatMessage {
     pub role: String,
-    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<MessageContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
@@ -316,7 +318,7 @@ impl From<ChatMessage> for XAIChatMessage {
     fn from(msg: ChatMessage) -> Self {
         Self {
             role: msg.role,
-            content: msg.content,
+            content: Some(msg.content),
             name: msg.name,
         }
     }
@@ -336,7 +338,8 @@ impl XAIChatResponse {
         let content = self
             .choices
             .first()
-            .map(|c| c.message.content.clone())
+            .and_then(|c| c.message.content.as_ref())
+            .map(|c| c.text())
             .unwrap_or_default();
 
         let usage = self
@@ -435,14 +438,14 @@ mod tests {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: "You are a helpful assistant.".to_string(),
+                    content: "You are a helpful assistant.".into(),
                     name: None,
                     tool_calls: None,
                     tool_call_id: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: "Hello!".to_string(),
+                    content: "Hello!".into(),
                     name: None,
                     tool_calls: None,
                     tool_call_id: None,
@@ -466,7 +469,23 @@ mod tests {
         assert_eq!(xai_request.model, "grok-3");
         assert_eq!(xai_request.messages.len(), 2);
         assert_eq!(xai_request.messages[0].role, "system");
+        assert_eq!(
+            xai_request.messages[0]
+                .content
+                .as_ref()
+                .map(|c| c.text())
+                .unwrap(),
+            "You are a helpful assistant."
+        );
         assert_eq!(xai_request.messages[1].role, "user");
+        assert_eq!(
+            xai_request.messages[1]
+                .content
+                .as_ref()
+                .map(|c| c.text())
+                .unwrap(),
+            "Hello!"
+        );
         assert_eq!(xai_request.temperature, Some(0.7));
         assert_eq!(xai_request.max_tokens, Some(100));
         assert!(!xai_request.stream);

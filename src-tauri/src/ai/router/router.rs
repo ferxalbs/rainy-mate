@@ -321,7 +321,7 @@ impl IntelligentRouter {
             let estimated_input = request
                 .messages
                 .iter()
-                .map(|m| m.content.len() as u32 / 4) // Rough estimate: 4 chars per token
+                .map(|m| m.content.text().len() as u32 / 4) // Rough estimate: 4 chars per token
                 .sum::<u32>();
             let estimated_output = request.max_tokens.unwrap_or(1000);
 

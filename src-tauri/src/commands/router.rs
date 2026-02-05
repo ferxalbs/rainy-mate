@@ -82,7 +82,7 @@ impl From<ChatMessageDto> for ChatMessage {
     fn from(dto: ChatMessageDto) -> Self {
         ChatMessage {
             role: dto.role,
-            content: dto.content,
+            content: dto.content.into(),
             name: dto.name,
             tool_calls: None,
             tool_call_id: None,

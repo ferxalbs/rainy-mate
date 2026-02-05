@@ -8,6 +8,7 @@ use crate::ai::provider_types::{
     EmbeddingResponse, FunctionCall, ProviderCapabilities, ProviderConfig, ProviderHealth,
     ProviderId, ProviderResult, ProviderType, StreamingCallback, Tool, ToolCall,
 };
+use crate::ai::provider_types::{ContentPart, ImageUrl, MessageContent};
 use async_trait::async_trait;
 use futures::StreamExt;
 use rainy_sdk::RainyClient;
@@ -39,7 +40,7 @@ struct RainyToolRequest {
 struct RainyMessage {
     role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    content: Option<String>,
+    content: Option<MessageContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -295,11 +296,15 @@ impl AIProvider for RainySDKProvider {
             .iter()
             .map(|msg| RainyMessage {
                 role: msg.role.clone(),
-                content: if msg.content.is_empty() && msg.role == "assistant" {
-                    // Assistant messages with tool_calls may have empty content
-                    None
-                } else {
-                    Some(msg.content.clone())
+                content: match &msg.content {
+                    MessageContent::Text(s) => {
+                        if s.is_empty() && msg.role == "assistant" {
+                            None
+                        } else {
+                            Some(MessageContent::Text(s.clone()))
+                        }
+                    }
+                    other => Some(other.clone()),
                 },
                 name: msg.name.clone(),
                 tool_calls: msg.tool_calls.as_ref().map(|calls| {
@@ -452,10 +457,10 @@ impl AIProvider for RainySDKProvider {
             .messages
             .iter()
             .map(|msg| match msg.role.as_str() {
-                "system" => rainy_sdk::models::ChatMessage::system(&msg.content),
-                "user" => rainy_sdk::models::ChatMessage::user(&msg.content),
-                "assistant" => rainy_sdk::models::ChatMessage::assistant(&msg.content),
-                _ => rainy_sdk::models::ChatMessage::user(&msg.content),
+                "system" => rainy_sdk::models::ChatMessage::system(msg.content.text()),
+                "user" => rainy_sdk::models::ChatMessage::user(msg.content.text()),
+                "assistant" => rainy_sdk::models::ChatMessage::assistant(msg.content.text()),
+                _ => rainy_sdk::models::ChatMessage::user(msg.content.text()),
             })
             .collect();
 

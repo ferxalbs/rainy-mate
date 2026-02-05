@@ -148,19 +148,19 @@ impl AnthropicProvider {
         for msg in messages {
             match msg.role.as_str() {
                 "system" => {
-                    system_message = Some(msg.content.clone());
+                    system_message = Some(msg.text());
                 }
                 "user" | "assistant" => {
                     anthropic_messages.push(AnthropicMessage {
                         role: msg.role.clone(),
-                        content: msg.content.clone(),
+                        content: msg.text(),
                     });
                 }
                 _ => {
                     // Default to user for unknown roles
                     anthropic_messages.push(AnthropicMessage {
                         role: "user".to_string(),
-                        content: msg.content.clone(),
+                        content: msg.text(),
                     });
                 }
             }
@@ -482,7 +482,7 @@ mod tests {
         let messages = vec![
             ChatMessage {
                 role: "system".to_string(),
-                content: "You are a helpful assistant".to_string(),
+                content: "You are a helpful assistant".into(),
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
@@ -490,7 +490,7 @@ mod tests {
             ChatMessage::user("Hello"),
             ChatMessage {
                 role: "assistant".to_string(),
-                content: "Hi there!".to_string(),
+                content: "Hi there!".into(),
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,

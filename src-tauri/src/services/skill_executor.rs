@@ -1,6 +1,7 @@
 use crate::models::neural::{CommandResult, QueuedCommand};
 use crate::services::workspace::WorkspaceManager;
 use crate::services::{ManagedResearchService, WebResearchService};
+use base64::prelude::*;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -469,14 +470,47 @@ impl SkillExecutor {
             Err(e) => return self.error(&e),
         };
 
-        match fs::read_to_string(path).await {
-            Ok(content) => CommandResult {
-                success: true,
-                output: Some(content),
-                error: None,
-                exit_code: Some(0),
-            },
-            Err(e) => self.error(&format!("Failed to read file: {}", e)),
+        // Determine mime type from extension
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let mime_type = match extension.as_str() {
+            "png" => Some("image/png"),
+            "jpg" | "jpeg" => Some("image/jpeg"),
+            "webp" => Some("image/webp"),
+            "gif" => Some("image/gif"),
+            "pdf" => Some("application/pdf"),
+            _ => None,
+        };
+
+        if let Some(mime) = mime_type {
+            match fs::read(&path).await {
+                Ok(bytes) => {
+                    let b64_content = BASE64_STANDARD.encode(&bytes);
+                    // Format as Data URI for easy consumption by agent/frontend
+                    let output = format!("data:{};base64,{}", mime, b64_content);
+                    CommandResult {
+                        success: true,
+                        output: Some(output),
+                        error: None,
+                        exit_code: Some(0),
+                    }
+                }
+                Err(e) => self.error(&format!("Failed to read binary file: {}", e)),
+            }
+        } else {
+            // Default to text read
+            match fs::read_to_string(&path).await {
+                Ok(content) => CommandResult {
+                    success: true,
+                    output: Some(content),
+                    error: None,
+                    exit_code: Some(0),
+                },
+                Err(e) => self.error(&format!("Failed to read file: {}", e)),
+            }
         }
     }
 

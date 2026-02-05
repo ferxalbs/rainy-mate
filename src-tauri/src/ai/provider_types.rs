@@ -174,13 +174,72 @@ pub struct FunctionCall {
     pub arguments: String,
 }
 
+/// Message content (text or multimodal parts)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MessageContent {
+    /// Simple text content
+    Text(String),
+    /// Multimodal content parts
+    Parts(Vec<ContentPart>),
+}
+
+impl MessageContent {
+    /// Get text representation of content
+    pub fn text(&self) -> String {
+        match self {
+            MessageContent::Text(s) => s.clone(),
+            MessageContent::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    ContentPart::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join(""),
+        }
+    }
+}
+
+impl From<String> for MessageContent {
+    fn from(s: String) -> Self {
+        MessageContent::Text(s)
+    }
+}
+
+impl From<&str> for MessageContent {
+    fn from(s: &str) -> Self {
+        MessageContent::Text(s.to_string())
+    }
+}
+
+/// Content part for multimodal messages
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentPart {
+    /// Text part
+    Text { text: String },
+    /// Image URL part
+    ImageUrl { image_url: ImageUrl },
+}
+
+/// Image URL details
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageUrl {
+    /// URL or base64 data URI
+    pub url: String,
+    /// Detail level (auto, low, high)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
 /// Chat message
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     /// Message role (system, user, assistant, tool)
     pub role: String,
     /// Message content
-    pub content: String,
+    pub content: MessageContent,
     /// Optional name for the message
     pub name: Option<String>,
     /// Tool calls (if assistant)
@@ -191,13 +250,39 @@ pub struct ChatMessage {
 
 impl ChatMessage {
     /// Create a new user message
-    pub fn user(content: impl Into<String>) -> Self {
+    pub fn user(content: impl Into<MessageContent>) -> Self {
         Self {
             role: "user".to_string(),
             content: content.into(),
             name: None,
             tool_calls: None,
             tool_call_id: None,
+        }
+    }
+
+    /// Create a new system message
+    pub fn system(content: impl Into<String>) -> Self {
+        Self {
+            role: "system".to_string(),
+            content: MessageContent::Text(content.into()),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    /// Helper to get text content from message regardless of variant
+    pub fn text(&self) -> String {
+        match &self.content {
+            MessageContent::Text(s) => s.clone(),
+            MessageContent::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    ContentPart::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join(""),
         }
     }
 }
