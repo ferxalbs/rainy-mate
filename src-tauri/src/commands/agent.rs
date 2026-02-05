@@ -2,10 +2,11 @@ use crate::ai::agent::runtime::{AgentConfig, AgentRuntime};
 use crate::commands::router::IntelligentRouterState;
 use crate::services::SkillExecutor;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
 
 #[tauri::command]
 pub async fn run_agent_workflow(
+    app_handle: tauri::AppHandle,
     prompt: String,
     model_id: String,
     workspace_id: String,
@@ -35,11 +36,20 @@ pub async fn run_agent_workflow(
             If a tool fails, analyze the error and try a different approach.",
             workspace_id
         ),
-        workspace_id,
+        workspace_id: workspace_id.clone(),
         max_steps: None,
     };
 
-    let runtime = AgentRuntime::new(config, router.0.clone(), skills.inner().clone());
+    // Initialize Persistent Memory
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let memory =
+        Arc::new(crate::ai::agent::memory::AgentMemory::new(&workspace_id, app_data_dir).await);
+
+    let runtime = AgentRuntime::new(config, router.0.clone(), skills.inner().clone(), memory);
 
     // 2. Run Workflow
     // For MVP, this just echoes or does a basic LLM call if wired

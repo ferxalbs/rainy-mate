@@ -1,3 +1,4 @@
+use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::workflow::{ActStep, AgentState, ThinkStep, Workflow};
 use crate::ai::router::IntelligentRouter;
 use crate::services::SkillExecutor;
@@ -20,6 +21,7 @@ pub struct AgentRuntime {
     config: AgentConfig,
     router: Arc<tokio::sync::RwLock<IntelligentRouter>>,
     skills: Arc<SkillExecutor>,
+    memory: Arc<AgentMemory>,
     history: Arc<Mutex<Vec<AgentMessage>>>,
 }
 
@@ -36,11 +38,13 @@ impl AgentRuntime {
         config: AgentConfig,
         router: Arc<tokio::sync::RwLock<IntelligentRouter>>,
         skills: Arc<SkillExecutor>,
+        memory: Arc<AgentMemory>,
     ) -> Self {
         Self {
             config,
             router,
             skills,
+            memory,
             history: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -48,7 +52,7 @@ impl AgentRuntime {
     /// Primary entry point: Run a workflow/turn
     pub async fn run(&self, input: &str) -> Result<String, String> {
         // 1. Initialize State
-        let mut state = AgentState::new(self.config.workspace_id.clone());
+        let mut state = AgentState::new(self.config.workspace_id.clone(), self.memory.clone());
 
         // Add System Message to State
         state.messages.push(AgentMessage {

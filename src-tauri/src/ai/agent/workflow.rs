@@ -24,12 +24,12 @@ pub struct AgentState {
 }
 
 impl AgentState {
-    pub fn new(workspace_id: String) -> Self {
+    pub fn new(workspace_id: String, memory: Arc<AgentMemory>) -> Self {
         Self {
             messages: Vec::new(),
             context: HashMap::new(),
             workspace_id,
-            memory: Arc::new(AgentMemory::new()),
+            memory,
         }
     }
 }
@@ -305,20 +305,38 @@ impl WorkflowStep for ActStep {
                 approved_by: None,
             };
 
-            let result = skills.execute(&command).await;
+            // Implement Auto-Retry Logic
+            let mut attempts = 0;
+            const MAX_RETRIES: u32 = 2;
+            let mut final_output = String::new();
 
-            let output = if result.success {
-                result.output.unwrap_or_default()
-            } else {
-                format!(
-                    "Error: {}",
-                    result.error.unwrap_or_else(|| "Unknown".to_string())
-                )
-            };
+            while attempts <= MAX_RETRIES {
+                let result = skills.execute(&command).await;
+
+                if result.success {
+                    final_output = result.output.unwrap_or_default();
+                    break;
+                } else {
+                    let err = result.error.unwrap_or_else(|| "Unknown error".to_string());
+                    // Don't retry if it's likely a user error (e.g. file not found)
+                    // But do retry for transient errors or web issues
+
+                    if attempts == MAX_RETRIES {
+                        final_output = format!("Error: {}", err);
+                    } else {
+                        // Backoff
+                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                            500 * (attempts as u64 + 1),
+                        ))
+                        .await;
+                    }
+                    attempts += 1;
+                }
+            }
 
             results.push(AgentMessage {
                 role: "tool".to_string(),
-                content: output,
+                content: final_output,
                 tool_calls: None,
                 tool_call_id: Some(call.id.clone()),
             });
@@ -394,9 +412,13 @@ mod tests {
             output: "Step 2 Done".to_string(),
         }));
 
-        let state = AgentState::new("test-ws".to_string());
-
         // Note: This relies on being able to create WorkspaceManager in test env.
+        // We need a dummy path for memory
+        let temp_dir = std::env::temp_dir();
+        let memory = Arc::new(AgentMemory::new("test-ws", temp_dir).await);
+
+        let state = AgentState::new("test-ws".to_string(), memory);
+
         match WorkspaceManager::new() {
             Ok(wm) => {
                 let provider_manager = Arc::new(AIProviderManager::new());

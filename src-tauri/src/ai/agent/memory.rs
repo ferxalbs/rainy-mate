@@ -3,7 +3,9 @@ use reqwest::Client;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::fs;
 use tokio::sync::RwLock;
 
 /// Represents a unit of information in the agent's memory
@@ -25,17 +27,41 @@ pub struct AgentMemory {
     /// Web client for fetching external info
     #[allow(dead_code)]
     // @TODO used by ingest_web_page - will be fully utilized when search tool is added
+    // @TODO used by ingest_web_page - will be fully utilized when search tool is added
     http_client: Client,
+    /// Path to persistent storage
+    storage_path: PathBuf,
 }
 
 impl AgentMemory {
-    pub fn new() -> Self {
+    pub async fn new(workspace_id: &str, app_data_dir: PathBuf) -> Self {
+        let storage_path = app_data_dir
+            .join("memory")
+            .join(workspace_id)
+            .join("short_term.json");
+
+        // Ensure directory exists
+        if let Some(parent) = storage_path.parent() {
+            let _ = fs::create_dir_all(parent).await;
+        }
+
+        // Load existing memory or create new
+        let entries = if storage_path.exists() {
+            match fs::read_to_string(&storage_path).await {
+                Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+                Err(_) => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+
         Self {
-            short_term: Arc::new(RwLock::new(Vec::new())),
+            short_term: Arc::new(RwLock::new(entries)),
             http_client: Client::builder()
-                .user_agent("Rainy-Cowork-Agent/1.0")
+                .user_agent("Rainy-MaTE-Agent/1.0")
                 .build()
                 .unwrap_or_default(),
+            storage_path,
         }
     }
 
@@ -59,6 +85,15 @@ impl AgentMemory {
 
         let mut store = self.short_term.write().await;
         store.push(entry);
+
+        // Persist to disk
+        self.save_to_disk(&store).await;
+    }
+
+    async fn save_to_disk(&self, entries: &[MemoryEntry]) {
+        if let Ok(content) = serde_json::to_string_pretty(entries) {
+            let _ = fs::write(&self.storage_path, content).await;
+        }
     }
 
     /// Retrieve relevant memory entries (Simple keyword match for now)
