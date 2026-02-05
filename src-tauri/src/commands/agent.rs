@@ -1,16 +1,15 @@
 use crate::ai::agent::runtime::{AgentConfig, AgentRuntime};
-use crate::ai::router::IntelligentRouter;
+use crate::commands::router::IntelligentRouterState;
 use crate::services::SkillExecutor;
 use std::sync::Arc;
 use tauri::State;
-use tokio::sync::RwLock;
 
 #[tauri::command]
 pub async fn run_agent_workflow(
     prompt: String,
     model_id: String,
     workspace_id: String,
-    router: State<'_, Arc<RwLock<IntelligentRouter>>>,
+    router: State<'_, IntelligentRouterState>,
     skills: State<'_, Arc<SkillExecutor>>,
 ) -> Result<String, String> {
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
@@ -39,7 +38,7 @@ pub async fn run_agent_workflow(
         workspace_id,
     };
 
-    let runtime = AgentRuntime::new(config, router.inner().clone(), skills.inner().clone());
+    let runtime = AgentRuntime::new(config, router.0.clone(), skills.inner().clone());
 
     // 2. Run Workflow
     // For MVP, this just echoes or does a basic LLM call if wired
