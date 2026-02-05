@@ -99,7 +99,7 @@ export function useAgentChat() {
   );
 
   const sendInstruction = useCallback(
-    async (instruction: string, _workspacePath: string) => {
+    async (instruction: string, workspacePath: string) => {
       // This maps to "Deep Processing" / Task creation
       const userMsg: AgentMessage = {
         id: crypto.randomUUID(),
@@ -118,6 +118,7 @@ export function useAgentChat() {
           instruction,
           "rainyapi",
           "gemini-2.0-flash",
+          workspacePath,
         );
 
         // Create a placeholder plan message
