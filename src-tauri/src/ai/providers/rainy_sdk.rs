@@ -356,7 +356,7 @@ impl AIProvider for RainySDKProvider {
 
         let response = self
             .http_client
-            .post(format!("{}/v1/chat/completions", base_url))
+            .post(format!("{}/api/v1/chat/completions", base_url))
             .bearer_auth(&self.api_key)
             .json(&api_request)
             .send()
