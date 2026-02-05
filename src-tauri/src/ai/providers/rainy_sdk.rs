@@ -14,9 +14,6 @@ use rainy_sdk::RainyClient;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-/// Rainy API base URL for direct HTTP calls
-const RAINY_API_BASE: &str = "https://api.rainy.dev";
-
 // ============================================================================
 // Internal types for OpenAI-compatible API with tool calling support
 // These are used for direct HTTP calls that bypass SDK limitations
@@ -351,9 +348,15 @@ impl AIProvider for RainySDKProvider {
         };
 
         // Make direct HTTP call to Rainy API
+        let base_url = self
+            .config
+            .base_url
+            .as_deref()
+            .unwrap_or(rainy_sdk::DEFAULT_BASE_URL);
+
         let response = self
             .http_client
-            .post(format!("{}/v1/chat/completions", RAINY_API_BASE))
+            .post(format!("{}/v1/chat/completions", base_url))
             .bearer_auth(&self.api_key)
             .json(&api_request)
             .send()
