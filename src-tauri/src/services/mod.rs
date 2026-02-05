@@ -1,7 +1,6 @@
 // Rainy Cowork - Services Module
 // Business logic layer
 
-pub mod ai_agent;
 pub mod airlock;
 pub mod atm_client;
 pub mod command_poller;
@@ -20,7 +19,6 @@ pub mod task_manager;
 pub mod web_research;
 pub mod workspace;
 
-pub use ai_agent::CoworkAgent;
 pub use airlock::AirlockService;
 pub use atm_client::ATMClient;
 pub use command_poller::CommandPoller;

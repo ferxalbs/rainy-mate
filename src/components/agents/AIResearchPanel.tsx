@@ -17,14 +17,30 @@ import {
 } from "@heroui/react";
 import { Search, Globe, Copy } from "lucide-react";
 import { useWebResearch } from "../../hooks/useWebResearch";
-import { useCoworkModels } from "../../hooks/useCoworkModels";
 import { MarkdownRenderer } from "../shared/MarkdownRenderer";
+import * as tauri from "../../services/tauri";
 
 export function AIResearchPanel() {
   const { researchTopic, researchResult, isResearching, error } =
     useWebResearch();
 
-  const { models, loading: modelsLoading } = useCoworkModels();
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+
+  // Fetch models on mount
+  useEffect(() => {
+    async function loadModels() {
+      try {
+        const availableModels = await tauri.getAvailableModels();
+        setModels(availableModels.map((m) => m.id));
+      } catch (err) {
+        console.error("Failed to load models:", err);
+      } finally {
+        setModelsLoading(false);
+      }
+    }
+    loadModels();
+  }, []);
   const [topic, setTopic] = useState("");
   const [depth, setDepth] = useState<"basic" | "advanced">("basic");
   const [provider, setProvider] = useState<"exa" | "tavily">("exa");

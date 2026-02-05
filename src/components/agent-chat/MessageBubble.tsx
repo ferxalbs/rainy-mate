@@ -9,8 +9,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Button, Card } from "@heroui/react";
-import type { AgentMessage } from "../../hooks/useCoworkAgent";
-import * as tauri from "../../services/tauri";
+import type { AgentMessage, TaskPlan } from "../../types/agent";
+
 import { ThoughtDisplay, ThoughtBadge } from "./ThoughtDisplay";
 
 // Map step types to icons
@@ -29,7 +29,7 @@ function TrashIcon(props: any) {
 
 interface MessageBubbleProps {
   message: AgentMessage;
-  currentPlan?: tauri.TaskPlan | null;
+  currentPlan?: TaskPlan | null;
   isExecuting?: boolean;
   onExecute?: (planId: string) => void;
   onCancel?: (planId: string) => void;
@@ -145,7 +145,7 @@ function PlanCard({
   onCancel,
   isExecuting,
 }: {
-  plan: tauri.TaskPlan;
+  plan: TaskPlan;
   onExecute?: (id: string) => void;
   onCancel?: (id: string) => void;
   isExecuting?: boolean;
@@ -181,7 +181,7 @@ function PlanCard({
         <div className="bg-orange-500/10 text-orange-600 dark:text-orange-400 p-3 rounded-lg text-xs space-y-1">
           <p className="font-semibold flex items-center gap-1">⚠️ Warnings</p>
           <ul className="list-disc list-inside opacity-90">
-            {plan.warnings.map((w, i) => (
+            {plan.warnings.map((w, i: number) => (
               <li key={i}>{w}</li>
             ))}
           </ul>

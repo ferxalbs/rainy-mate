@@ -234,17 +234,6 @@ impl AIProviderManager {
         fallback
     }
 
-    /// Get cowork models directly from API (efficient with connection reuse)
-    pub async fn get_cowork_models_from_api(
-        &self,
-    ) -> Result<rainy_sdk::cowork::CoworkModelsResponse, String> {
-        if let Some(client) = self.get_cowork_client().await {
-            client.get_cowork_models().await.map_err(|e| e.to_string())
-        } else {
-            Err("No Cowork API key configured".to_string())
-        }
-    }
-
     /// Check if user has a paid plan
     #[allow(dead_code)]
     pub async fn has_paid_plan(&self) -> bool {
@@ -728,11 +717,6 @@ impl AIProviderManager {
                     .map_err(|e| e.to_string())
             }
         }
-    }
-
-    /// Check if a feature is available based on plan
-    pub async fn can_use_feature(&self, feature: &str) -> bool {
-        self.get_capabilities().await.can_use_feature(feature)
     }
 
     /// Invalidate cached capabilities (call after API key changes)

@@ -11,8 +11,6 @@ import {
   TextField,
   Input,
   Spinner,
-  Modal,
-  Checkbox,
 } from "@heroui/react";
 import {
   Bot,
@@ -22,10 +20,8 @@ import {
   Sparkles,
   Eye,
   EyeOff,
-  CreditCard,
   X,
   ArrowLeft,
-  Plus,
   Copy,
   Trash2,
   ExternalLink,
@@ -34,12 +30,7 @@ import {
   Shield,
 } from "lucide-react";
 import * as tauri from "../../services/tauri";
-import {
-  useAIProvider,
-  useCoworkStatus,
-  useCoworkBilling,
-  useCoworkKeys,
-} from "../../hooks";
+import { useAIProvider } from "../../hooks";
 import { AI_PROVIDERS, type ProviderType } from "../../types";
 import { ThemeSelector } from "./ThemeSelector";
 import { ThemeContext } from "../../providers/ThemeProvider";
@@ -64,40 +55,7 @@ export function SettingsPage({
   const { hasApiKey, validateApiKey, storeApiKey, getApiKey, deleteApiKey } =
     useAIProvider();
 
-  const {
-    planName,
-    hasPaidPlan,
-    usagePercent,
-    remainingUses,
-    isOverLimit,
-    isLoading: coworkLoading,
-    status: coworkStatus,
-    refresh: refreshCowork,
-    error: coworkError,
-  } = useCoworkStatus();
-
-  // Cowork billing and API keys
-  const {
-    plans: coworkPlans,
-    subscription,
-    checkout,
-    openPortal,
-    isLoading: billingLoading,
-  } = useCoworkBilling();
-
-  const {
-    keys: coworkApiKeys,
-    createKey,
-    revokeKey,
-    isLoading: keysLoading,
-  } = useCoworkKeys();
-
-  // State for new API key modal
-  const [showNewKeyModal, setShowNewKeyModal] = useState(false);
-  const [newKeyName, setNewKeyName] = useState("");
-  const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
-  const [isCreatingKey, setIsCreatingKey] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  // State for new API key modal REMOVED
 
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
@@ -110,8 +68,6 @@ export function SettingsPage({
     {},
   );
 
-  const [coworkModelsData, setCoworkModelsData] =
-    useState<tauri.CoworkModelsResponse | null>(null);
   const [rainyApiModels, setRainyApiModels] = useState<string[]>([]);
   const [geminiModels, setGeminiModels] = useState<string[]>([]);
 
@@ -119,15 +75,14 @@ export function SettingsPage({
   useEffect(() => {
     async function loadData() {
       try {
-        const [coworkData, rainyModels, geminiModelsList, currentModel] =
-          await Promise.all([
-            tauri.getCoworkModels().catch(() => null),
+        const [rainyModels, geminiModelsList, currentModel] = await Promise.all(
+          [
             tauri.getProviderModels("rainy_api").catch(() => []),
             tauri.getProviderModels("gemini").catch(() => []),
             tauri.getSelectedModel(),
-          ]);
+          ],
+        );
 
-        setCoworkModelsData(coworkData);
         setRainyApiModels(rainyModels || []);
         setGeminiModels(geminiModelsList || []);
         setSelectedModel(currentModel);
@@ -138,7 +93,7 @@ export function SettingsPage({
       }
     }
     loadData();
-  }, [coworkStatus?.plan]); // Reload if plan changes
+  }, []);
 
   // Handle model selection
   const handleSelectModel = useCallback(async (modelId: string) => {
@@ -154,9 +109,9 @@ export function SettingsPage({
   }, []);
 
   // API key handlers
+  // API key handlers
   const getProviderId = (type: ProviderType) => {
     if (type === "rainyApi") return "rainy_api";
-    if (type === "coworkApi") return "cowork_api";
     return "gemini";
   };
 
@@ -203,7 +158,6 @@ export function SettingsPage({
       await storeApiKey(providerId, key);
       setApiKeyInputs((prev) => ({ ...prev, [provider]: "" }));
       setValidationStatus((prev) => ({ ...prev, [provider]: "idle" }));
-      await refreshCowork();
     } catch (error) {
       console.error("Failed to save API key:", error);
     } finally {
@@ -214,23 +168,10 @@ export function SettingsPage({
   const handleDeleteKey = async (provider: ProviderType) => {
     const providerId = getProviderId(provider);
     await deleteApiKey(providerId);
-    await refreshCowork();
   };
 
   const toggleShowKey = (provider: ProviderType) => {
     setShowKeys((prev) => ({ ...prev, [provider]: !prev[provider] }));
-  };
-
-  const formatResetDate = (isoDate: string) => {
-    if (!isoDate) return "N/A";
-    try {
-      return new Date(isoDate).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return "N/A";
-    }
   };
 
   const handleViewKey = async (provider: ProviderType) => {
@@ -353,15 +294,6 @@ export function SettingsPage({
                 </div>
               </Tabs.Tab>
               <Tabs.Tab
-                id="subscription"
-                className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground data-[selected=true]:text-foreground data-[selected=true]:bg-background data-[selected=true]:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background"
-              >
-                <div className="flex items-center gap-2">
-                  <CreditCard className="size-4" />
-                  Subscription
-                </div>
-              </Tabs.Tab>
-              <Tabs.Tab
                 id="appearance"
                 className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground data-[selected=true]:text-foreground data-[selected=true]:bg-background data-[selected=true]:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background"
               >
@@ -389,57 +321,6 @@ export function SettingsPage({
                 </div>
               ) : (
                 <>
-                  {/* Current Plan Badge */}
-                  <div className="p-4 rounded-xl bg-muted/50 border border-border/50 flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="size-5 text-primary" />
-                      <span className="font-medium">
-                        Current Plan: {coworkModelsData?.plan_name || "Free"}
-                      </span>
-                    </div>
-                    {coworkModelsData?.plan === "free" && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onPress={() =>
-                          window.open(
-                            "https://enosislabs.com/pricing",
-                            "_blank",
-                          )
-                        }
-                      >
-                        Upgrade
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* 1. Cowork Subscription Models */}
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                      <Sparkles className="size-4" />
-                      Subscription Models (Cowork)
-                    </h3>
-                    {coworkModelsData && coworkModelsData.models.length > 0 ? (
-                      <div className="grid gap-3">
-                        {coworkModelsData.models.map((model) => (
-                          <ModelCard
-                            key={model}
-                            id={model}
-                            name={model}
-                            description="Included in your plan"
-                            isSelected={selectedModel === model}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-6 rounded-xl border border-dashed text-center">
-                        <p className="text-muted-foreground text-sm">
-                          Upgrade to access premium Cowork models
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
                   {/* 2. Rainy API (PAYG) */}
                   {hasApiKey("rainy_api") && (
                     <div>
@@ -676,382 +557,6 @@ export function SettingsPage({
                   </div>
                 );
               })}
-            </Tabs.Panel>
-
-            {/* Subscription Tab */}
-            <Tabs.Panel id="subscription" className="space-y-6">
-              {/* Error Banner */}
-              {coworkError && (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-center gap-2">
-                  <Shield className="size-4" />
-                  <span>Failed to load subscription: {coworkError}</span>
-                </div>
-              )}
-
-              {/* Current Plan & Usage */}
-              <div className="p-4 rounded-xl border bg-muted/50 border-border/50">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="size-5 text-accent" />
-                      <span className="font-semibold text-lg">{planName}</span>
-                      {hasPaidPlan && (
-                        <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    {subscription?.hasSubscription && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onPress={async () => {
-                          const url = await openPortal();
-                          if (url) window.open(url, "_blank");
-                        }}
-                      >
-                        <ExternalLink className="size-4" />
-                        Manage Billing
-                      </Button>
-                    )}
-                  </div>
-
-                  <Separator />
-
-                  {!coworkLoading && coworkStatus && (
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          Monthly Usage
-                        </span>
-                        <span
-                          className={
-                            isOverLimit ? "text-red-500 font-medium" : ""
-                          }
-                        >
-                          {coworkStatus.usage.used} / {coworkStatus.usage.limit}{" "}
-                          uses
-                        </span>
-                      </div>
-
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            usagePercent >= 90
-                              ? "bg-red-500"
-                              : usagePercent >= 70
-                                ? "bg-yellow-500"
-                                : "bg-accent"
-                          }`}
-                          style={{ width: `${Math.min(100, usagePercent)}%` }}
-                        />
-                      </div>
-
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{remainingUses} remaining</span>
-                        <span>
-                          Resets {formatResetDate(coworkStatus.usage.resets_at)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {coworkLoading && (
-                    <div className="flex items-center justify-center py-4">
-                      <Spinner size="sm" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Available Plans */}
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                  <CreditCard className="size-4" />
-                  Available Plans
-                </h3>
-                {billingLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Spinner size="sm" />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {coworkPlans
-                      .filter((p) => p.id !== "free")
-                      .map((plan) => {
-                        const isCurrentPlan = subscription?.plan === plan.id;
-                        const isLoading = checkoutLoading === plan.id;
-
-                        return (
-                          <div
-                            key={plan.id}
-                            className={`p-4 rounded-xl border transition-all ${
-                              isCurrentPlan
-                                ? "border-accent bg-accent/5"
-                                : "bg-transparent border-border/50 hover:bg-muted/30 cursor-pointer"
-                            }`}
-                          >
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="font-semibold">
-                                  {plan.name}
-                                </span>
-                                {isCurrentPlan && (
-                                  <Check className="size-4 text-accent" />
-                                )}
-                              </div>
-
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-bold">
-                                  ${plan.price}
-                                </span>
-                                <span className="text-sm text-muted-foreground">
-                                  /month
-                                </span>
-                              </div>
-
-                              <div className="text-xs text-muted-foreground space-y-1">
-                                <div className="flex items-center gap-1">
-                                  <Zap className="size-3" />
-                                  {plan.usageLimit} uses/month
-                                </div>
-                                <div className="capitalize">
-                                  {plan.modelAccessLevel} models
-                                </div>
-                              </div>
-
-                              {!isCurrentPlan && plan.hasStripePrice && (
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  className="w-full"
-                                  isDisabled={isLoading}
-                                  onPress={async () => {
-                                    setCheckoutLoading(plan.id);
-                                    const url = await checkout(plan.id);
-                                    if (url) window.open(url, "_blank");
-                                    setCheckoutLoading(null);
-                                  }}
-                                >
-                                  {isLoading ? (
-                                    <Spinner size="sm" />
-                                  ) : (
-                                    "Subscribe"
-                                  )}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
-
-              {/* Cowork API Keys */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Key className="size-4" />
-                    Cowork API Keys
-                  </h3>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onPress={() => setShowNewKeyModal(true)}
-                  >
-                    <Plus className="size-4" />
-                    Create Key
-                  </Button>
-                </div>
-
-                {keysLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Spinner size="sm" />
-                  </div>
-                ) : coworkApiKeys.length === 0 ? (
-                  <div className="p-6 text-center rounded-xl border border-dashed border-border/50">
-                    <Key className="size-8 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground text-sm">
-                      No API keys yet
-                    </p>
-                    <p className="text-muted-foreground text-xs mt-1">
-                      Create a key to use with the Rainy SDK
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {coworkApiKeys.map((key) => (
-                      <div
-                        key={key.id}
-                        className="p-3 flex items-center justify-between rounded-xl border border-border/50 bg-muted/50"
-                      >
-                        <div>
-                          <span className="font-medium">{key.name}</span>
-                          <p className="text-xs text-muted-foreground">
-                            Created{" "}
-                            {new Date(key.createdAt).toLocaleDateString()}
-                            {key.lastUsed &&
-                              ` • Last used ${new Date(key.lastUsed).toLocaleDateString()}`}
-                          </p>
-                        </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onPress={async () => {
-                            if (confirm(`Revoke "${key.name}"?`)) {
-                              await revokeKey(key.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="size-4 text-red-500" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* New Key Modal */}
-                <Modal
-                  isOpen={showNewKeyModal}
-                  onOpenChange={setShowNewKeyModal}
-                >
-                  <Modal.Backdrop className="backdrop-blur-2xl bg-white/80 dark:bg-black/80" />
-                  <Modal.Container>
-                    <Modal.Dialog className="sm:max-w-[400px]">
-                      <Modal.CloseTrigger />
-                      <Modal.Header>
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 bg-primary/10 rounded-lg">
-                            <Key className="size-4 text-primary" />
-                          </div>
-                          <Modal.Heading>
-                            {newKeyValue
-                              ? "API Key Created"
-                              : "Create New API Key"}
-                          </Modal.Heading>
-                        </div>
-                      </Modal.Header>
-
-                      <Modal.Body>
-                        {newKeyValue ? (
-                          <div className="space-y-4">
-                            <div className="p-3 bg-muted rounded-lg font-mono text-sm break-all relative border border-border/50">
-                              {newKeyValue}
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                defaultSelected={true}
-                                onChange={async (e) => {
-                                  if (e.valueOf()) {
-                                    await storeApiKey(
-                                      "cowork_api",
-                                      newKeyValue,
-                                    );
-                                  }
-                                }}
-                              >
-                                <span className="text-sm">
-                                  Set as active Cowork key
-                                </span>
-                              </Checkbox>
-                            </div>
-
-                            <p className="text-xs text-muted-foreground bg-yellow-500/10 p-2 rounded text-yellow-600 dark:text-yellow-500 border border-yellow-500/20">
-                              ⚠️ Copy this key now. You won't be able to see it
-                              again.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            <TextField>
-                              <Label>Key Name</Label>
-                              <Input
-                                placeholder="e.g., Development Key"
-                                value={newKeyName}
-                                onChange={(e) => setNewKeyName(e.target.value)}
-                                autoFocus
-                              />
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Generates a secure random API key for your
-                                applications.
-                              </p>
-                            </TextField>
-                          </div>
-                        )}
-                      </Modal.Body>
-
-                      <Modal.Footer>
-                        {newKeyValue ? (
-                          <div className="flex gap-2 w-full">
-                            <Button
-                              variant="secondary"
-                              className="flex-1"
-                              onPress={() => {
-                                navigator.clipboard.writeText(newKeyValue);
-                                // Visual feedback here would be good but keeping it simple
-                              }}
-                            >
-                              <Copy className="size-4 mr-2" />
-                              Copy Key
-                            </Button>
-                            <Button
-                              variant="primary"
-                              className="flex-1"
-                              onPress={async () => {
-                                setShowNewKeyModal(false);
-                                // Auto-apply logic if checked (handled by checkbox change, but default true logic needed)
-                                // Re-check: the checkbox logic above only runs on CHANGE.
-                                // We should probably just force apply it or check if it's already applied.
-                                // For now, let's assume the user checks it or we run it by default on create success?
-                                // Better to just run it:
-                                await storeApiKey("cowork_api", newKeyValue);
-                                setNewKeyValue(null);
-                                setNewKeyName("");
-                              }}
-                            >
-                              Done
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2 justify-end w-full">
-                            <Button
-                              variant="tertiary"
-                              onPress={() => {
-                                setShowNewKeyModal(false);
-                                setNewKeyName("");
-                              }}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              variant="primary"
-                              isDisabled={!newKeyName.trim() || isCreatingKey}
-                              onPress={async () => {
-                                setIsCreatingKey(true);
-                                const result = await createKey(newKeyName);
-                                if (result) {
-                                  setNewKeyValue(result.key);
-                                  // AUTO APPLY DEFAULT
-                                  await storeApiKey("cowork_api", result.key);
-                                }
-                                setIsCreatingKey(false);
-                              }}
-                            >
-                              {isCreatingKey ? (
-                                <Spinner size="sm" />
-                              ) : (
-                                "Create Key"
-                              )}
-                            </Button>
-                          </div>
-                        )}
-                      </Modal.Footer>
-                    </Modal.Dialog>
-                  </Modal.Container>
-                </Modal>
-              </div>
             </Tabs.Panel>
 
             {/* Appearance Tab */}

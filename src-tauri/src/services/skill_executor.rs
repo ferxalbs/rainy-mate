@@ -236,12 +236,111 @@ impl SkillExecutor {
 
     async fn handle_search_files(
         &self,
-        _workspace_id: String,
-        _params: &Value,
-        _allowed_paths: &[String],
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
     ) -> CommandResult {
-        // Placeholder
-        self.error("search_files not implemented yet")
+        let query = match params.get("query").and_then(|v| v.as_str()) {
+            Some(q) => q,
+            None => return self.error("Missing query parameter"),
+        };
+
+        let path_str = params.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+        let search_content = params
+            .get("searchContent")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let root_path = match self
+            .resolve_path(workspace_id, path_str, allowed_paths)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => return self.error(&e),
+        };
+
+        let regex = match regex::Regex::new(query) {
+            Ok(r) => r,
+            Err(e) => return self.error(&format!("Invalid regex query: {}", e)),
+        };
+
+        let mut results = Vec::new();
+        let mut queue = vec![root_path];
+
+        // Breadth-first search with limit to avoid infinite loops or massive resource usage
+        let max_files = 1000;
+        let mut scanned_files = 0;
+
+        while let Some(current_dir) = queue.pop() {
+            let mut entries = match fs::read_dir(&current_dir).await {
+                Ok(read_dir) => read_dir,
+                Err(_) => continue, // Skip unreadable dirs
+            };
+
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                let file_name = entry.file_name().to_string_lossy().to_string();
+
+                scanned_files += 1;
+                if scanned_files > max_files {
+                    break;
+                }
+
+                if path.is_dir() {
+                    // Skip hidden directories like .git, node_modules
+                    if !file_name.starts_with('.')
+                        && file_name != "node_modules"
+                        && file_name != "target"
+                    {
+                        queue.push(path);
+                    }
+                } else {
+                    let mut matches = false;
+
+                    // 1. Match filename
+                    if regex.is_match(&file_name) {
+                        matches = true;
+                    }
+                    // 2. Match content if requested
+                    else if search_content {
+                        // Only search text files - simple heuristic
+                        if let Some(ext) = path.extension() {
+                            let ext_str = ext.to_string_lossy();
+                            if [
+                                "md", "txt", "rs", "ts", "tsx", "js", "json", "toml", "yaml",
+                                "yml", "css", "html",
+                            ]
+                            .contains(&ext_str.as_ref())
+                            {
+                                if let Ok(content) = fs::read_to_string(&path).await {
+                                    if regex.is_match(&content) {
+                                        matches = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if matches {
+                        results.push(serde_json::json!({
+                            "name": file_name,
+                            "path": path.to_string_lossy(),
+                            "type": "file"
+                        }));
+                    }
+                }
+            }
+            if scanned_files > max_files {
+                break;
+            }
+        }
+
+        CommandResult {
+            success: true,
+            output: Some(serde_json::to_string(&results).unwrap()),
+            error: None,
+            exit_code: Some(0),
+        }
     }
 
     async fn handle_write_file(

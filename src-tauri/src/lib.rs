@@ -11,9 +11,9 @@ mod services;
 use agents::AgentRegistry;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
-    ATMClient, CommandPoller, CoworkAgent, DocumentService, FileManager, FileOperationEngine,
-    FolderManager, ImageService, ManagedResearchService, MemoryManager, NeuralService,
-    ReflectionEngine, SettingsManager, SkillExecutor, WebResearchService, WorkspaceManager,
+    ATMClient, CommandPoller, DocumentService, FileManager, FileOperationEngine, FolderManager,
+    ImageService, ManagedResearchService, MemoryManager, NeuralService, ReflectionEngine,
+    SettingsManager, SkillExecutor, WebResearchService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -37,14 +37,6 @@ pub fn run() {
 
     // Initialize settings manager
     let settings_manager = Arc::new(Mutex::new(SettingsManager::new()));
-
-    // Initialize cowork agent (natural language file operations)
-    let cowork_agent = Arc::new(CoworkAgent::new(
-        ai_provider.clone(),
-        file_ops.clone(),
-        file_manager.clone(),
-        settings_manager.clone(),
-    ));
 
     // Initialize web research service (Phase 3 AI features)
     let managed_research = ManagedResearchService::new(ai_provider.clone());
@@ -107,7 +99,6 @@ pub fn run() {
         .manage(task_manager)
         .manage(file_manager)
         .manage(file_ops)
-        .manage(cowork_agent)
         .manage(web_research)
         .manage(managed_research) // Manage the new AI research service
         .manage(document_service)
@@ -236,10 +227,6 @@ pub fn run() {
             commands::get_provider_available_models,
             commands::clear_providers,
             commands::get_provider_count,
-            // Cowork status commands
-            commands::get_cowork_status,
-            commands::get_cowork_models,
-            commands::can_use_feature,
             // File commands
             commands::select_workspace,
             commands::set_workspace,
@@ -291,12 +278,6 @@ pub fn run() {
             commands::redo_file_operation,
             commands::list_enhanced_file_operations,
             commands::set_file_ops_workspace,
-            // Agent commands (NEW - AI Agent)
-            commands::plan_task,
-            commands::execute_agent_task,
-            commands::get_agent_plan,
-            commands::cancel_agent_plan,
-            commands::agent_analyze_workspace,
             // Multi-agent system commands (NEW - Agent Registry)
             commands::register_agent,
             commands::unregister_agent,

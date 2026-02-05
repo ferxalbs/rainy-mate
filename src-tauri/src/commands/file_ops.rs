@@ -2,15 +2,13 @@
 // Tauri commands for advanced file operations and AI agent
 // Part of Phase 2: Enhanced Tauri Commands
 
-use crate::ai::provider_types::ChatMessage;
-use crate::services::ai_agent::{AgentEvent, CoworkAgent, ExecutionResult, StreamEvent, TaskPlan};
 use crate::services::file_operations::{
     ConflictStrategy, FileOpChange, FileOperationEngine, FileVersion, FileVersionInfo,
     MoveOperation, OrganizeResult, OrganizeStrategy, RenamePattern, RenamePreview, Transaction,
     WorkspaceAnalysis,
 };
 use std::sync::Arc;
-use tauri::{ipc::Channel, State};
+use tauri::State;
 
 // ============ File Operation Commands ============
 
@@ -279,57 +277,4 @@ pub async fn set_file_ops_workspace(
         workspace_id
     );
     Ok(())
-}
-
-// ============ AI Agent Commands ============
-
-/// Plan a task from natural language instruction
-#[tauri::command]
-pub async fn plan_task(
-    instruction: String,
-    workspace_path: String,
-    history: Vec<ChatMessage>,
-    on_event: Channel<StreamEvent>,
-    state: State<'_, Arc<CoworkAgent>>,
-) -> Result<TaskPlan, String> {
-    state
-        .parse_instruction(&instruction, &workspace_path, history, Some(on_event))
-        .await
-}
-
-/// Execute a planned task
-#[tauri::command]
-pub async fn execute_agent_task(
-    plan_id: String,
-    on_event: Channel<AgentEvent>,
-    state: State<'_, Arc<CoworkAgent>>,
-) -> Result<ExecutionResult, String> {
-    state.execute_plan(&plan_id, on_event).await
-}
-
-/// Get a pending plan by ID
-#[tauri::command]
-pub async fn get_agent_plan(
-    plan_id: String,
-    state: State<'_, Arc<CoworkAgent>>,
-) -> Result<Option<TaskPlan>, String> {
-    Ok(state.get_plan(&plan_id).await)
-}
-
-/// Cancel a pending plan
-#[tauri::command]
-pub async fn cancel_agent_plan(
-    plan_id: String,
-    state: State<'_, Arc<CoworkAgent>>,
-) -> Result<(), String> {
-    state.cancel_plan(&plan_id).await
-}
-
-/// Analyze workspace with AI agent suggestions
-#[tauri::command]
-pub async fn agent_analyze_workspace(
-    path: String,
-    state: State<'_, Arc<CoworkAgent>>,
-) -> Result<WorkspaceAnalysis, String> {
-    state.analyze_workspace(&path).await
 }

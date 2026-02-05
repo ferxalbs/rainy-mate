@@ -12,7 +12,7 @@ export type TaskStatus =
   | "completed"
   | "failed"
   | "cancelled";
-export type ProviderType = "rainyApi" | "coworkApi" | "gemini";
+export type ProviderType = "rainyApi" | "gemini";
 export type FileOperation = "create" | "modify" | "delete" | "move" | "rename";
 
 export interface Task {
@@ -157,64 +157,6 @@ export async function getProviderModels(provider: string): Promise<string[]> {
 
 export async function hasApiKey(provider: string): Promise<boolean> {
   return invoke<boolean>("has_api_key", { provider });
-}
-
-// ============ Cowork Status Types ============
-
-export interface CoworkFeatures {
-  web_research: boolean;
-  document_export: boolean;
-  image_analysis: boolean;
-  priority_support: boolean;
-}
-
-export interface CoworkUsage {
-  used: number;
-  limit: number;
-  credits_used: number;
-  credits_ceiling: number;
-  resets_at: string;
-}
-
-export type CoworkPlan =
-  | "free"
-  | "go"
-  | "go_plus"
-  | "plus"
-  | "pro"
-  | "pro_plus";
-
-export interface CoworkStatus {
-  has_paid_plan: boolean;
-  plan: string; // Changed from CoworkPlan union to string to support all backend IDs
-  plan_name: string;
-  is_valid: boolean;
-  models: string[];
-  features: CoworkFeatures;
-  usage: CoworkUsage;
-  upgrade_message: string | null;
-}
-
-// ============ Cowork Commands ============
-
-export interface CoworkModelsResponse {
-  plan: string;
-  plan_name: string;
-  model_access_level: string;
-  models: string[];
-  total_models: number;
-}
-
-export async function getCoworkStatus(): Promise<CoworkStatus> {
-  return invoke<CoworkStatus>("get_cowork_status");
-}
-
-export async function getCoworkModels(): Promise<CoworkModelsResponse> {
-  return invoke<CoworkModelsResponse>("get_cowork_models");
-}
-
-export async function canUseFeature(feature: string): Promise<boolean> {
-  return invoke<boolean>("can_use_feature", { feature });
 }
 
 // ============ File Commands ============
@@ -380,87 +322,6 @@ export interface WorkspaceAnalysis {
   suggestions: OptimizationSuggestion[];
 }
 
-// ============ AI Agent Types ============
-
-export type TaskIntent = "question" | "command";
-
-export interface ModelInfo {
-  provider: string;
-  model: string;
-  planTier: string;
-}
-
-export interface PlannedStep {
-  type:
-    | "createFile"
-    | "modifyFile"
-    | "moveFile"
-    | "deleteFile"
-    | "organizeFolder"
-    | "batchRename"
-    | "analyzeContent";
-  path?: string;
-  source?: string;
-  destination?: string;
-  content?: string;
-  instruction?: string;
-  strategy?: OrganizeStrategy;
-  files?: string[];
-  pattern?: string;
-  description: string;
-}
-
-export interface TaskPlan {
-  id: string;
-  instruction: string;
-  intent: TaskIntent;
-  answer?: string;
-  thought?: string;
-  modelUsed?: ModelInfo;
-  steps: PlannedStep[];
-  estimatedChanges: number;
-  requiresConfirmation: boolean;
-  warnings: string[];
-  createdAt: string;
-}
-
-export interface ExecutionResult {
-  taskId: string;
-  success: boolean;
-  totalSteps: number;
-  completedSteps: number;
-  totalChanges: number;
-  changes: FileOpChange[];
-  errors: string[];
-  durationMs: number;
-}
-
-export type AgentEvent =
-  | { event: "planningStarted"; data: { taskId: string } }
-  | { event: "planReady"; data: { taskId: string; plan: TaskPlan } }
-  | {
-      event: "stepStarted";
-      data: { taskId: string; stepIndex: number; description: string };
-    }
-  | {
-      event: "stepCompleted";
-      data: { taskId: string; stepIndex: number; changes: FileOpChange[] };
-    }
-  | {
-      event: "stepFailed";
-      data: { taskId: string; stepIndex: number; error: string };
-    }
-  | {
-      event: "progress";
-      data: { taskId: string; progress: number; message: string };
-    }
-  | { event: "completed"; data: { taskId: string; totalChanges: number } }
-  | { event: "failed"; data: { taskId: string; error: string } }
-  | {
-      event: "confirmationRequired";
-      data: { taskId: string; message: string; affectedFiles: string[] };
-    };
-
 export interface ChatMessage {
   role: string;
   content: string;
@@ -529,52 +390,6 @@ export async function listFileOperations(): Promise<
   [string, string, string][]
 > {
   return invoke<[string, string, string][]>("list_file_operations");
-}
-
-// ============ AI Agent Commands ============
-
-export async function planTask(
-  instruction: string,
-  workspacePath: string,
-  history: ChatMessage[],
-  onEvent: (event: StreamEvent) => void,
-): Promise<TaskPlan> {
-  const channel = new Channel<StreamEvent>();
-  channel.onmessage = onEvent;
-
-  return invoke<TaskPlan>("plan_task", {
-    instruction,
-    workspacePath,
-    history,
-    onEvent: channel,
-  });
-}
-
-export async function executeAgentTask(
-  planId: string,
-  onEvent: (event: AgentEvent) => void,
-): Promise<ExecutionResult> {
-  const channel = new Channel<AgentEvent>();
-  channel.onmessage = onEvent;
-
-  return invoke<ExecutionResult>("execute_agent_task", {
-    planId,
-    onEvent: channel,
-  });
-}
-
-export async function getAgentPlan(planId: string): Promise<TaskPlan | null> {
-  return invoke<TaskPlan | null>("get_agent_plan", { planId });
-}
-
-export async function cancelAgentPlan(planId: string): Promise<void> {
-  return invoke<void>("cancel_agent_plan", { planId });
-}
-
-export async function agentAnalyzeWorkspace(
-  path: string,
-): Promise<WorkspaceAnalysis> {
-  return invoke<WorkspaceAnalysis>("agent_analyze_workspace", { path });
 }
 
 // ============ Unified Chat Commands ============

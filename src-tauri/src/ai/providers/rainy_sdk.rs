@@ -41,11 +41,6 @@ impl RainySDKProvider {
         })
     }
 
-    /// Check if this is a Cowork API key
-    fn is_cowork_key(api_key: &str) -> bool {
-        api_key.starts_with("ra-cowork")
-    }
-
     /// Map virtual model IDs to real model IDs and thinking config
     fn map_model_id(model_id: &str) -> (String, Option<rainy_sdk::models::ThinkingConfig>) {
         use rainy_sdk::models::{ThinkingConfig, ThinkingLevel};
@@ -107,52 +102,24 @@ impl AIProvider for RainySDKProvider {
             }
         }
 
-        // Fetch capabilities from rainy-sdk
-        let is_cowork = self
-            .config
-            .api_key
-            .as_ref()
-            .map(|k| Self::is_cowork_key(k))
-            .unwrap_or(false);
-
-        let capabilities = if is_cowork {
-            // Get Cowork capabilities
-            let caps = self.client.get_cowork_capabilities().await.map_err(|e| {
-                AIError::APIError(format!("Failed to get Cowork capabilities: {}", e))
-            })?;
-
-            ProviderCapabilities {
-                chat_completions: true,
-                embeddings: true,
-                streaming: true,
-                function_calling: true,
-                vision: caps.features.image_analysis,
-                web_search: caps.features.web_research,
-                max_context_tokens: 128000, // Gemini 2.5 Pro
-                max_output_tokens: 8192,
-                models: caps.models,
-            }
-        } else {
-            // Rainy API mode - use default capabilities
-            ProviderCapabilities {
-                chat_completions: true,
-                embeddings: true,
-                streaming: true,
-                function_calling: true,
-                vision: true,
-                web_search: true,
-                max_context_tokens: 128000,
-                max_output_tokens: 8192,
-                models: vec![
-                    "gemini-2.5-pro".to_string(),
-                    "gemini-2.0-flash".to_string(),
-                    "gemini-1.5-flash".to_string(),
-                    "gpt-4o".to_string(),
-                    "gpt-4o-mini".to_string(),
-                    "claude-3.5-sonnet".to_string(),
-                    "grok-2".to_string(),
-                ],
-            }
+        let capabilities = ProviderCapabilities {
+            chat_completions: true,
+            embeddings: true,
+            streaming: true,
+            function_calling: true,
+            vision: true,
+            web_search: true,
+            max_context_tokens: 128000,
+            max_output_tokens: 8192,
+            models: vec![
+                "gemini-2.5-pro".to_string(),
+                "gemini-2.0-flash".to_string(),
+                "gemini-1.5-flash".to_string(),
+                "gpt-4o".to_string(),
+                "gpt-4o-mini".to_string(),
+                "claude-3.5-sonnet".to_string(),
+                "grok-2".to_string(),
+            ],
         };
 
         // Cache for 5 minutes
@@ -360,18 +327,5 @@ impl AIProviderFactory for RainySDKProviderFactory {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_cowork_key() {
-        assert!(RainySDKProvider::is_cowork_key(
-            "ra-cowork12345678901234567890123456789012345678901234567890"
-        ));
-        assert!(!RainySDKProvider::is_cowork_key("ra-1234567890"));
     }
 }

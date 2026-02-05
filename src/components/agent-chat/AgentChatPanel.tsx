@@ -8,7 +8,7 @@ import {
 } from "@heroui/react";
 import * as tauri from "../../services/tauri";
 import { Paperclip, ArrowUp, Sparkles, Trash2, Zap, Info } from "lucide-react";
-import { useCoworkAgent } from "../../hooks/useCoworkAgent";
+import { useAgentChat } from "../../hooks/useAgentChat";
 import { useTheme } from "../../hooks/useTheme";
 import { MacOSToggle } from "../layout/MacOSToggle";
 
@@ -56,7 +56,7 @@ export function AgentChatPanel({
   };
 
   const {
-    messages = [],
+    messages,
     isPlanning,
     isExecuting,
     currentPlan,
@@ -65,7 +65,7 @@ export function AgentChatPanel({
     executePlan,
     cancelPlan,
     clearMessages,
-  } = useCoworkAgent() || {};
+  } = useAgentChat();
 
   const isProcessing = isPlanning || isExecuting;
 
