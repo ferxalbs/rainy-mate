@@ -1,23 +1,142 @@
 // Rainy SDK Provider
 // Wrapper around rainy-sdk v0.6.1 for the new provider abstraction layer
+// Enhanced with direct HTTP calls for tool calling support (SDK limitation bypass)
 
 use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
 use crate::ai::provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, EmbeddingRequest,
-    EmbeddingResponse, ProviderCapabilities, ProviderConfig, ProviderHealth, ProviderId,
-    ProviderResult, ProviderType, StreamingCallback,
+    EmbeddingResponse, FunctionCall, ProviderCapabilities, ProviderConfig, ProviderHealth,
+    ProviderId, ProviderResult, ProviderType, StreamingCallback, Tool, ToolCall,
 };
 use async_trait::async_trait;
 use futures::StreamExt;
 use rainy_sdk::RainyClient;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+/// Rainy API base URL for direct HTTP calls
+const RAINY_API_BASE: &str = "https://api.rainy.dev";
+
+// ============================================================================
+// Internal types for OpenAI-compatible API with tool calling support
+// These are used for direct HTTP calls that bypass SDK limitations
+// ============================================================================
+
+/// OpenAI-compatible request with tools support
+#[derive(Debug, Serialize)]
+struct RainyToolRequest {
+    model: String,
+    messages: Vec<RainyMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<RainyTool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<String>,
+}
+
+/// OpenAI-compatible message format
+#[derive(Debug, Serialize, Deserialize)]
+struct RainyMessage {
+    role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<RainyToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+}
+
+/// OpenAI-compatible tool definition
+#[derive(Debug, Serialize)]
+struct RainyTool {
+    r#type: String,
+    function: RainyFunction,
+}
+
+/// OpenAI-compatible function definition
+#[derive(Debug, Serialize)]
+struct RainyFunction {
+    name: String,
+    description: String,
+    parameters: serde_json::Value,
+}
+
+/// OpenAI-compatible tool call in response
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct RainyToolCall {
+    id: String,
+    r#type: String,
+    function: RainyFunctionCall,
+}
+
+/// OpenAI-compatible function call details
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct RainyFunctionCall {
+    name: String,
+    arguments: String,
+}
+
+/// OpenAI-compatible response
+#[derive(Debug, Deserialize)]
+struct RainyResponse {
+    model: String,
+    choices: Vec<RainyChoice>,
+    usage: Option<RainyUsage>,
+}
+
+/// OpenAI-compatible choice
+#[derive(Debug, Deserialize)]
+struct RainyChoice {
+    message: RainyResponseMessage,
+    finish_reason: String,
+}
+
+/// OpenAI-compatible response message (different from request message)
+#[derive(Debug, Deserialize)]
+struct RainyResponseMessage {
+    #[allow(dead_code)]
+    role: String,
+    content: Option<String>,
+    tool_calls: Option<Vec<RainyToolCall>>,
+}
+
+/// OpenAI-compatible usage
+#[derive(Debug, Deserialize)]
+struct RainyUsage {
+    prompt_tokens: u32,
+    completion_tokens: u32,
+    total_tokens: u32,
+}
+
+/// OpenAI-compatible error
+#[derive(Debug, Deserialize)]
+struct RainyError {
+    error: RainyErrorDetail,
+}
+
+/// OpenAI-compatible error detail
+#[derive(Debug, Deserialize)]
+struct RainyErrorDetail {
+    message: String,
+    #[serde(default)]
+    r#type: String,
+}
 
 /// Rainy SDK provider
 pub struct RainySDKProvider {
     /// Provider configuration
     config: ProviderConfig,
-    /// Rainy client
+    /// Rainy client (for streaming and non-tool calls)
     client: RainyClient,
+    /// HTTP client for direct API calls with tool support
+    http_client: reqwest::Client,
+    /// API key for direct calls
+    api_key: String,
     /// Cached capabilities
     cached_capabilities: tokio::sync::RwLock<Option<ProviderCapabilities>>,
 }
@@ -28,15 +147,23 @@ impl RainySDKProvider {
         let api_key = config
             .api_key
             .as_ref()
-            .ok_or_else(|| AIError::Authentication("API key is required".to_string()))?;
+            .ok_or_else(|| AIError::Authentication("API key is required".to_string()))?
+            .clone();
 
-        let client = RainyClient::with_api_key(api_key).map_err(|e| {
+        let client = RainyClient::with_api_key(&api_key).map_err(|e| {
             AIError::Authentication(format!("Failed to create Rainy client: {}", e))
         })?;
+
+        let http_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .build()
+            .map_err(|e| AIError::NetworkError(format!("Failed to create HTTP client: {}", e)))?;
 
         Ok(Self {
             config,
             client,
+            http_client,
+            api_key,
             cached_capabilities: tokio::sync::RwLock::new(None),
         })
     }
@@ -163,55 +290,140 @@ impl AIProvider for RainySDKProvider {
         &self,
         request: ChatCompletionRequest,
     ) -> ProviderResult<ChatCompletionResponse> {
-        let (model_id, thinking_config) = Self::map_model_id(&request.model);
+        let (model_id, _thinking_config) = Self::map_model_id(&request.model);
 
-        // Convert strict ChatMessage to rainy-sdk ChatMessage
-        let messages = request
+        // Convert messages to OpenAI-compatible format
+        let messages: Vec<RainyMessage> = request
             .messages
             .iter()
-            .map(|msg| match msg.role.as_str() {
-                "system" => rainy_sdk::models::ChatMessage::system(&msg.content),
-                "user" => rainy_sdk::models::ChatMessage::user(&msg.content),
-                "assistant" => rainy_sdk::models::ChatMessage::assistant(&msg.content),
-                _ => rainy_sdk::models::ChatMessage::user(&msg.content),
+            .map(|msg| RainyMessage {
+                role: msg.role.clone(),
+                content: if msg.content.is_empty() && msg.role == "assistant" {
+                    // Assistant messages with tool_calls may have empty content
+                    None
+                } else {
+                    Some(msg.content.clone())
+                },
+                name: msg.name.clone(),
+                tool_calls: msg.tool_calls.as_ref().map(|calls| {
+                    calls
+                        .iter()
+                        .map(|tc| RainyToolCall {
+                            id: tc.id.clone(),
+                            r#type: tc.r#type.clone(),
+                            function: RainyFunctionCall {
+                                name: tc.function.name.clone(),
+                                arguments: tc.function.arguments.clone(),
+                            },
+                        })
+                        .collect()
+                }),
+                tool_call_id: msg.tool_call_id.clone(),
             })
             .collect();
 
-        // Build request
-        let mut sdk_request =
-            rainy_sdk::models::ChatCompletionRequest::new(model_id.clone(), messages);
+        // Convert tools to OpenAI-compatible format
+        let tools: Option<Vec<RainyTool>> = request.tools.as_ref().map(|t| {
+            t.iter()
+                .map(|tool| RainyTool {
+                    r#type: tool.r#type.clone(),
+                    function: RainyFunction {
+                        name: tool.function.name.clone(),
+                        description: tool.function.description.clone(),
+                        parameters: tool.function.parameters.clone(),
+                    },
+                })
+                .collect()
+        });
 
-        if let Some(config) = thinking_config {
-            sdk_request = sdk_request.with_thinking_config(config);
-        }
+        // Build OpenAI-compatible request
+        let api_request = RainyToolRequest {
+            model: model_id,
+            messages,
+            temperature: request.temperature,
+            max_tokens: request.max_tokens,
+            tools,
+            tool_choice: if request.tools.is_some() {
+                Some("auto".to_string())
+            } else {
+                None
+            },
+        };
 
-        if let Some(max_tokens) = request.max_tokens {
-            sdk_request = sdk_request.with_max_tokens(max_tokens);
-        }
-
-        if let Some(temperature) = request.temperature {
-            sdk_request = sdk_request.with_temperature(temperature);
-        }
-
-        let (response, _) = self
-            .client
-            .chat_completion(sdk_request)
+        // Make direct HTTP call to Rainy API
+        let response = self
+            .http_client
+            .post(format!("{}/v1/chat/completions", RAINY_API_BASE))
+            .bearer_auth(&self.api_key)
+            .json(&api_request)
+            .send()
             .await
-            .map_err(|e| AIError::APIError(format!("Chat completion failed: {}", e)))?;
+            .map_err(|e| AIError::NetworkError(format!("Request failed: {}", e)))?;
 
-        // Extract content from first choice
-        let content = response
+        let status = response.status();
+
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+
+            // Try to parse as structured error
+            if let Ok(error) = serde_json::from_str::<RainyError>(&error_text) {
+                return Err(AIError::APIError(format!(
+                    "API error ({}): {}",
+                    error.error.r#type, error.error.message
+                )));
+            }
+
+            return Err(AIError::APIError(format!(
+                "HTTP {}: {}",
+                status, error_text
+            )));
+        }
+
+        let api_response: RainyResponse = response
+            .json()
+            .await
+            .map_err(|e| AIError::APIError(format!("Failed to parse response: {}", e)))?;
+
+        // Extract choice
+        let choice = api_response
             .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .unwrap_or_default();
+            .into_iter()
+            .next()
+            .ok_or_else(|| AIError::APIError("No response choices".to_string()))?;
+
+        // Convert tool_calls from response to our format
+        let tool_calls: Option<Vec<ToolCall>> = choice.message.tool_calls.map(|calls| {
+            calls
+                .into_iter()
+                .map(|tc| ToolCall {
+                    id: tc.id,
+                    r#type: tc.r#type,
+                    function: FunctionCall {
+                        name: tc.function.name,
+                        arguments: tc.function.arguments,
+                    },
+                })
+                .collect()
+        });
+
+        // Log tool calls for debugging
+        if let Some(ref calls) = tool_calls {
+            tracing::info!(
+                "[RainySDK] Received {} tool calls from LLM: {:?}",
+                calls.len(),
+                calls.iter().map(|c| &c.function.name).collect::<Vec<_>>()
+            );
+        }
 
         Ok(ChatCompletionResponse {
-            content: Some(content),
-            tool_calls: None,
-            model: request.model.clone(),
+            content: choice.message.content,
+            tool_calls,
+            model: api_response.model,
             usage: {
-                let (prompt, completion, total) = match response.usage.as_ref() {
+                let (prompt, completion, total) = match api_response.usage.as_ref() {
                     Some(u) => (u.prompt_tokens, u.completion_tokens, u.total_tokens),
                     None => (0, 0, 0),
                 };
@@ -221,7 +433,7 @@ impl AIProvider for RainySDKProvider {
                     total_tokens: total,
                 }
             },
-            finish_reason: "stop".to_string(),
+            finish_reason: choice.finish_reason,
         })
     }
 
