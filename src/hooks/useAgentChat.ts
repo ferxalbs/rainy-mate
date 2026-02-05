@@ -27,6 +27,8 @@ export function useAgentChat() {
         content: instruction,
         timestamp: new Date(),
       };
+
+      // Optimistically update UI
       setMessages((prev) => [...prev, userMsg]);
 
       const agentMsgId = crypto.randomUUID();
@@ -43,9 +45,24 @@ export function useAgentChat() {
       let accumulatedContent = "";
 
       try {
+        // Construct history from current messages
+        // Filter out temporary/loading states or failed messages if needed
+        const history = messages
+          .filter((m) => !m.isLoading && !m.content.startsWith("[Error"))
+          .map((m) => ({
+            role: m.type === "agent" ? "assistant" : "user",
+            content: m.content,
+          }));
+
+        // Add the new user message
+        const fullMessages = [
+          ...history,
+          { role: "user", content: instruction },
+        ];
+
         await streamWithRouting(
           {
-            messages: [{ role: "user", content: instruction }],
+            messages: fullMessages,
             model: modelId,
           },
           (event) => {
@@ -95,7 +112,7 @@ export function useAgentChat() {
         );
       }
     },
-    [streamWithRouting],
+    [streamWithRouting, messages], // Add messages to dependency array
   );
 
   const sendInstruction = useCallback(

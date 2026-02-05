@@ -76,30 +76,33 @@ export function AgentChatPanel({
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
-
     const instruction = input.trim();
     setInput("");
+    await streamChat(instruction, currentModelId);
+  };
 
-    if (isDeepProcessing) {
-      // Deep processing use legacy Cowork Agent (Plan -> Execute)
-      await sendInstruction(instruction, workspacePath, currentModelId);
-    } else {
-      // Fast chat uses Unified Streaming
-      await streamChat(instruction, currentModelId);
-    }
+  const handlePlan = async () => {
+    if (!input.trim() || isProcessing) return;
+    const instruction = input.trim();
+    setInput("");
+    await sendInstruction(instruction, workspacePath, currentModelId);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      // If Deep Processing is on, we still default to Chat for "Ask before Plan"
+      // But maybe we allow generic Cmd+Enter to force Plan?
+      if ((e.metaKey || e.ctrlKey) && isDeepProcessing) {
+        handlePlan();
+      } else {
+        handleSubmit();
+      }
     }
   };
 
-  // Always use agent capabilities (plan -> execute flow)
-  // This ensures file editing, research, and other agent features work
-  // regardless of which model is selected
-  const isDeepProcessing = true;
+  // Dynamic state for processing mode
+  const [isDeepProcessing, setIsDeepProcessing] = useState(false);
 
   const renderInputArea = (centered: boolean) => (
     <div
@@ -118,7 +121,11 @@ export function AgentChatPanel({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={"Message Agent..."}
+          placeholder={
+            isDeepProcessing
+              ? "Discuss a complex task (⌘+Enter to Plan)..."
+              : "Message Agent..."
+          }
           rows={centered ? 2 : 1}
           className={`w-full bg-transparent border-none shadow-none text-foreground placeholder:text-muted-foreground/40 focus:ring-0 px-5 py-4 resize-none ${
             centered
@@ -146,17 +153,49 @@ export function AgentChatPanel({
                 <span className="text-xs">Attach files</span>
               </TooltipContent>
             </Tooltip>
-            {isDeepProcessing && (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-500/5 rounded-full border border-purple-500/10 cursor-help select-none">
-                <Sparkles className="size-3 text-purple-400" />
-                <span className="text-[10px] font-medium text-purple-400/80">
-                  Deep Think
+
+            {/* Deep Think Toggle */}
+            <Tooltip delay={0}>
+              <TooltipTrigger>
+                <button
+                  onClick={() => setIsDeepProcessing(!isDeepProcessing)}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all duration-300 ${
+                    isDeepProcessing
+                      ? "bg-purple-500/10 border-purple-500/20 text-purple-400"
+                      : "bg-transparent border-transparent text-muted-foreground/50 hover:bg-muted/30"
+                  }`}
+                >
+                  <Sparkles
+                    className={`size-3 ${isDeepProcessing ? "text-purple-400" : "text-current"}`}
+                  />
+                  <span className="text-[10px] font-medium">Deep Mode</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span className="text-xs">
+                  Enable advanced reasoning (Chat first, Plan optionally)
                 </span>
-              </div>
-            )}
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Explicit Plan Button (Visible in Deep Mode or if text > 10 chars) */}
+            {(isDeepProcessing || input.length > 10) && (
+              <Button
+                size="sm"
+                onPress={handlePlan}
+                isDisabled={!input.trim() || isProcessing}
+                className={`rounded-full h-8 px-3 text-xs font-medium transition-all duration-300 ${
+                  isDeepProcessing
+                    ? "bg-purple-500/10 text-purple-400 hover:bg-purple-500/20"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                Plan Task
+              </Button>
+            )}
+
             <Button
               size="sm"
               isIconOnly
@@ -165,7 +204,9 @@ export function AgentChatPanel({
               isPending={isProcessing}
               className={`rounded-full transition-all duration-300 shadow-sm ${
                 input.trim()
-                  ? "bg-foreground text-background scale-100 opacity-100 translate-y-0"
+                  ? isDeepProcessing
+                    ? "bg-purple-600 hover:bg-purple-500 text-white scale-100 opacity-100 translate-y-0"
+                    : "bg-foreground text-background scale-100 opacity-100 translate-y-0"
                   : "bg-muted text-muted-foreground scale-90 opacity-0 translate-y-2 pointer-events-none"
               }`}
             >
@@ -178,7 +219,7 @@ export function AgentChatPanel({
         <div className="mt-2 text-center">
           <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
             <Info className="size-3" />
-            Uses advanced reasoning models. May take longer to respond.
+            Uses advanced reasoning and tools. May take longer to respond.
           </p>
         </div>
       )}
@@ -273,6 +314,7 @@ export function AgentChatPanel({
                   onClick={() => {
                     const fastModel = "rainy:gemini-2.0-flash";
                     handleModelSelect(fastModel);
+                    setIsDeepProcessing(false);
                     setInput("How do I...");
                   }}
                 />
@@ -283,6 +325,7 @@ export function AgentChatPanel({
                   onClick={() => {
                     const deepModel = "cowork:gemini-2.5-pro";
                     handleModelSelect(deepModel);
+                    setIsDeepProcessing(true);
                     setInput("Analyze this project and...");
                   }}
                 />
