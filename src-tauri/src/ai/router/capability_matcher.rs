@@ -198,6 +198,7 @@ impl Default for CapabilityWeights {
 }
 
 /// Capability matcher for selecting providers based on capabilities
+#[derive(Debug)]
 pub struct CapabilityMatcher {
     /// Available providers
     providers: Vec<std::sync::Arc<ProviderWithStats>>,

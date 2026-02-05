@@ -42,6 +42,7 @@ impl Default for CircuitBreakerConfig {
 }
 
 /// Circuit breaker for provider resilience
+#[derive(Debug)]
 pub struct CircuitBreaker {
     /// Circuit state
     state: Arc<RwLock<CircuitState>>,

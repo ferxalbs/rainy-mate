@@ -41,6 +41,7 @@ impl Default for FallbackChainConfig {
 }
 
 /// Fallback chain for provider resilience
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct FallbackChain {
     /// Provider chain (in priority order)

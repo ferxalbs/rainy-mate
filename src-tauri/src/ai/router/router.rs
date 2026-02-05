@@ -41,6 +41,7 @@ impl Default for RouterConfig {
 }
 
 /// Intelligent router for provider selection
+#[derive(Debug)]
 pub struct IntelligentRouter {
     /// Load balancer
     load_balancer: LoadBalancer,

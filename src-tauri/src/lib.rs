@@ -77,7 +77,11 @@ pub fn run() {
     );
 
     // Initialize Skill Executor
-    let skill_executor = Arc::new(SkillExecutor::new(workspace_manager.clone()));
+    let skill_executor = Arc::new(SkillExecutor::new(
+        workspace_manager.clone(),
+        Arc::new(managed_research.clone()),
+        Arc::new(web_research.clone()),
+    ));
 
     // Initialize Command Poller
     // Note: It starts "stopped". Setup will start it if credentials exist.

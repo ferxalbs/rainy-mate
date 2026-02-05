@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -49,9 +50,10 @@ struct CachedContent {
 }
 
 /// Web research service with caching and rate limiting
+#[derive(Clone)]
 pub struct WebResearchService {
     client: Client,
-    cache: DashMap<String, CachedContent>,
+    cache: Arc<DashMap<String, CachedContent>>,
     cache_ttl_seconds: i64,
 }
 
@@ -72,7 +74,7 @@ impl WebResearchService {
 
         Self {
             client,
-            cache: DashMap::new(),
+            cache: Arc::new(DashMap::new()),
             cache_ttl_seconds: 300, // 5 minutes default
         }
     }

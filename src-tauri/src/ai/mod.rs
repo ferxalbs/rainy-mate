@@ -1,4 +1,4 @@
-// Rainy Cowork - AI Module
+// Rainy MaTE - AI Module
 #![allow(unused_imports)]
 // AI provider abstraction using rainy-sdk for premium features
 

@@ -101,6 +101,15 @@ pub struct ProviderWithStats {
     pub stats: ProviderStats,
 }
 
+impl std::fmt::Debug for ProviderWithStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderWithStats")
+            .field("provider_id", self.provider.id())
+            .field("stats", &self.stats)
+            .finish()
+    }
+}
+
 impl ProviderWithStats {
     /// Create a new provider with stats
     pub fn new(provider: Arc<dyn AIProvider>) -> Self {

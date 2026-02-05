@@ -1,9 +1,6 @@
+use crate::ai::agent::workflow::{ActStep, AgentState, ThinkStep, Workflow};
 use crate::ai::router::IntelligentRouter;
-use crate::models::neural::{
-    AirlockLevel, CommandPriority, CommandResult, CommandStatus, QueuedCommand, RainyPayload,
-};
 use crate::services::SkillExecutor;
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -15,6 +12,7 @@ pub struct AgentConfig {
     pub instructions: String,
     pub workspace_id: String,
     // Future: tools list, memory settings
+    pub max_steps: Option<usize>,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
@@ -49,175 +47,132 @@ impl AgentRuntime {
 
     /// Primary entry point: Run a workflow/turn
     pub async fn run(&self, input: &str) -> Result<String, String> {
-        // 1. Add User Message
+        // 1. Initialize State
+        let mut state = AgentState::new(self.config.workspace_id.clone());
+
+        // Add System Message to State
+        state.messages.push(AgentMessage {
+            role: "system".to_string(),
+            content: self.config.instructions.clone(),
+            tool_calls: None,
+            tool_call_id: None,
+        });
+
+        // Add History to State
+        {
+            let hist = self.history.lock().await;
+            state.messages.extend(hist.clone());
+        }
+
+        // Add the new User Message
+        state.messages.push(AgentMessage {
+            role: "user".to_string(),
+            content: input.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+        });
+
+        // 2. Build the Workflow Graph
+        // In the future, this could be loaded from JSON.
+        // For now, we build the standard "ReAct" loop: Think -> Act -> Think
+        let mut workflow = Workflow::new(self.config.clone(), "think".to_string());
+
+        // Step 1: Think (Router/LLM)
+        let think_step = Box::new(ThinkStep {
+            router: self.router.clone(),
+            model: self.config.model.clone(),
+        });
+        workflow.add_step(think_step);
+
+        // Step 2: Act (Skill Executor)
+        let act_step = Box::new(ActStep);
+        workflow.add_step(act_step);
+
+        // 3. Execute Workflow
+        let final_state = workflow
+            .execute(state, self.skills.clone())
+            .await
+            .map_err(|e| format!("Workflow execution failed: {}", e))?;
+
+        // 4. Update History and Return Result
+        // We take the DIFFERENCE between final state messages and original history + 1 (user msg)
+        // Actually, let's just grab the last message content if it's from assistant
+        let last_message = final_state.messages.last().ok_or("No response generated")?;
+
+        // Update persistent history
         {
             let mut hist = self.history.lock().await;
+            // Append the User Message (input) first
             hist.push(AgentMessage {
                 role: "user".to_string(),
                 content: input.to_string(),
                 tool_calls: None,
                 tool_call_id: None,
             });
+
+            // Append all NEW messages generated during workflow
+            // Note: simple approach is to append everything after the user message we just added
+            // But state.messages includes system + old history + new user msg + new agent msgs...
+            // So we skip (1 + old_history_len + 1)
+            // Let's refine:
+            // The state started with: System + History + User Input.
+            // Any message AFTER that index is new.
+
+            // To be safe, let's just grab the new assistant/tool messages.
+            // We know the input was the last "user" message added.
+
+            // Actually, simpler:
+            // We pushed `input` to `hist` above.
+            // Now we push the RESPONSES.
+
+            // Find messages after the last "user" message that matches our input?
+            // Or just iterate from the known start index?
+
+            // Let's iterate final_state.messages.
+            // Only keep messages that are NOT in the initial set.
+            // We know we added System + Old History + User Input.
+            // So we skip `1 + old_hist_len + 1`.
+
+            // We can calculate offset:
+            // 1 (System)
+            // + (final_state.messages.len() - new_generated_count) ?? No
+
+            // Better: state.messages indices.
+            // Index 0: System
+            // Index 1..N: Old History
+            // Index N+1: User Input
+            // Index N+2...: New Responses
+
+            // We need to know N (Old History Length).
+            // We can get it from locking history again, but it might have changed (race condition? unlikely here).
+            // `hist` lock held above is different scope.
+
+            // Let's assume we are the only writer for this session.
+            // We can match by content or just append the last few.
+
+            // For MVP: Just check the last message. If it's assistant, return it.
+            // And append `last_message` to history?
+            // BUT: What if there were multiple tool calls? We need to save the whole chain in history.
+
+            // Correct approach:
+            // Identify all messages *after* the User Input we added to state.
+            let user_msg_index = final_state
+                .messages
+                .iter()
+                .rposition(|m| m.role == "user")
+                .unwrap();
+
+            for msg in final_state.messages.iter().skip(user_msg_index + 1) {
+                hist.push(msg.clone());
+            }
         }
 
-        let max_turns = 10;
-        let mut current_turn = 0;
-
-        loop {
-            if current_turn >= max_turns {
-                return Err("Maximum conversation turns exceeded".to_string());
-            }
-            current_turn += 1;
-
-            // 2. Prepare Request for Router
-            let mut messages: Vec<crate::ai::provider_types::ChatMessage> = Vec::new();
-
-            // Add System Message
-            messages.push(crate::ai::provider_types::ChatMessage {
-                role: "system".to_string(),
-                content: self.config.instructions.clone(),
-                name: None,
-                tool_calls: None,
-                tool_call_id: None,
-            });
-
-            {
-                let hist = self.history.lock().await;
-                messages.extend(hist.iter().map(|m| crate::ai::provider_types::ChatMessage {
-                    role: m.role.clone(),
-                    content: m.content.clone(),
-                    name: None,
-                    tool_calls: m.tool_calls.clone(),
-                    tool_call_id: m.tool_call_id.clone(),
-                }));
-            }
-
-            let tools = self.skills.get_tool_definitions();
-            let has_tools = !tools.is_empty();
-
-            let request = crate::ai::provider_types::ChatCompletionRequest {
-                model: self.config.model.clone(),
-                messages,
-                temperature: Some(0.7),
-                max_tokens: None,
-                top_p: None,
-                stream: false,
-                tools: if has_tools { Some(tools) } else { None },
-                tool_choice: if has_tools {
-                    Some(crate::ai::provider_types::ToolChoice::Auto)
-                } else {
-                    None
-                },
-                json_mode: false,
-                frequency_penalty: None,
-                presence_penalty: None,
-                stop: None,
-            };
-
-            // 3. Call Router
-            let router_guard: tokio::sync::RwLockReadGuard<IntelligentRouter> =
-                self.router.read().await;
-
-            let response: crate::ai::provider_types::ChatCompletionResponse = router_guard
-                .complete(request)
-                .await
-                .map_err(|e| format!("Router execution failed: {}", e))?;
-
-            // 4. Update History
-            let assistant_content = response.content.clone().unwrap_or_default();
-            let tool_calls = response.tool_calls.clone();
-
-            {
-                let mut hist = self.history.lock().await;
-                hist.push(AgentMessage {
-                    role: "assistant".to_string(),
-                    content: assistant_content.clone(),
-                    tool_calls: tool_calls.clone(),
-                    tool_call_id: None,
-                });
-            }
-
-            // 5. Handle Tool Calls
-            if let Some(calls) = tool_calls {
-                if calls.is_empty() {
-                    // No tool calls, we are done
-                    return Ok(assistant_content);
-                }
-
-                for call in calls {
-                    let function_name = call.function.name;
-                    let arguments_str = call.function.arguments;
-
-                    println!(
-                        "Executing tool: {} with args: {}",
-                        function_name, arguments_str
-                    );
-
-                    let params: serde_json::Value = serde_json::from_str(&arguments_str)
-                        .map_err(|e| format!("Failed to parse tool arguments: {}", e))?;
-
-                    // Map tool name to SkillExecutor skill/method
-                    // Currently assume all are filesystem
-                    let skill = "filesystem";
-                    let method = match function_name.as_str() {
-                        "read_file" => "read_file",
-                        "write_file" => "write_file",
-                        "list_files" => "list_files",
-                        "search_files" => "search_files",
-                        _ => return Err(format!("Unknown tool: {}", function_name)),
-                    };
-
-                    let command = QueuedCommand {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        intent: format!("{}.{}", skill, method),
-                        payload: RainyPayload {
-                            skill: Some(skill.to_string()),
-                            method: Some(method.to_string()),
-                            params: Some(params),
-                            content: None,
-                            allowed_paths: vec![self.config.workspace_id.clone()],
-                        },
-                        status: CommandStatus::Pending,
-                        priority: CommandPriority::Normal,
-                        airlock_level: AirlockLevel::Safe,
-                        created_at: Some(Utc::now().timestamp()),
-                        started_at: None,
-                        completed_at: None,
-                        result: None,
-                        workspace_id: Some(self.config.workspace_id.clone()),
-                        desktop_node_id: None,
-                        approved_by: None,
-                    };
-
-                    let result = self.skills.execute(&command).await;
-
-                    let tool_output = if result.success {
-                        result
-                            .output
-                            .unwrap_or_else(|| "Tool executed successfully".to_string())
-                    } else {
-                        format!(
-                            "Tool execution failed: {}",
-                            result.error.unwrap_or_else(|| "Unknown error".to_string())
-                        )
-                    };
-
-                    // Add Tool Result to History
-                    {
-                        let mut hist = self.history.lock().await;
-                        hist.push(AgentMessage {
-                            role: "tool".to_string(),
-                            content: tool_output,
-                            tool_calls: None,
-                            tool_call_id: Some(call.id),
-                        });
-                    }
-                }
-                // Loop continues to feed tool outputs back to LLM
-            } else {
-                // No tool calls, we are done
-                return Ok(assistant_content);
-            }
+        if last_message.role == "assistant" {
+            Ok(last_message.content.clone())
+        } else {
+            // Workflow ended on a Tool output or something?
+            // Usually ThinkStep (Assistant) is the last one.
+            Ok("Workflow completed without final response".to_string())
         }
     }
 }

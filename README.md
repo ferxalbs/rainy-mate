@@ -1,4 +1,4 @@
-# 🌧️ Rainy Cowork - Open Source AI Desktop Agent
+# 🌧️ Rainy MaTE - Open Source AI Desktop Agent
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0+-blue.svg)](https://tauri.app/)
@@ -7,18 +7,18 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-3178c6.svg)](https://www.typescriptlang.org/)
 [![HeroUI](https://img.shields.io/badge/HeroUI-3.0+-ff6b6b.svg)](https://heroui.com/)
 
-**The open-source alternative to Claude Cowork** - Transform your desktop into an intelligent AI coworker that handles file management, document generation, web research, and task automation with complete privacy and control.
+**The open-source alternative to Claude Cowork or OpenClaw (formerly Clawdbot and Moltbot)** - Transform your desktop into an intelligent AI coworker that handles file management, document generation, web research, and task automation with complete privacy and control.
 
 > 🚀 **Cross-platform AI agent** built with Tauri, React, and Rust  
 > 🔒 **Privacy-first** - Your data stays on your device  
 > 🎯 **Multi-provider AI** - OpenAI, Gemini, Groq, Cerebras, and more  
 > ⚡ **Real-time collaboration** - AI that works alongside you
 
-## 🎯 Why Rainy Cowork?
+## 🎯 Why Rainy MaTE?
 
 **The Problem**: Proprietary AI agents like Claude Cowork are expensive ($20-200/month), macOS-only, and keep your data in the cloud.
 
-**The Solution**: Rainy Cowork is a free, open-source, cross-platform AI desktop agent that gives you:
+**The Solution**: Rainy MaTE is a free, open-source, cross-platform AI desktop agent that gives you:
 
 - ✅ **Complete Privacy** - Your files never leave your device
 - ✅ **Cross-Platform** - Windows, macOS, and Linux support

@@ -36,6 +36,7 @@ pub async fn run_agent_workflow(
             workspace_id
         ),
         workspace_id,
+        max_steps: None,
     };
 
     let runtime = AgentRuntime::new(config, router.0.clone(), skills.inner().clone());

@@ -6,6 +6,7 @@ use rainy_sdk::{RainyClient, ResearchConfig, ResearchResult};
 use std::sync::Arc;
 
 /// Managed research service that handles API keys internally
+#[derive(Clone)]
 pub struct ManagedResearchService {
     /// Provider manager for API keys
     provider_manager: Arc<AIProviderManager>,

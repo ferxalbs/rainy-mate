@@ -55,6 +55,7 @@ impl Default for CostOptimizerConfig {
 }
 
 /// Cost optimizer for selecting cost-effective providers
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct CostOptimizer {
     /// Available providers

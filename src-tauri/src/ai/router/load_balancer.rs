@@ -38,6 +38,7 @@ impl Default for LoadBalancerConfig {
 }
 
 /// Load balancer for distributing requests
+#[derive(Debug)]
 pub struct LoadBalancer {
     /// Available providers
     providers: Vec<Arc<ProviderWithStats>>,

@@ -1,5 +1,6 @@
 use crate::models::neural::{CommandResult, QueuedCommand};
 use crate::services::workspace::WorkspaceManager;
+use crate::services::{ManagedResearchService, WebResearchService};
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -38,14 +39,44 @@ pub struct SearchFilesArgs {
     pub search_content: Option<bool>,
 }
 
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ExecuteCommandArgs {
+    /// The command to execute (e.g., npm, cargo, git)
+    pub command: String,
+    /// Arguments for the command
+    pub args: Vec<String>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct WebSearchArgs {
+    /// The query to search for
+    pub query: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ReadWebPageArgs {
+    /// The URL to read
+    pub url: String,
+}
+
 #[derive(Clone)]
 pub struct SkillExecutor {
     workspace_manager: Arc<WorkspaceManager>,
+    managed_research: Arc<ManagedResearchService>,
+    web_research: Arc<WebResearchService>,
 }
 
 impl SkillExecutor {
-    pub fn new(workspace_manager: Arc<WorkspaceManager>) -> Self {
-        Self { workspace_manager }
+    pub fn new(
+        workspace_manager: Arc<WorkspaceManager>,
+        managed_research: Arc<ManagedResearchService>,
+        web_research: Arc<WebResearchService>,
+    ) -> Self {
+        Self {
+            workspace_manager,
+            managed_research,
+            web_research,
+        }
     }
 
     /// Get all available tools and their JSON schemas
@@ -83,6 +114,30 @@ impl SkillExecutor {
                     parameters: serde_json::to_value(schema_for!(SearchFilesArgs)).unwrap(),
                 },
             },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "execute_command".to_string(),
+                    description: "Execute a shell command (npm, cargo, git, ls, grep)".to_string(),
+                    parameters: serde_json::to_value(schema_for!(ExecuteCommandArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "web_search".to_string(),
+                    description: "Search the web for information".to_string(),
+                    parameters: serde_json::to_value(schema_for!(WebSearchArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "read_web_page".to_string(),
+                    description: "Read the content of a web page".to_string(),
+                    parameters: serde_json::to_value(schema_for!(ReadWebPageArgs)).unwrap(),
+                },
+            },
         ]
     }
 
@@ -103,6 +158,14 @@ impl SkillExecutor {
         match skill {
             "filesystem" => {
                 self.execute_filesystem(workspace_id, method, &payload.params, allowed_paths)
+                    .await
+            }
+            "shell" => {
+                self.execute_shell(workspace_id, method, &payload.params, allowed_paths)
+                    .await
+            }
+            "web" => {
+                self.execute_web(workspace_id, method, &payload.params)
                     .await
             }
             _ => CommandResult {
@@ -156,6 +219,153 @@ impl SkillExecutor {
         }
     }
 
+    async fn execute_shell(
+        &self,
+        workspace_id: String,
+        method: &str,
+        params: &Option<Value>,
+        allowed_paths: &[String],
+    ) -> CommandResult {
+        let params = match params {
+            Some(p) => p,
+            None => return self.error("Missing parameters"),
+        };
+
+        match method {
+            "execute_command" => {
+                let args: ExecuteCommandArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+
+                // For security, strict checking of args could be here, but we check command whitelist in impl
+
+                // We need a CWD. Default to workspace root.
+                // We reuse resolve_path to get the root.
+                let root_path = match self.resolve_path(workspace_id, ".", allowed_paths).await {
+                    Ok(p) => p,
+                    Err(e) => return self.error(&e),
+                };
+
+                self.execute_command(&args.command, args.args, &root_path)
+                    .await
+            }
+            _ => CommandResult {
+                success: false,
+                output: None,
+                error: Some(format!("Unknown shell method: {}", method)),
+                exit_code: Some(1),
+            },
+        }
+    }
+
+    async fn execute_web(
+        &self,
+        _workspace_id: String,
+        method: &str,
+        params: &Option<Value>,
+    ) -> CommandResult {
+        let params = match params {
+            Some(p) => p,
+            None => return self.error("Missing parameters"),
+        };
+
+        match method {
+            "web_search" => {
+                let args: WebSearchArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_web_search(&args.query).await
+            }
+            "read_web_page" => {
+                let args: ReadWebPageArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_read_web_page(&args.url).await
+            }
+            _ => CommandResult {
+                success: false,
+                output: None,
+                error: Some(format!("Unknown web method: {}", method)),
+                exit_code: Some(1),
+            },
+        }
+    }
+
+    async fn handle_web_search(&self, query: &str) -> CommandResult {
+        // Use ManagedResearchService which assumes "Phase 3" rainy-sdk integration
+        // Note: perform_research uses API key from settings
+        match self
+            .managed_research
+            .perform_research(query.to_string(), None)
+            .await
+        {
+            Ok(result) => CommandResult {
+                success: true,
+                output: Some(format!(
+                    "Research Result for '{}':\n{}",
+                    query, result.content
+                )),
+                error: None,
+                exit_code: Some(0),
+            },
+            Err(e) => self.error(&format!("Web search failed: {}", e)),
+        }
+    }
+
+    async fn handle_read_web_page(&self, url: &str) -> CommandResult {
+        match self.web_research.fetch_url(url).await {
+            Ok(content) => CommandResult {
+                success: true,
+                output: Some(content.content_markdown), // Return markdown content
+                error: None,
+                exit_code: Some(0),
+            },
+            Err(e) => self.error(&format!("Failed to read web page: {:?}", e.to_string())),
+        }
+    }
+
+    /// Execute a shell command
+    async fn execute_command(
+        &self,
+        command: &str,
+        args: Vec<String>,
+        cwd: &PathBuf,
+    ) -> CommandResult {
+        // Whitelist safe commands
+        let allowed_commands = vec!["npm", "pnpm", "cargo", "git", "ls", "grep", "echo", "cat"];
+        if !allowed_commands.contains(&command) {
+            return self.error(&format!("Command '{}' is not allowed", command));
+        }
+
+        let output = tokio::process::Command::new(command)
+            .args(&args)
+            .current_dir(cwd)
+            .output()
+            .await;
+
+        match output {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+                let exit_code = out.status.code().unwrap_or(1);
+
+                CommandResult {
+                    success: out.status.success(),
+                    output: Some(format!("{}\n{}", stdout, stderr).trim().to_string()),
+                    error: if !out.status.success() {
+                        Some(stderr)
+                    } else {
+                        None
+                    },
+                    exit_code: Some(exit_code),
+                }
+            }
+            Err(e) => self.error(&format!("Failed to execute command: {}", e)),
+        }
+    }
     /// Resolve a path within the workspace. First tries to load local workspace,
     /// falls back to using allowed_paths from the command payload (Cloud-provided).
     async fn resolve_path(
