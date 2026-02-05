@@ -381,6 +381,8 @@ pub fn run() {
             commands::respond_to_airlock,
             commands::get_pending_airlock_approvals,
             commands::set_headless_mode,
+            // Skill Commands (Direct Local Execution)
+            commands::execute_skill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -41,7 +41,10 @@ pub use reflection::*;
 
 pub use router::*;
 pub use settings::*;
+pub use skills::*;
 pub use task::*;
 pub use unified_models::*;
 pub use web::*;
 pub use workspace::*;
+
+pub mod skills;

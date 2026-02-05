@@ -1342,3 +1342,24 @@ export async function resetNeuralWorkspace(
 ): Promise<void> {
   return invoke("reset_neural_workspace", { masterKey, userApiKey });
 }
+
+export interface CommandResult {
+  success: boolean;
+  output?: string;
+  error?: string;
+  exit_code?: number;
+}
+
+export async function executeSkill(
+  workspaceId: string,
+  skill: string,
+  method: string,
+  params: Record<string, any>,
+): Promise<CommandResult> {
+  return invoke<CommandResult>("execute_skill", {
+    workspaceId,
+    skill,
+    method,
+    params,
+  });
+}

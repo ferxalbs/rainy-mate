@@ -64,6 +64,7 @@ export function AgentChatPanel({
     streamChat,
     executePlan,
     cancelPlan,
+    executeDiscussedPlan,
     clearMessages,
   } = useAgentChat();
 
@@ -79,15 +80,41 @@ export function AgentChatPanel({
     const instruction = input.trim();
     setInput("");
 
-    // In Deep Mode, inject system context to prevent "I can't do that" refusals
+    // In Deep Mode, inject system context that tells AI about our specific file tools
     const hiddenContext = isDeepProcessing
-      ? `[SYSTEM: You are a Planning Agent. The user wants to perform a task. You have full access to the file system via the 'Execute Task' button the user will press later. DO NOT say you cannot do it. Instead, PROPOSE the plan of action. Assume your plan will be executed.]`
+      ? `[SYSTEM: You are a Planning Agent with access to these FILE OPERATIONS:
+- write_file(path, content) - Creates or overwrites a file
+- read_file(path) - Reads file contents
+- list_files(path) - Lists files in a directory
+- search_files(query, path) - Searches for content in files
+
+IMPORTANT: When the user asks you to create/modify/read files, propose a plan using THESE EXACT OPERATIONS.
+DO NOT suggest shell commands like 'touch', 'echo', 'mkdir'. Use our tools instead.
+After you propose the plan, the user will click "Execute Task" to run it.
+
+Example: If user says "create a test file", respond with:
+"I'll use write_file to create the file with the content you need.
+
+**Plan:**
+1. write_file("test.txt", "Hello World")
+
+Click 'Execute Task' when ready."]`
       : undefined;
 
     await streamChat(instruction, currentModelId, hiddenContext);
   };
 
   const handlePlan = async () => {
+    // If in Deep Mode, we execute the plan from the chat discussion
+    if (isDeepProcessing) {
+      // We don't need input for execution if we have chat history
+      if (messages.length > 0) {
+        await executeDiscussedPlan(workspacePath, currentModelId);
+        return;
+      }
+    }
+
+    // Legacy/Fallback Plan Mode (creates task from input)
     if (!input.trim() || isProcessing) return;
     const instruction = input.trim();
     setInput("");
