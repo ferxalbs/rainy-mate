@@ -356,7 +356,8 @@ impl XAIChatResponse {
             .unwrap_or_else(|| "stop".to_string());
 
         ChatCompletionResponse {
-            content,
+            content: Some(content),
+            tool_calls: None,
             model: self.model.clone(),
             usage,
             finish_reason,
@@ -436,11 +437,15 @@ mod tests {
                     role: "system".to_string(),
                     content: "You are a helpful assistant.".to_string(),
                     name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
                     content: "Hello!".to_string(),
                     name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
                 },
             ],
             model: "grok-3".to_string(),
@@ -451,6 +456,9 @@ mod tests {
             presence_penalty: None,
             stop: None,
             stream: false,
+            tools: None,
+            tool_choice: None,
+            json_mode: false,
         };
 
         let xai_request = XAIChatRequest::from(request);

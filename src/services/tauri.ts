@@ -1365,3 +1365,21 @@ export async function executeSkill(
     workspacePath,
   });
 }
+
+// Agent Command
+export const runAgentWorkflow = async (
+  prompt: string,
+  modelId: string,
+  workspaceId: string,
+): Promise<string> => {
+  try {
+    return await invoke<string>("run_agent_workflow", {
+      prompt,
+      modelId,
+      workspaceId,
+    });
+  } catch (e) {
+    console.error("Agent workflow failed:", e);
+    throw e;
+  }
+};

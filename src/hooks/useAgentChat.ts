@@ -3,6 +3,7 @@ import { useStreaming } from "./useStreaming";
 import { useTauriTask } from "./useTauriTask";
 import type { AgentMessage, TaskPlan } from "../types/agent";
 import * as tauri from "../services/tauri";
+import { runAgentWorkflow } from "../services/tauri";
 
 export function useAgentChat() {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -487,6 +488,67 @@ export function useAgentChat() {
     // Legacy stub
   }, []);
 
+  const runNativeAgent = useCallback(
+    async (instruction: string, modelId: string, workspaceId: string) => {
+      const userMsg: AgentMessage = {
+        id: crypto.randomUUID(),
+        type: "user",
+        content: instruction,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+
+      const agentMsgId = crypto.randomUUID();
+      const initialAgentMsg: AgentMessage = {
+        id: agentMsgId,
+        type: "agent",
+        content: "Running native agent workflow...",
+        isLoading: true,
+        timestamp: new Date(),
+        modelUsed: { name: modelId, thinkingEnabled: true },
+      };
+      setMessages((prev) => [...prev, initialAgentMsg]);
+
+      setIsExecuting(true);
+
+      try {
+        const result = await runAgentWorkflow(
+          instruction,
+          modelId,
+          workspaceId,
+        );
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === agentMsgId
+              ? {
+                  ...m,
+                  content: result,
+                  isLoading: false,
+                }
+              : m,
+          ),
+        );
+      } catch (err: any) {
+        console.error("Native agent error:", err);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === agentMsgId
+              ? {
+                  ...m,
+                  content: `❌ Agent Runtime Error: ${err.message || err}`,
+                  isLoading: false,
+                }
+              : m,
+          ),
+        );
+      } finally {
+        setIsExecuting(false);
+      }
+    },
+    [],
+  );
+
   return {
     messages,
     setMessages,
@@ -500,5 +562,6 @@ export function useAgentChat() {
     executeDiscussedPlan,
     executeToolCalls,
     clearMessages,
+    runNativeAgent,
   };
 }

@@ -207,7 +207,8 @@ impl AIProvider for RainySDKProvider {
             .unwrap_or_default();
 
         Ok(ChatCompletionResponse {
-            content,
+            content: Some(content),
+            tool_calls: None,
             model: request.model.clone(),
             usage: {
                 let (prompt, completion, total) = match response.usage.as_ref() {

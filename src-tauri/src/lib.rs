@@ -384,6 +384,8 @@ pub fn run() {
             commands::set_headless_mode,
             // Skill Commands (Direct Local Execution)
             commands::execute_skill,
+            // Agent Workflow (Native Rust)
+            commands::agent::run_agent_workflow,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

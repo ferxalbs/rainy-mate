@@ -154,15 +154,39 @@ impl Default for ProviderConfig {
     }
 }
 
+/// Tool call
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall {
+    /// Tool call ID
+    pub id: String,
+    /// Tool type
+    pub r#type: String,
+    /// Function execution details
+    pub function: FunctionCall,
+}
+
+/// Function call details
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionCall {
+    /// Function name
+    pub name: String,
+    /// Function arguments (JSON string)
+    pub arguments: String,
+}
+
 /// Chat message
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
-    /// Message role (system, user, assistant)
+    /// Message role (system, user, assistant, tool)
     pub role: String,
     /// Message content
     pub content: String,
     /// Optional name for the message
     pub name: Option<String>,
+    /// Tool calls (if assistant)
+    pub tool_calls: Option<Vec<ToolCall>>,
+    /// Tool call ID (if tool role)
+    pub tool_call_id: Option<String>,
 }
 
 impl ChatMessage {
@@ -172,8 +196,42 @@ impl ChatMessage {
             role: "user".to_string(),
             content: content.into(),
             name: None,
+            tool_calls: None,
+            tool_call_id: None,
         }
     }
+}
+
+/// Tool definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tool {
+    /// Tool type (e.g., "function")
+    pub r#type: String,
+    /// Function definition
+    pub function: FunctionDefinition,
+}
+
+/// Function definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionDefinition {
+    /// Function name
+    pub name: String,
+    /// Function description
+    pub description: String,
+    /// Function parameters (JSON schema)
+    pub parameters: serde_json::Value,
+}
+
+/// Tool choice
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ToolChoice {
+    /// No tool
+    None,
+    /// Auto select
+    Auto,
+    /// Specific tool
+    Tool(Tool),
 }
 
 /// Chat completion request
@@ -197,6 +255,12 @@ pub struct ChatCompletionRequest {
     pub stop: Option<Vec<String>>,
     /// Whether to stream the response
     pub stream: bool,
+    /// Tools available to the model
+    pub tools: Option<Vec<Tool>>,
+    /// Tool choice strategy
+    pub tool_choice: Option<ToolChoice>,
+    /// Whether to enforce JSON mode
+    pub json_mode: bool,
 }
 
 impl Default for ChatCompletionRequest {
@@ -211,6 +275,9 @@ impl Default for ChatCompletionRequest {
             presence_penalty: Some(0.0),
             stop: None,
             stream: false,
+            tools: None,
+            tool_choice: None,
+            json_mode: false,
         }
     }
 }
@@ -219,13 +286,18 @@ impl Default for ChatCompletionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatCompletionResponse {
     /// Generated content
-    pub content: String,
+    pub content: Option<String>,
+    /// Helper to get content string even if None (legacy compat)
+    // pub content: String, // Changed to Option<String> because tool calls might have null content
+
     /// Model used
     pub model: String,
     /// Tokens used
     pub usage: TokenUsage,
     /// Finish reason
     pub finish_reason: String,
+    /// Tool calls
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 /// Token usage information

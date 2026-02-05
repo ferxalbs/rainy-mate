@@ -55,3 +55,4 @@ dirs = "5.0"
 toml = "0.9.11"
 md5 = "0.8.0"
 serde_repr = "0.1.20"
+schemars = { version = "0.8", features = ["preserve_order"] }

@@ -1,6 +1,7 @@
 // Rainy Cowork - Tauri Commands Module
 // Export all command handlers for registration with Tauri
 
+pub mod agent;
 pub mod agents;
 pub mod ai;
 pub mod ai_providers;

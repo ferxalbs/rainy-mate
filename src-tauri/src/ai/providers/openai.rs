@@ -291,7 +291,8 @@ impl AIProvider for OpenAIProvider {
             .ok_or_else(|| AIError::APIError("No response choices".to_string()))?;
 
         Ok(ChatCompletionResponse {
-            content: choice.message.content,
+            content: Some(choice.message.content),
+            tool_calls: None,
             model: chat_response.model,
             usage: TokenUsage {
                 prompt_tokens: chat_response.usage.prompt_tokens,
@@ -477,12 +478,16 @@ mod tests {
                 role: "system".to_string(),
                 content: "You are a helpful assistant".to_string(),
                 name: None,
+                tool_calls: None,
+                tool_call_id: None,
             },
             ChatMessage::user("Hello"),
             ChatMessage {
                 role: "assistant".to_string(),
                 content: "Hi there!".to_string(),
                 name: None,
+                tool_calls: None,
+                tool_call_id: None,
             },
         ];
 

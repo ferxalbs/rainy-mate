@@ -7,6 +7,7 @@ pub mod keychain;
 pub mod provider;
 
 // PHASE 3: AI Provider Integration
+pub mod agent;
 pub mod features;
 pub mod provider_registry;
 pub mod provider_trait;

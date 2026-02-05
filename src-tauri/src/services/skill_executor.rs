@@ -1,10 +1,42 @@
 use crate::models::neural::{CommandResult, QueuedCommand};
 use crate::services::workspace::WorkspaceManager;
+use schemars::{schema_for, JsonSchema};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ReadFileArgs {
+    /// The path to the file to read
+    pub path: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct WriteFileArgs {
+    /// The path where the file should be written
+    pub path: String,
+    /// The content to write to the file
+    pub content: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ListFilesArgs {
+    /// The directory path to list
+    pub path: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct SearchFilesArgs {
+    /// The regex query to search for
+    pub query: String,
+    /// The root path to start searching from
+    pub path: Option<String>,
+    /// Whether to search file content (true) or just filenames (false)
+    pub search_content: Option<bool>,
+}
 
 #[derive(Clone)]
 pub struct SkillExecutor {
@@ -14,6 +46,44 @@ pub struct SkillExecutor {
 impl SkillExecutor {
     pub fn new(workspace_manager: Arc<WorkspaceManager>) -> Self {
         Self { workspace_manager }
+    }
+
+    /// Get all available tools and their JSON schemas
+    pub fn get_tool_definitions(&self) -> Vec<crate::ai::provider_types::Tool> {
+        vec![
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "read_file".to_string(),
+                    description: "Read the contents of a file".to_string(),
+                    parameters: serde_json::to_value(schema_for!(ReadFileArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "write_file".to_string(),
+                    description: "Write content to a file".to_string(),
+                    parameters: serde_json::to_value(schema_for!(WriteFileArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "list_files".to_string(),
+                    description: "List files in a directory".to_string(),
+                    parameters: serde_json::to_value(schema_for!(ListFilesArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "search_files".to_string(),
+                    description: "Search for files by name or content using regex".to_string(),
+                    parameters: serde_json::to_value(schema_for!(SearchFilesArgs)).unwrap(),
+                },
+            },
+        ]
     }
 
     pub async fn execute(&self, command: &QueuedCommand) -> CommandResult {
@@ -176,13 +246,13 @@ impl SkillExecutor {
         params: &Value,
         allowed_paths: &[String],
     ) -> CommandResult {
-        let path_str = match params.get("path").and_then(|v| v.as_str()) {
-            Some(p) => p,
-            None => return self.error("Missing path parameter"),
+        let args: ReadFileArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
         };
 
         let path = match self
-            .resolve_path(workspace_id, path_str, allowed_paths)
+            .resolve_path(workspace_id, &args.path, allowed_paths)
             .await
         {
             Ok(p) => p,
@@ -206,7 +276,11 @@ impl SkillExecutor {
         params: &Value,
         allowed_paths: &[String],
     ) -> CommandResult {
+        // Handle optional path manually or via struct default?
+        // Let's rely on struct default if possible, or manual parse
+        // Params comes as Value, likely an object
         let path_str = params.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+
         let path = match self
             .resolve_path(workspace_id, path_str, allowed_paths)
             .await
@@ -245,16 +319,13 @@ impl SkillExecutor {
         params: &Value,
         allowed_paths: &[String],
     ) -> CommandResult {
-        let query = match params.get("query").and_then(|v| v.as_str()) {
-            Some(q) => q,
-            None => return self.error("Missing query parameter"),
+        let args: SearchFilesArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
         };
 
-        let path_str = params.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-        let search_content = params
-            .get("searchContent")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let path_str = args.path.as_deref().unwrap_or(".");
+        let search_content = args.search_content.unwrap_or(false);
 
         let root_path = match self
             .resolve_path(workspace_id, path_str, allowed_paths)
@@ -264,7 +335,7 @@ impl SkillExecutor {
             Err(e) => return self.error(&e),
         };
 
-        let regex = match regex::Regex::new(query) {
+        let regex = match regex::Regex::new(&args.query) {
             Ok(r) => r,
             Err(e) => return self.error(&format!("Invalid regex query: {}", e)),
         };
@@ -354,17 +425,13 @@ impl SkillExecutor {
         params: &Value,
         allowed_paths: &[String],
     ) -> CommandResult {
-        let path_str = match params.get("path").and_then(|v| v.as_str()) {
-            Some(p) => p,
-            None => return self.error("Missing path parameter"),
-        };
-        let content = match params.get("content").and_then(|v| v.as_str()) {
-            Some(c) => c,
-            None => return self.error("Missing content parameter"),
+        let args: WriteFileArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
         };
 
         let path = match self
-            .resolve_path(workspace_id, path_str, allowed_paths)
+            .resolve_path(workspace_id, &args.path, allowed_paths)
             .await
         {
             Ok(p) => p,
@@ -378,7 +445,7 @@ impl SkillExecutor {
             }
         }
 
-        match fs::write(path, content).await {
+        match fs::write(path, &args.content).await {
             Ok(_) => CommandResult {
                 success: true,
                 output: Some("File written successfully".to_string()),
@@ -395,27 +462,19 @@ impl SkillExecutor {
         params: &Value,
         allowed_paths: &[String],
     ) -> CommandResult {
-        let path_str = match params.get("path").and_then(|v| v.as_str()) {
-            Some(p) => p,
-            None => return self.error("Missing path parameter"),
-        };
-        let content = match params.get("content").and_then(|v| v.as_str()) {
-            Some(c) => c,
-            None => return self.error("Missing content parameter"),
+        // Re-use WriteFileArgs since it has path + content
+        let args: WriteFileArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
         };
 
         let path = match self
-            .resolve_path(workspace_id, path_str, allowed_paths)
+            .resolve_path(workspace_id, &args.path, allowed_paths)
             .await
         {
             Ok(p) => p,
             Err(e) => return self.error(&e),
         };
-
-        // Ensure file exists or create it?
-        // Typically append works if file exists. If not, OpenOptions.create(true)
-        // But let's assume strict append. Or create(true) to be safe?
-        // User said "append text", implying file exists. But allowing creation is often safer.
 
         let file_res = fs::OpenOptions::new()
             .write(true)
@@ -425,7 +484,7 @@ impl SkillExecutor {
             .await;
 
         match file_res {
-            Ok(mut file) => match file.write_all(content.as_bytes()).await {
+            Ok(mut file) => match file.write_all(args.content.as_bytes()).await {
                 Ok(_) => CommandResult {
                     success: true,
                     output: Some("Content appended successfully".to_string()),
@@ -450,7 +509,5 @@ impl SkillExecutor {
 
 #[cfg(test)]
 mod tests {
-    // Tests require setting up WorkspaceManager with real filesystem.
-    // See integration tests directory for full test coverage.
-    // @TODO: Refactor to use a WorkspaceProvider trait for better testability.
+    // Tests are fine to stay as is for now
 }

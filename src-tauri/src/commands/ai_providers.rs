@@ -80,6 +80,8 @@ impl From<ChatMessageDto> for crate::ai::ChatMessage {
             role: dto.role,
             content: dto.content,
             name: dto.name,
+            tool_calls: None,
+            tool_call_id: None,
         }
     }
 }
@@ -413,6 +415,9 @@ pub async fn complete_chat(
         presence_penalty: request.presence_penalty,
         stop: request.stop,
         stream: request.stream,
+        tools: None,
+        tool_choice: None,
+        json_mode: false,
     };
 
     // Execute completion

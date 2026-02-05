@@ -66,6 +66,7 @@ export function AgentChatPanel({
     executeDiscussedPlan,
     executeToolCalls,
     clearMessages,
+    runNativeAgent,
   } = useAgentChat();
 
   const isProcessing = isPlanning || isExecuting;
@@ -79,6 +80,11 @@ export function AgentChatPanel({
     if (!input.trim() || isProcessing) return;
     const instruction = input.trim();
     setInput("");
+
+    if (isNativeMode) {
+      await runNativeAgent(instruction, currentModelId, workspacePath);
+      return;
+    }
 
     // In Deep Mode, inject system context that tells AI about our specific file tools
     const hiddenContext = isDeepProcessing
@@ -137,6 +143,7 @@ Click 'Execute Task' when ready."]`
 
   // Dynamic state for processing mode
   const [isDeepProcessing, setIsDeepProcessing] = useState(false);
+  const [isNativeMode, setIsNativeMode] = useState(false);
 
   const renderInputArea = (centered: boolean) => (
     <div
@@ -208,6 +215,32 @@ Click 'Execute Task' when ready."]`
               <TooltipContent>
                 <span className="text-xs">
                   Enable advanced reasoning (Chat first, Plan optionally)
+                </span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Native Agent Toggle */}
+            <Tooltip delay={0}>
+              <TooltipTrigger>
+                <button
+                  onClick={() => setIsNativeMode(!isNativeMode)}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all duration-300 ${
+                    isNativeMode
+                      ? "bg-green-500/10 border-green-500/20 text-green-400"
+                      : "bg-transparent border-transparent text-muted-foreground/50 hover:bg-muted/30"
+                  }`}
+                >
+                  <Zap
+                    className={`size-3 ${isNativeMode ? "text-green-400" : "text-current"}`}
+                  />
+                  <span className="text-[10px] font-medium">
+                    Native Runtime
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span className="text-xs">
+                  Run Autonomous Agent directly on Rust Runtime
                 </span>
               </TooltipContent>
             </Tooltip>
