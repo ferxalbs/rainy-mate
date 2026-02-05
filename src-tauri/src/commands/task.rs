@@ -15,7 +15,50 @@ pub async fn create_task(
     task_manager: State<'_, TaskManager>,
 ) -> Result<Task, String> {
     let mut task = Task::new(description, provider, model);
-    task.workspace_path = workspace_path;
+    task.workspace_path = workspace_path.clone();
+
+    // If no workspace context is set but we have a path, create an ad-hoc workspace context
+    if task_manager.get_workspace().await.is_none() {
+        if let Some(path) = &workspace_path {
+            let name = std::path::Path::new(path)
+                .file_name()
+                .unwrap_or_else(|| std::ffi::OsStr::new("Ad-hoc Workspace"))
+                .to_string_lossy()
+                .to_string();
+
+            let workspace = crate::services::workspace::Workspace {
+                id: uuid::Uuid::new_v4().to_string(),
+                name,
+                allowed_paths: vec![path.clone()],
+                permissions: crate::services::workspace::WorkspacePermissions {
+                    can_read: true,
+                    can_write: true,
+                    can_execute: true,
+                    can_delete: true,
+                    can_create_agents: true,
+                },
+                permission_overrides: vec![],
+                agents: vec![],
+                memory: crate::services::workspace::WorkspaceMemory {
+                    max_size: 1000000,
+                    current_size: 0,
+                    retention_policy: "30d".to_string(),
+                },
+                settings: crate::services::workspace::WorkspaceSettings {
+                    theme: "system".to_string(),
+                    language: "en".to_string(),
+                    auto_save: true,
+                    notifications_enabled: true,
+                },
+            };
+
+            task_manager.set_workspace(workspace).await;
+            tracing::info!(
+                "Auto-initialized ad-hoc workspace context for path: {}",
+                path
+            );
+        }
+    }
 
     task_manager.add_task_validated(task.clone()).await?;
 
