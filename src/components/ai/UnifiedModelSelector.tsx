@@ -439,7 +439,7 @@ const MOCK_MODELS: UnifiedModel[] = [
   },
   // GEMINI 3 SERIES - Advanced reasoning models with thinking capabilities
   {
-    id: "rainy:gemini-3-pro-preview",
+    id: "gemini-3-pro-preview",
     name: "Gemini 3 Pro (Preview)",
     provider: "Rainy API",
     capabilities: {
@@ -456,7 +456,7 @@ const MOCK_MODELS: UnifiedModel[] = [
     thinkingLevel: "high",
   },
   {
-    id: "rainy:gemini-3-flash-preview",
+    id: "gemini-3-flash-preview",
     name: "Gemini 3 Flash (Preview)",
     provider: "Rainy API",
     capabilities: {
@@ -473,7 +473,7 @@ const MOCK_MODELS: UnifiedModel[] = [
     thinkingLevel: "medium",
   },
   {
-    id: "rainy:gemini-3-pro-image-preview",
+    id: "gemini-3-pro-image-preview",
     name: "Gemini 3 Pro Image (Preview)",
     provider: "Rainy API",
     capabilities: {
@@ -491,7 +491,7 @@ const MOCK_MODELS: UnifiedModel[] = [
   },
   // GEMINI 2.5 SERIES - Stable models with thinking budget support
   {
-    id: "rainy:gemini-2.5-pro",
+    id: "gemini-2.5-pro",
     name: "Gemini 2.5 Pro",
     provider: "Rainy API",
     capabilities: {
@@ -508,7 +508,7 @@ const MOCK_MODELS: UnifiedModel[] = [
     thinkingLevel: "high",
   },
   {
-    id: "rainy:gemini-2.5-flash",
+    id: "gemini-2.5-flash",
     name: "Gemini 2.5 Flash",
     provider: "Rainy API",
     capabilities: {
@@ -525,7 +525,7 @@ const MOCK_MODELS: UnifiedModel[] = [
     thinkingLevel: "medium",
   },
   {
-    id: "rainy:gemini-2.5-flash-lite",
+    id: "gemini-2.5-flash-lite",
     name: "Gemini 2.5 Flash Lite",
     provider: "Rainy API",
     capabilities: {
@@ -542,7 +542,7 @@ const MOCK_MODELS: UnifiedModel[] = [
   },
   // GROQ MODELS - High-speed inference
   {
-    id: "rainy:llama-3.1-8b-instant",
+    id: "llama-3.1-8b-instant",
     name: "Llama 3.1 8B Instant (Groq)",
     provider: "Rainy API",
     capabilities: {
@@ -558,7 +558,7 @@ const MOCK_MODELS: UnifiedModel[] = [
     processing_mode: "rainy_api",
   },
   {
-    id: "rainy:llama-3.3-70b-versatile",
+    id: "llama-3.3-70b-versatile",
     name: "Llama 3.3 70B Versatile (Groq)",
     provider: "Rainy API",
     capabilities: {
@@ -575,7 +575,7 @@ const MOCK_MODELS: UnifiedModel[] = [
   },
   // KIMI K2 - Via Groq for high-speed inference
   {
-    id: "rainy:moonshotai/kimi-k2-instruct-0905",
+    id: "moonshotai/kimi-k2-instruct-0905",
     name: "Kimi K2 (Groq)",
     provider: "Rainy API",
     capabilities: {
@@ -593,7 +593,7 @@ const MOCK_MODELS: UnifiedModel[] = [
   },
   // CEREBRAS MODELS
   {
-    id: "rainy:cerebras/llama3.1-8b",
+    id: "cerebras/llama3.1-8b",
     name: "Llama 3.1 8B (Cerebras)",
     provider: "Rainy API",
     capabilities: {
@@ -610,7 +610,7 @@ const MOCK_MODELS: UnifiedModel[] = [
   },
   // ENOSIS LABS MODELS - Proprietary models
   {
-    id: "rainy:astronomer-2-pro",
+    id: "astronomer-2-pro",
     name: "Astronomer 2 Pro",
     provider: "Rainy API",
     capabilities: {
@@ -626,7 +626,7 @@ const MOCK_MODELS: UnifiedModel[] = [
     processing_mode: "rainy_api",
   },
   {
-    id: "rainy:astronomer-2",
+    id: "astronomer-2",
     name: "Astronomer 2",
     provider: "Rainy API",
     capabilities: {
@@ -642,7 +642,7 @@ const MOCK_MODELS: UnifiedModel[] = [
     processing_mode: "rainy_api",
   },
   {
-    id: "rainy:astronomer-1-5",
+    id: "astronomer-1-5",
     name: "Astronomer 1.5",
     provider: "Rainy API",
     capabilities: {
