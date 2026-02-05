@@ -344,13 +344,16 @@ Generate the JSON array now:`,
               skill: call.skill,
               method: call.method,
               params: call.params,
+              workspacePath: workspaceId, // workspaceId IS the path for local execution
             });
 
+            // For local Deep Mode execution, workspaceId is actually the filesystem path
             const result = await tauri.executeSkill(
               workspaceId,
               call.skill,
               call.method,
               call.params || {},
+              workspaceId, // Pass the workspace path for relative path resolution
             );
             console.log("[executeDiscussedPlan] executeSkill result:", result);
             results.push({ call, result });

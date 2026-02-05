@@ -1355,11 +1355,13 @@ export async function executeSkill(
   skill: string,
   method: string,
   params: Record<string, any>,
+  workspacePath?: string,
 ): Promise<CommandResult> {
   return invoke<CommandResult>("execute_skill", {
     workspaceId,
     skill,
     method,
     params,
+    workspacePath,
   });
 }
