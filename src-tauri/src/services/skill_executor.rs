@@ -1,5 +1,5 @@
 use crate::models::neural::{CommandResult, QueuedCommand};
-use crate::services::mcp_client::McpClient;
+use crate::services::browser_controller::BrowserController;
 use crate::services::workspace::WorkspaceManager;
 use crate::services::{ManagedResearchService, WebResearchService};
 use base64::prelude::*;
@@ -73,12 +73,11 @@ pub struct BrowserClickArgs {
     pub selector: String,
 }
 
-#[derive(Clone)]
 pub struct SkillExecutor {
     workspace_manager: Arc<WorkspaceManager>,
     managed_research: Arc<ManagedResearchService>,
     web_research: Arc<WebResearchService>,
-    mcp_client: Arc<McpClient>,
+    browser: Arc<BrowserController>,
 }
 
 impl SkillExecutor {
@@ -86,13 +85,13 @@ impl SkillExecutor {
         workspace_manager: Arc<WorkspaceManager>,
         managed_research: Arc<ManagedResearchService>,
         web_research: Arc<WebResearchService>,
-        mcp_client: Arc<McpClient>,
+        browser: Arc<BrowserController>,
     ) -> Self {
         Self {
             workspace_manager,
             managed_research,
             web_research,
-            mcp_client,
+            browser,
         }
     }
 
@@ -269,18 +268,44 @@ impl SkillExecutor {
 
         match method {
             "navigate" => {
-                // Support both "navigate" (classic) and "browser_navigate"
                 let args: BrowserNavigateArgs = match serde_json::from_value(params.clone()) {
                     Ok(a) => a,
                     Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
                 };
-                match self.mcp_client.navigate(&args.url).await {
-                    Ok(v) => CommandResult {
-                        success: true,
-                        output: Some(v.to_string()),
-                        error: None,
-                        exit_code: Some(0),
-                    },
+                match self.browser.navigate(&args.url).await {
+                    Ok(result) => {
+                        // Return rich navigation result with title and content preview
+                        let output = serde_json::json!({
+                            "url": result.url,
+                            "title": result.title,
+                            "content_preview": result.content_preview,
+                        });
+                        CommandResult {
+                            success: true,
+                            output: Some(output.to_string()),
+                            error: None,
+                            exit_code: Some(0),
+                        }
+                    }
+                    Err(e) => self.error(&e),
+                }
+            }
+            "screenshot" => {
+                // Take screenshot of current page
+                match self.browser.screenshot().await {
+                    Ok(result) => {
+                        let output = serde_json::json!({
+                            "data_uri": result.data_uri,
+                            "width": result.width,
+                            "height": result.height,
+                        });
+                        CommandResult {
+                            success: true,
+                            output: Some(output.to_string()),
+                            error: None,
+                            exit_code: Some(0),
+                        }
+                    }
                     Err(e) => self.error(&e),
                 }
             }
@@ -289,10 +314,22 @@ impl SkillExecutor {
                     Ok(a) => a,
                     Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
                 };
-                match self.mcp_client.click(&args.selector).await {
-                    Ok(v) => CommandResult {
+                match self.browser.click(&args.selector).await {
+                    Ok(()) => CommandResult {
                         success: true,
-                        output: Some(v.to_string()),
+                        output: Some(format!("Clicked element: {}", args.selector)),
+                        error: None,
+                        exit_code: Some(0),
+                    },
+                    Err(e) => self.error(&e),
+                }
+            }
+            "get_content" => {
+                // Get page HTML content
+                match self.browser.get_content().await {
+                    Ok(content) => CommandResult {
+                        success: true,
+                        output: Some(content),
                         error: None,
                         exit_code: Some(0),
                     },

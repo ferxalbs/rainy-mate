@@ -11,8 +11,8 @@ mod services;
 use agents::AgentRegistry;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
-    ATMClient, CommandPoller, DocumentService, FileManager, FileOperationEngine, FolderManager,
-    ImageService, ManagedResearchService, McpClient, MemoryManager, NeuralService,
+    ATMClient, BrowserController, CommandPoller, DocumentService, FileManager, FileOperationEngine,
+    FolderManager, ImageService, ManagedResearchService, MemoryManager, NeuralService,
     NodeAuthenticator, ReflectionEngine, SettingsManager, SkillExecutor, WebResearchService,
     WorkspaceManager,
 };
@@ -81,15 +81,15 @@ pub fn run() {
         authenticator,
     );
 
-    // Initialize MCP Client (Chrome DevTools)
-    let mcp_client = Arc::new(McpClient::new());
+    // Initialize Browser Controller (Native CDP)
+    let browser_controller = Arc::new(BrowserController::new());
 
     // Initialize Skill Executor
     let skill_executor = Arc::new(SkillExecutor::new(
         workspace_manager.clone(),
         Arc::new(managed_research.clone()),
         Arc::new(web_research.clone()),
-        mcp_client.clone(),
+        browser_controller.clone(),
     ));
 
     // Initialize Command Poller
@@ -126,16 +126,18 @@ pub fn run() {
         .manage(commands::reflection::ReflectionEngineState(
             reflection_engine,
         )) // Arc<ReflectionEngine>
-        .manage(commands::router::IntelligentRouterState(intelligent_router)) // Arc<RwLock<IntelligentRouter>>
+        .manage(commands::router::IntelligentRouterState(
+            intelligent_router.clone(),
+        )) // Arc<RwLock<IntelligentRouter>>
         .manage(atm_client) // ATMClient
         .manage(commands::neural::NeuralServiceState(neural_service)) // NeuralService
-        .manage(mcp_client) // Arc<McpClient>
+        .manage(browser_controller) // Arc<BrowserController>
         .manage(command_poller) // Arc<CommandPoller>
         .manage(skill_executor) // Arc<SkillExecutor>
         .manage(commands::airlock::AirlockServiceState(Arc::new(
             Mutex::new(None),
         ))) // Placeholder, initialized in setup
-        .setup(|app| {
+        .setup(move |app| {
             use crate::services::AirlockService;
             use tauri::Manager;
 
@@ -191,9 +193,20 @@ pub fn run() {
             // Start Command Poller
             // Check if we have credentials, if so start polling
             let poller = (*app.state::<Arc<CommandPoller>>()).clone();
+            let router_for_poller = intelligent_router.clone();
+            let app_data_for_poller = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir for CommandPoller");
+
             tauri::async_runtime::spawn(async move {
                 // Inject Airlock service
                 poller.set_airlock_service(airlock_for_poller).await;
+
+                // Inject agent context for agent.run commands
+                poller
+                    .set_agent_context(router_for_poller, app_data_for_poller)
+                    .await;
 
                 // Wait a bit for app to stabilize
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;

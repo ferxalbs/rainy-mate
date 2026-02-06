@@ -1,7 +1,11 @@
+use crate::ai::agent::memory::AgentMemory;
+use crate::ai::agent::runtime::{AgentConfig, AgentRuntime};
+use crate::ai::router::IntelligentRouter;
 use crate::models::neural::CommandResult;
 use crate::services::airlock::AirlockService;
 use crate::services::neural_service::NeuralService;
 use crate::services::skill_executor::SkillExecutor;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
@@ -9,10 +13,17 @@ use tokio::time::sleep;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
+/// Context needed to create AgentRuntime instances on-demand
+pub struct AgentRuntimeContext {
+    pub router: Arc<RwLock<IntelligentRouter>>,
+    pub app_data_dir: PathBuf,
+}
+
 #[derive(Clone)]
 pub struct CommandPoller {
     neural_service: NeuralService,
     skill_executor: Arc<SkillExecutor>,
+    agent_context: Arc<RwLock<Option<AgentRuntimeContext>>>,
     is_running: Arc<Mutex<bool>>,
     airlock_service: Arc<RwLock<Option<AirlockService>>>,
 }
@@ -22,9 +33,23 @@ impl CommandPoller {
         Self {
             neural_service,
             skill_executor,
+            agent_context: Arc::new(RwLock::new(None)),
             is_running: Arc::new(Mutex::new(false)),
             airlock_service: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Set the context needed to create AgentRuntime instances
+    pub async fn set_agent_context(
+        &self,
+        router: Arc<RwLock<IntelligentRouter>>,
+        app_data_dir: PathBuf,
+    ) {
+        let mut lock = self.agent_context.write().await;
+        *lock = Some(AgentRuntimeContext {
+            router,
+            app_data_dir,
+        });
     }
 
     pub async fn set_airlock_service(&self, service: AirlockService) {
@@ -73,10 +98,10 @@ impl CommandPoller {
             return Ok(());
         }
 
-        let pending_commands_result: Result<Vec<crate::models::neural::QueuedCommand>, String> = self
-            .neural_service
-            .heartbeat(crate::models::neural::DesktopNodeStatus::Online)
-            .await;
+        let pending_commands_result: Result<Vec<crate::models::neural::QueuedCommand>, String> =
+            self.neural_service
+                .heartbeat(crate::models::neural::DesktopNodeStatus::Online)
+                .await;
 
         let commands = match pending_commands_result {
             Ok(cmds) => cmds,
@@ -145,8 +170,107 @@ impl CommandPoller {
                 );
             }
 
-            // Execute
-            let result = self.skill_executor.execute(&command).await;
+            // Execute - check if this is an agent.run command for full workflow
+            let result = if command.intent.starts_with("agent.") {
+                // Route to AgentRuntime for full ReAct workflow
+                match command.intent.as_str() {
+                    "agent.run" => {
+                        // Extract prompt from params
+                        let prompt = command
+                            .payload
+                            .params
+                            .as_ref()
+                            .and_then(|p: &serde_json::Value| p.get("prompt"))
+                            .and_then(|v: &serde_json::Value| v.as_str())
+                            .unwrap_or("Hello, what can you help me with?");
+
+                        // Get workspace_id for this command
+                        let workspace_id = command
+                            .workspace_id
+                            .clone()
+                            .unwrap_or_else(|| "default".to_string());
+
+                        println!(
+                            "[CommandPoller] Routing to AgentRuntime: '{}' (workspace: {})",
+                            prompt, workspace_id
+                        );
+
+                        // Create AgentRuntime on-demand
+                        let context_lock = self.agent_context.read().await;
+                        if let Some(ctx) = context_lock.as_ref() {
+                            // Create memory for this workspace
+                            let memory = Arc::new(
+                                AgentMemory::new(&workspace_id, ctx.app_data_dir.clone()).await,
+                            );
+
+                            // Create config
+                            let config = AgentConfig {
+                                name: "Rainy Agent".to_string(),
+                                model: "gemini-2.0-flash".to_string(), // Default model
+                                instructions: format!(
+                                    "You are Rainy Agent, an autonomous AI assistant.
+
+Workspace ID: {}
+
+CAPABILITIES:
+- Read, write, list, and search files in the workspace.
+- Navigate web pages and take screenshots.
+- Perform web research.
+
+GUIDELINES:
+1. PLAN: Before executing, briefly state your plan.
+2. EXECUTE: Use the provided tools to carry out the plan.
+3. VERIFY: After critical operations, verify the result.",
+                                    workspace_id
+                                ),
+                                workspace_id: workspace_id.clone(),
+                                max_steps: Some(10),
+                            };
+
+                            // Create runtime
+                            let runtime = AgentRuntime::new(
+                                config,
+                                ctx.router.clone(),
+                                self.skill_executor.clone(),
+                                memory,
+                            );
+
+                            // Run the agent
+                            match runtime.run(prompt).await {
+                                Ok(response) => CommandResult {
+                                    success: true,
+                                    output: Some(response),
+                                    error: None,
+                                    exit_code: Some(0),
+                                },
+                                Err(e) => CommandResult {
+                                    success: false,
+                                    output: None,
+                                    error: Some(format!("Agent error: {}", e)),
+                                    exit_code: Some(1),
+                                },
+                            }
+                        } else {
+                            CommandResult {
+                                success: false,
+                                output: None,
+                                error: Some("Agent context not initialized".into()),
+                                exit_code: Some(1),
+                            }
+                        }
+                    }
+                    _ => CommandResult {
+                        success: false,
+                        output: None,
+                        error: Some(format!("Unknown agent skill: {}", command.intent)),
+                        exit_code: Some(1),
+                    },
+                }
+            } else {
+                // Standard skill execution
+                self.skill_executor.execute(&command).await
+            };
+
             if result.success {
                 println!(
                     "[CommandPoller] Execution result for {}: success=true",

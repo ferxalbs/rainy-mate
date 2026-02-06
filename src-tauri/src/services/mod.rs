@@ -3,6 +3,7 @@
 
 pub mod airlock;
 pub mod atm_client;
+pub mod browser_controller;
 pub mod command_poller;
 pub mod document;
 pub mod file_manager;
@@ -10,7 +11,6 @@ pub mod file_operations;
 pub mod folder_manager;
 pub mod image;
 pub mod managed_research; // Phase 3 AI Research
-pub mod mcp_client;
 pub mod memory;
 pub mod neural_service;
 pub mod reflection;
@@ -23,6 +23,7 @@ pub mod workspace;
 
 pub use airlock::AirlockService;
 pub use atm_client::ATMClient;
+pub use browser_controller::BrowserController;
 pub use command_poller::CommandPoller;
 pub use document::DocumentService;
 pub use file_manager::FileManager;
@@ -30,7 +31,6 @@ pub use file_operations::FileOperationEngine;
 pub use folder_manager::FolderManager;
 pub use image::ImageService;
 pub use managed_research::ManagedResearchService;
-pub use mcp_client::McpClient;
 pub use memory::MemoryManager;
 pub use neural_service::NeuralService;
 pub use reflection::ReflectionEngine;
