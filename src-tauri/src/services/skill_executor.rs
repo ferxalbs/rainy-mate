@@ -1,4 +1,5 @@
 use crate::models::neural::{CommandResult, QueuedCommand};
+use crate::services::mcp_client::McpClient;
 use crate::services::workspace::WorkspaceManager;
 use crate::services::{ManagedResearchService, WebResearchService};
 use base64::prelude::*;
@@ -60,11 +61,24 @@ pub struct ReadWebPageArgs {
     pub url: String,
 }
 
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BrowserNavigateArgs {
+    /// URL to navigate to
+    pub url: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BrowserClickArgs {
+    /// CSS selector to click
+    pub selector: String,
+}
+
 #[derive(Clone)]
 pub struct SkillExecutor {
     workspace_manager: Arc<WorkspaceManager>,
     managed_research: Arc<ManagedResearchService>,
     web_research: Arc<WebResearchService>,
+    mcp_client: Arc<McpClient>,
 }
 
 impl SkillExecutor {
@@ -72,11 +86,13 @@ impl SkillExecutor {
         workspace_manager: Arc<WorkspaceManager>,
         managed_research: Arc<ManagedResearchService>,
         web_research: Arc<WebResearchService>,
+        mcp_client: Arc<McpClient>,
     ) -> Self {
         Self {
             workspace_manager,
             managed_research,
             web_research,
+            mcp_client,
         }
     }
 
@@ -139,6 +155,30 @@ impl SkillExecutor {
                     parameters: serde_json::to_value(schema_for!(ReadWebPageArgs)).unwrap(),
                 },
             },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "read_web_page".to_string(),
+                    description: "Read the content of a web page".to_string(),
+                    parameters: serde_json::to_value(schema_for!(ReadWebPageArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "browser_navigate".to_string(),
+                    description: "Navigate browser to a URL (via Chrome DevTools)".to_string(),
+                    parameters: serde_json::to_value(schema_for!(BrowserNavigateArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "browser_click".to_string(),
+                    description: "Click an element in the browser".to_string(),
+                    parameters: serde_json::to_value(schema_for!(BrowserClickArgs)).unwrap(),
+                },
+            },
         ]
     }
 
@@ -169,6 +209,7 @@ impl SkillExecutor {
                 self.execute_web(workspace_id, method, &payload.params)
                     .await
             }
+            "browser" => self.execute_browser(method, &payload.params).await,
             _ => CommandResult {
                 success: false,
                 output: None,
@@ -217,6 +258,48 @@ impl SkillExecutor {
                 error: Some(format!("Unknown filesystem method: {}", method)),
                 exit_code: Some(1),
             },
+        }
+    }
+
+    async fn execute_browser(&self, method: &str, params: &Option<Value>) -> CommandResult {
+        let params = match params {
+            Some(p) => p,
+            None => return self.error("Missing parameters"),
+        };
+
+        match method {
+            "navigate" => {
+                // Support both "navigate" (classic) and "browser_navigate"
+                let args: BrowserNavigateArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                match self.mcp_client.navigate(&args.url).await {
+                    Ok(v) => CommandResult {
+                        success: true,
+                        output: Some(v.to_string()),
+                        error: None,
+                        exit_code: Some(0),
+                    },
+                    Err(e) => self.error(&e),
+                }
+            }
+            "click" => {
+                let args: BrowserClickArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                match self.mcp_client.click(&args.selector).await {
+                    Ok(v) => CommandResult {
+                        success: true,
+                        output: Some(v.to_string()),
+                        error: None,
+                        exit_code: Some(0),
+                    },
+                    Err(e) => self.error(&e),
+                }
+            }
+            _ => self.error(&format!("Unknown browser method: {}", method)),
         }
     }
 

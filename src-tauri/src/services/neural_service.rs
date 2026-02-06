@@ -1,4 +1,5 @@
 use crate::models::neural::{CommandResult, DesktopNodeStatus, QueuedCommand, SkillManifest};
+use crate::services::security::NodeAuthenticator;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -9,6 +10,7 @@ pub struct NeuralService {
     http: Client,
     base_url: String,
     metadata: Arc<Mutex<NodeMetadata>>,
+    authenticator: NodeAuthenticator,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +44,7 @@ struct CommandsResponse {
 }
 
 impl NeuralService {
-    pub fn new(base_url: String, workspace_id: String) -> Self {
+    pub fn new(base_url: String, workspace_id: String, authenticator: NodeAuthenticator) -> Self {
         let hostname = std::env::var("HOSTNAME")
             .or_else(|_| std::env::var("COMPUTERNAME"))
             .unwrap_or_else(|_| "unknown-host".to_string());
@@ -60,6 +62,7 @@ impl NeuralService {
                 platform_key: None,
                 user_api_key: None,
             })),
+            authenticator,
         }
     }
 
@@ -169,18 +172,26 @@ impl NeuralService {
 
         let url = format!("{}/v1/nodes/register", self.base_url);
 
+        let fingerprint = self
+            .authenticator
+            .get_device_fingerprint()
+            .await
+            .unwrap_or_else(|_| "unknown".to_string());
+
         let body = serde_json::json!({
             "workspaceId": metadata.workspace_id,
             "hostname": metadata.hostname,
             "platform": metadata.platform,
             "skills": skills,
-            "allowedPaths": allowed_paths
+            "allowedPaths": allowed_paths,
+            "fingerprint": fingerprint
         });
 
         let res = self
             .http
             .post(&url)
             .header("Authorization", format!("Bearer {}", platform_key))
+            .header("X-Device-Fingerprint", fingerprint)
             .json(&body)
             .send()
             .await

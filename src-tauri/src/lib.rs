@@ -12,8 +12,9 @@ use agents::AgentRegistry;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
     ATMClient, CommandPoller, DocumentService, FileManager, FileOperationEngine, FolderManager,
-    ImageService, ManagedResearchService, MemoryManager, NeuralService, ReflectionEngine,
-    SettingsManager, SkillExecutor, WebResearchService, WorkspaceManager,
+    ImageService, ManagedResearchService, McpClient, MemoryManager, NeuralService,
+    NodeAuthenticator, ReflectionEngine, SettingsManager, SkillExecutor, WebResearchService,
+    WorkspaceManager,
 };
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -70,17 +71,25 @@ pub fn run() {
         None,
     );
 
+    // Initialize Node Authenticator
+    let authenticator = NodeAuthenticator::new();
+
     // Initialize Neural Service (Distributed Neural System)
     let neural_service = NeuralService::new(
         "https://rainy-atm-cfe3gvcwua-uc.a.run.app".to_string(),
         "pending-pairing".to_string(), // Initial state, will be updated after pairing
+        authenticator,
     );
+
+    // Initialize MCP Client (Chrome DevTools)
+    let mcp_client = Arc::new(McpClient::new());
 
     // Initialize Skill Executor
     let skill_executor = Arc::new(SkillExecutor::new(
         workspace_manager.clone(),
         Arc::new(managed_research.clone()),
         Arc::new(web_research.clone()),
+        mcp_client.clone(),
     ));
 
     // Initialize Command Poller
@@ -120,6 +129,7 @@ pub fn run() {
         .manage(commands::router::IntelligentRouterState(intelligent_router)) // Arc<RwLock<IntelligentRouter>>
         .manage(atm_client) // ATMClient
         .manage(commands::neural::NeuralServiceState(neural_service)) // NeuralService
+        .manage(mcp_client) // Arc<McpClient>
         .manage(command_poller) // Arc<CommandPoller>
         .manage(skill_executor) // Arc<SkillExecutor>
         .manage(commands::airlock::AirlockServiceState(Arc::new(

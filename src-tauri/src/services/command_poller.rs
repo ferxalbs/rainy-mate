@@ -73,7 +73,7 @@ impl CommandPoller {
             return Ok(());
         }
 
-        let pending_commands_result = self
+        let pending_commands_result: Result<Vec<crate::models::neural::QueuedCommand>, String> = self
             .neural_service
             .heartbeat(crate::models::neural::DesktopNodeStatus::Online)
             .await;
