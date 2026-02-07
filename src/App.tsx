@@ -4,11 +4,13 @@ import { SettingsPage } from "./components/settings";
 import { AgentChatPanel } from "./components/agent-chat/AgentChatPanel";
 import { NeuralPanel, AirlockEvents } from "./components/neural";
 import { AgentBuilder } from "./components/agents/builder/AgentBuilder";
+import { AgentStorePage } from "./components/agents/store/AgentStorePage";
 import { Button, Card } from "@heroui/react";
 import { Toaster } from "sonner";
 import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
 import type { Folder } from "./types";
+import type { AgentSpec } from "./types/agent-spec";
 import * as tauri from "./services/tauri";
 import { useCloudEvents } from "./hooks/useCloudEvents";
 
@@ -33,6 +35,9 @@ function App() {
 
   const [activeSection, setActiveSection] = useState("agent-chat");
   const [activeFolder, setActiveFolder] = useState<Folder | null>(null);
+  const [agentBuilderInitialSpec, setAgentBuilderInitialSpec] = useState<
+    AgentSpec | undefined
+  >(undefined);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -68,7 +73,15 @@ function App() {
 
   // Handle navigation
   const handleNavigate = useCallback((section: string) => {
+    if (section === "agent-builder") {
+      setAgentBuilderInitialSpec(undefined);
+    }
     setActiveSection(section);
+  }, []);
+
+  const handleOpenAgentBuilder = useCallback((spec?: AgentSpec) => {
+    setAgentBuilderInitialSpec(spec);
+    setActiveSection("agent-builder");
   }, []);
 
   // Handle settings click from sidebar - Redundant now loop logic if needed or remove
@@ -156,7 +169,21 @@ function App() {
           {/* Agent Builder */}
           {activeSection === "agent-builder" && (
             <div className="flex-1 h-full min-h-0">
-              <AgentBuilder onBack={() => handleNavigate("agent-chat")} />
+              <AgentBuilder
+                onBack={() => handleNavigate("agent-chat")}
+                onOpenStore={() => handleNavigate("agent-store")}
+                initialSpec={agentBuilderInitialSpec}
+              />
+            </div>
+          )}
+
+          {/* Agents Store */}
+          {activeSection === "agent-store" && (
+            <div className="flex-1 p-6 h-full min-h-0">
+              <AgentStorePage
+                onCreateAgent={() => handleOpenAgentBuilder()}
+                onEditInBuilder={(spec) => handleOpenAgentBuilder(spec)}
+              />
             </div>
           )}
 

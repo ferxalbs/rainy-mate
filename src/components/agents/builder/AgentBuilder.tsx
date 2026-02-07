@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card } from "@heroui/react";
 import { toast } from "sonner";
 import {
@@ -9,57 +9,42 @@ import {
   Network,
   Cpu,
   Rocket,
+  Library,
 } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
 import { AgentSpec } from "../../../types/agent-spec";
 import { SoulEditor } from "./SoulEditor";
 import { SkillsSelector } from "./SkillsSelector";
 import { SecurityPanel } from "./SecurityPanel";
+import { createDefaultAgentSpec } from "./specDefaults";
+import * as tauri from "../../../services/tauri";
 
 interface AgentBuilderProps {
   onBack: () => void;
   initialSpec?: AgentSpec;
+  onOpenStore?: () => void;
 }
 
-const DEFAULT_SPEC: AgentSpec = {
-  id: crypto.randomUUID(),
-  version: "1.0.0",
-  soul: {
-    name: "",
-    description: "",
-    personality: "",
-    tone: "",
-    soul_content: "",
-    version: "1.0.0",
-  },
-  skills: {
-    capabilities: [],
-    tools: {},
-  },
-  memory_config: {
-    strategy: "hybrid",
-    retention_days: 30,
-    max_tokens: 32000,
-  },
-  connectors: {
-    telegram_enabled: false,
-    telegram_channel_id: undefined,
-    auto_reply: true,
-  },
-};
-
-export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
-  const [spec, setSpec] = useState<AgentSpec>(initialSpec || DEFAULT_SPEC);
+export function AgentBuilder({
+  onBack,
+  initialSpec,
+  onOpenStore,
+}: AgentBuilderProps) {
+  const [spec, setSpec] = useState<AgentSpec>(() =>
+    initialSpec ? structuredClone(initialSpec) : createDefaultAgentSpec(),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("soul");
 
+  useEffect(() => {
+    setSpec(initialSpec ? structuredClone(initialSpec) : createDefaultAgentSpec());
+  }, [initialSpec]);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await invoke("save_agent_spec", { spec });
+      await tauri.saveAgentSpec(spec);
       toast.success("Agent saved successfully!");
-      onBack();
     } catch (error) {
       console.error("Failed to save agent:", error);
       toast.error("Failed to save agent");
@@ -75,16 +60,15 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
   const handleDeploy = async () => {
     setIsDeploying(true);
     try {
-      const hasCredentials = await invoke<boolean>("ensure_atm_credentials_loaded");
+      const hasCredentials = await tauri.ensureAtmCredentialsLoaded();
       if (!hasCredentials) {
         throw new Error(
           "Rainy-ATM is not authenticated. Configure ATM credentials first.",
         );
       }
 
-      await invoke("deploy_agent_spec", { spec });
+      await tauri.deployAgentSpec(spec);
       toast.success("Agent deployed to Rainy-ATM");
-      onBack();
     } catch (error) {
       console.error("Failed to deploy agent:", error);
       toast.error(`Deploy failed: ${error}`);
@@ -111,6 +95,11 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
           </div>
         </div>
         <div className="flex gap-2">
+          {onOpenStore && (
+            <Button variant="ghost" onPress={onOpenStore} className="font-medium">
+              <Library className="size-4 mr-2" /> Agent Store
+            </Button>
+          )}
           {/* Action buttons */}
           <Button
             variant="secondary"

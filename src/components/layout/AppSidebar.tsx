@@ -15,6 +15,7 @@ import {
   Settings,
   Network,
   Bot,
+  Library,
 } from "lucide-react";
 import { MacOSToggle } from "./MacOSToggle";
 import { useTheme } from "../../hooks/useTheme";
@@ -267,6 +268,12 @@ export function AppSidebar({
             label="Agent Builder"
             icon={Bot}
             colorClass="text-orange-500"
+          />
+          <NavItem
+            id="agent-store"
+            label="Agents Store"
+            icon={Library}
+            colorClass="text-amber-500"
           />
         </div>
       </div>
