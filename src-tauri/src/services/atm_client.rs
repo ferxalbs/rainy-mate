@@ -56,6 +56,10 @@ impl ATMClient {
         }
     }
 
+    pub async fn get_state(&self) -> ATMClientState {
+        self.state.lock().await.clone()
+    }
+
     pub async fn set_credentials(&self, api_key: String) {
         let mut state = self.state.lock().await;
         state.api_key = Some(api_key);

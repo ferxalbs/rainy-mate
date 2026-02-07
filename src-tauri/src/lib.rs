@@ -223,6 +223,23 @@ pub fn run() {
                 poller.start().await;
             });
 
+            // Initialize Cloud Bridge (WebSocket)
+            let app_handle_cb = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Wait for other services
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                let atm = app_handle_cb
+                    .state::<crate::services::ATMClient>()
+                    .inner()
+                    .clone();
+                let bridge = crate::services::cloud_bridge::CloudBridge::new(
+                    std::sync::Arc::new(atm),
+                    app_handle_cb.clone(),
+                );
+                bridge.start();
+                app_handle_cb.manage(bridge);
+            });
+
             Ok(())
         })
         // Commands

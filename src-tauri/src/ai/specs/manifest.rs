@@ -44,20 +44,3 @@ pub struct ConnectorsConfig {
     pub telegram_channel_id: Option<String>,
     pub auto_reply: bool,
 }
-
-impl AgentSpec {
-    pub fn new(id: String, name: String) -> Self {
-        Self {
-            id,
-            version: "2.0.0".to_string(),
-            soul: AgentSoul {
-                name,
-                ..Default::default()
-            },
-            skills: AgentSkills::new(),
-            memory_config: Default::default(),
-            connectors: Default::default(),
-            signature: None,
-        }
-    }
-}

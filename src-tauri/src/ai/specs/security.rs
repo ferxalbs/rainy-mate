@@ -15,9 +15,5 @@ pub struct AgentSignature {
 }
 
 impl AgentSignature {
-    pub fn verify(&self, _content_hash: &str) -> bool {
-        // Placeholder for actual crypto verification
-        // In Phase 1, we might just check if the hash matches locally
-        true
-    }
+    // Methods removed to avoid dead code warnings
 }

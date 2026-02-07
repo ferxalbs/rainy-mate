@@ -62,3 +62,5 @@ schemars = { version = "0.8", features = ["preserve_order"] }
 # Native Browser Control (CDP)
 chromiumoxide = { version = "0.8.0", features = ["tokio-runtime"], default-features = false }
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
+tokio-tungstenite = { version = "0.26.1", features = ["native-tls"] }
+futures-util = "0.3"

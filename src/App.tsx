@@ -9,9 +9,11 @@ import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
 import type { Folder } from "./types";
 import * as tauri from "./services/tauri";
+import { useCloudEvents } from "./hooks/useCloudEvents";
 
 function App() {
   const { refreshProviders } = useAIProvider();
+  useCloudEvents();
 
   // Folder management hook
   const {

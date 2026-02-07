@@ -8,16 +8,8 @@ const IDENTITY_KEY_ID: &str = "rainy_agent_identity_v1";
 
 #[derive(Debug, thiserror::Error)]
 pub enum SecurityError {
-    #[error("Key generation failed")]
-    KeyGenerationFailed,
-    #[error("Signing failed: {0}")]
-    SigningFailed(String),
     #[error("Keychain error: {0}")]
     KeychainError(String),
-    #[error("Invalid signature")]
-    InvalidSignature,
-    #[error("Key decoding failed: {0}")]
-    KeyDecodingFailed(String),
 }
 
 pub struct SecurityService {

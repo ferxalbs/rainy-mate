@@ -4,6 +4,7 @@
 pub mod airlock;
 pub mod atm_client;
 pub mod browser_controller;
+pub mod cloud_bridge;
 pub mod command_poller;
 pub mod document;
 pub mod file_manager;

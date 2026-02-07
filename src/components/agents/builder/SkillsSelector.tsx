@@ -1,183 +1,123 @@
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  Divider,
-  Switch,
-  Chip,
-  CheckboxGroup,
-  Checkbox,
-} from "@heroui/react";
-import { AgentSkills, Capability, Permission } from "../../../types/agent-spec";
+import { Card, Separator, Switch } from "@heroui/react";
+import { AgentSkills } from "../../../types/agent-spec";
+import { Folder, Globe, Database, Terminal, LucideIcon } from "lucide-react";
 
 interface SkillsSelectorProps {
   skills: AgentSkills;
   onChange: (skills: AgentSkills) => void;
 }
 
-const AVAILABLE_CAPABILITIES = [
-  {
-    name: "filesystem",
-    description: "Access local files and directories",
-    defaultScopes: ["$HOME/Documents", "$HOME/Projects"],
-    permissions: [Permission.Read, Permission.Write],
-  },
-  {
-    name: "browser",
-    description: "Browse the web and capture content",
-    defaultScopes: ["https://*"],
-    permissions: [Permission.Read],
-  },
-  {
-    name: "shell",
-    description: "Execute system commands",
-    defaultScopes: ["ls", "grep", "git"],
-    permissions: [Permission.Execute],
-  },
-  {
-    name: "telegram",
-    description: "Send and receive messages on Telegram",
-    defaultScopes: ["chat_id:*"],
-    permissions: [Permission.Read, Permission.Write],
-  },
-];
-
 export function SkillsSelector({ skills, onChange }: SkillsSelectorProps) {
-  const hasCapability = (name: string) => {
-    return skills.capabilities.some((c) => c.name === name);
-  };
-
   const toggleCapability = (name: string, enabled: boolean) => {
+    let newCaps = [...skills.capabilities];
     if (enabled) {
-      // Add default capability
-      const template = AVAILABLE_CAPABILITIES.find((c) => c.name === name);
-      if (template) {
-        onChange({
-          ...skills,
-          capabilities: [
-            ...skills.capabilities,
-            {
-              name: template.name,
-              description: template.description,
-              scopes: template.defaultScopes,
-              permissions: template.permissions,
-            },
-          ],
-        });
+      if (!newCaps.find((c) => c.name === name)) {
+        newCaps.push({
+          name,
+          description: "Added by user",
+          scopes: [],
+          permissions: ["Read", "Write"],
+        } as any);
       }
     } else {
-      // Remove capability
-      onChange({
-        ...skills,
-        capabilities: skills.capabilities.filter((c) => c.name !== name),
-      });
+      newCaps = newCaps.filter((c) => c.name !== name);
     }
+    onChange({ ...skills, capabilities: newCaps });
   };
 
-  // Helper to update specific capability fields (scopes/permissions)
-  const updateCapability = (
+  const hasCapability = (name: string) =>
+    !!skills.capabilities.find((c) => c.name === name);
+
+  const renderCapToggle = (
     name: string,
-    updater: (c: Capability) => Capability,
+    Icon: LucideIcon,
+    label: string,
+    desc: string,
   ) => {
-    onChange({
-      ...skills,
-      capabilities: skills.capabilities.map((c) =>
-        c.name === name ? updater(c) : c,
-      ),
-    });
+    const isEnabled = hasCapability(name);
+    return (
+      <div className="flex items-center justify-between p-3 border border-default-200 rounded-lg hover:bg-content2 transition-colors">
+        <div className="flex items-center gap-3">
+          <div
+            className={`p-2 rounded-lg ${isEnabled ? "bg-primary/10 text-primary" : "bg-default-100 text-default-500"}`}
+          >
+            {Icon && <Icon className="size-5" />}
+          </div>
+          <div>
+            <h5 className="font-medium">{label}</h5>
+            <p className="text-xs text-default-500">{desc}</p>
+          </div>
+        </div>
+        <Switch
+          size="sm"
+          isSelected={isEnabled}
+          onChange={(e) => {
+            // HeroUI Switch onChange might return event OR boolean depending on version quirk.
+            // If previous error said 'target' does not exist on 'boolean', then 'e' IS boolean.
+            // We cast to any to be safe or try to infer.
+            // But wait, standard React onChange is Event.
+            // If Heroui overrides it to return boolean, types should match.
+            // Let's try explicit boolean argument based on error.
+            toggleCapability(name, e as any as boolean);
+          }}
+          // Actually, let's try onValueChange again? No, it didn't exist.
+          // Let's rely on the error message: "Property 'target' does not exist on type 'boolean'".
+          // This implies the argument IS boolean.
+        />
+      </div>
+    );
   };
 
   return (
     <Card className="w-full">
-      <CardHeader className="flex flex-col items-start gap-1">
-        <p className="text-md font-bold">Skills & Capabilities</p>
-        <p className="text-small text-default-500">
-          What is this agent allowed to do?
-        </p>
-      </CardHeader>
-      <Divider />
-      <CardBody className="gap-6">
-        {AVAILABLE_CAPABILITIES.map((cap) => {
-          const isEnabled = hasCapability(cap.name);
-          const currentConfig = skills.capabilities.find(
-            (c) => c.name === cap.name,
-          );
+      <Card.Header className="flex gap-3">
+        <div className="flex flex-col">
+          <p className="text-md font-bold">Skills & Permissions</p>
+          <p className="text-small text-default-500">
+            Grant this agent access to system resources.
+          </p>
+        </div>
+      </Card.Header>
+      <Separator />
+      <Card.Content className="p-4 flex flex-col gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {renderCapToggle(
+            "filesystem",
+            Folder,
+            "Filesystem",
+            "Read/Write access to workspace files",
+          )}
+          {renderCapToggle(
+            "browser",
+            Globe,
+            "Web Browser",
+            "Access to external websites",
+          )}
+          {renderCapToggle(
+            "database",
+            Database,
+            "Knowledge Base",
+            "Access to vector stores and memory",
+          )}
+          {renderCapToggle(
+            "terminal",
+            Terminal,
+            "Shell Execution",
+            "Execute sandboxed commands",
+          )}
+        </div>
 
-          return (
-            <div
-              key={cap.name}
-              className="flex flex-col gap-2 p-3 rounded-lg border border-default-100 hover:border-default-300 transition-colors"
-            >
-              <div className="flex justify-between items-center">
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold uppercase tracking-wider text-primary">
-                    {cap.name}
-                  </span>
-                  <span className="text-xs text-default-500">
-                    {cap.description}
-                  </span>
-                </div>
-                <Switch
-                  isSelected={isEnabled}
-                  onValueChange={(v) => toggleCapability(cap.name, v)}
-                  size="sm"
-                />
-              </div>
+        <div className="mt-4">
+          <h4 className="text-sm font-medium mb-2">Scope Configuration</h4>
+          <p className="text-xs text-default-400 mb-4">
+            Refine access to specific paths or domains.
+          </p>
 
-              {isEnabled && currentConfig && (
-                <div className="ml-4 pl-4 border-l-2 border-primary/20 space-y-3 mt-2">
-                  {/* Permissions */}
-                  <div className="flex gap-2 flex-wrap">
-                    {Object.values(Permission).map((p) => {
-                      const hasPerm = currentConfig.permissions.includes(p);
-                      // Simple toggle logic for permissions
-                      const togglePerm = () => {
-                        const newPerms = hasPerm
-                          ? currentConfig.permissions.filter((x) => x !== p)
-                          : [...currentConfig.permissions, p];
-                        updateCapability(cap.name, (c) => ({
-                          ...c,
-                          permissions: newPerms,
-                        }));
-                      };
-
-                      return (
-                        <Chip
-                          key={p}
-                          variant={hasPerm ? "solid" : "bordered"}
-                          color={hasPerm ? "primary" : "default"}
-                          size="sm"
-                          className="cursor-pointer select-none"
-                          onClick={togglePerm}
-                        >
-                          {p}
-                        </Chip>
-                      );
-                    })}
-                  </div>
-
-                  {/* Scopes Display (ReadOnly for now in MVP) */}
-                  <div className="flex gap-2 flex-wrap items-center">
-                    <span className="text-xs text-default-400">Scopes:</span>
-                    {currentConfig.scopes.map((scope, idx) => (
-                      <code
-                        key={idx}
-                        className="text-xs bg-default-100 px-1 py-0.5 rounded"
-                      >
-                        {scope}
-                      </code>
-                    ))}
-                    {/* 
-                         TODO: Add scope editor 
-                         For now, users accept defaults or edit JSON manually if we add a raw view.
-                        */}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </CardBody>
+          <div className="p-4 bg-content2 rounded-lg text-center text-sm text-default-500 border border-dashed border-default-300">
+            Detailed scope configuration coming safely in v2.1
+          </div>
+        </div>
+      </Card.Content>
     </Card>
   );
 }

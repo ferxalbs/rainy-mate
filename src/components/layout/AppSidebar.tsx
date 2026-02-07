@@ -262,6 +262,12 @@ export function AppSidebar({
             icon={Network}
             colorClass="text-purple-500"
           />
+          <NavItem
+            id="agent-builder"
+            label="Agent Builder"
+            icon={Bot}
+            colorClass="text-orange-500"
+          />
         </div>
       </div>
 
