@@ -489,7 +489,12 @@ export function useAgentChat() {
   }, []);
 
   const runNativeAgent = useCallback(
-    async (instruction: string, modelId: string, workspaceId: string) => {
+    async (
+      instruction: string,
+      modelId: string,
+      workspaceId: string,
+      agentSpecId?: string,
+    ) => {
       const userMsg: AgentMessage = {
         id: crypto.randomUUID(),
         type: "user",
@@ -516,6 +521,7 @@ export function useAgentChat() {
           instruction,
           modelId,
           workspaceId,
+          agentSpecId,
         );
 
         setMessages((prev) =>

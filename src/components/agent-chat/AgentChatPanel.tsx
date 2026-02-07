@@ -14,6 +14,7 @@ import { MacOSToggle } from "../layout/MacOSToggle";
 
 import { UnifiedModelSelector } from "../ai/UnifiedModelSelector";
 import { MessageBubble } from "./MessageBubble";
+import { AgentSpec } from "../../types/agent-spec";
 
 interface AgentChatPanelProps {
   workspacePath: string;
@@ -30,6 +31,8 @@ export function AgentChatPanel({
   const { mode, setMode } = useTheme();
   const [input, setInput] = useState("");
   const [currentModelId, setCurrentModelId] = useState<string>("");
+  const [agentSpecs, setAgentSpecs] = useState<AgentSpec[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize with default model if none selected
@@ -44,6 +47,21 @@ export function AgentChatPanel({
       }
     };
     initModel();
+  }, []);
+
+  useEffect(() => {
+    const loadSpecs = async () => {
+      try {
+        const specs = (await tauri.listAgentSpecs()) as AgentSpec[];
+        setAgentSpecs(specs);
+        if (specs.length > 0) {
+          setSelectedAgentId((prev) => prev || specs[0].id);
+        }
+      } catch (e) {
+        console.error("Failed to load saved agents", e);
+      }
+    };
+    loadSpecs();
   }, []);
 
   const handleModelSelect = async (modelId: string) => {
@@ -82,9 +100,25 @@ export function AgentChatPanel({
     setInput("");
 
     if (isNativeMode) {
-      await runNativeAgent(instruction, currentModelId, workspacePath);
+      await runNativeAgent(
+        instruction,
+        currentModelId,
+        workspacePath,
+        selectedAgentId || undefined,
+      );
       return;
     }
+
+    const selectedSpec = agentSpecs.find((s) => s.id === selectedAgentId);
+    const selectedAgentContext = selectedSpec
+      ? `[ACTIVE AGENT PROFILE]
+Name: ${selectedSpec.soul.name}
+Description: ${selectedSpec.soul.description}
+Personality: ${selectedSpec.soul.personality}
+Tone: ${selectedSpec.soul.tone}
+Soul:
+${selectedSpec.soul.soul_content}`
+      : undefined;
 
     // In Deep Mode, inject system context that tells AI about our specific file tools
     const hiddenContext = isDeepProcessing
@@ -108,7 +142,12 @@ Example: If user says "create a test file", respond with:
 Click 'Execute Task' when ready."]`
       : undefined;
 
-    await streamChat(instruction, currentModelId, hiddenContext);
+    const mergedHiddenContext =
+      selectedAgentContext && hiddenContext
+        ? `${selectedAgentContext}\n\n${hiddenContext}`
+        : (selectedAgentContext ?? hiddenContext);
+
+    await streamChat(instruction, currentModelId, mergedHiddenContext);
   };
 
   const handlePlan = async () => {
@@ -311,6 +350,26 @@ Click 'Execute Task' when ready."]`
         />
 
         <div className="relative z-10 flex items-center gap-3 p-1.5 pl-3 rounded-full bg-background/60 backdrop-blur-2xl border border-white/10 shadow-lg pointer-events-auto transition-all hover:bg-background/80">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-background/50 px-2 py-1">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/80">
+              Agent
+            </span>
+            <select
+              value={selectedAgentId}
+              onChange={(e) => setSelectedAgentId(e.target.value)}
+              className="bg-transparent text-xs outline-none min-w-[160px]"
+            >
+              {agentSpecs.length === 0 && (
+                <option value="">Default Agent</option>
+              )}
+              {agentSpecs.map((spec) => (
+                <option key={spec.id} value={spec.id}>
+                  {spec.soul.name || "Untitled Agent"}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <UnifiedModelSelector
             selectedModelId={currentModelId}
             onSelect={handleModelSelect}
@@ -371,7 +430,8 @@ Click 'Execute Task' when ready."]`
                 How can I help you?
               </h1>
               <p className="text-muted-foreground text-sm mb-10 text-center max-w-sm font-light">
-                Rainy Agent is ready to assist with your workspace tasks.
+                {(agentSpecs.find((s) => s.id === selectedAgentId)?.soul.name ||
+                  "Rainy Agent") + " is ready to assist with your workspace tasks."}
               </p>
 
               {renderInputArea(true)}
