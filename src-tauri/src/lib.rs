@@ -474,6 +474,7 @@ pub fn run() {
             manager::load_agents_from_db,
             manager::save_chat_message,
             manager::get_chat_history,
+            manager::clear_chat_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

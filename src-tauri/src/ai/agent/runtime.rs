@@ -161,6 +161,12 @@ impl AgentRuntime {
         }
     }
 
+    /// Replace in-memory history for this runtime instance.
+    pub async fn set_history(&self, messages: Vec<AgentMessage>) {
+        let mut hist = self.history.lock().await;
+        *hist = messages;
+    }
+
     /// Primary entry point: Run a workflow/turn
     pub async fn run<F>(&self, input: &str, on_event: F) -> Result<String, String>
     where

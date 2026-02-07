@@ -1390,6 +1390,10 @@ export async function executeSkill(
   });
 }
 
+export async function clearChatHistory(chatId: string): Promise<void> {
+  return invoke<void>("clear_chat_history", { chatId });
+}
+
 // Agent Command
 export const runAgentWorkflow = async (
   prompt: string,

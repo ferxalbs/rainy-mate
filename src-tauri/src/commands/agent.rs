@@ -1,9 +1,47 @@
-use crate::ai::agent::runtime::{AgentConfig, AgentRuntime};
+use crate::ai::agent::runtime::{AgentConfig, AgentContent, AgentMessage, AgentRuntime};
 use crate::ai::specs::AgentSpec;
 use crate::commands::router::IntelligentRouterState;
 use crate::services::SkillExecutor;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
+
+const MAX_HISTORY_MESSAGES: usize = 30;
+const MAX_HISTORY_MESSAGE_CHARS: usize = 4000;
+
+fn truncate_text(input: &str, max_chars: usize) -> String {
+    if input.chars().count() <= max_chars {
+        return input.to_string();
+    }
+    let out: String = input.chars().take(max_chars).collect();
+    format!("{}\n\n[TRUNCATED]", out)
+}
+
+fn build_runtime_history(rows: Vec<(String, String, String)>) -> Vec<AgentMessage> {
+    let mut selected: Vec<AgentMessage> = rows
+        .into_iter()
+        .filter_map(|(_, role, content)| {
+            if role != "user" && role != "assistant" {
+                return None;
+            }
+            Some(AgentMessage {
+                role,
+                content: AgentContent::text(truncate_text(&content, MAX_HISTORY_MESSAGE_CHARS)),
+                tool_calls: None,
+                tool_call_id: None,
+            })
+        })
+        .collect();
+
+    if selected.len() > MAX_HISTORY_MESSAGES {
+        let skip = selected.len() - MAX_HISTORY_MESSAGES;
+        selected = selected
+            .into_iter()
+            .skip(skip)
+            .collect();
+    }
+
+    selected
+}
 
 fn default_instructions(workspace_id: &str) -> String {
     format!(
@@ -159,14 +197,20 @@ pub async fn run_agent_workflow(
 
     let runtime = AgentRuntime::new(config, router.0.clone(), skills.inner().clone(), memory);
 
+    // Load persisted conversation history into runtime so local Native Runtime
+    // preserves context across turns.
+    let history_rows = agent_manager
+        .get_history(&chat_id)
+        .await
+        .map_err(|e| format!("Failed to load chat history: {}", e))?;
+    runtime.set_history(build_runtime_history(history_rows)).await;
+
     // 2. Run Workflow with Persistence
     let app_handle_clone = app_handle.clone();
-    let manager = agent_manager.inner().clone();
-    let chat_id_persist = chat_id.clone();
 
     // Persist Initial User Prompt
-    let _ = manager
-        .save_message(&chat_id_persist, "user", &prompt)
+    let _ = agent_manager
+        .save_message(&chat_id, "user", &prompt)
         .await
         .map_err(|e| format!("Failed to save user message: {}", e))?;
 
@@ -174,47 +218,14 @@ pub async fn run_agent_workflow(
         .run(&prompt, move |event| {
             // Emit to frontend
             let _ = app_handle_clone.emit("agent://event", event.clone());
-
-            // Persist relevant events to DB asynchronously
-            let manager = manager.clone();
-            let chat_id = chat_id_persist.clone();
-
-            tauri::async_runtime::spawn(async move {
-                let (role, content) = match event {
-                    crate::ai::agent::runtime::AgentEvent::Thought(thought) => {
-                        (Some("assistant"), Some(thought))
-                    }
-                    crate::ai::agent::runtime::AgentEvent::ToolCall(call) => (
-                        Some("assistant"),
-                        Some(format!(
-                            "Tool Call: {} ({})",
-                            call.function.name, call.function.arguments
-                        )),
-                    ),
-                    crate::ai::agent::runtime::AgentEvent::ToolResult { id: _, result } => {
-                        (Some("tool"), Some(result))
-                    }
-                    crate::ai::agent::runtime::AgentEvent::Error(err) => {
-                        (Some("system"), Some(format!("Error: {}", err)))
-                    }
-                    _ => (None, None),
-                };
-
-                if let (Some(r), Some(c)) = (role, content) {
-                    if let Err(e) = manager.save_message(&chat_id, r, &c).await {
-                        eprintln!("Failed to persist agent event: {}", e);
-                    }
-                }
-            });
         })
         .await?;
 
-    // Persist Final Response
-    // Note: The callback handles intermediate steps.
-    // Ideally, the final response is also just the last Thought/Message.
-    // If run returns a string distinct from events, we should save it.
-    // Looking at runtime.rs, it returns the last message content if assistant.
-    // So it might be redundant if we capture Thoughts, but let's double check.
+    // Persist final assistant response only (avoid noisy intermediate event spam).
+    let _ = agent_manager
+        .save_message(&chat_id, "assistant", &response)
+        .await
+        .map_err(|e| format!("Failed to save assistant message: {}", e))?;
 
     Ok(response)
 }

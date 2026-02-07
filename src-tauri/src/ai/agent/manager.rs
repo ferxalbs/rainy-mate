@@ -80,6 +80,14 @@ impl AgentManager {
         Ok(messages)
     }
 
+    pub async fn clear_history(&self, chat_id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM messages WHERE chat_id = ?")
+            .bind(chat_id)
+            .execute(&*self.db)
+            .await?;
+        Ok(())
+    }
+
     pub async fn ensure_chat_session(
         &self,
         chat_id: &str,
@@ -153,4 +161,15 @@ pub async fn get_chat_history(
     chat_id: String,
 ) -> Result<Vec<(String, String, String)>, String> {
     state.get_history(&chat_id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn clear_chat_history(
+    state: State<'_, AgentManager>,
+    chat_id: String,
+) -> Result<(), String> {
+    state
+        .clear_history(&chat_id)
+        .await
+        .map_err(|e| e.to_string())
 }

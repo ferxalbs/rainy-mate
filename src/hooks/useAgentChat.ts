@@ -19,6 +19,12 @@ export function useAgentChat() {
     setCurrentPlan(null);
   }, []);
 
+  const clearMessagesAndContext = useCallback(async (chatId: string) => {
+    await tauri.clearChatHistory(chatId);
+    setMessages([]);
+    setCurrentPlan(null);
+  }, []);
+
   // Helper to parse tool calls from content
   const parseToolCalls = useCallback((content: string) => {
     const toolCalls: Array<{
@@ -568,6 +574,7 @@ export function useAgentChat() {
     executeDiscussedPlan,
     executeToolCalls,
     clearMessages,
+    clearMessagesAndContext,
     runNativeAgent,
   };
 }

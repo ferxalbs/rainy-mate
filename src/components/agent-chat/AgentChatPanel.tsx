@@ -7,7 +7,15 @@ import {
   TooltipTrigger,
 } from "@heroui/react";
 import * as tauri from "../../services/tauri";
-import { Paperclip, ArrowUp, Sparkles, Trash2, Zap, Info } from "lucide-react";
+import {
+  Paperclip,
+  ArrowUp,
+  Sparkles,
+  Trash2,
+  Zap,
+  Info,
+  Eraser,
+} from "lucide-react";
 import { useAgentChat } from "../../hooks/useAgentChat";
 import { useTheme } from "../../hooks/useTheme";
 import { MacOSToggle } from "../layout/MacOSToggle";
@@ -84,6 +92,7 @@ export function AgentChatPanel({
     executeDiscussedPlan,
     executeToolCalls,
     clearMessages,
+    clearMessagesAndContext,
     runNativeAgent,
   } = useAgentChat();
 
@@ -385,15 +394,44 @@ Click 'Execute Task' when ready."]`
           <div className="w-px h-4 bg-border/20 mx-1" />
 
           <div className="flex items-center gap-1 pr-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              isIconOnly
-              onPress={clearMessages}
-              className="rounded-full w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-400/10"
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
+            <Tooltip delay={0}>
+              <TooltipTrigger>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  onPress={clearMessages}
+                  className="rounded-full w-8 h-8 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                >
+                  <Eraser className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span className="text-xs">Clear UI only</span>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delay={0}>
+              <TooltipTrigger>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  onPress={async () => {
+                    try {
+                      await clearMessagesAndContext(workspacePath);
+                    } catch (e) {
+                      console.error("Failed to clear persisted chat context:", e);
+                    }
+                  }}
+                  className="rounded-full w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-400/10"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span className="text-xs">Delete context (memory)</span>
+              </TooltipContent>
+            </Tooltip>
             {onClose && (
               <Button
                 size="sm"
