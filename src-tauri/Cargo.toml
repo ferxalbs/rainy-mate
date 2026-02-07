@@ -37,7 +37,7 @@ futures = "0.3.31"
 security-framework = "3.5.1"
 tracing = "0.1.44"
 env_logger = "0.11"
-rand = "0.9.2"
+rand = "0.8"
 mac_address = "1.1" # For Node fingerprinting
 sha2 = "0.10"
 hex = "0.4"
@@ -61,3 +61,4 @@ serde_repr = "0.1.20"
 schemars = { version = "0.8", features = ["preserve_order"] }
 # Native Browser Control (CDP)
 chromiumoxide = { version = "0.8.0", features = ["tokio-runtime"], default-features = false }
+ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }

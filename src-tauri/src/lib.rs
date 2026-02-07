@@ -424,6 +424,8 @@ pub fn run() {
             commands::execute_skill,
             // Agent Workflow (Native Rust)
             commands::agent::run_agent_workflow,
+            // Deployment (Phase 1)
+            commands::deploy_agent,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,3 +1,4 @@
+// @deprecated: This module is being replaced by the new native AgentSpec v2 system.
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::workflow::{ActStep, AgentState, ThinkStep, Workflow};
 use crate::ai::router::IntelligentRouter;

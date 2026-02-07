@@ -150,7 +150,7 @@ impl LoadBalancer {
             return None;
         }
 
-        let index = rand::rng().random_range(0..self.providers.len());
+        let index = rand::thread_rng().gen_range(0..self.providers.len());
         self.providers.get(index).cloned()
     }
 

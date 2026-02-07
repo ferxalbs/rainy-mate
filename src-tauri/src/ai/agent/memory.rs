@@ -1,3 +1,4 @@
+// @deprecated: This module is being replaced by the new native AgentSpec v2 system.
 use chrono::{TimeZone, Utc};
 use reqwest::Client;
 use scraper::{Html, Selector};

@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   Settings,
   Network,
+  Bot,
 } from "lucide-react";
 import { MacOSToggle } from "./MacOSToggle";
 import { useTheme } from "../../hooks/useTheme";

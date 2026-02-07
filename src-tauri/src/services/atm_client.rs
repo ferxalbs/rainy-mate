@@ -251,4 +251,49 @@ impl ATMClient {
 
         res.json().await.map_err(|e| e.to_string())
     }
+
+    /// Deploys an AgentSpec v2 to the Cloud, signing it first.
+    pub async fn deploy_agent(
+        &self,
+        mut spec: crate::ai::specs::AgentSpec,
+    ) -> Result<serde_json::Value, String> {
+        use crate::ai::features::security_service::SecurityService;
+
+        // 1. Sign the agent package
+        let security = SecurityService::new();
+
+        // Hash capabilities for integrity
+        let skills_json = serde_json::to_value(&spec.skills).map_err(|e| e.to_string())?;
+        let cap_hash = SecurityService::hash_capabilities(&skills_json);
+
+        // Create content to sign (Soul + Skills Hash + Version)
+        let signable_content = format!("{}:{}:{}", spec.soul.name, cap_hash, spec.version);
+        let signature_str = security
+            .sign_content(&signable_content)
+            .map_err(|e| e.to_string())?;
+        let pub_key = security
+            .get_public_key_string()
+            .map_err(|e| e.to_string())?;
+
+        // Attach signature
+        spec.signature = Some(crate::ai::specs::AgentSignature {
+            signature: signature_str,
+            signer_id: pub_key, // Using public key as ID for now
+            capabilities_hash: cap_hash,
+            origin_device_id: "desktop-local".to_string(), // TODO: Get real device ID
+            signed_at: chrono::Utc::now().timestamp(),
+        });
+
+        // 2. Wrap in CreateAgentParams
+        let config_json = serde_json::to_value(&spec).map_err(|e| e.to_string())?;
+
+        let params = CreateAgentParams {
+            name: spec.soul.name.clone(),
+            type_: "v2_spec".to_string(),
+            config: config_json,
+        };
+
+        // 3. Upload
+        self.create_agent(params).await
+    }
 }

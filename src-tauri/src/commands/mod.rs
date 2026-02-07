@@ -7,6 +7,7 @@ pub mod ai;
 pub mod ai_providers;
 pub mod airlock;
 pub mod atm;
+pub mod deployment;
 
 pub mod document;
 pub mod file;
@@ -30,6 +31,7 @@ pub use ai::*;
 pub use ai_providers::*;
 pub use airlock::*;
 pub use atm::*;
+pub use deployment::*;
 
 pub use document::*;
 pub use file::*;

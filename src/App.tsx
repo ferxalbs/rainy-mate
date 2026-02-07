@@ -3,6 +3,7 @@ import { TahoeLayout, AIDocumentPanel, AIResearchPanel } from "./components";
 import { SettingsPage } from "./components/settings";
 import { AgentChatPanel } from "./components/agent-chat/AgentChatPanel";
 import { NeuralPanel, AirlockEvents } from "./components/neural";
+import { AgentBuilder } from "./components/agents/builder/AgentBuilder";
 import { Button, Card, Toast } from "@heroui/react";
 import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
@@ -146,6 +147,13 @@ function App() {
           {activeSection === "neural-link" && (
             <div className="flex-1 overflow-auto bg-content1/50">
               <NeuralPanel />
+            </div>
+          )}
+
+          {/* Agent Builder */}
+          {activeSection === "agent-builder" && (
+            <div className="flex-1 h-full min-h-0">
+              <AgentBuilder onBack={() => handleNavigate("agent-chat")} />
             </div>
           )}
 
