@@ -292,7 +292,15 @@ impl SkillExecutor {
                             exit_code: Some(0),
                         }
                     }
-                    Err(e) => self.error(&e),
+                    Err(e) => {
+                        // Recover from stuck browser sessions after navigation timeout/failure.
+                        if e.to_lowercase().contains("timed out")
+                            || e.to_lowercase().contains("timeout")
+                        {
+                            self.browser.close().await;
+                        }
+                        self.error(&e)
+                    }
                 }
             }
             "screenshot" => {

@@ -9,6 +9,11 @@ use chromiumoxide::page::ScreenshotParams;
 use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::{timeout, Duration};
+
+const BROWSER_LAUNCH_TIMEOUT: Duration = Duration::from_secs(20);
+const BROWSER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
+const BROWSER_EVAL_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// Result of a browser navigation operation
 #[derive(Debug, Clone)]
@@ -57,8 +62,14 @@ impl BrowserController {
             .build()
             .map_err(|e| format!("Failed to build browser config: {}", e))?;
 
-        let (browser, mut handler) = Browser::launch(config)
+        let (browser, mut handler) = timeout(BROWSER_LAUNCH_TIMEOUT, Browser::launch(config))
             .await
+            .map_err(|_| {
+                format!(
+                    "Timed out launching browser after {}s",
+                    BROWSER_LAUNCH_TIMEOUT.as_secs()
+                )
+            })?
             .map_err(|e| format!("Failed to launch browser: {}", e))?;
 
         // Spawn handler task to process CDP events
@@ -85,9 +96,15 @@ impl BrowserController {
 
         println!("[BrowserController] Navigating to: {}", url);
 
-        let page = browser
-            .new_page(url)
+        let page = timeout(BROWSER_NAVIGATION_TIMEOUT, browser.new_page(url))
             .await
+            .map_err(|_| {
+                format!(
+                    "Navigation timed out after {}s for {}",
+                    BROWSER_NAVIGATION_TIMEOUT.as_secs(),
+                    url
+                )
+            })?
             .map_err(|e| format!("Failed to create page: {}", e))?;
 
         // Check if navigation happened (URL changed) or wait for load event
@@ -96,26 +113,31 @@ impl BrowserController {
 
         // Wait for network idle or load event if possible (basic wait for now kept short)
         // @TODO: Implement stricter wait_for_navigation if needed
-        tokio::time::sleep(tokio::time::Duration::from_secs(4)).await; // Increased slightly to ensure render, but ideally use events
+        tokio::time::sleep(Duration::from_secs(4)).await; // Short settle delay for rendering
 
         // Get page info
-        let current_url = page
-            .url()
+        let current_url = timeout(BROWSER_EVAL_TIMEOUT, page.url())
             .await
+            .map_err(|_| "Timed out reading page URL".to_string())?
             .map_err(|e| format!("Failed to get URL: {}", e))?
             .unwrap_or_else(|| url.to_string());
 
-        let title = page
-            .evaluate("document.title")
+        let title_eval = timeout(BROWSER_EVAL_TIMEOUT, page.evaluate("document.title"))
             .await
+            .map_err(|_| "Timed out reading page title".to_string())?;
+        let title = title_eval
             .map_err(|e| format!("Failed to get title: {}", e))?
             .into_value::<String>()
             .unwrap_or_else(|_| "Untitled".to_string());
 
         // Get visible text content (first 2000 chars)
-        let content = page
-            .evaluate("document.body.innerText.substring(0, 2000)")
-            .await
+        let content_eval = timeout(
+            BROWSER_EVAL_TIMEOUT,
+            page.evaluate("document.body ? document.body.innerText.substring(0, 2000) : \"\""),
+        )
+        .await
+        .map_err(|_| "Timed out reading page content".to_string())?;
+        let content = content_eval
             .map_err(|e| format!("Failed to get content: {}", e))?
             .into_value::<String>()
             .unwrap_or_default();
