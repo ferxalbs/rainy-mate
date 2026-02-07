@@ -14,6 +14,27 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+const MAX_MODEL_MESSAGE_BYTES: usize = 95 * 1024;
+const MAX_TOOL_TEXT_BYTES: usize = 48 * 1024;
+const MAX_MEMORY_CONTEXT_BYTES: usize = 24 * 1024;
+
+fn truncate_to_max_bytes(input: &str, max_bytes: usize) -> String {
+    if input.len() <= max_bytes {
+        return input.to_string();
+    }
+    let mut cut = 0usize;
+    for (idx, _) in input.char_indices() {
+        if idx <= max_bytes {
+            cut = idx;
+        } else {
+            break;
+        }
+    }
+    let mut out = input[..cut].to_string();
+    out.push_str("\n\n[TRUNCATED: content exceeded size limits]");
+    out
+}
+
 /// Helper to detect if a string is a base64 data URI for an image
 fn is_image_data_uri(s: &str) -> bool {
     s.starts_with("data:image/") && s.contains("base64,")
@@ -25,8 +46,19 @@ fn tool_output_to_content(output: String) -> AgentContent {
         // Pure image - wrap in ImageUrl part
         AgentContent::image(output)
     } else {
-        // Plain text
-        AgentContent::text(output)
+        // Screenshot tool currently returns JSON with a huge data_uri payload.
+        // Keep only metadata in the model context to avoid >100KB message failures.
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&output) {
+            if json.get("data_uri").and_then(|v| v.as_str()).is_some() {
+                let width = json.get("width").and_then(|v| v.as_u64()).unwrap_or(0);
+                let height = json.get("height").and_then(|v| v.as_u64()).unwrap_or(0);
+                return AgentContent::text(format!(
+                    "Screenshot captured successfully ({}x{}).",
+                    width, height
+                ));
+            }
+        }
+        AgentContent::text(truncate_to_max_bytes(&output, MAX_TOOL_TEXT_BYTES))
     }
 }
 
@@ -172,7 +204,10 @@ impl WorkflowStep for ThinkStep {
             .map(|m| {
                 if m.role == "system" {
                     // System messages are text-only, use as_text()
-                    crate::ai::provider_types::ChatMessage::system(m.content.as_text())
+                    crate::ai::provider_types::ChatMessage::system(truncate_to_max_bytes(
+                        &m.content.as_text(),
+                        MAX_MODEL_MESSAGE_BYTES,
+                    ))
                 } else if m.role == "user" {
                     // User messages support multimodal, convert AgentContent -> MessageContent
                     crate::ai::provider_types::ChatMessage::user(m.content.clone())
@@ -202,6 +237,7 @@ impl WorkflowStep for ThinkStep {
                     .map(|h| format!("- {}", h.content))
                     .collect::<Vec<_>>()
                     .join("\n");
+                let ctx = truncate_to_max_bytes(&ctx, MAX_MEMORY_CONTEXT_BYTES);
 
                 let system_ctx = format!(
                     "Retrieved Memory Context:\n{}\n\nUse this context to answer the user's request if relevant.",
@@ -214,6 +250,26 @@ impl WorkflowStep for ThinkStep {
                     0,
                     crate::ai::provider_types::ChatMessage::system(system_ctx),
                 );
+            }
+        }
+
+        // Final guardrail: enforce per-message text size limits before provider call.
+        for msg in messages.iter_mut() {
+            match &mut msg.content {
+                crate::ai::provider_types::MessageContent::Text(text) => {
+                    if text.len() > MAX_MODEL_MESSAGE_BYTES {
+                        *text = truncate_to_max_bytes(text, MAX_MODEL_MESSAGE_BYTES);
+                    }
+                }
+                crate::ai::provider_types::MessageContent::Parts(parts) => {
+                    for part in parts.iter_mut() {
+                        if let crate::ai::provider_types::ContentPart::Text { text } = part {
+                            if text.len() > MAX_MODEL_MESSAGE_BYTES {
+                                *text = truncate_to_max_bytes(text, MAX_MODEL_MESSAGE_BYTES);
+                            }
+                        }
+                    }
+                }
             }
         }
 

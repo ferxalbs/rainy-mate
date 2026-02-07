@@ -11,6 +11,25 @@ use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
+const MAX_TOOL_OUTPUT_BYTES: usize = 48 * 1024;
+
+fn truncate_output(input: &str) -> String {
+    if input.len() <= MAX_TOOL_OUTPUT_BYTES {
+        return input.to_string();
+    }
+    let mut cut = 0usize;
+    for (idx, _) in input.char_indices() {
+        if idx <= MAX_TOOL_OUTPUT_BYTES {
+            cut = idx;
+        } else {
+            break;
+        }
+    }
+    let mut out = input[..cut].to_string();
+    out.push_str("\n\n[TRUNCATED: output exceeded tool limit]");
+    out
+}
+
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ReadFileArgs {
     /// The path to the file to read
@@ -307,10 +326,13 @@ impl SkillExecutor {
                 // Take screenshot of current page
                 match self.browser.screenshot().await {
                     Ok(result) => {
+                        // Never return full base64 screenshot in tool text context.
+                        // It can exceed model provider message limits.
                         let output = serde_json::json!({
-                            "data_uri": result.data_uri,
+                            "summary": "Screenshot captured successfully",
                             "width": result.width,
                             "height": result.height,
+                            "has_image": true,
                         });
                         CommandResult {
                             success: true,
@@ -342,7 +364,7 @@ impl SkillExecutor {
                 match self.browser.get_content().await {
                     Ok(content) => CommandResult {
                         success: true,
-                        output: Some(content),
+                        output: Some(truncate_output(&content)),
                         error: None,
                         exit_code: Some(0),
                     },
@@ -457,13 +479,13 @@ impl SkillExecutor {
                 match self.browser.get_content().await {
                     Ok(content) => CommandResult {
                         success: true,
-                        output: Some(content),
+                        output: Some(truncate_output(&content)),
                         error: None,
                         exit_code: Some(0),
                     },
                     Err(_) => CommandResult {
                         success: true,
-                        output: Some(nav_result.content_preview), // Fallback to preview
+                        output: Some(truncate_output(&nav_result.content_preview)), // Fallback to preview
                         error: None,
                         exit_code: Some(0),
                     },
