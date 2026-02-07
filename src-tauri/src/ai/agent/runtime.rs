@@ -44,6 +44,16 @@ pub enum AgentContent {
     Parts(Vec<AgentContentPart>),
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum AgentEvent {
+    Status(String),
+    Thought(String),
+    ToolCall(crate::ai::provider_types::ToolCall),
+    ToolResult { id: String, result: String },
+    Error(String),
+}
+
 impl AgentContent {
     /// Create text content
     pub fn text(s: impl Into<String>) -> Self {
@@ -148,7 +158,10 @@ impl AgentRuntime {
     }
 
     /// Primary entry point: Run a workflow/turn
-    pub async fn run(&self, input: &str) -> Result<String, String> {
+    pub async fn run<F>(&self, input: &str, on_event: F) -> Result<String, String>
+    where
+        F: Fn(AgentEvent) + Send + Sync + 'static + Clone,
+    {
         // 1. Initialize State
         let mut state = AgentState::new(self.config.workspace_id.clone(), self.memory.clone());
 
@@ -191,8 +204,9 @@ impl AgentRuntime {
         workflow.add_step(act_step);
 
         // 3. Execute Workflow
+        // 3. Execute Workflow
         let final_state = workflow
-            .execute(state, self.skills.clone())
+            .execute(state, self.skills.clone(), on_event)
             .await
             .map_err(|e| format!("Workflow execution failed: {}", e))?;
 

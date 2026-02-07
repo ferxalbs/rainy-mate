@@ -2,7 +2,7 @@ use crate::ai::agent::runtime::{AgentConfig, AgentRuntime};
 use crate::commands::router::IntelligentRouterState;
 use crate::services::SkillExecutor;
 use std::sync::Arc;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn run_agent_workflow(
@@ -54,7 +54,12 @@ pub async fn run_agent_workflow(
 
     // 2. Run Workflow
     // For MVP, this just echoes or does a basic LLM call if wired
-    let response = runtime.run(&prompt).await?;
+    let app_handle_clone = app_handle.clone();
+    let response = runtime
+        .run(&prompt, move |event| {
+            let _ = app_handle_clone.emit("agent://event", event);
+        })
+        .await?;
 
     Ok(response)
 }

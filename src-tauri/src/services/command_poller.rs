@@ -251,7 +251,12 @@ GUIDELINES:
                             );
 
                             // Run the agent
-                            match runtime.run(prompt).await {
+                            match runtime
+                                .run(prompt, |event| {
+                                    println!("[Agent Event] {:?}", event);
+                                })
+                                .await
+                            {
                                 Ok(response) => CommandResult {
                                     success: true,
                                     output: Some(response),

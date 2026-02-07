@@ -5,7 +5,7 @@ import {
   listAtmAgents,
   ensureAtmCredentialsLoaded,
 } from "../../services/tauri";
-import { toast } from "@heroui/react";
+import { toast } from "sonner";
 
 interface Agent {
   id: string;
@@ -59,9 +59,9 @@ export function AgentList({ onCreateClick, refreshToken }: AgentListProps) {
       ) {
         setAuthStatus("missing");
         setAgents([]);
-        toast.danger("ATM admin key missing. Reconnect Neural Link.");
+        toast.error("ATM admin key missing. Reconnect Neural Link.");
       } else {
-        toast.danger("Failed to load agents");
+        toast.error("Failed to load agents");
       }
     } finally {
       setIsLoading(false);

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-// import { addToast } from "@heroui/react"; // Not available
+import { toast } from "sonner";
 
 interface DeployRequestPayload {
   specId: string;
@@ -14,15 +14,14 @@ export function useCloudEvents() {
       (event) => {
         console.log("[Cloud] Deploy Request:", event.payload);
 
-        // TODO: Implement valid toast notification or use available toast library
-        /*
-      addToast({
-        title: "Cloud Deployment Request",
-        description: `Received request to deploy agent ${event.payload.specId}`,
-        color: "primary",
-        timeout: 5000,
-      });
-      */
+        toast.info("Cloud Deployment Request", {
+          description: `Received request to deploy agent ${event.payload.specId}`,
+          duration: 5000,
+          action: {
+            label: "View",
+            onClick: () => console.log("View deployment"),
+          },
+        });
 
         // TODO: Automatically trigger download/installation logic here
         // For now, just notify.

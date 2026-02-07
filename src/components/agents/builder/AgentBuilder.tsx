@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, Card } from "@heroui/react";
+import { toast } from "sonner";
 import { Save, ArrowLeft, Bot, Shield, Network, Cpu } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { AgentSpec } from "../../../types/agent-spec";
@@ -48,10 +49,11 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
     setIsSaving(true);
     try {
       await invoke("save_agent_spec", { spec });
-      console.log("Agent saved successfully!");
+      toast.success("Agent saved successfully!");
       onBack();
     } catch (error) {
       console.error("Failed to save agent:", error);
+      toast.error("Failed to save agent");
     } finally {
       setIsSaving(false);
     }

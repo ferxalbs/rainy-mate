@@ -1,6 +1,6 @@
 // @deprecated: This module is being replaced by the new native AgentSpec v2 system.
 use crate::ai::agent::memory::AgentMemory;
-use crate::ai::agent::runtime::{AgentConfig, AgentContent, AgentMessage};
+use crate::ai::agent::runtime::{AgentConfig, AgentContent, AgentEvent, AgentMessage};
 use crate::ai::router::IntelligentRouter;
 use crate::models::neural::{
     AirlockLevel, CommandPriority, CommandStatus, QueuedCommand, RainyPayload,
@@ -69,10 +69,12 @@ pub trait WorkflowStep: Debug + Send + Sync {
     fn id(&self) -> String;
 
     /// Execute the step logic
+    /// Execute the step logic
     async fn execute(
         &self,
         state: &mut AgentState,
         skills: Arc<SkillExecutor>,
+        on_event: Box<dyn Fn(AgentEvent) + Send + Sync>,
     ) -> Result<StepResult, String>;
 }
 
@@ -97,11 +99,15 @@ impl Workflow {
         self.steps.insert(step.id(), step);
     }
 
-    pub async fn execute(
+    pub async fn execute<F>(
         &self,
         initial_state: AgentState,
         skills: Arc<SkillExecutor>,
-    ) -> Result<AgentState, String> {
+        on_event: F,
+    ) -> Result<AgentState, String>
+    where
+        F: Fn(AgentEvent) + Send + Sync + 'static + Clone,
+    {
         let mut state = initial_state;
         let mut current_step_id = Some(self.start_step.clone());
         let mut steps_count = 0;
@@ -119,7 +125,9 @@ impl Workflow {
 
             // Execute the step
             // We pass a clone of skills for now. State is mutable.
-            let result = step.execute(&mut state, skills.clone()).await?;
+            let result = step
+                .execute(&mut state, skills.clone(), Box::new(on_event.clone()))
+                .await?;
 
             if !result.success {
                 return Err(format!("Step {} failed: {:?}", step_id, result.output));
@@ -152,7 +160,10 @@ impl WorkflowStep for ThinkStep {
         &self,
         state: &mut AgentState,
         skills: Arc<SkillExecutor>,
+        on_event: Box<dyn Fn(AgentEvent) + Send + Sync>,
     ) -> Result<StepResult, String> {
+        on_event(AgentEvent::Status("Thinking...".to_string()));
+
         // 1. Prepare messages
         // 1. Prepare messages
         let mut messages: Vec<crate::ai::provider_types::ChatMessage> = state
@@ -239,6 +250,9 @@ impl WorkflowStep for ThinkStep {
 
         // 4. Update State
         let assistant_content = response.content.clone().unwrap_or_default();
+        if !assistant_content.is_empty() {
+            on_event(AgentEvent::Thought(assistant_content.clone()));
+        }
         let tool_calls = response.tool_calls.clone();
 
         state.messages.push(AgentMessage {
@@ -281,6 +295,7 @@ impl WorkflowStep for ActStep {
         &self,
         state: &mut AgentState,
         skills: Arc<SkillExecutor>,
+        on_event: Box<dyn Fn(AgentEvent) + Send + Sync>,
     ) -> Result<StepResult, String> {
         // Find the last assistant message with tool calls
         let last_msg = state.messages.last().ok_or("No messages in state")?;
@@ -317,6 +332,15 @@ impl WorkflowStep for ActStep {
                 }
                 _ => ("filesystem", function_name.as_str()), // Default to fs or pass through
             };
+
+            on_event(AgentEvent::Status(format!(
+                "Executing tool: {}",
+                function_name
+            )));
+            // We need to reconstruct the ToolCall for the event
+            // But we don't have the full object easily here without cloning from call
+            // Let's just create a simplified event or use what we have
+            on_event(AgentEvent::ToolCall(call.clone()));
 
             let command = QueuedCommand {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -369,6 +393,11 @@ impl WorkflowStep for ActStep {
                 }
             }
 
+            on_event(AgentEvent::ToolResult {
+                id: call.id.clone(),
+                result: final_output.clone(),
+            });
+
             // Convert tool output to proper multimodal content if it's an image
             let content = tool_output_to_content(final_output);
 
@@ -416,6 +445,7 @@ mod tests {
             &self,
             state: &mut AgentState,
             _skills: Arc<SkillExecutor>,
+            _on_event: Box<dyn Fn(AgentEvent) + Send + Sync>,
         ) -> Result<StepResult, String> {
             state.context.insert(self.id.clone(), "visited".to_string());
             Ok(StepResult {
@@ -469,7 +499,7 @@ mod tests {
                     web_research,
                     browser,
                 ));
-                let result = workflow.execute(state, skills).await;
+                let result = workflow.execute(state, skills, |_| {}).await;
                 assert!(result.is_ok());
 
                 let final_state = result.unwrap();
