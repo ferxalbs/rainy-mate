@@ -430,6 +430,15 @@ export interface UserSettings {
   selectedModel: string;
   theme: string;
   notificationsEnabled: boolean;
+  autoReconnectCloud: boolean;
+  profile: UserProfile;
+}
+
+export interface UserProfile {
+  displayName: string;
+  email: string;
+  organization: string;
+  role: string;
 }
 
 // ============ Settings Commands ============
@@ -456,6 +465,14 @@ export async function setNotifications(enabled: boolean): Promise<void> {
 
 export async function getAvailableModels(): Promise<ModelOption[]> {
   return invoke<ModelOption[]>("get_available_models");
+}
+
+export async function getUserProfile(): Promise<UserProfile> {
+  return invoke<UserProfile>("get_user_profile");
+}
+
+export async function setUserProfile(profile: UserProfile): Promise<void> {
+  return invoke<void>("set_user_profile", { profile });
 }
 
 // ============ Workspace Types ============

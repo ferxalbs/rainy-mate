@@ -21,10 +21,24 @@ pub struct ModelOption {
 /// User settings persisted to disk
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct UserSettings {
     pub selected_model: String,
     pub theme: String,
     pub notifications_enabled: bool,
+    pub profile: UserProfile,
+    pub auto_reconnect_cloud: bool,
+}
+
+/// User profile metadata for desktop personalization and cloud identity sync
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(default)]
+pub struct UserProfile {
+    pub display_name: String,
+    pub email: String,
+    pub organization: String,
+    pub role: String,
 }
 
 impl Default for UserSettings {
@@ -33,6 +47,19 @@ impl Default for UserSettings {
             selected_model: "gemini-3-flash-high".to_string(),
             theme: "system".to_string(),
             notifications_enabled: true,
+            profile: UserProfile::default(),
+            auto_reconnect_cloud: true,
+        }
+    }
+}
+
+impl Default for UserProfile {
+    fn default() -> Self {
+        Self {
+            display_name: "Rainy User".to_string(),
+            email: "".to_string(),
+            organization: "".to_string(),
+            role: "Builder".to_string(),
         }
     }
 }
@@ -108,6 +135,17 @@ impl SettingsManager {
     /// Set notifications and persist
     pub fn set_notifications(&mut self, enabled: bool) -> Result<(), String> {
         self.settings.notifications_enabled = enabled;
+        self.save_to_disk()
+    }
+
+    /// Get user profile
+    pub fn get_profile(&self) -> &UserProfile {
+        &self.settings.profile
+    }
+
+    /// Set user profile and persist
+    pub fn set_profile(&mut self, profile: UserProfile) -> Result<(), String> {
+        self.settings.profile = profile;
         self.save_to_disk()
     }
 

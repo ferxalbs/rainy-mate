@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { MacOSToggle } from "./MacOSToggle";
 import { useTheme } from "../../hooks/useTheme";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import type { Folder } from "../../types";
 
 interface AppSidebarProps {
@@ -52,6 +53,7 @@ export function AppSidebar({
   onSettingsClick,
 }: AppSidebarProps) {
   const { mode, setMode } = useTheme();
+  const { profile } = useUserProfile();
 
   const NavItem = ({
     id,
@@ -285,6 +287,7 @@ export function AppSidebar({
         <div className="space-y-1 pt-2">
           <NavItem id="settings-models" label="AI Provider" icon={Sparkles} />
           <NavItem id="settings-appearance" label="Appearance" icon={Palette} />
+          <NavItem id="settings-profile" label="Profile" icon={Settings} />
         </div>
 
         {/* User / Settings Footer */}
@@ -292,13 +295,17 @@ export function AppSidebar({
           className={`mt-2 flex items-center transition-all ${isCollapsed ? "flex-col gap-4 py-2" : "px-1 gap-3 py-2"}`}
         >
           <Avatar size="sm">
-            <Avatar.Image src="https://api.dicebear.com/7.x/avataaars/svg?seed=Fernando" />
+            <Avatar.Image
+              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.displayName || "Rainy User")}`}
+            />
           </Avatar>
           {!isCollapsed && (
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-xs font-semibold truncate">Fernando</span>
+              <span className="text-xs font-semibold truncate">
+                {profile.displayName || "Rainy User"}
+              </span>
               <span className="text-[10px] text-muted-foreground truncate opacity-70 italic">
-                Premium Plan
+                {profile.role || "Builder"}
               </span>
             </div>
           )}

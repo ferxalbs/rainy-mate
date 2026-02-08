@@ -385,6 +385,8 @@ pub fn run() {
             commands::set_selected_model,
             commands::set_theme,
             commands::set_notifications,
+            commands::get_user_profile,
+            commands::set_user_profile,
             commands::get_available_models,
             // Workspace commands
             commands::create_workspace,

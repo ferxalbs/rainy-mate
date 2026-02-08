@@ -2,10 +2,11 @@ import { ReactNode, useState, useEffect } from "react";
 import { BackgroundManager } from "../backgrounds/BackgroundManager";
 import { AppSidebar } from "./AppSidebar";
 import { MacOSToggle } from "./MacOSToggle";
-import { Button } from "@heroui/react";
-import { Maximize2, Minus, X, FolderOpen } from "lucide-react";
+import { Button, Chip } from "@heroui/react";
+import { Maximize2, Minus, X, FolderOpen, Cloud, CloudOff } from "lucide-react";
 import type { Folder } from "../../types";
 import { useTheme } from "../../hooks/useTheme";
+import { useCloudBridgeStatus } from "../../hooks/useCloudBridgeStatus";
 
 interface TahoeLayoutProps {
   children: ReactNode;
@@ -39,6 +40,7 @@ export function TahoeLayout({
   const { mode, setMode } = useTheme();
   const [isWindows, setIsWindows] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const cloudStatus = useCloudBridgeStatus();
 
   useEffect(() => {
     // Detect OS
@@ -99,6 +101,25 @@ export function TahoeLayout({
                   </div>
                 </div>
               )}
+              <Chip
+                size="sm"
+                variant="soft"
+                title={cloudStatus.message}
+                className={
+                  cloudStatus.connected
+                    ? "bg-green-500/10 text-green-500 border border-green-500/20"
+                    : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                }
+              >
+                <span className="flex items-center gap-1.5">
+                  {cloudStatus.connected ? (
+                    <Cloud className="size-3" />
+                  ) : (
+                    <CloudOff className="size-3" />
+                  )}
+                  {cloudStatus.connected ? "Bridge Online" : "Bridge Offline"}
+                </span>
+              </Chip>
             </div>
 
             {/* Right Side: Global Controls */}

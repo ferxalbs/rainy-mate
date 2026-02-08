@@ -15,6 +15,7 @@ import {
 import {
   Bot,
   Key,
+  User,
   Check,
   Lock,
   Sparkles,
@@ -28,6 +29,8 @@ import {
   Zap,
   Palette,
   Shield,
+  Building2,
+  Briefcase,
 } from "lucide-react";
 import * as tauri from "../../services/tauri";
 import { useAIProvider } from "../../hooks";
@@ -35,6 +38,8 @@ import { AI_PROVIDERS, type ProviderType } from "../../types";
 import { ThemeSelector } from "./ThemeSelector";
 import { ThemeContext } from "../../providers/ThemeProvider";
 import { useContext } from "react";
+import { useUserProfile } from "../../hooks/useUserProfile";
+import type { UserProfile } from "../../services/tauri";
 
 interface SettingsPageProps {
   initialTab?: string;
@@ -50,6 +55,14 @@ export function SettingsPage({
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const { profile, isLoading: isLoadingProfile, saveProfile } = useUserProfile();
+  const [profileForm, setProfileForm] = useState<UserProfile>({
+    displayName: "",
+    email: "",
+    organization: "",
+    role: "",
+  });
 
   // API key management
   const { hasApiKey, validateApiKey, storeApiKey, getApiKey, deleteApiKey } =
@@ -107,6 +120,29 @@ export function SettingsPage({
       setIsSaving(false);
     }
   }, []);
+
+  useEffect(() => {
+    setProfileForm(profile);
+  }, [profile]);
+
+  const updateProfileField = (
+    key: keyof UserProfile,
+    value: string,
+  ) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    try {
+      await saveProfile(profileForm);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   // API key handlers
   // API key handlers
@@ -309,6 +345,15 @@ export function SettingsPage({
                 <div className="flex items-center gap-2">
                   <Shield className="size-4" />
                   Permissions
+                </div>
+              </Tabs.Tab>
+              <Tabs.Tab
+                id="profile"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground data-[selected=true]:text-foreground data-[selected=true]:bg-background data-[selected=true]:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background"
+              >
+                <div className="flex items-center gap-2">
+                  <User className="size-4" />
+                  Profile
                 </div>
               </Tabs.Tab>
             </Tabs.List>
@@ -637,6 +682,92 @@ export function SettingsPage({
                   </Switch>
                 </div>
               </div>
+            </Tabs.Panel>
+
+            {/* Profile Tab */}
+            <Tabs.Panel id="profile" className="space-y-4">
+              {isLoadingProfile ? (
+                <div className="flex items-center justify-center py-12">
+                  <Spinner size="lg" />
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl border bg-muted/50 border-border/50 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium">User Identity</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      This profile is used by the desktop app and cloud bridge.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <TextField
+                      name="profile-display-name"
+                      onChange={(value) => updateProfileField("displayName", value)}
+                    >
+                      <Label className="flex items-center gap-1.5">
+                        <User className="size-3.5" />
+                        Display Name
+                      </Label>
+                      <Input
+                        placeholder="Rainy User"
+                        value={profileForm.displayName}
+                      />
+                    </TextField>
+
+                    <TextField
+                      name="profile-email"
+                      onChange={(value) => updateProfileField("email", value)}
+                    >
+                      <Label>Email</Label>
+                      <Input
+                        placeholder="you@company.com"
+                        type="email"
+                        value={profileForm.email}
+                      />
+                    </TextField>
+
+                    <TextField
+                      name="profile-organization"
+                      onChange={(value) =>
+                        updateProfileField("organization", value)
+                      }
+                    >
+                      <Label className="flex items-center gap-1.5">
+                        <Building2 className="size-3.5" />
+                        Organization
+                      </Label>
+                      <Input
+                        placeholder="Enosis Labs"
+                        value={profileForm.organization}
+                      />
+                    </TextField>
+
+                    <TextField
+                      name="profile-role"
+                      onChange={(value) => updateProfileField("role", value)}
+                    >
+                      <Label className="flex items-center gap-1.5">
+                        <Briefcase className="size-3.5" />
+                        Role
+                      </Label>
+                      <Input placeholder="Builder" value={profileForm.role} />
+                    </TextField>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Saved locally to encrypted desktop settings.
+                    </p>
+                    <Button
+                      variant="primary"
+                      onPress={handleSaveProfile}
+                      isDisabled={isSavingProfile}
+                    >
+                      {isSavingProfile ? "Saving..." : "Save Profile"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Tabs.Panel>
           </Tabs>
         </div>

@@ -2,7 +2,7 @@
 // Tauri commands for user settings and model selection
 
 use crate::ai::provider::AIProviderManager;
-use crate::services::settings::{ModelOption, SettingsManager, UserSettings};
+use crate::services::settings::{ModelOption, SettingsManager, UserProfile, UserSettings};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -53,6 +53,25 @@ pub async fn set_notifications(
 ) -> Result<(), String> {
     let mut settings = settings.lock().await;
     settings.set_notifications(enabled)
+}
+
+/// Get user profile
+#[tauri::command]
+pub async fn get_user_profile(
+    settings: State<'_, Arc<Mutex<SettingsManager>>>,
+) -> Result<UserProfile, String> {
+    let settings = settings.lock().await;
+    Ok(settings.get_profile().clone())
+}
+
+/// Set user profile
+#[tauri::command]
+pub async fn set_user_profile(
+    profile: UserProfile,
+    settings: State<'_, Arc<Mutex<SettingsManager>>>,
+) -> Result<(), String> {
+    let mut settings = settings.lock().await;
+    settings.set_profile(profile)
 }
 
 /// Get available models based on user's plan

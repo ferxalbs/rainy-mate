@@ -7,6 +7,7 @@ use chromiumoxide::browser::{Browser, BrowserConfig};
 use chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat;
 use chromiumoxide::page::ScreenshotParams;
 use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
@@ -16,7 +17,7 @@ const BROWSER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
 const BROWSER_EVAL_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// Result of a browser navigation operation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NavigationResult {
     pub url: String,
     pub title: String,
@@ -24,7 +25,7 @@ pub struct NavigationResult {
 }
 
 /// Result of a screenshot operation  
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenshotResult {
     pub data_uri: String,
     pub width: u32,

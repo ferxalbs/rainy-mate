@@ -36,5 +36,13 @@
     {
       "path": "./tsconfig.node.json"
     }
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "rainy-atm",
+    "rainy-atm/dist",
+    "rainy-atm/node_modules",
+    "rainy-atm/dist"
   ]
 }

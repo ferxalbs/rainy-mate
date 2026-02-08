@@ -15,3 +15,5 @@ export { useFileVersioning } from "./useFileVersioning";
 export { useIntelligentRouter } from "./useIntelligentRouter";
 export { useNeuralService } from "./useNeuralService";
 export { useAirlock } from "./useAirlock";
+export { useUserProfile } from "./useUserProfile";
+export { useCloudBridgeStatus } from "./useCloudBridgeStatus";
