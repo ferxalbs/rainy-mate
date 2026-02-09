@@ -1,4 +1,4 @@
-use crate::ai::agent::runtime::{AgentConfig, AgentContent, AgentMessage, AgentRuntime};
+use crate::ai::agent::runtime::{AgentContent, AgentMessage, AgentRuntime, RuntimeOptions};
 use crate::ai::specs::AgentSpec;
 use crate::commands::router::IntelligentRouterState;
 use crate::services::SkillExecutor;
@@ -34,10 +34,7 @@ fn build_runtime_history(rows: Vec<(String, String, String)>) -> Vec<AgentMessag
 
     if selected.len() > MAX_HISTORY_MESSAGES {
         let skip = selected.len() - MAX_HISTORY_MESSAGES;
-        selected = selected
-            .into_iter()
-            .skip(skip)
-            .collect();
+        selected = selected.into_iter().skip(skip).collect();
     }
 
     selected
@@ -66,80 +63,6 @@ fn default_instructions(workspace_id: &str) -> String {
     )
 }
 
-fn load_agent_spec_from_disk(app_handle: &tauri::AppHandle, id: &str) -> Result<AgentSpec, String> {
-    let app_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    let path = app_dir.join("agent_specs").join(format!("{}.json", id));
-    let body = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read agent spec {}: {}", path.to_string_lossy(), e))?;
-    serde_json::from_str::<AgentSpec>(&body)
-        .map_err(|e| format!("Invalid agent spec json {}: {}", path.to_string_lossy(), e))
-}
-
-fn instructions_from_spec(spec: &AgentSpec, workspace_id: &str) -> String {
-    let capability_lines = if spec.skills.capabilities.is_empty() {
-        "- No explicit capabilities configured".to_string()
-    } else {
-        spec.skills
-            .capabilities
-            .iter()
-            .map(|cap| {
-                let scopes = cap.scopes.join(", ");
-                let permissions = cap
-                    .permissions
-                    .iter()
-                    .map(|p| format!("{:?}", p))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(
-                    "- {}: {} | scopes: {} | permissions: {}",
-                    cap.name, cap.description, scopes, permissions
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-
-    format!(
-        "You are {}.
-
-Identity:
-- Description: {}
-- Personality: {}
-- Tone: {}
-
-Core soul:
-{}
-
-Workspace Path: {}
-
-Capabilities:
-{}
-
-Memory:
-- strategy: {}
-- retention_days: {}
-- max_tokens: {}
-
-Rules:
-1. Use tools and skills only within declared capabilities and workspace scope.
-2. Never fabricate file results.
-3. If a tool fails, explain and try the safest fallback.",
-        spec.soul.name,
-        spec.soul.description,
-        spec.soul.personality,
-        spec.soul.tone,
-        spec.soul.soul_content,
-        workspace_id,
-        capability_lines,
-        spec.memory_config.strategy,
-        spec.memory_config.retention_days,
-        spec.memory_config.max_tokens
-    )
-}
-
 #[tauri::command]
 pub async fn run_agent_workflow(
     app_handle: tauri::AppHandle,
@@ -160,28 +83,75 @@ pub async fn run_agent_workflow(
         .map_err(|e| format!("Failed to initialize chat session: {}", e))?;
 
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
-    let (agent_name, instructions) = if let Some(spec_id) = agent_spec_id.clone() {
-        match load_agent_spec_from_disk(&app_handle, &spec_id) {
-            Ok(spec) => (
-                spec.soul.name.clone(),
-                instructions_from_spec(&spec, &workspace_id),
-            ),
-            Err(err) => {
+    // 1. Initialize Runtime (Ephemeral for now, persistent later)
+    let spec = if let Some(spec_id) = agent_spec_id {
+        match agent_manager.get_agent_spec(&spec_id).await {
+            Ok(Some(s)) => s,
+            Ok(None) => {
                 eprintln!(
-                    "[AgentWorkflow] Failed to load spec {}, falling back to default: {}",
-                    spec_id, err
+                    "[AgentWorkflow] Spec {} not found in DB, falling back to default",
+                    spec_id
                 );
-                ("Rainy Agent".to_string(), default_instructions(&workspace_id))
+                // Fallback
+                use crate::ai::specs::skills::AgentSkills;
+                use crate::ai::specs::soul::AgentSoul;
+                AgentSpec {
+                    id: "default".to_string(),
+                    version: "2.0.0".to_string(),
+                    soul: AgentSoul {
+                        name: "Rainy Agent".to_string(),
+                        description: "Default fallback agent".to_string(),
+                        soul_content: default_instructions(&workspace_id),
+                        ..Default::default()
+                    },
+                    skills: AgentSkills::default(),
+                    memory_config: Default::default(),
+                    connectors: Default::default(),
+                    signature: None,
+                }
+            }
+            Err(e) => {
+                eprintln!("[AgentWorkflow] Failed to load spec {}: {}", spec_id, e);
+                // Fallback
+                use crate::ai::specs::skills::AgentSkills;
+                use crate::ai::specs::soul::AgentSoul;
+                AgentSpec {
+                    id: "default".to_string(),
+                    version: "2.0.0".to_string(),
+                    soul: AgentSoul {
+                        name: "Rainy Agent".to_string(),
+                        description: "Default fallback agent".to_string(),
+                        soul_content: default_instructions(&workspace_id),
+                        ..Default::default()
+                    },
+                    skills: AgentSkills::default(),
+                    memory_config: Default::default(),
+                    connectors: Default::default(),
+                    signature: None,
+                }
             }
         }
     } else {
-        ("Rainy Agent".to_string(), default_instructions(&workspace_id))
+        use crate::ai::specs::skills::AgentSkills;
+        use crate::ai::specs::soul::AgentSoul;
+        AgentSpec {
+            id: "default".to_string(),
+            version: "2.0.0".to_string(),
+            soul: AgentSoul {
+                name: "Rainy Agent".to_string(),
+                description: "Default agent".to_string(),
+                soul_content: default_instructions(&workspace_id),
+                ..Default::default()
+            },
+            skills: AgentSkills::default(),
+            memory_config: Default::default(),
+            connectors: Default::default(),
+            signature: None,
+        }
     };
 
-    let config = AgentConfig {
-        name: agent_name,
-        model: model_id,
-        instructions,
+    let options = RuntimeOptions {
+        model: Some(model_id),
         workspace_id: workspace_id.clone(),
         max_steps: None,
     };
@@ -195,7 +165,13 @@ pub async fn run_agent_workflow(
     let memory =
         Arc::new(crate::ai::agent::memory::AgentMemory::new(&workspace_id, app_data_dir).await);
 
-    let runtime = AgentRuntime::new(config, router.0.clone(), skills.inner().clone(), memory);
+    let runtime = AgentRuntime::new(
+        spec,
+        options,
+        router.0.clone(),
+        skills.inner().clone(),
+        memory,
+    );
 
     // Load persisted conversation history into runtime so local Native Runtime
     // preserves context across turns.
@@ -203,7 +179,9 @@ pub async fn run_agent_workflow(
         .get_history(&chat_id)
         .await
         .map_err(|e| format!("Failed to load chat history: {}", e))?;
-    runtime.set_history(build_runtime_history(history_rows)).await;
+    runtime
+        .set_history(build_runtime_history(history_rows))
+        .await;
 
     // 2. Run Workflow with Persistence
     let app_handle_clone = app_handle.clone();

@@ -1,0 +1,2 @@
+ALTER TABLE agents ADD COLUMN spec_json TEXT;
+ALTER TABLE agents ADD COLUMN version TEXT DEFAULT '1.0.0';

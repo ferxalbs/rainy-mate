@@ -5,6 +5,44 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-02-09 - Native Runtime Enhancement (AgentSpec V2)
+
+### Added - AgentSpec V2 Persistence & Runtime
+
+**Rust Backend (`src-tauri/src/`)**
+
+- `ai/agent/runtime.rs` - **AgentRuntime** upgrade:
+  - Refactored to use `AgentSpec` V2 and `RuntimeOptions`.
+  - New `generate_system_prompt` logic that builds rich, multi-layered instructions (Soul, Capabilities, Memory, Rules).
+  - Integration with the new `AgentMemory` system.
+
+- `ai/agent/manager.rs` - **AgentManager** (Persistence):
+  - Added `spec_json` and `version` columns support in database.
+  - New `create_agent` and `get_agent_spec` methods for V2 hydration.
+  - Implemented speculative fallback for legacy agents (v1 -> v2).
+
+- `services/command_poller.rs` - **Cloud Bridge**:
+  - Injected `AgentManager` into runtime context.
+  - Commands now trigger execution based on persisted `agentId` with local ephemeral fallback.
+
+- `commands/agent.rs` - **Agent Commands**:
+  - `run_agent_workflow` now loads agent specs directly from the database, ensuring consistency with API operations.
+
+- `ai/agent/verification_test.rs` - **Verification**:
+  - Added end-to-end test verifying DB -> Spec -> Runtime cycles.
+
+### Changed
+
+- `ai/agent/workflow.rs` - Updated `AgentState` to hold `Arc<AgentSpec>`.
+- `agents/mod.rs` - Marked legacy module as `@DEPRECATED`.
+
+### Fixed
+
+- `services/skill_executor.rs` - Removed unused neural service imports in mock constructor.
+- Resolved multiple compilation warnings related to unused fields and imports.
+
+---
+
 ## [0.5.6] - 2026-02-03 - Workspace Sync Fixes
 
 ### Fixed - Workspace Path Synchronization

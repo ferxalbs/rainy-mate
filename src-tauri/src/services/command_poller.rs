@@ -1,5 +1,5 @@
 use crate::ai::agent::memory::AgentMemory;
-use crate::ai::agent::runtime::{AgentConfig, AgentRuntime};
+use crate::ai::agent::runtime::AgentRuntime;
 use crate::ai::router::IntelligentRouter;
 use crate::models::neural::CommandResult;
 use crate::services::airlock::AirlockService;
@@ -14,10 +14,13 @@ use tokio::time::sleep;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
+use crate::ai::agent::manager::AgentManager;
+
 /// Context needed to create AgentRuntime instances on-demand
 pub struct AgentRuntimeContext {
     pub router: Arc<RwLock<IntelligentRouter>>,
     pub app_data_dir: PathBuf,
+    pub agent_manager: Arc<AgentManager>,
 }
 
 #[derive(Clone)]
@@ -45,11 +48,13 @@ impl CommandPoller {
         &self,
         router: Arc<RwLock<IntelligentRouter>>,
         app_data_dir: PathBuf,
+        agent_manager: Arc<AgentManager>,
     ) {
         let mut lock = self.agent_context.write().await;
         *lock = Some(AgentRuntimeContext {
             router,
             app_data_dir,
+            agent_manager,
         });
     }
 
@@ -252,6 +257,15 @@ impl CommandPoller {
                             settings.get_selected_model().to_string()
                         });
 
+                    // Optional agent ID to load persisted spec
+                    let agent_id = command
+                        .payload
+                        .params
+                        .as_ref()
+                        .and_then(|p| p.get("agentId"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
                     // Optional agent identity/profile provided by Rainy-ATM.
                     // If present, this becomes the primary runtime instruction set.
                     let agent_name = command
@@ -286,26 +300,65 @@ impl CommandPoller {
                             AgentMemory::new(&workspace_id, ctx.app_data_dir.clone()).await,
                         );
 
+                        // Try to load spec from DB if agentId is present
+                        let loaded_spec = if let Some(id) = &agent_id {
+                            ctx.agent_manager
+                                .get_agent_spec(id)
+                                .await
+                                .unwrap_or_else(|e| {
+                                    eprintln!(
+                                        "[CommandPoller] Failed to load agent spec {}: {}",
+                                        id, e
+                                    );
+                                    None
+                                })
+                        } else {
+                            None
+                        };
+
+                        use crate::ai::agent::runtime::RuntimeOptions;
+                        use crate::ai::specs::manifest::AgentSpec;
+                        use crate::ai::specs::skills::AgentSkills;
+                        use crate::ai::specs::soul::AgentSoul;
+
+                        let options = RuntimeOptions {
+                            model: Some(model),
+                            workspace_id: workspace_id.clone(),
+                            max_steps: Some(10),
+                        };
+
                         // Create config
                         let base_instructions = agent_system_prompt.unwrap_or_else(|| {
                             format!(
                                 "You are Rainy Agent, an autonomous AI assistant.
-
-Workspace ID: {}
-
-CAPABILITIES:
-- Read, write, list, and search files in the workspace.
-- Navigate web pages and take screenshots.
-- Perform web research.",
+ 
+ Workspace ID: {}
+ 
+ CAPABILITIES:
+ - Read, write, list, and search files in the workspace.
+ - Navigate web pages and take screenshots.
+ - Perform web research.",
                                 workspace_id
                             )
                         });
 
-                        let config = AgentConfig {
-                            name: agent_name.clone(),
-                            model, // Use extracted or default model
-                            instructions: format!(
-                                "{}
+                        let spec = if let Some(s) = loaded_spec {
+                            println!(
+                                "[CommandPoller] Using persisted AgentSpec for {}",
+                                s.soul.name
+                            );
+                            s
+                        } else {
+                            // Fallback / Ephemeral Construction
+                            AgentSpec {
+                                id: uuid::Uuid::new_v4().to_string(),
+                                version: "2.0.0".to_string(),
+                                soul: AgentSoul {
+                                    name: agent_name.clone(),
+                                    description: "Ephemeral agent spawned by Cloud Command"
+                                        .to_string(),
+                                    soul_content: format!(
+                                        "{}
 
 IDENTITY LOCK (MANDATORY):
 - Your name is \"{}\".
@@ -316,15 +369,24 @@ GUIDELINES:
 1. PLAN: Before executing, briefly state your plan.
 2. EXECUTE: Use the provided tools to carry out the plan.
 3. VERIFY: After critical operations, verify the result.",
-                                base_instructions, agent_name
-                            ),
-                            workspace_id: workspace_id.clone(),
-                            max_steps: Some(10),
+                                        base_instructions, agent_name
+                                    ),
+                                    ..Default::default()
+                                },
+                                skills: AgentSkills {
+                                    capabilities: vec![],
+                                    tools: std::collections::HashMap::new(),
+                                },
+                                memory_config: Default::default(),
+                                connectors: Default::default(),
+                                signature: None,
+                            }
                         };
 
                         // Create runtime
                         let runtime = AgentRuntime::new(
-                            config,
+                            spec,
+                            options,
                             ctx.router.clone(),
                             self.skill_executor.clone(),
                             memory,

@@ -1,3 +1,4 @@
+use crate::ai::specs::manifest::AgentSpec;
 use crate::db::Database;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
@@ -11,6 +12,8 @@ pub struct AgentEntity {
     pub description: Option<String>,
     pub soul: Option<String>,
     pub created_at: chrono::NaiveDateTime,
+    pub spec_json: Option<String>,
+    pub version: Option<String>,
 }
 
 #[derive(Clone)]
@@ -23,22 +26,20 @@ impl AgentManager {
         Self { db: Arc::new(pool) }
     }
 
-    pub async fn create_agent(
-        &self,
-        id: &str,
-        name: &str,
-        description: Option<&str>,
-        soul: Option<&str>,
-    ) -> Result<String, sqlx::Error> {
-        sqlx::query("INSERT INTO agents (id, name, description, soul) VALUES (?, ?, ?, ?)")
-            .bind(id)
-            .bind(name)
-            .bind(description)
-            .bind(soul)
+    pub async fn create_agent(&self, spec: &AgentSpec) -> Result<String, sqlx::Error> {
+        let spec_json = serde_json::to_string(spec).unwrap_or_default();
+
+        sqlx::query("INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?)")
+            .bind(&spec.id)
+            .bind(&spec.soul.name)
+            .bind(&spec.soul.description)
+            .bind(&spec.soul.soul_content)
+            .bind(spec_json)
+            .bind(&spec.version)
             .execute(&*self.db)
             .await?;
 
-        Ok(id.to_string())
+        Ok(spec.id.clone())
     }
 
     pub async fn list_agents(&self) -> Result<Vec<AgentEntity>, sqlx::Error> {
@@ -93,9 +94,12 @@ impl AgentManager {
         chat_id: &str,
         agent_name: &str,
     ) -> Result<(), sqlx::Error> {
+        // ... (existing code)
         // 1. Ensure a default agent exists for this runtime context
         // prevent duplicate key error by using INSERT OR IGNORE
         let default_agent_id = "rainy-agent-v1";
+        // Need to create a default Spec to insert if missing
+        // For now, simpler query just to satisfy the constraint
         sqlx::query(
             "INSERT INTO agents (id, name, description, soul) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
         )
@@ -118,6 +122,50 @@ impl AgentManager {
 
         Ok(())
     }
+
+    pub async fn get_agent(&self, id: &str) -> Result<Option<AgentEntity>, sqlx::Error> {
+        let agent = sqlx::query_as::<_, AgentEntity>("SELECT * FROM agents WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&*self.db)
+            .await?;
+        Ok(agent)
+    }
+
+    pub async fn get_agent_spec(&self, id: &str) -> Result<Option<AgentSpec>, String> {
+        let entity = self.get_agent(id).await.map_err(|e| e.to_string())?;
+
+        if let Some(agent) = entity {
+            if let Some(json) = agent.spec_json {
+                let spec: AgentSpec = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+                return Ok(Some(spec));
+            }
+
+            // Fallback for legacy agents or migrations
+            use crate::ai::specs::skills::AgentSkills;
+            use crate::ai::specs::soul::AgentSoul;
+
+            let spec = AgentSpec {
+                id: agent.id,
+                version: "1.0.0".to_string(),
+                soul: AgentSoul {
+                    name: agent.name,
+                    description: agent.description.unwrap_or_default(),
+                    soul_content: agent.soul.unwrap_or_default(),
+                    ..Default::default()
+                },
+                skills: AgentSkills {
+                    capabilities: vec![],
+                    tools: std::collections::HashMap::new(),
+                },
+                memory_config: Default::default(),
+                connectors: Default::default(),
+                signature: None,
+            };
+            Ok(Some(spec))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 // Commands to be exposed to Frontend
@@ -129,10 +177,28 @@ pub async fn save_agent_to_db(
     description: Option<String>,
     soul: Option<String>,
 ) -> Result<String, String> {
-    state
-        .create_agent(&id, &name, description.as_deref(), soul.as_deref())
-        .await
-        .map_err(|e| e.to_string())
+    use crate::ai::specs::skills::AgentSkills;
+    use crate::ai::specs::soul::AgentSoul;
+
+    let spec = AgentSpec {
+        id,
+        version: "2.0.0".to_string(),
+        soul: AgentSoul {
+            name,
+            description: description.unwrap_or_default(),
+            soul_content: soul.unwrap_or_default(),
+            ..Default::default()
+        },
+        skills: AgentSkills {
+            capabilities: vec![],
+            tools: std::collections::HashMap::new(),
+        },
+        memory_config: Default::default(),
+        connectors: Default::default(),
+        signature: None,
+    };
+
+    state.create_agent(&spec).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

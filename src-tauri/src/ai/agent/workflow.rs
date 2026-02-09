@@ -1,7 +1,8 @@
 // @deprecated: This module is being replaced by the new native AgentSpec v2 system.
 use crate::ai::agent::memory::AgentMemory;
-use crate::ai::agent::runtime::{AgentConfig, AgentContent, AgentEvent, AgentMessage};
+use crate::ai::agent::runtime::{AgentContent, AgentEvent, AgentMessage, RuntimeOptions};
 use crate::ai::router::IntelligentRouter;
+use crate::ai::specs::manifest::AgentSpec;
 use crate::models::neural::{
     AirlockLevel, CommandPriority, CommandStatus, QueuedCommand, RainyPayload,
 };
@@ -70,15 +71,18 @@ pub struct AgentState {
     pub context: HashMap<String, String>,
     pub workspace_id: String,
     pub memory: Arc<AgentMemory>,
+    #[allow(dead_code)] // Used by steps
+    pub spec: Arc<AgentSpec>,
 }
 
 impl AgentState {
-    pub fn new(workspace_id: String, memory: Arc<AgentMemory>) -> Self {
+    pub fn new(workspace_id: String, memory: Arc<AgentMemory>, spec: Arc<AgentSpec>) -> Self {
         Self {
             messages: Vec::new(),
             context: HashMap::new(),
             workspace_id,
             memory,
+            spec,
         }
     }
 }
@@ -113,15 +117,18 @@ pub trait WorkflowStep: Debug + Send + Sync {
 /// The Workflow Graph Container
 pub struct Workflow {
     #[allow(dead_code)] // @TODO Configuration usage in steps
-    pub config: AgentConfig,
+    pub spec: AgentSpec,
+    #[allow(dead_code)]
+    pub options: RuntimeOptions,
     pub steps: HashMap<String, Box<dyn WorkflowStep>>,
     pub start_step: String,
 }
 
 impl Workflow {
-    pub fn new(config: AgentConfig, start_step: String) -> Self {
+    pub fn new(spec: AgentSpec, options: RuntimeOptions, start_step: String) -> Self {
         Self {
-            config,
+            spec,
+            options,
             steps: HashMap::new(),
             start_step,
         }
@@ -514,15 +521,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_workflow_execution() {
-        let config = AgentConfig {
-            name: "Test Agent".to_string(),
-            model: "test-model".to_string(),
-            instructions: "test".to_string(),
+        use crate::ai::specs::skills::AgentSkills;
+        use crate::ai::specs::soul::AgentSoul;
+
+        let spec = AgentSpec {
+            id: "test-agent".to_string(),
+            version: "1.0.0".to_string(),
+            soul: AgentSoul {
+                name: "Test Agent".to_string(),
+                soul_content: "test".to_string(),
+                ..Default::default()
+            },
+            skills: AgentSkills {
+                capabilities: vec![],
+                tools: std::collections::HashMap::new(),
+            },
+            memory_config: Default::default(),
+            connectors: Default::default(),
+            signature: None,
+        };
+
+        let options = RuntimeOptions {
+            model: Some("test-model".to_string()),
             workspace_id: "test-ws".to_string(),
             max_steps: Some(10),
         };
 
-        let mut workflow = Workflow::new(config, "start".to_string());
+        let mut workflow = Workflow::new(spec.clone(), options, "start".to_string());
 
         workflow.add_step(Box::new(MockStep {
             id: "start".to_string(),
@@ -541,7 +566,7 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let memory = Arc::new(AgentMemory::new("test-ws", temp_dir).await);
 
-        let state = AgentState::new("test-ws".to_string(), memory);
+        let state = AgentState::new("test-ws".to_string(), memory, Arc::new(spec.clone()));
 
         match WorkspaceManager::new() {
             Ok(wm) => {

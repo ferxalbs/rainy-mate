@@ -1,5 +1,8 @@
 // Agents Module - Multi-Agent System for Rainy MaTE
 //
+// DEPRECATED: This module is being replaced by the Native Agent Runtime (src/ai/agent/runtime.rs)
+// and AgentSpec V2 system. Do not add new features here.
+//
 // This module implements the foundational agent infrastructure for the multi-agent system.
 // It provides the core traits, types, and base implementations that all specialized agents
 // will build upon.

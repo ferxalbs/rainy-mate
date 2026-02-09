@@ -2,24 +2,23 @@
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::workflow::{ActStep, AgentState, ThinkStep, Workflow};
 use crate::ai::router::IntelligentRouter;
+use crate::ai::specs::manifest::AgentSpec;
 use crate::services::SkillExecutor;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AgentConfig {
-    pub name: String,
-    pub model: String,
-    pub instructions: String,
+pub struct RuntimeOptions {
+    pub model: Option<String>,
     pub workspace_id: String,
-    // Future: tools list, memory settings
     pub max_steps: Option<usize>,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
 pub struct AgentRuntime {
-    config: AgentConfig,
+    pub spec: AgentSpec,
+    pub options: RuntimeOptions,
     router: Arc<tokio::sync::RwLock<IntelligentRouter>>,
     skills: Arc<SkillExecutor>,
     memory: Arc<AgentMemory>,
@@ -147,13 +146,15 @@ pub struct AgentImageUrl {
 
 impl AgentRuntime {
     pub fn new(
-        config: AgentConfig,
+        spec: AgentSpec,
+        options: RuntimeOptions,
         router: Arc<tokio::sync::RwLock<IntelligentRouter>>,
         skills: Arc<SkillExecutor>,
         memory: Arc<AgentMemory>,
     ) -> Self {
         Self {
-            config,
+            spec,
+            options,
             router,
             skills,
             memory,
@@ -167,18 +168,87 @@ impl AgentRuntime {
         *hist = messages;
     }
 
+    fn generate_system_prompt(&self) -> String {
+        let spec = &self.spec;
+        let workspace_id = &self.options.workspace_id;
+
+        let capability_lines = if spec.skills.capabilities.is_empty() {
+            "- No explicit capabilities configured".to_string()
+        } else {
+            spec.skills
+                .capabilities
+                .iter()
+                .map(|cap| {
+                    let scopes = cap.scopes.join(", ");
+                    let permissions = cap
+                        .permissions
+                        .iter()
+                        .map(|p| format!("{:?}", p))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!(
+                        "- {}: {} | scopes: {} | permissions: {}",
+                        cap.name, cap.description, scopes, permissions
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+
+        format!(
+            "You are {}.
+
+Identity:
+- Description: {}
+- Personality: {}
+- Tone: {}
+
+Core soul:
+{}
+
+Workspace Path: {}
+
+Capabilities:
+{}
+
+Memory:
+- strategy: {}
+- retention_days: {}
+- max_tokens: {}
+
+Rules:
+1. Use tools and skills only within declared capabilities and workspace scope.
+2. Never fabricate file results.
+3. If a tool fails, explain and try the safest fallback.",
+            spec.soul.name,
+            spec.soul.description,
+            spec.soul.personality,
+            spec.soul.tone,
+            spec.soul.soul_content,
+            workspace_id,
+            capability_lines,
+            spec.memory_config.strategy,
+            spec.memory_config.retention_days,
+            spec.memory_config.max_tokens
+        )
+    }
+
     /// Primary entry point: Run a workflow/turn
     pub async fn run<F>(&self, input: &str, on_event: F) -> Result<String, String>
     where
         F: Fn(AgentEvent) + Send + Sync + 'static + Clone,
     {
         // 1. Initialize State
-        let mut state = AgentState::new(self.config.workspace_id.clone(), self.memory.clone());
+        let mut state = AgentState::new(
+            self.options.workspace_id.clone(),
+            self.memory.clone(),
+            Arc::new(self.spec.clone()),
+        );
 
         // Add System Message to State
         state.messages.push(AgentMessage {
             role: "system".to_string(),
-            content: AgentContent::text(self.config.instructions.clone()),
+            content: AgentContent::text(self.generate_system_prompt()),
             tool_calls: None,
             tool_call_id: None,
         });
@@ -200,12 +270,19 @@ impl AgentRuntime {
         // 2. Build the Workflow Graph
         // In the future, this could be loaded from JSON.
         // For now, we build the standard "ReAct" loop: Think -> Act -> Think
-        let mut workflow = Workflow::new(self.config.clone(), "think".to_string());
+        // NOTE: We pass spec and options to Workflow::new. This requires updating workflow.rs.
+        let mut workflow =
+            Workflow::new(self.spec.clone(), self.options.clone(), "think".to_string());
 
         // Step 1: Think (Router/LLM)
         let think_step = Box::new(ThinkStep {
             router: self.router.clone(),
-            model: self.config.model.clone(),
+            // Use runtime option model or default
+            model: self
+                .options
+                .model
+                .clone()
+                .unwrap_or("gemini-2.0-flash".to_string()),
         });
         workflow.add_step(think_step);
 

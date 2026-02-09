@@ -206,6 +206,15 @@ pub fn run() {
                 *guard = Some(airlock);
             }
 
+            // Initialize Database and AgentManager
+            // We block here to ensure DB is ready for core services like CommandPoller
+            let db = tauri::async_runtime::block_on(async { Database::init(app.handle()).await })
+                .expect("Failed to initialize database");
+
+            let agent_manager = AgentManager::new(db.pool);
+            app.manage(agent_manager.clone());
+            tracing::info!("Database and AgentManager initialized successfully");
+
             // Start Command Poller
             // Check if we have credentials, if so start polling
             let poller = (*app.state::<Arc<CommandPoller>>()).clone();
@@ -215,13 +224,19 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Failed to get app data dir for CommandPoller");
 
+            let agent_manager_for_poller = Arc::new(agent_manager);
+
             tauri::async_runtime::spawn(async move {
                 // Inject Airlock service
                 poller.set_airlock_service(airlock_for_poller).await;
 
                 // Inject agent context for agent.run commands
                 poller
-                    .set_agent_context(router_for_poller, app_data_for_poller)
+                    .set_agent_context(
+                        router_for_poller,
+                        app_data_for_poller,
+                        agent_manager_for_poller,
+                    )
                     .await;
 
                 // Wait a bit for app to stabilize
@@ -245,21 +260,6 @@ pub fn run() {
                 );
                 bridge.start();
                 app_handle_cb.manage(bridge);
-            });
-
-            // Initialize Database and AgentManager (PHASE 3)
-            let app_handle_db = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                match Database::init(&app_handle_db).await {
-                    Ok(db) => {
-                        let agent_manager = AgentManager::new(db.pool);
-                        app_handle_db.manage(agent_manager);
-                        tracing::info!("Database and AgentManager initialized successfully");
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to initialize database: {}", e);
-                    }
-                }
             });
 
             Ok(())

@@ -131,6 +131,34 @@ impl SkillExecutor {
         }
     }
 
+    #[cfg(test)]
+    pub fn mock() -> Self {
+        // We need to construct minimal valid objects or use another mock approach.
+        // WorkspaceManager::new() might require disk access or real paths.
+        // Let's rely on the fact that this is unit testing within the crate.
+        // We can just construct them if they have defaults or simple constructors.
+
+        let provider_manager = Arc::new(crate::ai::provider::AIProviderManager::new());
+        let research = Arc::new(ManagedResearchService::new(provider_manager));
+        let browser = Arc::new(BrowserController::new());
+        // WorkspaceManager might panic if config not found?
+        // Let's accept that risk for now or try to wrap it.
+        // Actually, WorkspaceManager::new() returns Result.
+        let wm = Arc::new(WorkspaceManager::new().unwrap_or_else(|_| {
+            // If failed, maybe we can't easily mock it without more work.
+            // But for the verification test which just checks Runtime construction,
+            // we might not even USE the skills.
+            // Let's panic if we can't create it, as the test setup should be robust enough or fixed.
+            panic!("Failed to create mock WorkspaceManager for test");
+        }));
+
+        Self {
+            workspace_manager: wm,
+            managed_research: research,
+            browser,
+        }
+    }
+
     /// Get all available tools and their JSON schemas
     pub fn get_tool_definitions(&self) -> Vec<crate::ai::provider_types::Tool> {
         vec![
