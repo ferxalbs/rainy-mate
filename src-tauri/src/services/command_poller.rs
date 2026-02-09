@@ -1,5 +1,5 @@
 use crate::ai::agent::memory::AgentMemory;
-use crate::ai::agent::runtime::AgentRuntime;
+use crate::ai::agent::runtime::{AgentEvent, AgentRuntime};
 use crate::ai::router::IntelligentRouter;
 use crate::models::neural::CommandResult;
 use crate::services::airlock::AirlockService;
@@ -25,6 +25,48 @@ fn progress_preview(value: &str) -> String {
     }
     let preview: String = trimmed.chars().take(MAX_PROGRESS_PREVIEW_CHARS).collect();
     format!("{}...", preview)
+}
+
+fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
+    match event {
+        AgentEvent::Status(text) => (
+            "Agent status".to_string(),
+            serde_json::json!({
+                "type": "status",
+                "text": progress_preview(text),
+            }),
+        ),
+        AgentEvent::Thought(text) => (
+            "Agent thought".to_string(),
+            serde_json::json!({
+                "type": "thought",
+                "text": progress_preview(text),
+            }),
+        ),
+        AgentEvent::ToolCall(call) => (
+            format!("Tool call: {}", call.function.name),
+            serde_json::json!({
+                "type": "tool_call",
+                "toolCallId": call.id,
+                "toolName": call.function.name,
+            }),
+        ),
+        AgentEvent::ToolResult { id, result } => (
+            "Tool result".to_string(),
+            serde_json::json!({
+                "type": "tool_result",
+                "toolCallId": id,
+                "resultPreview": progress_preview(result),
+            }),
+        ),
+        AgentEvent::Error(text) => (
+            "Agent error".to_string(),
+            serde_json::json!({
+                "type": "error",
+                "text": progress_preview(text),
+            }),
+        ),
+    }
 }
 
 use crate::ai::agent::manager::AgentManager;
@@ -433,7 +475,7 @@ GUIDELINES:
                         match runtime
                             .run(prompt, move |event| {
                                 println!("[Agent Event] {:?}", event);
-                                let event_text = format!("{:?}", event);
+                                let (message, data) = map_agent_event(&event);
                                 let service = neural_service.clone();
                                 let cmd = command_id.clone();
                                 tokio::spawn(async move {
@@ -441,10 +483,8 @@ GUIDELINES:
                                         .report_command_progress(
                                             &cmd,
                                             "info",
-                                            "Agent runtime event",
-                                            Some(serde_json::json!({
-                                                "event": event_text,
-                                            })),
+                                            &message,
+                                            Some(data),
                                         )
                                         .await;
                                 });
