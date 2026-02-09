@@ -1469,6 +1469,13 @@ export interface AtmMetricsAlertCleanupResponse {
   cutoffTs: number;
 }
 
+export interface AtmAdminPermissions {
+  canEditSlo: boolean;
+  canAckAlerts: boolean;
+  canEditAlertRetention: boolean;
+  canRunAlertCleanup: boolean;
+}
+
 export async function createAtmAgent(
   name: string,
   type: string,
@@ -1566,6 +1573,10 @@ export async function updateAtmMetricsAlertRetention(
 
 export async function cleanupAtmMetricsAlerts(): Promise<AtmMetricsAlertCleanupResponse> {
   return invoke("cleanup_atm_metrics_alerts");
+}
+
+export async function getAtmAdminPermissions(): Promise<AtmAdminPermissions> {
+  return invoke("get_atm_admin_permissions");
 }
 
 // ============ ATM Bootstrap Commands ============

@@ -278,6 +278,20 @@ pub struct MetricsAlertCleanupResponse {
     pub cutoff_ts: i64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminPermissions {
+    pub can_edit_slo: bool,
+    pub can_ack_alerts: bool,
+    pub can_edit_alert_retention: bool,
+    pub can_run_alert_cleanup: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AdminPermissionsResponse {
+    pub permissions: AdminPermissions,
+}
+
 impl ATMClient {
     pub fn new(base_url: String, api_key: Option<String>) -> Self {
         Self {
@@ -976,6 +990,34 @@ impl ATMClient {
         }
 
         res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn get_admin_permissions(&self) -> Result<AdminPermissions, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/permissions", state.base_url);
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Get admin permissions failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: AdminPermissionsResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(body.permissions)
     }
 
     /// Deploys an AgentSpec v2 to the Cloud, signing it first.

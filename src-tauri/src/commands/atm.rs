@@ -164,6 +164,13 @@ pub async fn cleanup_atm_metrics_alerts(
 }
 
 #[command]
+pub async fn get_atm_admin_permissions(
+    client: State<'_, ATMClient>,
+) -> Result<crate::services::atm_client::AdminPermissions, String> {
+    client.get_admin_permissions().await
+}
+
+#[command]
 pub async fn generate_pairing_code(
     client: State<'_, ATMClient>,
 ) -> Result<crate::services::atm_client::PairingCodeResponse, String> {

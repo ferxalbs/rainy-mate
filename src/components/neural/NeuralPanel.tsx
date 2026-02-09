@@ -48,6 +48,7 @@ import {
   getAtmMetricsAlertRetention,
   updateAtmMetricsAlertRetention,
   cleanupAtmMetricsAlerts,
+  getAtmAdminPermissions,
   AtmCommandSummary,
   AtmCommandProgressEvent,
   AtmCommandMetricsResponse,
@@ -56,6 +57,7 @@ import {
   AtmMetricsAlert,
   AtmMetricsSloConfig,
   AtmMetricsAlertRetentionConfig,
+  AtmAdminPermissions,
 } from "../../services/tauri";
 import { useAirlock } from "../../hooks/useAirlock";
 import { DEFAULT_NEURAL_SKILLS } from "../../constants/defaultNeuralSkills";
@@ -94,6 +96,12 @@ const DEFAULT_SLO_THRESHOLDS: AtmMetricsSloConfig = {
 };
 const DEFAULT_ALERT_RETENTION: AtmMetricsAlertRetentionConfig = {
   days: 14,
+};
+const DEFAULT_ADMIN_PERMISSIONS: AtmAdminPermissions = {
+  canEditSlo: true,
+  canAckAlerts: true,
+  canEditAlertRetention: true,
+  canRunAlertCleanup: true,
 };
 
 const NEURAL_WORKSPACE_STORAGE_KEY = "rainy-neural-workspace";
@@ -171,6 +179,8 @@ export function NeuralPanel() {
     useState<AlertHistoryStatus>("open");
   const [alertRetention, setAlertRetention] =
     useState<AtmMetricsAlertRetentionConfig>(DEFAULT_ALERT_RETENTION);
+  const [adminPermissions, setAdminPermissions] =
+    useState<AtmAdminPermissions>(DEFAULT_ADMIN_PERMISSIONS);
   const [sloThresholds, setSloThresholds] =
     useState<AtmMetricsSloConfig>(DEFAULT_SLO_THRESHOLDS);
   const [isLoadingCommands, setIsLoadingCommands] = useState(false);
@@ -365,6 +375,15 @@ export function NeuralPanel() {
     }
   }, []);
 
+  const loadAdminPermissions = useCallback(async () => {
+    try {
+      const permissions = await getAtmAdminPermissions();
+      setAdminPermissions(permissions);
+    } catch (err) {
+      console.error("Failed to load admin permissions:", err);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
@@ -535,7 +554,8 @@ export function NeuralPanel() {
     if (state !== "connected") return;
     loadSloThresholds();
     loadAlertRetention();
-  }, [loadAlertRetention, loadSloThresholds, state]);
+    loadAdminPermissions();
+  }, [loadAdminPermissions, loadAlertRetention, loadSloThresholds, state]);
 
   useEffect(() => {
     if (state !== "connected") return;
@@ -694,6 +714,10 @@ export function NeuralPanel() {
   };
 
   const handleAckAlert = async (alertId: string) => {
+    if (!adminPermissions.canAckAlerts) {
+      toast.error("Alert acknowledgement is disabled by workspace policy");
+      return;
+    }
     try {
       await ackAtmMetricsAlert(alertId, "desktop-admin");
       await refreshPersistedAlerts();
@@ -716,6 +740,10 @@ export function NeuralPanel() {
   };
 
   const handleSaveSloThresholds = async () => {
+    if (!adminPermissions.canEditSlo) {
+      toast.error("SLO editing is disabled by workspace policy");
+      return;
+    }
     setIsSavingSlo(true);
     try {
       const updated = await updateAtmMetricsSlo(sloThresholds);
@@ -731,6 +759,10 @@ export function NeuralPanel() {
   };
 
   const handleSaveAlertRetention = async () => {
+    if (!adminPermissions.canEditAlertRetention) {
+      toast.error("Alert retention editing is disabled by workspace policy");
+      return;
+    }
     setIsSavingAlertRetention(true);
     try {
       const updated = await updateAtmMetricsAlertRetention(alertRetention);
@@ -746,6 +778,10 @@ export function NeuralPanel() {
   };
 
   const handleCleanupAlerts = async () => {
+    if (!adminPermissions.canRunAlertCleanup) {
+      toast.error("Alert cleanup is disabled by workspace policy");
+      return;
+    }
     setIsCleaningAlerts(true);
     try {
       const result = await cleanupAtmMetricsAlerts();
@@ -1107,11 +1143,16 @@ export function NeuralPanel() {
                           size="sm"
                           variant="ghost"
                           onPress={handleSaveSloThresholds}
-                          isDisabled={isSavingSlo}
+                          isDisabled={isSavingSlo || !adminPermissions.canEditSlo}
                         >
                           {isSavingSlo ? "Saving..." : "Save Thresholds"}
                         </Button>
                       </div>
+                      {!adminPermissions.canEditSlo && (
+                        <div className="text-[11px] text-muted-foreground">
+                          SLO editing is disabled by workspace policy.
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         <Input
                           type="number"
@@ -1437,7 +1478,10 @@ export function NeuralPanel() {
                           size="sm"
                           variant="secondary"
                           onPress={handleSaveAlertRetention}
-                          isDisabled={isSavingAlertRetention}
+                          isDisabled={
+                            isSavingAlertRetention ||
+                            !adminPermissions.canEditAlertRetention
+                          }
                         >
                           {isSavingAlertRetention ? "Saving..." : "Save Retention"}
                         </Button>
@@ -1445,11 +1489,19 @@ export function NeuralPanel() {
                           size="sm"
                           variant="outline"
                           onPress={handleCleanupAlerts}
-                          isDisabled={isCleaningAlerts}
+                          isDisabled={
+                            isCleaningAlerts || !adminPermissions.canRunAlertCleanup
+                          }
                         >
                           {isCleaningAlerts ? "Cleaning..." : "Run Cleanup"}
                         </Button>
                       </div>
+                      {(!adminPermissions.canEditAlertRetention ||
+                        !adminPermissions.canRunAlertCleanup) && (
+                        <div className="text-[11px] text-muted-foreground">
+                          Alert retention controls are limited by workspace policy.
+                        </div>
+                      )}
                       <div className="flex items-center gap-1.5">
                         {(["open", "acked", "resolved", "all"] as const).map(
                           (status) => (
@@ -1499,6 +1551,7 @@ export function NeuralPanel() {
                                   variant="ghost"
                                   className="text-xs"
                                   onPress={() => handleAckAlert(alert.id)}
+                                  isDisabled={!adminPermissions.canAckAlerts}
                                 >
                                   Ack
                                 </Button>
