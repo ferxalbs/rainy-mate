@@ -190,6 +190,94 @@ pub struct EndpointMetricsResponse {
     pub endpoints: Vec<EndpointMetricsItem>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsAlert {
+    pub id: String,
+    pub source: String,
+    pub key: String,
+    pub severity: String,
+    pub reason: String,
+    pub status: String,
+    pub first_seen_at: i64,
+    pub last_seen_at: i64,
+    pub acked_at: Option<i64>,
+    pub acked_by: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MetricsAlertsResponse {
+    pub alerts: Vec<MetricsAlert>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertSyncItem {
+    pub source: String,
+    pub key: String,
+    pub severity: String,
+    pub reason: String,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertSyncResponse {
+    pub success: bool,
+    pub upserts: i64,
+    pub resolved: i64,
+    pub open_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsSloConfig {
+    pub endpoint_error_rate_warn: f64,
+    pub endpoint_error_rate_critical: f64,
+    pub endpoint_p95_warn_ms: f64,
+    pub endpoint_p95_critical_ms: f64,
+    pub endpoint_slo_error_rate_target: f64,
+    pub endpoint_slo_p95_target_ms: f64,
+    pub endpoint_regression_error_rate_factor: f64,
+    pub endpoint_regression_error_rate_delta: f64,
+    pub endpoint_regression_p95_factor: f64,
+    pub endpoint_regression_p95_delta_ms: f64,
+    pub failure_timeout_warn: f64,
+    pub failure_timeout_critical: f64,
+    pub failure_runtime_warn: f64,
+    pub failure_runtime_critical: f64,
+    pub failure_transport_warn: f64,
+    pub failure_transport_critical: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsSloResponse {
+    pub metrics_slo: MetricsSloConfig,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsAlertRetentionConfig {
+    pub days: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsAlertRetentionResponse {
+    pub metrics_alert_retention: MetricsAlertRetentionConfig,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsAlertCleanupResponse {
+    pub success: bool,
+    pub deleted: i64,
+    pub retention_days: i64,
+    pub cutoff_ts: i64,
+}
+
 impl ATMClient {
     pub fn new(base_url: String, api_key: Option<String>) -> Self {
         Self {
@@ -631,6 +719,258 @@ impl ATMClient {
             let err_text = res.text().await.unwrap_or_default();
             return Err(format!(
                 "Get endpoint metrics failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn sync_metrics_alerts(
+        &self,
+        alerts: Vec<AlertSyncItem>,
+    ) -> Result<AlertSyncResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/metrics/alerts/sync", state.base_url);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&serde_json::json!({ "alerts": alerts }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Sync metrics alerts failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn list_metrics_alerts(
+        &self,
+        status: Option<String>,
+        limit: Option<usize>,
+    ) -> Result<Vec<MetricsAlert>, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let mut url = format!(
+            "{}/admin/metrics/alerts?limit={}",
+            state.base_url,
+            limit.unwrap_or(100)
+        );
+        if let Some(s) = status {
+            if !s.trim().is_empty() {
+                url.push_str("&status=");
+                url.push_str(s.trim());
+            }
+        }
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "List metrics alerts failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: MetricsAlertsResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(body.alerts)
+    }
+
+    pub async fn acknowledge_metrics_alert(
+        &self,
+        alert_id: String,
+        acked_by: Option<String>,
+    ) -> Result<serde_json::Value, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/metrics/alerts/{}/ack", state.base_url, alert_id);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&serde_json::json!({
+                "ackedBy": acked_by.unwrap_or_else(|| "desktop-admin".to_string())
+            }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Acknowledge metrics alert failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn get_metrics_slo(&self) -> Result<MetricsSloConfig, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/metrics/slo", state.base_url);
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!("Get metrics SLO failed: {} - {}", status, err_text));
+        }
+
+        let body: MetricsSloResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(body.metrics_slo)
+    }
+
+    pub async fn update_metrics_slo(
+        &self,
+        metrics_slo: MetricsSloConfig,
+    ) -> Result<MetricsSloConfig, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/metrics/slo", state.base_url);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&serde_json::json!({ "metricsSlo": metrics_slo }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Update metrics SLO failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: MetricsSloResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(body.metrics_slo)
+    }
+
+    pub async fn get_metrics_alert_retention(&self) -> Result<MetricsAlertRetentionConfig, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/metrics/alerts/retention", state.base_url);
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Get metrics alert retention failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: MetricsAlertRetentionResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(body.metrics_alert_retention)
+    }
+
+    pub async fn update_metrics_alert_retention(
+        &self,
+        metrics_alert_retention: MetricsAlertRetentionConfig,
+    ) -> Result<MetricsAlertRetentionConfig, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/metrics/alerts/retention", state.base_url);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&serde_json::json!({ "metricsAlertRetention": metrics_alert_retention }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Update metrics alert retention failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: MetricsAlertRetentionResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(body.metrics_alert_retention)
+    }
+
+    pub async fn cleanup_metrics_alerts(&self) -> Result<MetricsAlertCleanupResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/metrics/alerts/cleanup", state.base_url);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Cleanup metrics alerts failed: {} - {}",
                 status, err_text
             ));
         }

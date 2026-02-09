@@ -99,6 +99,71 @@ pub async fn get_atm_endpoint_metrics(
 }
 
 #[command]
+pub async fn sync_atm_metrics_alerts(
+    client: State<'_, ATMClient>,
+    alerts: Vec<crate::services::atm_client::AlertSyncItem>,
+) -> Result<crate::services::atm_client::AlertSyncResponse, String> {
+    client.sync_metrics_alerts(alerts).await
+}
+
+#[command]
+pub async fn list_atm_metrics_alerts(
+    client: State<'_, ATMClient>,
+    status: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<crate::services::atm_client::MetricsAlert>, String> {
+    client.list_metrics_alerts(status, limit).await
+}
+
+#[command]
+pub async fn ack_atm_metrics_alert(
+    client: State<'_, ATMClient>,
+    alert_id: String,
+    acked_by: Option<String>,
+) -> Result<serde_json::Value, String> {
+    client.acknowledge_metrics_alert(alert_id, acked_by).await
+}
+
+#[command]
+pub async fn get_atm_metrics_slo(
+    client: State<'_, ATMClient>,
+) -> Result<crate::services::atm_client::MetricsSloConfig, String> {
+    client.get_metrics_slo().await
+}
+
+#[command]
+pub async fn update_atm_metrics_slo(
+    client: State<'_, ATMClient>,
+    metrics_slo: crate::services::atm_client::MetricsSloConfig,
+) -> Result<crate::services::atm_client::MetricsSloConfig, String> {
+    client.update_metrics_slo(metrics_slo).await
+}
+
+#[command]
+pub async fn get_atm_metrics_alert_retention(
+    client: State<'_, ATMClient>,
+) -> Result<crate::services::atm_client::MetricsAlertRetentionConfig, String> {
+    client.get_metrics_alert_retention().await
+}
+
+#[command]
+pub async fn update_atm_metrics_alert_retention(
+    client: State<'_, ATMClient>,
+    metrics_alert_retention: crate::services::atm_client::MetricsAlertRetentionConfig,
+) -> Result<crate::services::atm_client::MetricsAlertRetentionConfig, String> {
+    client
+        .update_metrics_alert_retention(metrics_alert_retention)
+        .await
+}
+
+#[command]
+pub async fn cleanup_atm_metrics_alerts(
+    client: State<'_, ATMClient>,
+) -> Result<crate::services::atm_client::MetricsAlertCleanupResponse, String> {
+    client.cleanup_metrics_alerts().await
+}
+
+#[command]
 pub async fn generate_pairing_code(
     client: State<'_, ATMClient>,
 ) -> Result<crate::services::atm_client::PairingCodeResponse, String> {

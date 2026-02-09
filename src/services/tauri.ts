@@ -1417,6 +1417,58 @@ export interface AtmEndpointMetricsResponse {
   endpoints: AtmEndpointMetricsItem[];
 }
 
+export interface AtmMetricsAlertSyncItem {
+  source: string;
+  key: string;
+  severity: "warn" | "critical";
+  reason: string;
+  metadata?: any;
+}
+
+export interface AtmMetricsAlert {
+  id: string;
+  source: string;
+  key: string;
+  severity: "warn" | "critical" | string;
+  reason: string;
+  status: "open" | "acked" | "resolved" | string;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  ackedAt?: number | null;
+  ackedBy?: string | null;
+  metadata?: any;
+}
+
+export interface AtmMetricsSloConfig {
+  endpointErrorRateWarn: number;
+  endpointErrorRateCritical: number;
+  endpointP95WarnMs: number;
+  endpointP95CriticalMs: number;
+  endpointSloErrorRateTarget: number;
+  endpointSloP95TargetMs: number;
+  endpointRegressionErrorRateFactor: number;
+  endpointRegressionErrorRateDelta: number;
+  endpointRegressionP95Factor: number;
+  endpointRegressionP95DeltaMs: number;
+  failureTimeoutWarn: number;
+  failureTimeoutCritical: number;
+  failureRuntimeWarn: number;
+  failureRuntimeCritical: number;
+  failureTransportWarn: number;
+  failureTransportCritical: number;
+}
+
+export interface AtmMetricsAlertRetentionConfig {
+  days: number;
+}
+
+export interface AtmMetricsAlertCleanupResponse {
+  success: boolean;
+  deleted: number;
+  retentionDays: number;
+  cutoffTs: number;
+}
+
 export async function createAtmAgent(
   name: string,
   type: string,
@@ -1465,6 +1517,55 @@ export async function getAtmEndpointMetrics(
   limit = 2000,
 ): Promise<AtmEndpointMetricsResponse> {
   return invoke("get_atm_endpoint_metrics", { windowMs, limit });
+}
+
+export async function syncAtmMetricsAlerts(
+  alerts: AtmMetricsAlertSyncItem[],
+): Promise<{
+  success: boolean;
+  upserts: number;
+  resolved: number;
+  openCount: number;
+}> {
+  return invoke("sync_atm_metrics_alerts", { alerts });
+}
+
+export async function listAtmMetricsAlerts(
+  status?: string,
+  limit = 100,
+): Promise<AtmMetricsAlert[]> {
+  return invoke("list_atm_metrics_alerts", { status, limit });
+}
+
+export async function ackAtmMetricsAlert(
+  alertId: string,
+  ackedBy = "desktop-admin",
+): Promise<any> {
+  return invoke("ack_atm_metrics_alert", { alertId, ackedBy });
+}
+
+export async function getAtmMetricsSlo(): Promise<AtmMetricsSloConfig> {
+  return invoke("get_atm_metrics_slo");
+}
+
+export async function updateAtmMetricsSlo(
+  metricsSlo: AtmMetricsSloConfig,
+): Promise<AtmMetricsSloConfig> {
+  return invoke("update_atm_metrics_slo", { metricsSlo });
+}
+
+export async function getAtmMetricsAlertRetention(): Promise<AtmMetricsAlertRetentionConfig> {
+  return invoke("get_atm_metrics_alert_retention");
+}
+
+export async function updateAtmMetricsAlertRetention(
+  metricsAlertRetention: AtmMetricsAlertRetentionConfig,
+): Promise<AtmMetricsAlertRetentionConfig> {
+  return invoke("update_atm_metrics_alert_retention", { metricsAlertRetention });
+}
+
+export async function cleanupAtmMetricsAlerts(): Promise<AtmMetricsAlertCleanupResponse> {
+  return invoke("cleanup_atm_metrics_alerts");
 }
 
 // ============ ATM Bootstrap Commands ============
