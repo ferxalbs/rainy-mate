@@ -119,6 +119,13 @@ pub struct SkillExecutor {
 }
 
 impl SkillExecutor {
+    fn is_allowed_shell_command(command: &str) -> bool {
+        matches!(
+            command,
+            "npm" | "cargo" | "git" | "ls" | "grep" | "echo" | "cat"
+        )
+    }
+
     pub fn new(
         workspace_manager: Arc<WorkspaceManager>,
         managed_research: Arc<ManagedResearchService>,
@@ -588,10 +595,7 @@ impl SkillExecutor {
         cwd: &PathBuf,
     ) -> CommandResult {
         // Shell command policy follows AGENTS.md allowed command set.
-        let allowed_commands = vec![
-            "npm", "cargo", "git", "ls", "grep", "echo", "cat",
-        ];
-        if !allowed_commands.contains(&command) {
+        if !Self::is_allowed_shell_command(command) {
             return self.error(&format!("Command '{}' is not allowed", command));
         }
 
@@ -1173,5 +1177,40 @@ impl SkillExecutor {
 
 #[cfg(test)]
 mod tests {
-    // Tests are fine to stay as is for now
+    use super::SkillExecutor;
+    use std::path::Path;
+
+    #[test]
+    fn shell_allowlist_matches_agents_policy() {
+        for cmd in ["npm", "cargo", "git", "ls", "grep", "echo", "cat"] {
+            assert!(SkillExecutor::is_allowed_shell_command(cmd));
+        }
+    }
+
+    #[test]
+    fn shell_allowlist_blocks_dangerous_commands() {
+        for cmd in ["rm", "curl", "wget", "kill", "mv", "cp", "bun"] {
+            assert!(!SkillExecutor::is_allowed_shell_command(cmd));
+        }
+    }
+
+    #[test]
+    fn normalize_absolute_path_collapses_dot_segments() {
+        let normalized = SkillExecutor::normalize_absolute_path(Path::new(
+            "/Users/fer/Projects/../Projects/rainy-cowork/./src-tauri",
+        ))
+        .expect("expected valid absolute path");
+
+        assert_eq!(
+            normalized.to_string_lossy(),
+            "/Users/fer/Projects/rainy-cowork/src-tauri"
+        );
+    }
+
+    #[test]
+    fn normalize_absolute_path_rejects_relative_paths() {
+        let err =
+            SkillExecutor::normalize_absolute_path(Path::new("relative/path/to/file")).unwrap_err();
+        assert!(err.contains("must be absolute"));
+    }
 }

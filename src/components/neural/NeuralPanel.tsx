@@ -417,7 +417,9 @@ export function NeuralPanel() {
 
       try {
         const approvals = await getPendingAirlockApprovals();
-        setPendingApprovals(approvals);
+        if (approvals.length > 0) {
+          console.log("Pending approval IDs detected:", approvals);
+        }
       } catch (err) {
         console.error("Failed to load approvals:", err);
       }
@@ -477,10 +479,12 @@ export function NeuralPanel() {
     }
   };
 
-  const handleAirlockRespond = async (requestId: string, approved: boolean) => {
+  const handleAirlockRespond = async (commandId: string, approved: boolean) => {
     try {
-      await respondToAirlock(requestId, approved);
-      setPendingApprovals((prev) => prev.filter((req) => req.id !== requestId));
+      await respondToAirlock(commandId, approved);
+      setPendingApprovals((prev) =>
+        prev.filter((req) => req.commandId !== commandId),
+      );
       toast.success(approved ? "Request Approved" : "Request Denied");
     } catch (err) {
       toast.error("Failed to process response");
@@ -850,25 +854,25 @@ export function NeuralPanel() {
                       <div className="grid grid-cols-1 gap-3">
                         {pendingApprovals.map((request) => (
                           <div
-                            key={request.id}
+                            key={request.commandId}
                             className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-all"
                           >
                             <div className="flex items-center gap-4">
                               <Chip
                                 size="sm"
                                 className={
-                                  request.level === AirlockLevels.Dangerous
+                                  request.airlockLevel === AirlockLevels.Dangerous
                                     ? "bg-red-500/20 text-red-400 border-red-500/20"
-                                    : request.level === AirlockLevels.Sensitive
+                                    : request.airlockLevel === AirlockLevels.Sensitive
                                       ? "bg-orange-500/20 text-orange-400 border-orange-500/20"
                                       : "bg-green-500/20 text-green-400 border-green-500/20"
                                 }
                                 variant="soft"
                               >
-                                {request.command_type}
+                                {request.intent}
                               </Chip>
                               <code className="text-xs text-muted-foreground font-mono bg-black/20 px-2 py-1 rounded">
-                                {JSON.stringify(request.payload).slice(0, 60)}
+                                {request.payloadSummary.slice(0, 60)}
                                 ...
                               </code>
                             </div>
@@ -880,7 +884,7 @@ export function NeuralPanel() {
                                 isIconOnly
                                 className="text-green-500 hover:bg-green-500/10"
                                 onPress={() =>
-                                  handleAirlockRespond(request.id, true)
+                                  handleAirlockRespond(request.commandId, true)
                                 }
                               >
                                 <CheckCircle2 className="size-4" />
@@ -891,7 +895,7 @@ export function NeuralPanel() {
                                 isIconOnly
                                 className="text-red-500 hover:bg-red-500/10"
                                 onPress={() =>
-                                  handleAirlockRespond(request.id, false)
+                                  handleAirlockRespond(request.commandId, false)
                                 }
                               >
                                 <XCircle className="size-4" />

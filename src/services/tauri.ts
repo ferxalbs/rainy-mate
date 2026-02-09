@@ -1218,12 +1218,11 @@ export const AirlockLevels = {
 };
 
 export interface ApprovalRequest {
-  id: string;
-  timestamp: string; // ISO
-  command_type: string;
-  payload: any;
-  level: AirlockLevel;
-  requester_id?: string;
+  commandId: string;
+  intent: string;
+  payloadSummary: string;
+  airlockLevel: AirlockLevel;
+  timestamp: number;
 }
 
 export interface ParameterSchema {
@@ -1270,18 +1269,20 @@ export async function setNeuralWorkspaceId(workspaceId: string): Promise<void> {
   return invoke("set_neural_workspace_id", { workspaceId });
 }
 
-export async function sendHeartbeat(): Promise<void> {
-  return invoke("send_heartbeat");
+export async function sendHeartbeat(
+  status: DesktopNodeStatus = "connected",
+): Promise<void> {
+  return invoke("send_heartbeat", { status });
 }
 
 export async function respondToAirlock(
-  requestId: string,
+  commandId: string,
   approved: boolean,
 ): Promise<void> {
-  return invoke("respond_to_airlock", { requestId, approved });
+  return invoke("respond_to_airlock", { commandId, approved });
 }
 
-export async function getPendingAirlockApprovals(): Promise<ApprovalRequest[]> {
+export async function getPendingAirlockApprovals(): Promise<string[]> {
   return invoke("get_pending_airlock_approvals");
 }
 

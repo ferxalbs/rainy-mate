@@ -227,7 +227,7 @@ export function useNeuralService() {
   const startHeartbeat = useCallback(() => {
     const interval = setInterval(async () => {
       try {
-        await sendHeartbeat();
+        await sendHeartbeat("connected");
         setLastHeartbeat(new Date());
       } catch (err) {
         console.error("Heartbeat failed:", err);
@@ -244,9 +244,14 @@ export function useNeuralService() {
       "airlock:approval_required",
       (event) => {
         console.log("Airlock Approval Required:", event.payload);
-        setPendingApprovals((prev) => [...prev, event.payload]);
+        setPendingApprovals((prev) => {
+          if (prev.some((req) => req.commandId === event.payload.commandId)) {
+            return prev;
+          }
+          return [...prev, event.payload];
+        });
         toast("Security Alert", {
-          description: `Permission required for ${event.payload.command_type}`,
+          description: `Permission required for ${event.payload.intent}`,
           actionProps: {
             children: "Review",
             onPress: () => {
@@ -258,17 +263,25 @@ export function useNeuralService() {
     );
 
     // Load initial pending approvals
-    getPendingAirlockApprovals().then(setPendingApprovals).catch(console.error);
+    getPendingAirlockApprovals()
+      .then((ids) => {
+        if (ids.length > 0) {
+          console.log("Pending approval IDs detected:", ids);
+        }
+      })
+      .catch(console.error);
 
     return () => {
       unlisten.then((f) => f());
     };
   }, []);
 
-  const respond = useCallback(async (requestId: string, approved: boolean) => {
+  const respond = useCallback(async (commandId: string, approved: boolean) => {
     try {
-      await respondToAirlock(requestId, approved);
-      setPendingApprovals((prev) => prev.filter((req) => req.id !== requestId));
+      await respondToAirlock(commandId, approved);
+      setPendingApprovals((prev) =>
+        prev.filter((req) => req.commandId !== commandId),
+      );
       toast.success(approved ? "Request Approved" : "Request Denied");
     } catch (error) {
       console.error("Failed to respond to airlock:", error);
