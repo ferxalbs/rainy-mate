@@ -73,6 +73,23 @@ pub async fn get_atm_command_progress(
 }
 
 #[command]
+pub async fn get_atm_command_metrics(
+    client: State<'_, ATMClient>,
+    command_id: String,
+) -> Result<crate::services::atm_client::CommandMetricsResponse, String> {
+    client.get_command_metrics(command_id).await
+}
+
+#[command]
+pub async fn get_atm_workspace_command_metrics(
+    client: State<'_, ATMClient>,
+    window_ms: Option<i64>,
+    limit: Option<usize>,
+) -> Result<crate::services::atm_client::WorkspaceCommandMetricsResponse, String> {
+    client.get_workspace_command_metrics(window_ms, limit).await
+}
+
+#[command]
 pub async fn generate_pairing_code(
     client: State<'_, ATMClient>,
 ) -> Result<crate::services::atm_client::PairingCodeResponse, String> {

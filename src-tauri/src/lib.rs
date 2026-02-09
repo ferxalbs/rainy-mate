@@ -443,6 +443,8 @@ pub fn run() {
             commands::list_atm_commands,
             commands::get_atm_command_details,
             commands::get_atm_command_progress,
+            commands::get_atm_command_metrics,
+            commands::get_atm_workspace_command_metrics,
             commands::set_atm_credentials,
             commands::has_atm_credentials,
             commands::ensure_atm_credentials_loaded,

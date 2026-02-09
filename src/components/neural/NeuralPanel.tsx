@@ -36,8 +36,12 @@ import {
   listAtmCommands,
   getAtmCommandDetails,
   getAtmCommandProgress,
+  getAtmCommandMetrics,
+  getAtmWorkspaceCommandMetrics,
   AtmCommandSummary,
   AtmCommandProgressEvent,
+  AtmCommandMetricsResponse,
+  AtmWorkspaceCommandMetricsResponse,
 } from "../../services/tauri";
 import { useAirlock } from "../../hooks/useAirlock";
 import { DEFAULT_NEURAL_SKILLS } from "../../constants/defaultNeuralSkills";
@@ -110,9 +114,17 @@ export function NeuralPanel() {
   const [commandProgress, setCommandProgress] = useState<AtmCommandProgressEvent[]>(
     [],
   );
+  const [commandMetrics, setCommandMetrics] =
+    useState<AtmCommandMetricsResponse | null>(null);
+  const [workspaceCommandMetrics, setWorkspaceCommandMetrics] =
+    useState<AtmWorkspaceCommandMetricsResponse | null>(null);
   const [isLoadingCommands, setIsLoadingCommands] = useState(false);
   const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+  const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
   const progressSinceRef = useRef(0);
+
+  const formatMs = (value?: number | null) =>
+    typeof value === "number" ? `${value}ms` : "-";
 
   useEffect(() => {
     let cancelled = false;
@@ -210,11 +222,16 @@ export function NeuralPanel() {
     if (state !== "connected") return;
     setIsLoadingCommands(true);
     try {
-      const commands = await listAtmCommands(25);
+      const [commands, metrics] = await Promise.all([
+        listAtmCommands(25),
+        getAtmWorkspaceCommandMetrics(24 * 60 * 60 * 1000, 500),
+      ]);
       setRecentCommands(commands);
+      setWorkspaceCommandMetrics(metrics);
       if (commands.length === 0) {
         setSelectedCommandId(null);
         setCommandProgress([]);
+        setCommandMetrics(null);
         progressSinceRef.current = 0;
         return;
       }
@@ -246,16 +263,22 @@ export function NeuralPanel() {
 
     const loadInitial = async () => {
       setIsLoadingProgress(true);
+      setIsLoadingMetrics(true);
       try {
-        const details = await getAtmCommandDetails(selectedCommandId, 200);
+        const [details, metrics] = await Promise.all([
+          getAtmCommandDetails(selectedCommandId, 200),
+          getAtmCommandMetrics(selectedCommandId),
+        ]);
         if (cancelled) return;
         setCommandProgress(details.progress);
+        setCommandMetrics(metrics);
         const last = details.progress[details.progress.length - 1];
         progressSinceRef.current = last?.createdAt || 0;
       } catch (err) {
         console.error("Failed to load command details:", err);
       } finally {
         if (!cancelled) setIsLoadingProgress(false);
+        if (!cancelled) setIsLoadingMetrics(false);
       }
     };
 
@@ -284,11 +307,23 @@ export function NeuralPanel() {
       }
     };
 
+    const pollMetrics = async () => {
+      try {
+        const metrics = await getAtmCommandMetrics(selectedCommandId);
+        if (cancelled) return;
+        setCommandMetrics(metrics);
+      } catch (err) {
+        console.error("Failed to poll command metrics:", err);
+      }
+    };
+
     loadInitial();
-    const interval = setInterval(pollProgress, 2000);
+    const progressInterval = setInterval(pollProgress, 2000);
+    const metricsInterval = setInterval(pollMetrics, 5000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearInterval(progressInterval);
+      clearInterval(metricsInterval);
     };
   }, [selectedCommandId, state]);
 
@@ -712,6 +747,50 @@ export function NeuralPanel() {
                       </Button>
                     </div>
 
+                    {workspaceCommandMetrics && (
+                      <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                            Workspace Metrics
+                          </span>
+                          <span className="text-[11px] text-muted-foreground font-mono">
+                            {(workspaceCommandMetrics.windowMs / (60 * 60 * 1000)).toFixed(0)}
+                            h window
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Chip size="sm" variant="soft">
+                            timeout: {workspaceCommandMetrics.failureBuckets.timeout || 0}
+                          </Chip>
+                          <Chip size="sm" variant="soft">
+                            airlock:{" "}
+                            {workspaceCommandMetrics.failureBuckets.airlock_rejected || 0}
+                          </Chip>
+                          <Chip size="sm" variant="soft">
+                            runtime:{" "}
+                            {workspaceCommandMetrics.failureBuckets.runtime_error || 0}
+                          </Chip>
+                          <Chip size="sm" variant="soft">
+                            transport:{" "}
+                            {workspaceCommandMetrics.failureBuckets.transport_error || 0}
+                          </Chip>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
+                          <div>
+                            queue:{" "}
+                            {formatMs(workspaceCommandMetrics.averages.queueDelayMs)}
+                          </div>
+                          <div>
+                            run: {formatMs(workspaceCommandMetrics.averages.runDurationMs)}
+                          </div>
+                          <div>
+                            total:{" "}
+                            {formatMs(workspaceCommandMetrics.averages.totalDurationMs)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {recentCommands.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-white/10 text-muted-foreground/50">
                         <span className="text-sm font-medium">
@@ -750,6 +829,46 @@ export function NeuralPanel() {
                         <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 max-h-72 overflow-y-auto">
                           {selectedCommandId ? (
                             <div className="space-y-2">
+                              {commandMetrics && (
+                                <div className="p-2 rounded-md bg-white/5 border border-white/5 space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                                      Command Metrics
+                                    </span>
+                                    <Chip size="sm" variant="soft">
+                                      {commandMetrics.status}
+                                    </Chip>
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
+                                    <div>
+                                      queue: {formatMs(commandMetrics.timings.queueDelayMs)}
+                                    </div>
+                                    <div>
+                                      run: {formatMs(commandMetrics.timings.runDurationMs)}
+                                    </div>
+                                    <div>
+                                      total: {formatMs(commandMetrics.timings.totalDurationMs)}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Chip size="sm" variant="soft">
+                                      events: {commandMetrics.progress.totalEvents}
+                                    </Chip>
+                                    <Chip size="sm" variant="soft">
+                                      dropped: {commandMetrics.progress.droppedEventsTotal}
+                                    </Chip>
+                                    <Chip size="sm" variant="soft">
+                                      suppressed:{" "}
+                                      {commandMetrics.progress.suppressedEventsTotal}
+                                    </Chip>
+                                  </div>
+                                </div>
+                              )}
+                              {isLoadingMetrics && !commandMetrics && (
+                                <div className="text-sm text-muted-foreground">
+                                  Loading metrics...
+                                </div>
+                              )}
                               {isLoadingProgress && commandProgress.length === 0 ? (
                                 <div className="text-sm text-muted-foreground">
                                   Loading progress...

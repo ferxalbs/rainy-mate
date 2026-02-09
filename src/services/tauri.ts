@@ -1337,6 +1337,13 @@ export interface AtmCommandSummary {
   startedAt?: number | null;
   completedAt?: number | null;
   desktopNodeId?: string | null;
+  timings?: AtmCommandTimings;
+}
+
+export interface AtmCommandTimings {
+  queueDelayMs?: number | null;
+  runDurationMs?: number | null;
+  totalDurationMs?: number | null;
 }
 
 export interface AtmCommandProgressEvent {
@@ -1358,6 +1365,30 @@ export interface AtmCommandProgressResponse {
   commandId: string;
   progress: AtmCommandProgressEvent[];
   nextSince: number;
+}
+
+export interface AtmCommandMetricsResponse {
+  commandId: string;
+  status: string;
+  timings: AtmCommandTimings;
+  progress: {
+    totalEvents: number;
+    firstEventAt?: number | null;
+    lastEventAt?: number | null;
+    byLevel: Record<string, number>;
+    droppedEventsTotal: number;
+    suppressedEventsTotal: number;
+  };
+}
+
+export interface AtmWorkspaceCommandMetricsResponse {
+  workspaceId: string;
+  windowMs: number;
+  since: number;
+  sampledCommands: number;
+  statusCounts: Record<string, number>;
+  failureBuckets: Record<string, number>;
+  averages: AtmCommandTimings;
 }
 
 export async function createAtmAgent(
@@ -1388,6 +1419,19 @@ export async function getAtmCommandProgress(
   limit = 200,
 ): Promise<AtmCommandProgressResponse> {
   return invoke("get_atm_command_progress", { commandId, since, limit });
+}
+
+export async function getAtmCommandMetrics(
+  commandId: string,
+): Promise<AtmCommandMetricsResponse> {
+  return invoke("get_atm_command_metrics", { commandId });
+}
+
+export async function getAtmWorkspaceCommandMetrics(
+  windowMs = 24 * 60 * 60 * 1000,
+  limit = 500,
+): Promise<AtmWorkspaceCommandMetricsResponse> {
+  return invoke("get_atm_workspace_command_metrics", { windowMs, limit });
 }
 
 // ============ ATM Bootstrap Commands ============

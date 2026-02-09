@@ -58,6 +58,15 @@ pub struct ATMCommandSummary {
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
     pub desktop_node_id: Option<String>,
+    pub timings: Option<ATMCommandTimings>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ATMCommandTimings {
+    pub queue_delay_ms: Option<i64>,
+    pub run_duration_ms: Option<i64>,
+    pub total_duration_ms: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -86,6 +95,7 @@ pub struct ATMCommandDetails {
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
     pub desktop_node_id: Option<String>,
+    pub timings: Option<ATMCommandTimings>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -100,6 +110,46 @@ pub struct CommandProgressResponse {
     pub command_id: String,
     pub progress: Vec<ATMCommandProgressEvent>,
     pub next_since: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ATMCommandProgressMetrics {
+    pub total_events: i64,
+    pub first_event_at: Option<i64>,
+    pub last_event_at: Option<i64>,
+    pub by_level: std::collections::HashMap<String, i64>,
+    pub dropped_events_total: i64,
+    pub suppressed_events_total: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandMetricsResponse {
+    pub command_id: String,
+    pub status: String,
+    pub timings: ATMCommandTimings,
+    pub progress: ATMCommandProgressMetrics,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceCommandMetricAverages {
+    pub queue_delay_ms: Option<i64>,
+    pub run_duration_ms: Option<i64>,
+    pub total_duration_ms: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceCommandMetricsResponse {
+    pub workspace_id: String,
+    pub window_ms: i64,
+    pub since: i64,
+    pub sampled_commands: i64,
+    pub status_counts: std::collections::HashMap<String, i64>,
+    pub failure_buckets: std::collections::HashMap<String, i64>,
+    pub averages: WorkspaceCommandMetricAverages,
 }
 
 impl ATMClient {
@@ -441,6 +491,72 @@ impl ATMClient {
             let err_text = res.text().await.unwrap_or_default();
             return Err(format!(
                 "Get command progress failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn get_command_metrics(
+        &self,
+        command_id: String,
+    ) -> Result<CommandMetricsResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/commands/{}/metrics", state.base_url, command_id);
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Get command metrics failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn get_workspace_command_metrics(
+        &self,
+        window_ms: Option<i64>,
+        limit: Option<usize>,
+    ) -> Result<WorkspaceCommandMetricsResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!(
+            "{}/admin/metrics/commands?windowMs={}&limit={}",
+            state.base_url,
+            window_ms.unwrap_or(24 * 60 * 60 * 1000),
+            limit.unwrap_or(500)
+        );
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Get workspace command metrics failed: {} - {}",
                 status, err_text
             ));
         }
