@@ -5,6 +5,51 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] - 2026-02-09 - Production Ops Integration (ATM + Native Runtime)
+
+### Added - Metrics Operations Hardening
+
+**Private Cloud Runtime (`Rainy ATM`)**
+
+- Integrated new production operations APIs and policy/audit flows.
+- Added owner-authenticated policy mutation path with validation.
+- Added immutable policy audit trail and retention lifecycle support.
+
+**Desktop Native Runtime (`src-tauri/src/`)**
+
+- `services/atm_client.rs`, `commands/atm.rs`, `lib.rs`:
+  - Added Tauri bridge support for:
+    - alert retention get/update/cleanup
+    - admin permissions get/update
+    - admin permissions audit listing
+
+**Frontend (`src/`)**
+
+- `services/tauri.ts`:
+  - Added typed wrappers and DTOs for retention, permission update, and permission audit APIs.
+
+- `components/neural/NeuralPanel.tsx`:
+  - Added production dashboard controls:
+    - Alert History filters (`open`, `acked`, `resolved`, `all`)
+    - Alert retention editor and manual cleanup trigger
+    - Admin Policy (Owner Auth) permission toggles
+    - Policy audit timeline with changed-key before/after visibility
+  - Added UI-level capability gating for:
+    - SLO save
+    - alert acknowledge
+    - retention save
+    - cleanup run
+
+### Changed
+
+- Operational controls now follow workspace policy-driven capability checks, enforced both server-side and in UI.
+- Metrics alert lifecycle now includes retention-driven pruning for stale `acked`/`resolved` records.
+
+### Fixed
+
+- Fixed TypeScript ack payload parsing edge case (`ackedBy` union fallback issue) in ATM admin alert acknowledge flow.
+- Removed dashboard action paths that could execute when policy disallowed the operation.
+
 ## [0.5.7] - 2026-02-09 - Native Runtime Enhancement (AgentSpec V2)
 
 ### Added - AgentSpec V2 Persistence & Runtime

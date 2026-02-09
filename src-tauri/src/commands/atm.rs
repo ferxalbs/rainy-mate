@@ -171,6 +171,26 @@ pub async fn get_atm_admin_permissions(
 }
 
 #[command]
+pub async fn update_atm_admin_permissions(
+    client: State<'_, ATMClient>,
+    permissions: crate::services::atm_client::AdminPermissions,
+    platform_key: String,
+    user_api_key: String,
+) -> Result<crate::services::atm_client::AdminPermissions, String> {
+    client
+        .update_admin_permissions(permissions, platform_key, user_api_key)
+        .await
+}
+
+#[command]
+pub async fn list_atm_admin_policy_audit(
+    client: State<'_, ATMClient>,
+    limit: Option<usize>,
+) -> Result<Vec<crate::services::atm_client::AdminPolicyAuditEvent>, String> {
+    client.list_admin_policy_audit(limit).await
+}
+
+#[command]
 pub async fn generate_pairing_code(
     client: State<'_, ATMClient>,
 ) -> Result<crate::services::atm_client::PairingCodeResponse, String> {

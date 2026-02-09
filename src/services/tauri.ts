@@ -1476,6 +1476,16 @@ export interface AtmAdminPermissions {
   canRunAlertCleanup: boolean;
 }
 
+export interface AtmAdminPolicyAuditEvent {
+  id: string;
+  actor: string;
+  eventType: string;
+  previous?: any;
+  next?: any;
+  metadata?: any;
+  createdAt: number;
+}
+
 export async function createAtmAgent(
   name: string,
   type: string,
@@ -1577,6 +1587,24 @@ export async function cleanupAtmMetricsAlerts(): Promise<AtmMetricsAlertCleanupR
 
 export async function getAtmAdminPermissions(): Promise<AtmAdminPermissions> {
   return invoke("get_atm_admin_permissions");
+}
+
+export async function updateAtmAdminPermissions(
+  permissions: AtmAdminPermissions,
+  platformKey: string,
+  userApiKey: string,
+): Promise<AtmAdminPermissions> {
+  return invoke("update_atm_admin_permissions", {
+    permissions,
+    platformKey,
+    userApiKey,
+  });
+}
+
+export async function listAtmAdminPolicyAudit(
+  limit = 50,
+): Promise<AtmAdminPolicyAuditEvent[]> {
+  return invoke("list_atm_admin_policy_audit", { limit });
 }
 
 // ============ ATM Bootstrap Commands ============

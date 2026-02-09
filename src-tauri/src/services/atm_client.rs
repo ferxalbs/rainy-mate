@@ -292,6 +292,23 @@ pub struct AdminPermissionsResponse {
     pub permissions: AdminPermissions,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminPolicyAuditEvent {
+    pub id: String,
+    pub actor: String,
+    pub event_type: String,
+    pub previous: Option<serde_json::Value>,
+    pub next: Option<serde_json::Value>,
+    pub metadata: Option<serde_json::Value>,
+    pub created_at: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AdminPolicyAuditResponse {
+    pub events: Vec<AdminPolicyAuditEvent>,
+}
+
 impl ATMClient {
     pub fn new(base_url: String, api_key: Option<String>) -> Self {
         Self {
@@ -1018,6 +1035,77 @@ impl ATMClient {
 
         let body: AdminPermissionsResponse = res.json().await.map_err(|e| e.to_string())?;
         Ok(body.permissions)
+    }
+
+    pub async fn update_admin_permissions(
+        &self,
+        permissions: AdminPermissions,
+        platform_key: String,
+        user_api_key: String,
+    ) -> Result<AdminPermissions, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/permissions", state.base_url);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("x-rainy-platform-key", platform_key)
+            .header("x-rainy-api-key", user_api_key)
+            .json(&serde_json::json!({ "permissions": permissions }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Update admin permissions failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: AdminPermissionsResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(body.permissions)
+    }
+
+    pub async fn list_admin_policy_audit(
+        &self,
+        limit: Option<usize>,
+    ) -> Result<Vec<AdminPolicyAuditEvent>, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!(
+            "{}/admin/permissions/audit?limit={}",
+            state.base_url,
+            limit.unwrap_or(50)
+        );
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "List admin policy audit failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: AdminPolicyAuditResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(body.events)
     }
 
     /// Deploys an AgentSpec v2 to the Cloud, signing it first.

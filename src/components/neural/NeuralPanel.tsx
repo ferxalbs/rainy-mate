@@ -49,6 +49,8 @@ import {
   updateAtmMetricsAlertRetention,
   cleanupAtmMetricsAlerts,
   getAtmAdminPermissions,
+  updateAtmAdminPermissions,
+  listAtmAdminPolicyAudit,
   AtmCommandSummary,
   AtmCommandProgressEvent,
   AtmCommandMetricsResponse,
@@ -58,6 +60,7 @@ import {
   AtmMetricsSloConfig,
   AtmMetricsAlertRetentionConfig,
   AtmAdminPermissions,
+  AtmAdminPolicyAuditEvent,
 } from "../../services/tauri";
 import { useAirlock } from "../../hooks/useAirlock";
 import { DEFAULT_NEURAL_SKILLS } from "../../constants/defaultNeuralSkills";
@@ -181,6 +184,11 @@ export function NeuralPanel() {
     useState<AtmMetricsAlertRetentionConfig>(DEFAULT_ALERT_RETENTION);
   const [adminPermissions, setAdminPermissions] =
     useState<AtmAdminPermissions>(DEFAULT_ADMIN_PERMISSIONS);
+  const [permissionDraft, setPermissionDraft] =
+    useState<AtmAdminPermissions>(DEFAULT_ADMIN_PERMISSIONS);
+  const [policyAuditEvents, setPolicyAuditEvents] = useState<
+    AtmAdminPolicyAuditEvent[]
+  >([]);
   const [sloThresholds, setSloThresholds] =
     useState<AtmMetricsSloConfig>(DEFAULT_SLO_THRESHOLDS);
   const [isLoadingCommands, setIsLoadingCommands] = useState(false);
@@ -190,6 +198,8 @@ export function NeuralPanel() {
   const [isSavingSlo, setIsSavingSlo] = useState(false);
   const [isSavingAlertRetention, setIsSavingAlertRetention] = useState(false);
   const [isCleaningAlerts, setIsCleaningAlerts] = useState(false);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+  const [isLoadingPolicyAudit, setIsLoadingPolicyAudit] = useState(false);
   const progressSinceRef = useRef(0);
   const endpointSnapshotRef = useRef<
     Record<string, { errorRate: number | null; p95: number | null }>
@@ -201,6 +211,8 @@ export function NeuralPanel() {
     typeof value === "number" ? `${value.toFixed(1)}%` : "-";
   const formatRate = (value?: number | null) =>
     typeof value === "number" ? `${value.toFixed(2)}/s` : "-";
+  const formatPolicyValue = (value: unknown) =>
+    typeof value === "boolean" ? (value ? "enabled" : "disabled") : String(value);
   const thresholdNumber = (
     key: keyof AtmMetricsSloConfig,
     fallback: number,
@@ -379,8 +391,21 @@ export function NeuralPanel() {
     try {
       const permissions = await getAtmAdminPermissions();
       setAdminPermissions(permissions);
+      setPermissionDraft(permissions);
     } catch (err) {
       console.error("Failed to load admin permissions:", err);
+    }
+  }, []);
+
+  const loadPolicyAudit = useCallback(async () => {
+    setIsLoadingPolicyAudit(true);
+    try {
+      const events = await listAtmAdminPolicyAudit(20);
+      setPolicyAuditEvents(events);
+    } catch (err) {
+      console.error("Failed to load policy audit:", err);
+    } finally {
+      setIsLoadingPolicyAudit(false);
     }
   }, []);
 
@@ -555,7 +580,14 @@ export function NeuralPanel() {
     loadSloThresholds();
     loadAlertRetention();
     loadAdminPermissions();
-  }, [loadAdminPermissions, loadAlertRetention, loadSloThresholds, state]);
+    loadPolicyAudit();
+  }, [
+    loadAdminPermissions,
+    loadAlertRetention,
+    loadPolicyAudit,
+    loadSloThresholds,
+    state,
+  ]);
 
   useEffect(() => {
     if (state !== "connected") return;
@@ -792,6 +824,31 @@ export function NeuralPanel() {
       toast.error("Failed to cleanup alerts");
     } finally {
       setIsCleaningAlerts(false);
+    }
+  };
+
+  const handleSavePermissions = async () => {
+    if (!platformKey.trim() || !userApiKey.trim()) {
+      toast.error("Owner credentials are required to update permissions");
+      return;
+    }
+
+    setIsSavingPermissions(true);
+    try {
+      const updated = await updateAtmAdminPermissions(
+        permissionDraft,
+        platformKey.trim(),
+        userApiKey.trim(),
+      );
+      setAdminPermissions(updated);
+      setPermissionDraft(updated);
+      toast.success("Admin permissions updated");
+      await loadPolicyAudit();
+    } catch (err) {
+      console.error("Failed to update admin permissions:", err);
+      toast.error("Failed to update admin permissions");
+    } finally {
+      setIsSavingPermissions(false);
     }
   };
 
@@ -1135,6 +1192,139 @@ export function NeuralPanel() {
                     </div>
 
                     <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 space-y-3">
+                      <div className="rounded-lg border border-white/5 bg-background/30 p-3 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                            Admin Policy (Owner Auth)
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onPress={handleSavePermissions}
+                            isDisabled={isSavingPermissions}
+                          >
+                            {isSavingPermissions ? "Saving..." : "Save Policy"}
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                            <span className="text-xs text-muted-foreground">
+                              Allow SLO edits
+                            </span>
+                            <Switch
+                              size="sm"
+                              isSelected={permissionDraft.canEditSlo}
+                              onChange={(enabled) =>
+                                setPermissionDraft((prev) => ({
+                                  ...prev,
+                                  canEditSlo: enabled,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                            <span className="text-xs text-muted-foreground">
+                              Allow alert ack
+                            </span>
+                            <Switch
+                              size="sm"
+                              isSelected={permissionDraft.canAckAlerts}
+                              onChange={(enabled) =>
+                                setPermissionDraft((prev) => ({
+                                  ...prev,
+                                  canAckAlerts: enabled,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                            <span className="text-xs text-muted-foreground">
+                              Allow retention edits
+                            </span>
+                            <Switch
+                              size="sm"
+                              isSelected={permissionDraft.canEditAlertRetention}
+                              onChange={(enabled) =>
+                                setPermissionDraft((prev) => ({
+                                  ...prev,
+                                  canEditAlertRetention: enabled,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                            <span className="text-xs text-muted-foreground">
+                              Allow cleanup runs
+                            </span>
+                            <Switch
+                              size="sm"
+                              isSelected={permissionDraft.canRunAlertCleanup}
+                              onChange={(enabled) =>
+                                setPermissionDraft((prev) => ({
+                                  ...prev,
+                                  canRunAlertCleanup: enabled,
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                              Policy Audit
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {isLoadingPolicyAudit
+                                ? "loading..."
+                                : `${policyAuditEvents.length} events`}
+                            </span>
+                          </div>
+                          {policyAuditEvents.length === 0 ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              No policy changes recorded yet.
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                              {policyAuditEvents.slice(0, 5).map((event) => (
+                                <div
+                                  key={event.id}
+                                  className="rounded-md border border-white/5 bg-white/5 px-2 py-1.5"
+                                >
+                                  <div className="text-[11px] text-foreground">
+                                    {event.eventType}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground font-mono">
+                                    {event.actor} - {new Date(event.createdAt).toLocaleString()}
+                                  </div>
+                                  {event.metadata?.changedKeys &&
+                                    Array.isArray(event.metadata.changedKeys) &&
+                                    event.metadata.changedKeys.length > 0 && (
+                                      <div className="mt-1.5 space-y-1">
+                                        {(event.metadata.changedKeys as string[]).map((key) => (
+                                          <div
+                                            key={`${event.id}-${key}`}
+                                            className="text-[10px] text-muted-foreground"
+                                          >
+                                            {key}:{" "}
+                                            {formatPolicyValue(
+                                              (event.previous as Record<string, unknown> | null)?.[
+                                                key
+                                              ],
+                                            )}{" -> "}
+                                            {formatPolicyValue(
+                                              (event.next as Record<string, unknown> | null)?.[key],
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <span className="text-xs uppercase tracking-wider text-muted-foreground">
                           SLO Thresholds
