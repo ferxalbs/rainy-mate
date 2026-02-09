@@ -19,6 +19,7 @@ import {
   Sparkles,
   ExternalLink,
 } from "lucide-react";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -436,6 +437,32 @@ export function NeuralPanel() {
     init();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlistenRequired = listen<ApprovalRequest>(
+      "airlock:approval_required",
+      (event) => {
+        setPendingApprovals((prev) => {
+          if (prev.some((req) => req.commandId === event.payload.commandId)) {
+            return prev;
+          }
+          return [...prev, event.payload];
+        });
+      },
+    );
+
+    const unlistenResolved = listen<string>("airlock:approval_resolved", (event) => {
+      const commandId = event.payload;
+      setPendingApprovals((prev) =>
+        prev.filter((req) => req.commandId !== commandId),
+      );
+    });
+
+    return () => {
+      unlistenRequired.then((f) => f());
+      unlistenResolved.then((f) => f());
     };
   }, []);
 

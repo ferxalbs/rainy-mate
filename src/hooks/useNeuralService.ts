@@ -240,7 +240,7 @@ export function useNeuralService() {
 
   // Listen for Airlock Events
   useEffect(() => {
-    const unlisten = listen<ApprovalRequest>(
+    const unlistenRequired = listen<ApprovalRequest>(
       "airlock:approval_required",
       (event) => {
         console.log("Airlock Approval Required:", event.payload);
@@ -261,6 +261,12 @@ export function useNeuralService() {
         });
       },
     );
+    const unlistenResolved = listen<string>("airlock:approval_resolved", (event) => {
+      const commandId = event.payload;
+      setPendingApprovals((prev) =>
+        prev.filter((req) => req.commandId !== commandId),
+      );
+    });
 
     // Load initial pending approvals
     getPendingAirlockApprovals()
@@ -280,7 +286,8 @@ export function useNeuralService() {
       .catch(console.error);
 
     return () => {
-      unlisten.then((f) => f());
+      unlistenRequired.then((f) => f());
+      unlistenResolved.then((f) => f());
     };
   }, []);
 

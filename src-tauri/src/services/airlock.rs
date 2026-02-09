@@ -50,6 +50,31 @@ pub struct AirlockService {
 }
 
 impl AirlockService {
+    fn insert_pending_approval(
+        pending: &mut HashMap<String, PendingApproval>,
+        request: ApprovalRequest,
+        responder: oneshot::Sender<ApprovalResult>,
+    ) {
+        pending.insert(
+            request.command_id.clone(),
+            PendingApproval { request, responder },
+        );
+    }
+
+    fn remove_pending_approval(
+        pending: &mut HashMap<String, PendingApproval>,
+        command_id: &str,
+    ) -> Option<PendingApproval> {
+        pending.remove(command_id)
+    }
+
+    fn list_pending_approvals(pending: &HashMap<String, PendingApproval>) -> Vec<ApprovalRequest> {
+        let mut approvals: Vec<ApprovalRequest> =
+            pending.values().map(|entry| entry.request.clone()).collect();
+        approvals.sort_by_key(|request| request.timestamp);
+        approvals
+    }
+
     pub fn new(app: AppHandle) -> Self {
         Self {
             app,
@@ -129,13 +154,7 @@ impl AirlockService {
         // Store the pending request and sender so frontend can restore state after reload.
         {
             let mut pending = self.pending_approvals.lock().await;
-            pending.insert(
-                command.id.clone(),
-                PendingApproval {
-                    request: request.clone(),
-                    responder: tx,
-                },
-            );
+            Self::insert_pending_approval(&mut pending, request.clone(), tx);
         };
 
         // Emit event to frontend
@@ -155,7 +174,7 @@ impl AirlockService {
         // Clean up pending approval
         {
             let mut pending = self.pending_approvals.lock().await;
-            pending.remove(&command.id);
+            Self::remove_pending_approval(&mut pending, &command.id);
         }
 
         match result {
@@ -201,7 +220,7 @@ impl AirlockService {
     ) -> Result<(), String> {
         let mut pending = self.pending_approvals.lock().await;
 
-        if let Some(entry) = pending.remove(command_id) {
+        if let Some(entry) = Self::remove_pending_approval(&mut pending, command_id) {
             let result = if approved {
                 ApprovalResult::Approved
             } else {
@@ -221,9 +240,54 @@ impl AirlockService {
     /// Get all pending approval requests
     pub async fn get_pending_approvals(&self) -> Vec<ApprovalRequest> {
         let pending = self.pending_approvals.lock().await;
-        let mut approvals: Vec<ApprovalRequest> =
-            pending.values().map(|entry| entry.request.clone()).collect();
-        approvals.sort_by_key(|request| request.timestamp);
-        approvals
+        Self::list_pending_approvals(&pending)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_request(command_id: &str, timestamp: i64) -> ApprovalRequest {
+        ApprovalRequest {
+            command_id: command_id.to_string(),
+            intent: "filesystem.write_file".to_string(),
+            payload_summary: "{\"path\":\"/tmp/x\"}".to_string(),
+            airlock_level: AirlockLevel::Sensitive,
+            timestamp,
+        }
+    }
+
+    #[tokio::test]
+    async fn pending_approvals_are_sorted_by_timestamp() {
+        let mut pending: HashMap<String, PendingApproval> = HashMap::new();
+        let (tx_old, _rx_old) = oneshot::channel::<ApprovalResult>();
+        let (tx_new, _rx_new) = oneshot::channel::<ApprovalResult>();
+
+        AirlockService::insert_pending_approval(&mut pending, make_request("b", 20), tx_new);
+        AirlockService::insert_pending_approval(&mut pending, make_request("a", 10), tx_old);
+
+        let listed = AirlockService::list_pending_approvals(&pending);
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].command_id, "a");
+        assert_eq!(listed[1].command_id, "b");
+    }
+
+    #[tokio::test]
+    async fn remove_pending_approval_returns_responder_and_cleans_store() {
+        let mut pending: HashMap<String, PendingApproval> = HashMap::new();
+        let (tx, rx) = oneshot::channel::<ApprovalResult>();
+        AirlockService::insert_pending_approval(&mut pending, make_request("cmd-1", 1), tx);
+
+        let entry = AirlockService::remove_pending_approval(&mut pending, "cmd-1")
+            .expect("pending approval should exist");
+        assert!(pending.is_empty());
+
+        entry
+            .responder
+            .send(ApprovalResult::Approved)
+            .expect("responder send should succeed");
+        let result = rx.await.expect("receiver should get approval result");
+        assert!(matches!(result, ApprovalResult::Approved));
     }
 }
