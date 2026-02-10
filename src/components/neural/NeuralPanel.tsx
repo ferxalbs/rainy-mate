@@ -50,6 +50,8 @@ import {
   cleanupAtmMetricsAlerts,
   getAtmAdminPermissions,
   updateAtmAdminPermissions,
+  getAtmToolAccessPolicy,
+  updateAtmToolAccessPolicy,
   listAtmAdminPolicyAudit,
   AtmCommandSummary,
   AtmCommandProgressEvent,
@@ -60,6 +62,8 @@ import {
   AtmMetricsSloConfig,
   AtmMetricsAlertRetentionConfig,
   AtmAdminPermissions,
+  AtmToolAccessPolicy,
+  AtmToolAccessPolicyState,
   AtmAdminPolicyAuditEvent,
 } from "../../services/tauri";
 import { useAirlock } from "../../hooks/useAirlock";
@@ -105,6 +109,12 @@ const DEFAULT_ADMIN_PERMISSIONS: AtmAdminPermissions = {
   canAckAlerts: true,
   canEditAlertRetention: true,
   canRunAlertCleanup: true,
+};
+const DEFAULT_TOOL_ACCESS_POLICY: AtmToolAccessPolicy = {
+  enabled: true,
+  mode: "all",
+  allow: [],
+  deny: [],
 };
 
 const NEURAL_WORKSPACE_STORAGE_KEY = "rainy-neural-workspace";
@@ -190,6 +200,13 @@ export function NeuralPanel() {
   const [permissionDraft, setPermissionDraft] = useState<AtmAdminPermissions>(
     DEFAULT_ADMIN_PERMISSIONS,
   );
+  const [toolPolicyDraft, setToolPolicyDraft] = useState<AtmToolAccessPolicy>(
+    DEFAULT_TOOL_ACCESS_POLICY,
+  );
+  const [toolPolicyVersion, setToolPolicyVersion] = useState<number>(0);
+  const [toolPolicyHash, setToolPolicyHash] = useState<string>("");
+  const [allowInput, setAllowInput] = useState("");
+  const [denyInput, setDenyInput] = useState("");
   const [policyAuditEvents, setPolicyAuditEvents] = useState<
     AtmAdminPolicyAuditEvent[]
   >([]);
@@ -204,6 +221,7 @@ export function NeuralPanel() {
   const [isSavingAlertRetention, setIsSavingAlertRetention] = useState(false);
   const [isCleaningAlerts, setIsCleaningAlerts] = useState(false);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+  const [isSavingToolPolicy, setIsSavingToolPolicy] = useState(false);
   const [isLoadingPolicyAudit, setIsLoadingPolicyAudit] = useState(false);
   const progressSinceRef = useRef(0);
   const endpointSnapshotRef = useRef<
@@ -216,6 +234,16 @@ export function NeuralPanel() {
     typeof value === "number" ? `${value.toFixed(1)}%` : "-";
   const formatRate = (value?: number | null) =>
     typeof value === "number" ? `${value.toFixed(2)}/s` : "-";
+  const parseToolList = (value: string): string[] =>
+    Array.from(
+      new Set(
+        value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    );
+  const toolListToInput = (items: string[]): string => items.join(", ");
   const formatPolicyValue = (value: unknown) =>
     typeof value === "boolean"
       ? value
@@ -425,6 +453,19 @@ export function NeuralPanel() {
     }
   }, []);
 
+  const loadToolAccessPolicy = useCallback(async () => {
+    try {
+      const state = await getAtmToolAccessPolicy();
+      setToolPolicyDraft(state.toolAccessPolicy);
+      setToolPolicyVersion(state.toolAccessPolicyVersion);
+      setToolPolicyHash(state.toolAccessPolicyHash);
+      setAllowInput(toolListToInput(state.toolAccessPolicy.allow));
+      setDenyInput(toolListToInput(state.toolAccessPolicy.deny));
+    } catch (err) {
+      console.error("Failed to load tool access policy:", err);
+    }
+  }, []);
+
   const loadPolicyAudit = useCallback(async () => {
     setIsLoadingPolicyAudit(true);
     try {
@@ -611,10 +652,12 @@ export function NeuralPanel() {
     loadSloThresholds();
     loadAlertRetention();
     loadAdminPermissions();
+    loadToolAccessPolicy();
     loadPolicyAudit();
   }, [
     loadAdminPermissions,
     loadAlertRetention,
+    loadToolAccessPolicy,
     loadPolicyAudit,
     loadSloThresholds,
     state,
@@ -880,6 +923,40 @@ export function NeuralPanel() {
       toast.error("Failed to update admin permissions");
     } finally {
       setIsSavingPermissions(false);
+    }
+  };
+
+  const handleSaveToolPolicy = async () => {
+    if (!platformKey.trim() || !userApiKey.trim()) {
+      toast.error("Owner credentials are required to update tool policy");
+      return;
+    }
+
+    const nextPolicy: AtmToolAccessPolicy = {
+      ...toolPolicyDraft,
+      allow: parseToolList(allowInput),
+      deny: parseToolList(denyInput),
+    };
+
+    setIsSavingToolPolicy(true);
+    try {
+      const updated: AtmToolAccessPolicyState = await updateAtmToolAccessPolicy(
+        nextPolicy,
+        platformKey.trim(),
+        userApiKey.trim(),
+      );
+      setToolPolicyDraft(updated.toolAccessPolicy);
+      setToolPolicyVersion(updated.toolAccessPolicyVersion);
+      setToolPolicyHash(updated.toolAccessPolicyHash);
+      setAllowInput(toolListToInput(updated.toolAccessPolicy.allow));
+      setDenyInput(toolListToInput(updated.toolAccessPolicy.deny));
+      toast.success("Tool access policy updated");
+      await loadPolicyAudit();
+    } catch (err) {
+      console.error("Failed to update tool access policy:", err);
+      toast.error("Failed to update tool access policy");
+    } finally {
+      setIsSavingToolPolicy(false);
     }
   };
 
@@ -1228,14 +1305,28 @@ export function NeuralPanel() {
                           <span className="text-xs uppercase tracking-wider text-muted-foreground">
                             Admin Policy (Owner Auth)
                           </span>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onPress={handleSavePermissions}
-                            isDisabled={isSavingPermissions}
-                          >
-                            {isSavingPermissions ? "Saving..." : "Save Policy"}
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onPress={handleSavePermissions}
+                              isDisabled={isSavingPermissions}
+                            >
+                              {isSavingPermissions
+                                ? "Saving..."
+                                : "Save Admin Policy"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onPress={handleSaveToolPolicy}
+                              isDisabled={isSavingToolPolicy}
+                            >
+                              {isSavingToolPolicy
+                                ? "Saving..."
+                                : "Save Tool Policy"}
+                            </Button>
+                          </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
@@ -1296,6 +1387,94 @@ export function NeuralPanel() {
                                   canRunAlertCleanup: enabled,
                                 }))
                               }
+                            />
+                          </div>
+                        </div>
+                        <div className="rounded-md border border-white/5 bg-background/20 p-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                              Tool Access Policy
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <Chip size="sm" variant="soft">
+                                v{toolPolicyVersion}
+                              </Chip>
+                              <Chip size="sm" variant="soft">
+                                Deny-first
+                              </Chip>
+                            </div>
+                          </div>
+                          <div className="text-[10px] font-mono text-muted-foreground break-all">
+                            hash: {toolPolicyHash || "n/a"}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                              <span className="text-xs text-muted-foreground">
+                                Tools enabled
+                              </span>
+                              <Switch
+                                size="sm"
+                                isSelected={toolPolicyDraft.enabled}
+                                onChange={(enabled) =>
+                                  setToolPolicyDraft((prev) => ({
+                                    ...prev,
+                                    enabled,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                              <span className="text-xs text-muted-foreground">
+                                Mode
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant={
+                                    toolPolicyDraft.mode === "all"
+                                      ? "primary"
+                                      : "ghost"
+                                  }
+                                  className="text-[10px]"
+                                  onPress={() =>
+                                    setToolPolicyDraft((prev) => ({
+                                      ...prev,
+                                      mode: "all",
+                                    }))
+                                  }
+                                >
+                                  All
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={
+                                    toolPolicyDraft.mode === "allowlist"
+                                      ? "primary"
+                                      : "ghost"
+                                  }
+                                  className="text-[10px]"
+                                  onPress={() =>
+                                    setToolPolicyDraft((prev) => ({
+                                      ...prev,
+                                      mode: "allowlist",
+                                    }))
+                                  }
+                                >
+                                  Allowlist
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <Input
+                              value={allowInput}
+                              onChange={(e) => setAllowInput(e.target.value)}
+                              placeholder="Allow list (comma-separated)"
+                            />
+                            <Input
+                              value={denyInput}
+                              onChange={(e) => setDenyInput(e.target.value)}
+                              placeholder="Deny list (comma-separated)"
                             />
                           </div>
                         </div>

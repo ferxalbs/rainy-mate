@@ -191,6 +191,25 @@ pub async fn list_atm_admin_policy_audit(
 }
 
 #[command]
+pub async fn get_atm_tool_access_policy(
+    client: State<'_, ATMClient>,
+) -> Result<crate::services::atm_client::ToolAccessPolicyState, String> {
+    client.get_tool_access_policy().await
+}
+
+#[command]
+pub async fn update_atm_tool_access_policy(
+    client: State<'_, ATMClient>,
+    tool_access_policy: crate::services::atm_client::ToolAccessPolicy,
+    platform_key: String,
+    user_api_key: String,
+) -> Result<crate::services::atm_client::ToolAccessPolicyState, String> {
+    client
+        .update_tool_access_policy(tool_access_policy, platform_key, user_api_key)
+        .await
+}
+
+#[command]
 pub async fn generate_pairing_code(
     client: State<'_, ATMClient>,
 ) -> Result<crate::services::atm_client::PairingCodeResponse, String> {

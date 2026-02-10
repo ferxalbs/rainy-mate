@@ -1476,6 +1476,19 @@ export interface AtmAdminPermissions {
   canRunAlertCleanup: boolean;
 }
 
+export interface AtmToolAccessPolicy {
+  enabled: boolean;
+  mode: "all" | "allowlist";
+  allow: string[];
+  deny: string[];
+}
+
+export interface AtmToolAccessPolicyState {
+  toolAccessPolicy: AtmToolAccessPolicy;
+  toolAccessPolicyVersion: number;
+  toolAccessPolicyHash: string;
+}
+
 export interface AtmAdminPolicyAuditEvent {
   id: string;
   actor: string;
@@ -1605,6 +1618,22 @@ export async function listAtmAdminPolicyAudit(
   limit = 50,
 ): Promise<AtmAdminPolicyAuditEvent[]> {
   return invoke("list_atm_admin_policy_audit", { limit });
+}
+
+export async function getAtmToolAccessPolicy(): Promise<AtmToolAccessPolicyState> {
+  return invoke("get_atm_tool_access_policy");
+}
+
+export async function updateAtmToolAccessPolicy(
+  toolAccessPolicy: AtmToolAccessPolicy,
+  platformKey: string,
+  userApiKey: string,
+): Promise<AtmToolAccessPolicyState> {
+  return invoke("update_atm_tool_access_policy", {
+    toolAccessPolicy,
+    platformKey,
+    userApiKey,
+  });
 }
 
 // ============ ATM Bootstrap Commands ============

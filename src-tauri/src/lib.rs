@@ -457,6 +457,8 @@ pub fn run() {
             commands::get_atm_admin_permissions,
             commands::update_atm_admin_permissions,
             commands::list_atm_admin_policy_audit,
+            commands::get_atm_tool_access_policy,
+            commands::update_atm_tool_access_policy,
             commands::set_atm_credentials,
             commands::has_atm_credentials,
             commands::ensure_atm_credentials_loaded,

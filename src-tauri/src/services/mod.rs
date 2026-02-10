@@ -19,6 +19,7 @@ pub mod security;
 pub mod settings;
 pub mod skill_executor;
 pub mod task_manager;
+pub mod tool_policy;
 
 pub mod workspace;
 
@@ -40,6 +41,7 @@ pub use skill_executor::SkillExecutor;
 
 pub use settings::SettingsManager;
 pub use task_manager::TaskManager;
+pub use tool_policy::get_tool_policy;
 
 pub use workspace::{
     ConfigFormat, PermissionOverride, Workspace, WorkspaceAnalytics, WorkspaceManager,

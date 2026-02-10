@@ -1,8 +1,10 @@
-use crate::models::neural::{CommandResult, QueuedCommand};
+use crate::models::neural::{CommandResult, QueuedCommand, ToolAccessPolicy};
 use crate::services::browser_controller::BrowserController;
+use crate::services::settings::SettingsManager;
 use crate::services::workspace::WorkspaceManager;
 use crate::services::ManagedResearchService;
 use base64::prelude::*;
+use sha2::{Digest, Sha256};
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -124,6 +126,44 @@ impl SkillExecutor {
             command,
             "npm" | "cargo" | "git" | "ls" | "grep" | "echo" | "cat"
         )
+    }
+
+    fn is_tool_allowed(method: &str, policy: Option<&ToolAccessPolicy>) -> bool {
+        let Some(policy) = policy else {
+            return true;
+        };
+
+        if !policy.enabled {
+            return false;
+        }
+
+        if policy.deny.iter().any(|tool| tool == method) {
+            return false;
+        }
+
+        if policy.mode == "allowlist" {
+            return policy.allow.iter().any(|tool| tool == method);
+        }
+
+        true
+    }
+
+    fn hash_tool_policy(policy: &ToolAccessPolicy) -> String {
+        // Keep deterministic ordering aligned with ATM canonicalization.
+        let mut allow = policy.allow.clone();
+        allow.sort();
+        let mut deny = policy.deny.clone();
+        deny.sort();
+        let canonical = serde_json::json!({
+            "enabled": policy.enabled,
+            "mode": policy.mode,
+            "allow": allow,
+            "deny": deny,
+        })
+        .to_string();
+        let mut hasher = Sha256::new();
+        hasher.update(canonical.as_bytes());
+        hex::encode(hasher.finalize())
     }
 
     pub fn new(
@@ -289,6 +329,7 @@ impl SkillExecutor {
         let payload = &command.payload;
         let skill = payload.skill.as_deref().unwrap_or("unknown");
         let method = payload.method.as_deref().unwrap_or("unknown");
+        let tool_policy = payload.tool_access_policy.as_ref();
 
         let workspace_id = match &command.workspace_id {
             Some(id) => id.clone(),
@@ -297,6 +338,36 @@ impl SkillExecutor {
 
         // Get allowed_paths from payload (Cloud sends these from workspace config)
         let allowed_paths = &payload.allowed_paths;
+        if let (Some(policy), Some(expected_hash)) = (
+            tool_policy,
+            payload.tool_access_policy_hash.as_deref(),
+        ) {
+            let actual_hash = Self::hash_tool_policy(policy);
+            if actual_hash != expected_hash {
+                return self.error("Tool policy hash mismatch; rejecting command");
+            }
+        }
+        if let Some(version) = payload.tool_access_policy_version {
+            let mut settings = SettingsManager::new();
+            let last_seen = settings.get_tool_policy_floor(&workspace_id);
+            if version < last_seen {
+                return self.error(&format!(
+                    "Stale tool policy version {} (latest seen {})",
+                    version, last_seen
+                ));
+            }
+            if version > last_seen {
+                if let Err(e) = settings.set_tool_policy_floor(&workspace_id, version) {
+                    return self.error(&format!("Failed to persist tool policy version floor: {}", e));
+                }
+            }
+        }
+        if !Self::is_tool_allowed(method, tool_policy) {
+            return self.error(&format!(
+                "Tool '{}' is blocked by workspace tool policy",
+                method
+            ));
+        }
 
         match skill {
             "filesystem" => {
@@ -1175,6 +1246,59 @@ Configure allowed paths before filesystem operations."
             error: Some(msg.to_string()),
             exit_code: Some(1),
         }
+    }
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::SkillExecutor;
+    use crate::models::neural::ToolAccessPolicy;
+
+    #[test]
+    fn tool_policy_is_deny_first() {
+        let policy = ToolAccessPolicy {
+            enabled: true,
+            mode: "allowlist".to_string(),
+            allow: vec!["read_file".to_string(), "write_file".to_string()],
+            deny: vec!["write_file".to_string()],
+        };
+
+        assert!(SkillExecutor::is_tool_allowed("read_file", Some(&policy)));
+        assert!(!SkillExecutor::is_tool_allowed("write_file", Some(&policy)));
+    }
+
+    #[test]
+    fn tool_policy_disabled_blocks_all() {
+        let policy = ToolAccessPolicy {
+            enabled: false,
+            mode: "all".to_string(),
+            allow: vec![],
+            deny: vec![],
+        };
+
+        assert!(!SkillExecutor::is_tool_allowed("read_file", Some(&policy)));
+        assert!(!SkillExecutor::is_tool_allowed("execute_command", Some(&policy)));
+    }
+
+    #[test]
+    fn tool_policy_hash_is_stable_for_same_semantics() {
+        let policy_a = ToolAccessPolicy {
+            enabled: true,
+            mode: "allowlist".to_string(),
+            allow: vec!["write_file".to_string(), "read_file".to_string()],
+            deny: vec!["execute_command".to_string()],
+        };
+        let policy_b = ToolAccessPolicy {
+            enabled: true,
+            mode: "allowlist".to_string(),
+            allow: vec!["read_file".to_string(), "write_file".to_string()],
+            deny: vec!["execute_command".to_string()],
+        };
+
+        assert_eq!(
+            SkillExecutor::hash_tool_policy(&policy_a),
+            SkillExecutor::hash_tool_policy(&policy_b),
+        );
     }
 }
 

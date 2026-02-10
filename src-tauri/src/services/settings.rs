@@ -2,6 +2,7 @@
 // Manages user preferences including AI model selection
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -28,6 +29,7 @@ pub struct UserSettings {
     pub notifications_enabled: bool,
     pub profile: UserProfile,
     pub auto_reconnect_cloud: bool,
+    pub tool_policy_version_floor: HashMap<String, u64>,
 }
 
 /// User profile metadata for desktop personalization and cloud identity sync
@@ -49,6 +51,7 @@ impl Default for UserSettings {
             notifications_enabled: true,
             profile: UserProfile::default(),
             auto_reconnect_cloud: true,
+            tool_policy_version_floor: HashMap::new(),
         }
     }
 }
@@ -146,6 +149,23 @@ impl SettingsManager {
     /// Set user profile and persist
     pub fn set_profile(&mut self, profile: UserProfile) -> Result<(), String> {
         self.settings.profile = profile;
+        self.save_to_disk()
+    }
+
+    /// Get the persisted minimum accepted tool policy version for a workspace.
+    pub fn get_tool_policy_floor(&self, workspace_id: &str) -> u64 {
+        self.settings
+            .tool_policy_version_floor
+            .get(workspace_id)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Persist the minimum accepted tool policy version for a workspace.
+    pub fn set_tool_policy_floor(&mut self, workspace_id: &str, version: u64) -> Result<(), String> {
+        self.settings
+            .tool_policy_version_floor
+            .insert(workspace_id.to_string(), version);
         self.save_to_disk()
     }
 

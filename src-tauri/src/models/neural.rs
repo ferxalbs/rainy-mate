@@ -137,6 +137,26 @@ pub struct RainyPayload {
     /// Allowed paths for this command (from workspace config)
     #[serde(default)]
     pub allowed_paths: Vec<String>,
+    /// Optional workspace tool access policy (deny-first) pushed by Cloud.
+    #[serde(default)]
+    pub tool_access_policy: Option<ToolAccessPolicy>,
+    /// Optional monotonically increasing workspace tool policy version.
+    #[serde(default)]
+    pub tool_access_policy_version: Option<u64>,
+    /// Optional SHA-256 hash of canonicalized tool policy.
+    #[serde(default)]
+    pub tool_access_policy_hash: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAccessPolicy {
+    pub enabled: bool,
+    pub mode: String,
+    #[serde(default)]
+    pub allow: Vec<String>,
+    #[serde(default)]
+    pub deny: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

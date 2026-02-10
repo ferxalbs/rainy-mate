@@ -294,6 +294,33 @@ pub struct AdminPermissionsResponse {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct ToolAccessPolicy {
+    pub enabled: bool,
+    pub mode: String,
+    pub allow: Vec<String>,
+    pub deny: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAccessPolicyState {
+    pub tool_access_policy: ToolAccessPolicy,
+    pub tool_access_policy_version: u64,
+    pub tool_access_policy_hash: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAccessPolicyResponse {
+    pub tool_access_policy: ToolAccessPolicy,
+    #[serde(default)]
+    pub tool_access_policy_version: u64,
+    #[serde(default)]
+    pub tool_access_policy_hash: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct AdminPolicyAuditEvent {
     pub id: String,
     pub actor: String,
@@ -1106,6 +1133,78 @@ impl ATMClient {
 
         let body: AdminPolicyAuditResponse = res.json().await.map_err(|e| e.to_string())?;
         Ok(body.events)
+    }
+
+    pub async fn get_tool_access_policy(&self) -> Result<ToolAccessPolicyState, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/tools/policy", state.base_url);
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Get tool access policy failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: ToolAccessPolicyResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(ToolAccessPolicyState {
+            tool_access_policy: body.tool_access_policy,
+            tool_access_policy_version: body.tool_access_policy_version,
+            tool_access_policy_hash: body.tool_access_policy_hash,
+        })
+    }
+
+    pub async fn update_tool_access_policy(
+        &self,
+        tool_access_policy: ToolAccessPolicy,
+        platform_key: String,
+        user_api_key: String,
+    ) -> Result<ToolAccessPolicyState, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/tools/policy", state.base_url);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("x-rainy-platform-key", platform_key)
+            .header("x-rainy-api-key", user_api_key)
+            .json(&serde_json::json!({ "toolAccessPolicy": tool_access_policy }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Update tool access policy failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let body: ToolAccessPolicyResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(ToolAccessPolicyState {
+            tool_access_policy: body.tool_access_policy,
+            tool_access_policy_version: body.tool_access_policy_version,
+            tool_access_policy_hash: body.tool_access_policy_hash,
+        })
     }
 
     /// Deploys an AgentSpec v2 to the Cloud, signing it first.

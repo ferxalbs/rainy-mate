@@ -4,10 +4,8 @@ use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::{AgentContent, AgentEvent, AgentMessage, RuntimeOptions};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::AgentSpec;
-use crate::models::neural::{
-    AirlockLevel, CommandPriority, CommandStatus, QueuedCommand, RainyPayload,
-};
-use crate::services::SkillExecutor;
+use crate::models::neural::{CommandPriority, CommandStatus, QueuedCommand, RainyPayload};
+use crate::services::{get_tool_policy, SkillExecutor};
 use chrono::Utc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -457,27 +455,6 @@ impl WorkflowStep for ThinkStep {
     }
 }
 
-/// Classify a tool call's security level based on its operation type.
-/// - Level 0 (Safe): read-only operations — no side effects
-/// - Level 1 (Sensitive): write operations — modifies files, navigates browser
-/// - Level 2 (Dangerous): destructive or external execution — deletes, runs commands
-fn classify_tool_airlock_level(function_name: &str) -> AirlockLevel {
-    match function_name {
-        // Level 0: Read-only, no side effects
-        "read_file" | "list_files" | "search_files" | "get_page_content" | "screenshot"
-        | "web_search" | "read_web_page" => AirlockLevel::Safe,
-
-        // Level 1: Write operations — modifies state but recoverable
-        "write_file" | "append_file" | "browse_url" | "click_element" => AirlockLevel::Sensitive,
-
-        // Level 2: Destructive or external execution — irreversible
-        "execute_command" | "delete_file" | "move_file" => AirlockLevel::Dangerous,
-
-        // Default: unknown tools are treated as Sensitive (conservative)
-        _ => AirlockLevel::Sensitive,
-    }
-}
-
 #[derive(Debug)]
 pub struct ActStep;
 
@@ -516,18 +493,9 @@ impl WorkflowStep for ActStep {
             let params: serde_json::Value = serde_json::from_str(&arguments_str)
                 .map_err(|e| format!("Failed to parse args: {}", e))?;
 
-            // Dynamic mapping based on tool name
-            let (skill, method) = match function_name.as_str() {
-                "browse_url" | "click_element" | "screenshot" | "get_page_content" => {
-                    ("browser", function_name.as_str())
-                }
-                "web_search" | "read_web_page" => ("web", function_name.as_str()),
-                "execute_command" => ("shell", "execute_command"),
-                "read_file" | "write_file" | "list_files" | "search_files" | "append_file" => {
-                    ("filesystem", function_name.as_str())
-                }
-                _ => ("filesystem", function_name.as_str()), // Default to fs or pass through
-            };
+            let policy = get_tool_policy(&function_name);
+            let skill = policy.skill.as_str();
+            let method = function_name.as_str();
 
             on_event(AgentEvent::Status(format!(
                 "Executing tool: {}",
@@ -538,8 +506,7 @@ impl WorkflowStep for ActStep {
             // Let's just create a simplified event or use what we have
             on_event(AgentEvent::ToolCall(call.clone()));
 
-            // Classify tool operation's security level
-            let airlock_level = classify_tool_airlock_level(&function_name);
+            let airlock_level = policy.airlock_level;
 
             let command = QueuedCommand {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -550,6 +517,9 @@ impl WorkflowStep for ActStep {
                     params: Some(params),
                     content: None,
                     allowed_paths: state.allowed_paths.clone(),
+                    tool_access_policy: None,
+                    tool_access_policy_version: None,
+                    tool_access_policy_hash: None,
                 },
                 status: CommandStatus::Pending,
                 priority: CommandPriority::Normal,

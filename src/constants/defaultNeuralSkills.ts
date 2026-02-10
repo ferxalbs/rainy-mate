@@ -1,4 +1,5 @@
-import { AirlockLevels, SkillManifest } from "../services/tauri";
+import { SkillManifest } from "../services/tauri";
+import { getToolAirlockLevel } from "./toolPolicy";
 
 export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
   {
@@ -8,7 +9,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "read_file",
         description: "Read file content",
-        airlockLevel: AirlockLevels.Safe,
+        airlockLevel: getToolAirlockLevel("read_file"),
         parameters: {
           path: {
             type: "string",
@@ -20,7 +21,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "list_files",
         description: "List files in a directory",
-        airlockLevel: AirlockLevels.Safe,
+        airlockLevel: getToolAirlockLevel("list_files"),
         parameters: {
           path: {
             type: "string",
@@ -32,7 +33,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "search_files",
         description: "Search files by query",
-        airlockLevel: AirlockLevels.Safe,
+        airlockLevel: getToolAirlockLevel("search_files"),
         parameters: {
           query: {
             type: "string",
@@ -54,7 +55,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "write_file",
         description: "Write content to file",
-        airlockLevel: AirlockLevels.Sensitive,
+        airlockLevel: getToolAirlockLevel("write_file"),
         parameters: {
           path: {
             type: "string",
@@ -71,7 +72,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "mkdir",
         description: "Create directory",
-        airlockLevel: AirlockLevels.Sensitive,
+        airlockLevel: getToolAirlockLevel("mkdir"),
         parameters: {
           path: {
             type: "string",
@@ -83,7 +84,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "delete_file",
         description: "Delete file or directory",
-        airlockLevel: AirlockLevels.Dangerous,
+        airlockLevel: getToolAirlockLevel("delete_file"),
         parameters: {
           path: {
             type: "string",
@@ -95,7 +96,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "move_file",
         description: "Move or rename file",
-        airlockLevel: AirlockLevels.Sensitive,
+        airlockLevel: getToolAirlockLevel("move_file"),
         parameters: {
           source: {
             type: "string",
@@ -112,7 +113,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "append_file",
         description: "Append content to file",
-        airlockLevel: AirlockLevels.Sensitive,
+        airlockLevel: getToolAirlockLevel("append_file"),
         parameters: {
           path: {
             type: "string",
@@ -135,7 +136,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "execute_command",
         description: "Execute a shell command",
-        airlockLevel: AirlockLevels.Dangerous,
+        airlockLevel: getToolAirlockLevel("execute_command"),
         parameters: {
           command: {
             type: "string",
@@ -158,7 +159,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "web_search",
         description: "Search the web",
-        airlockLevel: AirlockLevels.Safe,
+        airlockLevel: getToolAirlockLevel("web_search"),
         parameters: {
           query: {
             type: "string",
@@ -170,7 +171,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "read_web_page",
         description: "Read a web page",
-        airlockLevel: AirlockLevels.Safe,
+        airlockLevel: getToolAirlockLevel("read_web_page"),
         parameters: {
           url: {
             type: "string",
@@ -188,7 +189,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "browse_url",
         description: "Open a URL in the browser",
-        airlockLevel: AirlockLevels.Safe,
+        airlockLevel: getToolAirlockLevel("browse_url"),
         parameters: {
           url: {
             type: "string",
@@ -200,7 +201,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "click_element",
         description: "Click an element by CSS selector",
-        airlockLevel: AirlockLevels.Sensitive,
+        airlockLevel: getToolAirlockLevel("click_element"),
         parameters: {
           selector: {
             type: "string",
@@ -212,13 +213,13 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       {
         name: "screenshot",
         description: "Take a screenshot of the current page",
-        airlockLevel: AirlockLevels.Safe,
+        airlockLevel: getToolAirlockLevel("screenshot"),
         parameters: {},
       },
       {
         name: "get_page_content",
         description: "Get HTML content of the current page",
-        airlockLevel: AirlockLevels.Safe,
+        airlockLevel: getToolAirlockLevel("get_page_content"),
         parameters: {},
       },
     ],
