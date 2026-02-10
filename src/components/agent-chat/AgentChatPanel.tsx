@@ -191,7 +191,7 @@ Click 'Execute Task' when ready."]`
 
   // Dynamic state for processing mode
   const [isDeepProcessing, setIsDeepProcessing] = useState(false);
-  const [isNativeMode, setIsNativeMode] = useState(false);
+  const [isNativeMode, setIsNativeMode] = useState(true);
 
   const renderInputArea = (centered: boolean) => (
     <div
@@ -420,7 +420,10 @@ Click 'Execute Task' when ready."]`
                     try {
                       await clearMessagesAndContext(workspacePath);
                     } catch (e) {
-                      console.error("Failed to clear persisted chat context:", e);
+                      console.error(
+                        "Failed to clear persisted chat context:",
+                        e,
+                      );
                     }
                   }}
                   className="rounded-full w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-400/10"
@@ -469,7 +472,8 @@ Click 'Execute Task' when ready."]`
               </h1>
               <p className="text-muted-foreground text-sm mb-10 text-center max-w-sm font-light">
                 {(agentSpecs.find((s) => s.id === selectedAgentId)?.soul.name ||
-                  "Rainy Agent") + " is ready to assist with your workspace tasks."}
+                  "Rainy Agent") +
+                  " is ready to assist with your workspace tasks."}
               </p>
 
               {renderInputArea(true)}

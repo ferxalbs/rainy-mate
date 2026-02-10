@@ -8,7 +8,8 @@ export type AgentEvent =
   | { type: "thought"; data: string }
   | { type: "tool_call"; data: any }
   | { type: "tool_result"; data: { id: string; result: string } }
-  | { type: "error"; data: string };
+  | { type: "error"; data: string }
+  | { type: "stream_chunk"; data: string };
 
 export type AgentStatus = "idle" | "running" | "error" | "completed";
 
@@ -36,21 +37,57 @@ export function useAgentRuntime() {
   useEffect(() => {
     const unlistenPromise = listen<AgentEvent>("agent://event", (event) => {
       const payload = event.payload;
-      // console.log("Agent Event:", payload);
 
-      const newEvent: AgentLogEvent = {
-        id: Date.now().toString() + Math.random().toString().slice(2, 5),
-        type: payload.type,
-        content: payload.data,
-        timestamp: new Date(),
-      };
+      setState((prev) => {
+        const events = [...prev.events];
+        const lastEvent = events[events.length - 1];
 
-      setState((prev) => ({
-        ...prev,
-        events: [...prev.events, newEvent],
-        status: payload.type === "error" ? "error" : prev.status,
-        error: payload.type === "error" ? (payload.data as string) : prev.error,
-      }));
+        // Handle streaming: Accumulate chunks or finalize thought
+        if (
+          (payload.type === "stream_chunk" || payload.type === "thought") &&
+          lastEvent?.type === "thought"
+        ) {
+          // If streaming, append. If final thought, overwrite (snap to consistency).
+          const newContent =
+            payload.type === "stream_chunk"
+              ? lastEvent.content + (payload.data as string)
+              : (payload.data as string);
+
+          events[events.length - 1] = {
+            ...lastEvent,
+            content: newContent,
+            timestamp: new Date(),
+          };
+
+          return {
+            ...prev,
+            events,
+            // Streaming updates don't change status/error generally
+          };
+        }
+
+        // Standard handling for non-streaming or new events
+        // Map stream_chunk to thought if it's the start of a new message
+        const type = payload.type === "stream_chunk" ? "thought" : payload.type;
+
+        // Skip stream_chunk if we couldn't merge it (rare/edge case) but handle it safely
+        const content = payload.data;
+
+        const newEvent: AgentLogEvent = {
+          id: Date.now().toString() + Math.random().toString().slice(2, 5),
+          type: type as any,
+          content: content,
+          timestamp: new Date(),
+        };
+
+        return {
+          ...prev,
+          events: [...events, newEvent],
+          status: payload.type === "error" ? "error" : prev.status,
+          error:
+            payload.type === "error" ? (payload.data as string) : prev.error,
+        };
+      });
     });
 
     return () => {
@@ -59,7 +96,12 @@ export function useAgentRuntime() {
   }, []);
 
   const runAgent = useCallback(
-    async (prompt: string, modelId: string, workspaceId: string) => {
+    async (
+      prompt: string,
+      modelId: string,
+      workspaceId: string,
+      agentSpecId?: string,
+    ) => {
       setState(() => ({
         status: "running",
         events: [], // Clear previous run events
@@ -71,6 +113,7 @@ export function useAgentRuntime() {
           prompt,
           model_id: modelId,
           workspace_id: workspaceId,
+          agent_spec_id: agentSpecId,
         });
 
         setState((prev) => ({ ...prev, status: "completed" }));

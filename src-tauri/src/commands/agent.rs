@@ -85,52 +85,62 @@ pub async fn run_agent_workflow(
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
     let spec = if let Some(spec_id) = agent_spec_id {
-        match agent_manager.get_agent_spec(&spec_id).await {
-            Ok(Some(s)) => s,
-            Ok(None) => {
-                eprintln!(
-                    "[AgentWorkflow] Spec {} not found in DB, falling back to default",
-                    spec_id
-                );
-                // Fallback
-                use crate::ai::specs::skills::AgentSkills;
-                use crate::ai::specs::soul::AgentSoul;
-                AgentSpec {
-                    id: "default".to_string(),
-                    version: "2.0.0".to_string(),
-                    soul: AgentSoul {
-                        name: "Rainy Agent".to_string(),
-                        description: "Default fallback agent".to_string(),
-                        soul_content: default_instructions(&workspace_id),
-                        ..Default::default()
-                    },
-                    skills: AgentSkills::default(),
-                    memory_config: Default::default(),
-                    connectors: Default::default(),
-                    signature: None,
-                }
-            }
+        // Try DB first, then fall back to file-based spec storage
+        let db_spec = match agent_manager.get_agent_spec(&spec_id).await {
+            Ok(Some(s)) => Some(s),
+            Ok(None) => None,
             Err(e) => {
-                eprintln!("[AgentWorkflow] Failed to load spec {}: {}", spec_id, e);
-                // Fallback
-                use crate::ai::specs::skills::AgentSkills;
-                use crate::ai::specs::soul::AgentSoul;
-                AgentSpec {
-                    id: "default".to_string(),
-                    version: "2.0.0".to_string(),
-                    soul: AgentSoul {
-                        name: "Rainy Agent".to_string(),
-                        description: "Default fallback agent".to_string(),
-                        soul_content: default_instructions(&workspace_id),
-                        ..Default::default()
-                    },
-                    skills: AgentSkills::default(),
-                    memory_config: Default::default(),
-                    connectors: Default::default(),
-                    signature: None,
+                eprintln!(
+                    "[AgentWorkflow] DB lookup for spec {} failed: {}, trying file fallback",
+                    spec_id, e
+                );
+                None
+            }
+        };
+
+        // Fallback: try loading from agent_specs/ JSON files (canonical source from AgentBuilder)
+        let spec = match db_spec {
+            Some(s) => s,
+            None => {
+                let app_data_dir = app_handle
+                    .path()
+                    .app_data_dir()
+                    .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+                let spec_path = app_data_dir
+                    .join("agent_specs")
+                    .join(format!("{}.json", spec_id));
+
+                if spec_path.exists() {
+                    let body = std::fs::read_to_string(&spec_path)
+                        .map_err(|e| format!("Failed to read spec file: {}", e))?;
+                    serde_json::from_str(&body)
+                        .map_err(|e| format!("Invalid agent spec JSON: {}", e))?
+                } else {
+                    eprintln!(
+                        "[AgentWorkflow] Spec {} not found in DB or files, falling back to default",
+                        spec_id
+                    );
+                    // Fallback
+                    use crate::ai::specs::skills::AgentSkills;
+                    use crate::ai::specs::soul::AgentSoul;
+                    AgentSpec {
+                        id: "default".to_string(),
+                        version: "2.0.0".to_string(),
+                        soul: AgentSoul {
+                            name: "Rainy Agent".to_string(),
+                            description: "Default fallback agent".to_string(),
+                            soul_content: default_instructions(&workspace_id),
+                            ..Default::default()
+                        },
+                        skills: AgentSkills::default(),
+                        memory_config: Default::default(),
+                        connectors: Default::default(),
+                        signature: None,
+                    }
                 }
             }
-        }
+        };
+        spec
     } else {
         use crate::ai::specs::skills::AgentSkills;
         use crate::ai::specs::soul::AgentSoul;
