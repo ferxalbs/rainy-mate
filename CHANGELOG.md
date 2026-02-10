@@ -5,6 +5,38 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.10] - 2026-02-10 - Streaming Runtime & Airlock Enforcement (P1)
+
+### Added - Streaming Responses & Security Classification
+
+**Rust Backend (`src-tauri/src/ai/agent/`)**
+
+- `runtime.rs` — Added `AgentEvent::StreamChunk(String)` variant for token-by-token streaming to frontend
+- `workflow.rs` — **ThinkStep** hybrid streaming:
+  - When **no tools** present: uses `complete_stream()` for real-time token delivery via `StreamChunk` events
+  - When **tools** present: uses blocking `complete()` (tool calls require full response)
+  - Accumulates streamed content with `std::sync::Mutex` for safe sync callback access
+  - Emits full `Thought` event after streaming completes for history consistency
+- `workflow.rs` — **ActStep** Airlock level enforcement:
+  - `classify_tool_airlock_level()` — 3-tier dynamic security classification:
+    - **Safe** (Level 0): `read_file`, `list_files`, `search_files`, `screenshot`, `web_search`, `read_web_page`, `get_page_content`
+    - **Sensitive** (Level 1): `write_file`, `append_file`, `browse_url`, `click_element`
+    - **Dangerous** (Level 2): `execute_command`, `delete_file`, `move_file`
+    - Unknown tools default to **Sensitive** (conservative)
+  - Replaced hardcoded `AirlockLevel::Safe` with dynamic classification
+
+**Services (`src-tauri/src/services/`)**
+
+- `command_poller.rs` — Added `AgentEvent::StreamChunk` handler in `map_agent_event`; passes raw content without truncation
+
+### Technical
+
+- Build: 0 warnings, 0 errors
+- Tests: 168 passed, 4 pre-existing failures (keychain, base_agent legacy)
+- Architecture: Hybrid streaming preserves tool call detection while enabling real-time text delivery
+
+---
+
 ## [0.5.9] - 2026-02-10 - Agent Memory & Runtime Hardening (P0)
 
 ### Added - Agent Memory Persistence & Context Management

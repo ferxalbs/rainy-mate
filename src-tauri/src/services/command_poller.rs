@@ -47,6 +47,13 @@ fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
                 "text": progress_preview(text),
             }),
         ),
+        AgentEvent::StreamChunk(text) => (
+            "Stream chunk".to_string(),
+            serde_json::json!({
+                "type": "stream_chunk",
+                "text": text,
+            }),
+        ),
         AgentEvent::ToolCall(call) => (
             format!("Tool call: {}", call.function.name),
             serde_json::json!({

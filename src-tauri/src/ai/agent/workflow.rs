@@ -306,8 +306,8 @@ impl WorkflowStep for ThinkStep {
             temperature: Some(0.7),
             max_tokens: None,
             top_p: None,
-            stream: false,
-            tools: if has_tools { Some(tools) } else { None }, // Send tools to LLM
+            stream: !has_tools, // Stream only when no tools (tool calls need full response)
+            tools: if has_tools { Some(tools) } else { None },
             tool_choice: if has_tools {
                 Some(crate::ai::provider_types::ToolChoice::Auto)
             } else {
@@ -319,21 +319,56 @@ impl WorkflowStep for ThinkStep {
             stop: None,
         };
 
-        // 3. Call Router
+        // 3. Call Router — streaming when no tools, blocking otherwise
         let router_guard = self.router.read().await;
-        // Basic error handling for now, can improve retry logic here later
-        let response = router_guard
-            .complete(request)
-            .await
-            .map_err(|e| format!("ThinkStep Failed: {}", e))?;
+
+        let (assistant_content, tool_calls) = if has_tools {
+            // Blocking path: tool calls require full ChatCompletionResponse
+            let response = router_guard
+                .complete(request)
+                .await
+                .map_err(|e| format!("ThinkStep Failed: {}", e))?;
+
+            let content = response.content.clone().unwrap_or_default();
+            if !content.is_empty() {
+                on_event(AgentEvent::Thought(content.clone()));
+            }
+            (content, response.tool_calls.clone())
+        } else {
+            // Streaming path: emit token-by-token chunks to the frontend
+            let accumulated = Arc::new(std::sync::Mutex::new(String::new()));
+            let acc_clone = Arc::clone(&accumulated);
+            let event_fn: Arc<dyn Fn(AgentEvent) + Send + Sync> = Arc::from(on_event);
+            let event_clone = Arc::clone(&event_fn);
+
+            let callback: crate::ai::provider_types::StreamingCallback =
+                Arc::new(move |chunk: crate::ai::provider_types::StreamingChunk| {
+                    if !chunk.content.is_empty() {
+                        event_clone(AgentEvent::StreamChunk(chunk.content.clone()));
+                        if let Ok(mut guard) = acc_clone.lock() {
+                            guard.push_str(&chunk.content);
+                        }
+                    }
+                });
+
+            router_guard
+                .complete_stream(request, callback)
+                .await
+                .map_err(|e| format!("ThinkStep Streaming Failed: {}", e))?;
+
+            let content = accumulated
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if !content.is_empty() {
+                // Emit full thought after streaming completes
+                event_fn(AgentEvent::Thought(content.clone()));
+            }
+            (content, None)
+        };
+        drop(router_guard);
 
         // 4. Update State
-        let assistant_content = response.content.clone().unwrap_or_default();
-        if !assistant_content.is_empty() {
-            on_event(AgentEvent::Thought(assistant_content.clone()));
-        }
-        let tool_calls = response.tool_calls.clone();
-
         state.messages.push(AgentMessage {
             role: "assistant".to_string(),
             content: AgentContent::text(assistant_content.clone()),
@@ -358,6 +393,27 @@ impl WorkflowStep for ThinkStep {
             success: true,
             output: Some(assistant_content),
         })
+    }
+}
+
+/// Classify a tool call's security level based on its operation type.
+/// - Level 0 (Safe): read-only operations — no side effects
+/// - Level 1 (Sensitive): write operations — modifies files, navigates browser
+/// - Level 2 (Dangerous): destructive or external execution — deletes, runs commands
+fn classify_tool_airlock_level(function_name: &str) -> AirlockLevel {
+    match function_name {
+        // Level 0: Read-only, no side effects
+        "read_file" | "list_files" | "search_files" | "get_page_content" | "screenshot"
+        | "web_search" | "read_web_page" => AirlockLevel::Safe,
+
+        // Level 1: Write operations — modifies state but recoverable
+        "write_file" | "append_file" | "browse_url" | "click_element" => AirlockLevel::Sensitive,
+
+        // Level 2: Destructive or external execution — irreversible
+        "execute_command" | "delete_file" | "move_file" => AirlockLevel::Dangerous,
+
+        // Default: unknown tools are treated as Sensitive (conservative)
+        _ => AirlockLevel::Sensitive,
     }
 }
 
@@ -421,6 +477,9 @@ impl WorkflowStep for ActStep {
             // Let's just create a simplified event or use what we have
             on_event(AgentEvent::ToolCall(call.clone()));
 
+            // Classify tool operation's security level
+            let airlock_level = classify_tool_airlock_level(&function_name);
+
             let command = QueuedCommand {
                 id: uuid::Uuid::new_v4().to_string(),
                 intent: format!("{}.{}", skill, method),
@@ -433,7 +492,7 @@ impl WorkflowStep for ActStep {
                 },
                 status: CommandStatus::Pending,
                 priority: CommandPriority::Normal,
-                airlock_level: AirlockLevel::Safe,
+                airlock_level,
                 created_at: Some(Utc::now().timestamp()),
                 started_at: None,
                 completed_at: None,

@@ -50,6 +50,8 @@ pub enum AgentContent {
 pub enum AgentEvent {
     Status(String),
     Thought(String),
+    /// Token-by-token streaming chunks during LLM generation
+    StreamChunk(String),
     ToolCall(crate::ai::provider_types::ToolCall),
     ToolResult {
         id: String,
