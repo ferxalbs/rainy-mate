@@ -472,7 +472,14 @@ impl CommandPoller {
                         let options = RuntimeOptions {
                             model: Some(model),
                             workspace_id: workspace_id.clone(),
-                            max_steps: Some(10),
+                            // Cloud commands often require several think/act cycles.
+                            // Keep a bounded ceiling but avoid premature termination.
+                            max_steps: Some(30),
+                            allowed_paths: if command.payload.allowed_paths.is_empty() {
+                                None
+                            } else {
+                                Some(command.payload.allowed_paths.clone())
+                            },
                         };
 
                         // Create config

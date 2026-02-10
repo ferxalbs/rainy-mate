@@ -166,10 +166,12 @@ export function NeuralPanel() {
     "dashboard",
   );
   const [recentCommands, setRecentCommands] = useState<AtmCommandSummary[]>([]);
-  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null);
-  const [commandProgress, setCommandProgress] = useState<AtmCommandProgressEvent[]>(
-    [],
+  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(
+    null,
   );
+  const [commandProgress, setCommandProgress] = useState<
+    AtmCommandProgressEvent[]
+  >([]);
   const [commandMetrics, setCommandMetrics] =
     useState<AtmCommandMetricsResponse | null>(null);
   const [workspaceCommandMetrics, setWorkspaceCommandMetrics] =
@@ -182,15 +184,18 @@ export function NeuralPanel() {
     useState<AlertHistoryStatus>("open");
   const [alertRetention, setAlertRetention] =
     useState<AtmMetricsAlertRetentionConfig>(DEFAULT_ALERT_RETENTION);
-  const [adminPermissions, setAdminPermissions] =
-    useState<AtmAdminPermissions>(DEFAULT_ADMIN_PERMISSIONS);
-  const [permissionDraft, setPermissionDraft] =
-    useState<AtmAdminPermissions>(DEFAULT_ADMIN_PERMISSIONS);
+  const [adminPermissions, setAdminPermissions] = useState<AtmAdminPermissions>(
+    DEFAULT_ADMIN_PERMISSIONS,
+  );
+  const [permissionDraft, setPermissionDraft] = useState<AtmAdminPermissions>(
+    DEFAULT_ADMIN_PERMISSIONS,
+  );
   const [policyAuditEvents, setPolicyAuditEvents] = useState<
     AtmAdminPolicyAuditEvent[]
   >([]);
-  const [sloThresholds, setSloThresholds] =
-    useState<AtmMetricsSloConfig>(DEFAULT_SLO_THRESHOLDS);
+  const [sloThresholds, setSloThresholds] = useState<AtmMetricsSloConfig>(
+    DEFAULT_SLO_THRESHOLDS,
+  );
   const [isLoadingCommands, setIsLoadingCommands] = useState(false);
   const [isLoadingProgress, setIsLoadingProgress] = useState(false);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
@@ -212,13 +217,19 @@ export function NeuralPanel() {
   const formatRate = (value?: number | null) =>
     typeof value === "number" ? `${value.toFixed(2)}/s` : "-";
   const formatPolicyValue = (value: unknown) =>
-    typeof value === "boolean" ? (value ? "enabled" : "disabled") : String(value);
+    typeof value === "boolean"
+      ? value
+        ? "enabled"
+        : "disabled"
+      : String(value);
   const thresholdNumber = (
     key: keyof AtmMetricsSloConfig,
     fallback: number,
   ): number => {
     const value = sloThresholds[key];
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+    return typeof value === "number" && Number.isFinite(value)
+      ? value
+      : fallback;
   };
   const severityClass = (severity: AlertSeverity) => {
     if (severity === "critical") {
@@ -256,7 +267,8 @@ export function NeuralPanel() {
   ): EndpointAlert[] => {
     const alerts: EndpointAlert[] = [];
     for (const endpoint of metrics.endpoints) {
-      const p95 = endpoint.latency.p95TotalMs ?? endpoint.latency.p95RunMs ?? null;
+      const p95 =
+        endpoint.latency.p95TotalMs ?? endpoint.latency.p95RunMs ?? null;
       const errorRate = endpoint.errorRate ?? null;
 
       const pushAlert = (
@@ -273,9 +285,15 @@ export function NeuralPanel() {
         });
       };
 
-      const sloErrorRateTarget = thresholdNumber("endpointSloErrorRateTarget", 2);
+      const sloErrorRateTarget = thresholdNumber(
+        "endpointSloErrorRateTarget",
+        2,
+      );
       const sloP95Target = thresholdNumber("endpointSloP95TargetMs", 2500);
-      const criticalErrorRate = thresholdNumber("endpointErrorRateCritical", 20);
+      const criticalErrorRate = thresholdNumber(
+        "endpointErrorRateCritical",
+        20,
+      );
       const criticalP95 = thresholdNumber("endpointP95CriticalMs", 10000);
       const regressionErrorFactor = thresholdNumber(
         "endpointRegressionErrorRateFactor",
@@ -285,8 +303,14 @@ export function NeuralPanel() {
         "endpointRegressionErrorRateDelta",
         2,
       );
-      const regressionP95Factor = thresholdNumber("endpointRegressionP95Factor", 1.5);
-      const regressionP95Delta = thresholdNumber("endpointRegressionP95DeltaMs", 1000);
+      const regressionP95Factor = thresholdNumber(
+        "endpointRegressionP95Factor",
+        1.5,
+      );
+      const regressionP95Delta = thresholdNumber(
+        "endpointRegressionP95DeltaMs",
+        1000,
+      );
 
       if (typeof errorRate === "number" && errorRate > sloErrorRateTarget) {
         pushAlert(
@@ -340,15 +364,19 @@ export function NeuralPanel() {
     const buckets = workspaceCommandMetrics.failureBuckets;
     if (
       (buckets.timeout || 0) >= thresholdNumber("failureTimeoutCritical", 10) ||
-      (buckets.runtime_error || 0) >= thresholdNumber("failureRuntimeCritical", 15) ||
-      (buckets.transport_error || 0) >= thresholdNumber("failureTransportCritical", 6)
+      (buckets.runtime_error || 0) >=
+        thresholdNumber("failureRuntimeCritical", 15) ||
+      (buckets.transport_error || 0) >=
+        thresholdNumber("failureTransportCritical", 6)
     ) {
       return "critical";
     }
     if (
       (buckets.timeout || 0) >= thresholdNumber("failureTimeoutWarn", 3) ||
-      (buckets.runtime_error || 0) >= thresholdNumber("failureRuntimeWarn", 5) ||
-      (buckets.transport_error || 0) >= thresholdNumber("failureTransportWarn", 2)
+      (buckets.runtime_error || 0) >=
+        thresholdNumber("failureRuntimeWarn", 5) ||
+      (buckets.transport_error || 0) >=
+        thresholdNumber("failureTransportWarn", 2)
     ) {
       return "warn";
     }
@@ -493,7 +521,6 @@ export function NeuralPanel() {
       } catch (err) {
         console.error("Failed to load credentials:", err);
       }
-
     };
     init();
     return () => {
@@ -553,10 +580,14 @@ export function NeuralPanel() {
         progressSinceRef.current = 0;
         return;
       }
-      if (!selectedCommandId || !commands.some((c) => c.id === selectedCommandId)) {
+      if (
+        !selectedCommandId ||
+        !commands.some((c) => c.id === selectedCommandId)
+      ) {
         const active =
-          commands.find((c) => c.status === "running" || c.status === "pending") ||
-          commands[0];
+          commands.find(
+            (c) => c.status === "running" || c.status === "pending",
+          ) || commands[0];
         setSelectedCommandId(active.id);
       }
     } catch (err) {
@@ -1294,25 +1325,37 @@ export function NeuralPanel() {
                                     {event.eventType}
                                   </div>
                                   <div className="text-[10px] text-muted-foreground font-mono">
-                                    {event.actor} - {new Date(event.createdAt).toLocaleString()}
+                                    {event.actor} -{" "}
+                                    {new Date(event.createdAt).toLocaleString()}
                                   </div>
                                   {event.metadata?.changedKeys &&
                                     Array.isArray(event.metadata.changedKeys) &&
                                     event.metadata.changedKeys.length > 0 && (
                                       <div className="mt-1.5 space-y-1">
-                                        {(event.metadata.changedKeys as string[]).map((key) => (
+                                        {(
+                                          event.metadata.changedKeys as string[]
+                                        ).map((key) => (
                                           <div
                                             key={`${event.id}-${key}`}
                                             className="text-[10px] text-muted-foreground"
                                           >
                                             {key}:{" "}
                                             {formatPolicyValue(
-                                              (event.previous as Record<string, unknown> | null)?.[
-                                                key
-                                              ],
-                                            )}{" -> "}
+                                              (
+                                                event.previous as Record<
+                                                  string,
+                                                  unknown
+                                                > | null
+                                              )?.[key],
+                                            )}
+                                            {" -> "}
                                             {formatPolicyValue(
-                                              (event.next as Record<string, unknown> | null)?.[key],
+                                              (
+                                                event.next as Record<
+                                                  string,
+                                                  unknown
+                                                > | null
+                                              )?.[key],
                                             )}
                                           </div>
                                         ))}
@@ -1333,7 +1376,9 @@ export function NeuralPanel() {
                           size="sm"
                           variant="ghost"
                           onPress={handleSaveSloThresholds}
-                          isDisabled={isSavingSlo || !adminPermissions.canEditSlo}
+                          isDisabled={
+                            isSavingSlo || !adminPermissions.canEditSlo
+                          }
                         >
                           {isSavingSlo ? "Saving..." : "Save Thresholds"}
                         </Button>
@@ -1349,13 +1394,18 @@ export function NeuralPanel() {
                           placeholder="Err Warn %"
                           value={String(sloThresholds.endpointErrorRateWarn)}
                           onChange={(e) =>
-                            handleSloInputChange("endpointErrorRateWarn", e.target.value)
+                            handleSloInputChange(
+                              "endpointErrorRateWarn",
+                              e.target.value,
+                            )
                           }
                         />
                         <Input
                           type="number"
                           placeholder="Err Critical %"
-                          value={String(sloThresholds.endpointErrorRateCritical)}
+                          value={String(
+                            sloThresholds.endpointErrorRateCritical,
+                          )}
                           onChange={(e) =>
                             handleSloInputChange(
                               "endpointErrorRateCritical",
@@ -1368,7 +1418,10 @@ export function NeuralPanel() {
                           placeholder="P95 Warn ms"
                           value={String(sloThresholds.endpointP95WarnMs)}
                           onChange={(e) =>
-                            handleSloInputChange("endpointP95WarnMs", e.target.value)
+                            handleSloInputChange(
+                              "endpointP95WarnMs",
+                              e.target.value,
+                            )
                           }
                         />
                         <Input
@@ -1385,7 +1438,9 @@ export function NeuralPanel() {
                         <Input
                           type="number"
                           placeholder="SLO Err %"
-                          value={String(sloThresholds.endpointSloErrorRateTarget)}
+                          value={String(
+                            sloThresholds.endpointSloErrorRateTarget,
+                          )}
                           onChange={(e) =>
                             handleSloInputChange(
                               "endpointSloErrorRateTarget",
@@ -1407,7 +1462,9 @@ export function NeuralPanel() {
                         <Input
                           type="number"
                           placeholder="Reg Err Factor"
-                          value={String(sloThresholds.endpointRegressionErrorRateFactor)}
+                          value={String(
+                            sloThresholds.endpointRegressionErrorRateFactor,
+                          )}
                           onChange={(e) =>
                             handleSloInputChange(
                               "endpointRegressionErrorRateFactor",
@@ -1418,7 +1475,9 @@ export function NeuralPanel() {
                         <Input
                           type="number"
                           placeholder="Reg Err Delta"
-                          value={String(sloThresholds.endpointRegressionErrorRateDelta)}
+                          value={String(
+                            sloThresholds.endpointRegressionErrorRateDelta,
+                          )}
                           onChange={(e) =>
                             handleSloInputChange(
                               "endpointRegressionErrorRateDelta",
@@ -1429,7 +1488,9 @@ export function NeuralPanel() {
                         <Input
                           type="number"
                           placeholder="Reg P95 Factor"
-                          value={String(sloThresholds.endpointRegressionP95Factor)}
+                          value={String(
+                            sloThresholds.endpointRegressionP95Factor,
+                          )}
                           onChange={(e) =>
                             handleSloInputChange(
                               "endpointRegressionP95Factor",
@@ -1440,7 +1501,9 @@ export function NeuralPanel() {
                         <Input
                           type="number"
                           placeholder="Reg P95 Delta"
-                          value={String(sloThresholds.endpointRegressionP95DeltaMs)}
+                          value={String(
+                            sloThresholds.endpointRegressionP95DeltaMs,
+                          )}
                           onChange={(e) =>
                             handleSloInputChange(
                               "endpointRegressionP95DeltaMs",
@@ -1453,7 +1516,10 @@ export function NeuralPanel() {
                           placeholder="Timeout Warn"
                           value={String(sloThresholds.failureTimeoutWarn)}
                           onChange={(e) =>
-                            handleSloInputChange("failureTimeoutWarn", e.target.value)
+                            handleSloInputChange(
+                              "failureTimeoutWarn",
+                              e.target.value,
+                            )
                           }
                         />
                         <Input
@@ -1472,7 +1538,10 @@ export function NeuralPanel() {
                           placeholder="Runtime Warn"
                           value={String(sloThresholds.failureRuntimeWarn)}
                           onChange={(e) =>
-                            handleSloInputChange("failureRuntimeWarn", e.target.value)
+                            handleSloInputChange(
+                              "failureRuntimeWarn",
+                              e.target.value,
+                            )
                           }
                         />
                         <Input
@@ -1491,7 +1560,10 @@ export function NeuralPanel() {
                           placeholder="Transport Warn"
                           value={String(sloThresholds.failureTransportWarn)}
                           onChange={(e) =>
-                            handleSloInputChange("failureTransportWarn", e.target.value)
+                            handleSloInputChange(
+                              "failureTransportWarn",
+                              e.target.value,
+                            )
                           }
                         />
                         <Input
@@ -1517,7 +1589,10 @@ export function NeuralPanel() {
                             Workspace Metrics
                           </span>
                           <span className="text-[11px] text-muted-foreground font-mono">
-                            {(workspaceCommandMetrics.windowMs / (60 * 60 * 1000)).toFixed(0)}
+                            {(
+                              workspaceCommandMetrics.windowMs /
+                              (60 * 60 * 1000)
+                            ).toFixed(0)}
                             h window
                           </span>
                         </div>
@@ -1537,90 +1612,108 @@ export function NeuralPanel() {
                         )}
                         <div className="flex flex-wrap gap-2">
                           <Chip size="sm" variant="soft">
-                            timeout: {workspaceCommandMetrics.failureBuckets.timeout || 0}
+                            timeout:{" "}
+                            {workspaceCommandMetrics.failureBuckets.timeout ||
+                              0}
                           </Chip>
                           <Chip size="sm" variant="soft">
                             airlock:{" "}
-                            {workspaceCommandMetrics.failureBuckets.airlock_rejected || 0}
+                            {workspaceCommandMetrics.failureBuckets
+                              .airlock_rejected || 0}
                           </Chip>
                           <Chip size="sm" variant="soft">
                             runtime:{" "}
-                            {workspaceCommandMetrics.failureBuckets.runtime_error || 0}
+                            {workspaceCommandMetrics.failureBuckets
+                              .runtime_error || 0}
                           </Chip>
                           <Chip size="sm" variant="soft">
                             transport:{" "}
-                            {workspaceCommandMetrics.failureBuckets.transport_error || 0}
+                            {workspaceCommandMetrics.failureBuckets
+                              .transport_error || 0}
                           </Chip>
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
                           <div>
                             queue:{" "}
-                            {formatMs(workspaceCommandMetrics.averages.queueDelayMs)}
+                            {formatMs(
+                              workspaceCommandMetrics.averages.queueDelayMs,
+                            )}
                           </div>
                           <div>
-                            run: {formatMs(workspaceCommandMetrics.averages.runDurationMs)}
+                            run:{" "}
+                            {formatMs(
+                              workspaceCommandMetrics.averages.runDurationMs,
+                            )}
                           </div>
                           <div>
                             total:{" "}
-                            {formatMs(workspaceCommandMetrics.averages.totalDurationMs)}
+                            {formatMs(
+                              workspaceCommandMetrics.averages.totalDurationMs,
+                            )}
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {endpointMetrics && endpointMetrics.endpoints.length > 0 && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        {endpointMetrics.endpoints.map((metric) => {
-                          const p95 =
-                            metric.latency.p95TotalMs ?? metric.latency.p95RunMs;
-                          const avg =
-                            metric.latency.avgTotalMs ?? metric.latency.avgRunMs;
-                          const severity = classifyEndpointSeverity(
-                            metric.errorRate,
-                            p95,
-                          );
-                          return (
-                            <div
-                              key={metric.key}
-                              className={`rounded-xl border backdrop-blur-md p-3 space-y-1.5 ${severityClass(severity)}`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                                  {metric.label}
+                    {endpointMetrics &&
+                      endpointMetrics.endpoints.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {endpointMetrics.endpoints.map((metric) => {
+                            const p95 =
+                              metric.latency.p95TotalMs ??
+                              metric.latency.p95RunMs;
+                            const avg =
+                              metric.latency.avgTotalMs ??
+                              metric.latency.avgRunMs;
+                            const severity = classifyEndpointSeverity(
+                              metric.errorRate,
+                              p95,
+                            );
+                            return (
+                              <div
+                                key={metric.key}
+                                className={`rounded-xl border backdrop-blur-md p-3 space-y-1.5 ${severityClass(severity)}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                                    {metric.label}
+                                  </div>
+                                  {severity !== "normal" && (
+                                    <Chip
+                                      size="sm"
+                                      variant="soft"
+                                      className={
+                                        severity === "critical"
+                                          ? "bg-red-500/20 text-red-300 border-red-500/30"
+                                          : "bg-orange-500/20 text-orange-300 border-orange-500/30"
+                                      }
+                                    >
+                                      {severity}
+                                    </Chip>
+                                  )}
                                 </div>
-                                {severity !== "normal" && (
-                                  <Chip
-                                    size="sm"
-                                    variant="soft"
-                                    className={
-                                      severity === "critical"
-                                        ? "bg-red-500/20 text-red-300 border-red-500/30"
-                                        : "bg-orange-500/20 text-orange-300 border-orange-500/30"
-                                    }
-                                  >
-                                    {severity}
-                                  </Chip>
-                                )}
+                                <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-muted-foreground">
+                                  <div>req: {metric.requests}</div>
+                                  <div>
+                                    rate: {formatRate(metric.ratePerSecond)}
+                                  </div>
+                                  <div>ok: {formatPct(metric.successRate)}</div>
+                                  <div>err: {formatPct(metric.errorRate)}</div>
+                                  <div>p95: {formatMs(p95)}</div>
+                                  <div>avg: {formatMs(avg)}</div>
+                                </div>
                               </div>
-                              <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-muted-foreground">
-                                <div>req: {metric.requests}</div>
-                                <div>rate: {formatRate(metric.ratePerSecond)}</div>
-                                <div>ok: {formatPct(metric.successRate)}</div>
-                                <div>err: {formatPct(metric.errorRate)}</div>
-                                <div>p95: {formatMs(p95)}</div>
-                                <div>avg: {formatMs(avg)}</div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            );
+                          })}
+                        </div>
+                      )}
 
                     {endpointAlerts.length > 0 && (
                       <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 backdrop-blur-md p-3 space-y-2">
                         <div className="flex items-center gap-2 text-xs text-orange-300">
                           <AlertTriangle className="size-3.5" />
-                          Endpoint SLO/regression alerts ({endpointAlerts.length})
+                          Endpoint SLO/regression alerts (
+                          {endpointAlerts.length})
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {endpointAlerts.slice(0, 6).map((alert, index) => (
@@ -1660,7 +1753,9 @@ export function NeuralPanel() {
                           onChange={(e) => {
                             const next = Number(e.target.value);
                             if (Number.isFinite(next)) {
-                              setAlertRetention({ days: Math.max(1, Math.round(next)) });
+                              setAlertRetention({
+                                days: Math.max(1, Math.round(next)),
+                              });
                             }
                           }}
                         />
@@ -1673,14 +1768,17 @@ export function NeuralPanel() {
                             !adminPermissions.canEditAlertRetention
                           }
                         >
-                          {isSavingAlertRetention ? "Saving..." : "Save Retention"}
+                          {isSavingAlertRetention
+                            ? "Saving..."
+                            : "Save Retention"}
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
                           onPress={handleCleanupAlerts}
                           isDisabled={
-                            isCleaningAlerts || !adminPermissions.canRunAlertCleanup
+                            isCleaningAlerts ||
+                            !adminPermissions.canRunAlertCleanup
                           }
                         >
                           {isCleaningAlerts ? "Cleaning..." : "Run Cleanup"}
@@ -1689,7 +1787,8 @@ export function NeuralPanel() {
                       {(!adminPermissions.canEditAlertRetention ||
                         !adminPermissions.canRunAlertCleanup) && (
                         <div className="text-[11px] text-muted-foreground">
-                          Alert retention controls are limited by workspace policy.
+                          Alert retention controls are limited by workspace
+                          policy.
                         </div>
                       )}
                       <div className="flex items-center gap-1.5">
@@ -1763,13 +1862,14 @@ export function NeuralPanel() {
                     {commandMetrics &&
                       (commandMetrics.progress.droppedEventsTotal > 0 ||
                         commandMetrics.progress.suppressedEventsTotal > 0) && (
-                      <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 backdrop-blur-md p-3">
-                        <div className="flex items-center gap-2 text-xs text-orange-300">
-                          <AlertTriangle className="size-3.5" />
-                          Runtime telemetry backpressure detected for selected command.
+                        <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 backdrop-blur-md p-3">
+                          <div className="flex items-center gap-2 text-xs text-orange-300">
+                            <AlertTriangle className="size-3.5" />
+                            Runtime telemetry backpressure detected for selected
+                            command.
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {recentCommands.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-white/10 text-muted-foreground/50">
@@ -1821,25 +1921,42 @@ export function NeuralPanel() {
                                   </div>
                                   <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
                                     <div>
-                                      queue: {formatMs(commandMetrics.timings.queueDelayMs)}
+                                      queue:{" "}
+                                      {formatMs(
+                                        commandMetrics.timings.queueDelayMs,
+                                      )}
                                     </div>
                                     <div>
-                                      run: {formatMs(commandMetrics.timings.runDurationMs)}
+                                      run:{" "}
+                                      {formatMs(
+                                        commandMetrics.timings.runDurationMs,
+                                      )}
                                     </div>
                                     <div>
-                                      total: {formatMs(commandMetrics.timings.totalDurationMs)}
+                                      total:{" "}
+                                      {formatMs(
+                                        commandMetrics.timings.totalDurationMs,
+                                      )}
                                     </div>
                                   </div>
                                   <div className="flex flex-wrap gap-2">
                                     <Chip size="sm" variant="soft">
-                                      events: {commandMetrics.progress.totalEvents}
+                                      events:{" "}
+                                      {commandMetrics.progress.totalEvents}
                                     </Chip>
                                     <Chip size="sm" variant="soft">
-                                      dropped: {commandMetrics.progress.droppedEventsTotal}
+                                      dropped:{" "}
+                                      {
+                                        commandMetrics.progress
+                                          .droppedEventsTotal
+                                      }
                                     </Chip>
                                     <Chip size="sm" variant="soft">
                                       suppressed:{" "}
-                                      {commandMetrics.progress.suppressedEventsTotal}
+                                      {
+                                        commandMetrics.progress
+                                          .suppressedEventsTotal
+                                      }
                                     </Chip>
                                   </div>
                                 </div>
@@ -1849,7 +1966,8 @@ export function NeuralPanel() {
                                   Loading metrics...
                                 </div>
                               )}
-                              {isLoadingProgress && commandProgress.length === 0 ? (
+                              {isLoadingProgress &&
+                              commandProgress.length === 0 ? (
                                 <div className="text-sm text-muted-foreground">
                                   Loading progress...
                                 </div>
@@ -1868,7 +1986,9 @@ export function NeuralPanel() {
                                         {event.level}
                                       </span>
                                       <span className="text-[11px] text-muted-foreground font-mono">
-                                        {new Date(event.createdAt).toLocaleTimeString()}
+                                        {new Date(
+                                          event.createdAt,
+                                        ).toLocaleTimeString()}
                                       </span>
                                     </div>
                                     <p className="text-sm text-foreground/90 mt-1">
@@ -1918,9 +2038,11 @@ export function NeuralPanel() {
                               <Chip
                                 size="sm"
                                 className={
-                                  request.airlockLevel === AirlockLevels.Dangerous
+                                  request.airlockLevel ===
+                                  AirlockLevels.Dangerous
                                     ? "bg-red-500/20 text-red-400 border-red-500/20"
-                                    : request.airlockLevel === AirlockLevels.Sensitive
+                                    : request.airlockLevel ===
+                                        AirlockLevels.Sensitive
                                       ? "bg-orange-500/20 text-orange-400 border-orange-500/20"
                                       : "bg-green-500/20 text-green-400 border-green-500/20"
                                 }

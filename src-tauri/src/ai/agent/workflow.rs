@@ -19,6 +19,16 @@ use tokio::sync::RwLock;
 const MAX_MODEL_MESSAGE_BYTES: usize = 95 * 1024;
 const MAX_TOOL_TEXT_BYTES: usize = 48 * 1024;
 const MAX_MEMORY_CONTEXT_BYTES: usize = 24 * 1024;
+const FILESYSTEM_TOOL_NAMES: &[&str] = &[
+    "read_file",
+    "write_file",
+    "list_files",
+    "search_files",
+    "append_file",
+    "mkdir",
+    "delete_file",
+    "move_file",
+];
 
 fn truncate_to_max_bytes(input: &str, max_bytes: usize) -> String {
     if input.len() <= max_bytes {
@@ -71,17 +81,24 @@ pub struct AgentState {
     #[allow(dead_code)] // @TODO Future context sharing
     pub context: HashMap<String, String>,
     pub workspace_id: String,
+    pub allowed_paths: Vec<String>,
     pub memory: Arc<AgentMemory>,
     #[allow(dead_code)] // Used by steps
     pub spec: Arc<AgentSpec>,
 }
 
 impl AgentState {
-    pub fn new(workspace_id: String, memory: Arc<AgentMemory>, spec: Arc<AgentSpec>) -> Self {
+    pub fn new(
+        workspace_id: String,
+        allowed_paths: Vec<String>,
+        memory: Arc<AgentMemory>,
+        spec: Arc<AgentSpec>,
+    ) -> Self {
         Self {
             messages: Vec::new(),
             context: HashMap::new(),
             workspace_id,
+            allowed_paths,
             memory,
             spec,
         }
@@ -150,11 +167,50 @@ impl Workflow {
         let mut state = initial_state;
         let mut current_step_id = Some(self.start_step.clone());
         let mut steps_count = 0;
-        const MAX_STEPS: usize = 50;
+        const DEFAULT_MAX_STEPS: usize = 50;
+        const ABSOLUTE_MAX_STEPS: usize = 200;
+        let max_steps = self
+            .options
+            .max_steps
+            .unwrap_or(DEFAULT_MAX_STEPS)
+            .clamp(4, ABSOLUTE_MAX_STEPS);
 
         while let Some(step_id) = current_step_id {
-            if steps_count >= MAX_STEPS {
-                return Err("Workflow execution exceeded maximum step count".to_string());
+            if steps_count >= max_steps {
+                on_event(AgentEvent::Status(format!(
+                    "Stopping workflow after {} steps to prevent infinite tool loops.",
+                    max_steps
+                )));
+
+                let last_assistant_text = state
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|m| m.role == "assistant")
+                    .map(|m| m.content.as_text())
+                    .unwrap_or_default();
+
+                let fallback = if last_assistant_text.trim().is_empty() {
+                    format!(
+                        "I could not complete this request within {} workflow steps. \
+Please narrow the task or break it into smaller steps.",
+                        max_steps
+                    )
+                } else {
+                    format!(
+                        "{}\n\n[Execution stopped after {} steps to prevent an infinite loop. \
+Please narrow the task or ask me to continue with a focused next step.]",
+                        last_assistant_text, max_steps
+                    )
+                };
+
+                state.messages.push(AgentMessage {
+                    role: "assistant".to_string(),
+                    content: AgentContent::text(fallback),
+                    tool_calls: None,
+                    tool_call_id: None,
+                });
+                return Ok(state);
             }
 
             let step = self
@@ -297,7 +353,12 @@ impl WorkflowStep for ThinkStep {
         }
 
         // 2. Prepare tools
-        let tools = skills.get_tool_definitions();
+        let mut tools = skills.get_tool_definitions();
+        if state.allowed_paths.is_empty() {
+            tools.retain(|tool| {
+                !FILESYSTEM_TOOL_NAMES.contains(&tool.function.name.as_str())
+            });
+        }
         let has_tools = !tools.is_empty();
 
         let request = crate::ai::provider_types::ChatCompletionRequest {
@@ -488,7 +549,7 @@ impl WorkflowStep for ActStep {
                     method: Some(method.to_string()),
                     params: Some(params),
                     content: None,
-                    allowed_paths: vec![state.workspace_id.clone()],
+                    allowed_paths: state.allowed_paths.clone(),
                 },
                 status: CommandStatus::Pending,
                 priority: CommandPriority::Normal,
@@ -638,6 +699,7 @@ mod tests {
             model: Some("test-model".to_string()),
             workspace_id: "test-ws".to_string(),
             max_steps: Some(10),
+            allowed_paths: None,
         };
 
         let mut workflow = Workflow::new(spec.clone(), options, "start".to_string());
@@ -659,7 +721,12 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let memory = Arc::new(AgentMemory::new("test-ws", temp_dir).await);
 
-        let state = AgentState::new("test-ws".to_string(), memory, Arc::new(spec.clone()));
+        let state = AgentState::new(
+            "test-ws".to_string(),
+            Vec::new(),
+            memory,
+            Arc::new(spec.clone()),
+        );
 
         match WorkspaceManager::new() {
             Ok(wm) => {

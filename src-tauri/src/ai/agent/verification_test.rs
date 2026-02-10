@@ -82,6 +82,7 @@ mod tests {
             model: Some("test-model".to_string()),
             workspace_id: "test-ws".to_string(),
             max_steps: Some(1),
+            allowed_paths: None,
         };
 
         // We can't easily run() without a real SkillExecutor/Router,

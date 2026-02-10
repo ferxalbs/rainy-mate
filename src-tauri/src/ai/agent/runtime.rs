@@ -15,6 +15,7 @@ pub struct RuntimeOptions {
     pub model: Option<String>,
     pub workspace_id: String,
     pub max_steps: Option<usize>,
+    pub allowed_paths: Option<Vec<String>>,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
@@ -177,6 +178,12 @@ impl AgentRuntime {
     fn generate_system_prompt(&self) -> String {
         let spec = &self.spec;
         let workspace_id = &self.options.workspace_id;
+        let allowed_paths = self.options.allowed_paths.clone().unwrap_or_default();
+        let workspace_scope = if allowed_paths.is_empty() {
+            "(none provided)".to_string()
+        } else {
+            allowed_paths.join(", ")
+        };
 
         let capability_lines = if spec.skills.capabilities.is_empty() {
             "- No explicit capabilities configured".to_string()
@@ -212,7 +219,8 @@ Identity:
 Core soul:
 {}
 
-Workspace Path: {}
+Workspace ID: {}
+Allowed Filesystem Scope: {}
 
 Capabilities:
 {}
@@ -225,13 +233,15 @@ Memory:
 Rules:
 1. Use tools and skills only within declared capabilities and workspace scope.
 2. Never fabricate file results.
-3. If a tool fails, explain and try the safest fallback.",
+3. If a tool fails, explain and try the safest fallback.
+4. Never use workspace ID as a filesystem path. Only use explicit allowed filesystem scope paths.",
             spec.soul.name,
             spec.soul.description,
             spec.soul.personality,
             spec.soul.tone,
             spec.soul.soul_content,
             workspace_id,
+            workspace_scope,
             capability_lines,
             spec.memory_config.strategy,
             spec.memory_config.retention_days,
@@ -247,6 +257,7 @@ Rules:
         // 1. Initialize State
         let mut state = AgentState::new(
             self.options.workspace_id.clone(),
+            self.options.allowed_paths.clone().unwrap_or_default(),
             self.memory.clone(),
             Arc::new(self.spec.clone()),
         );

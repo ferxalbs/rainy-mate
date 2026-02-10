@@ -164,6 +164,7 @@ pub async fn run_agent_workflow(
         model: Some(model_id),
         workspace_id: workspace_id.clone(),
         max_steps: None,
+        allowed_paths: None,
     };
 
     // Initialize Persistent Memory

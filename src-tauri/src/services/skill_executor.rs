@@ -675,8 +675,11 @@ impl SkillExecutor {
                     if !allowed_paths.is_empty() {
                         allowed_paths.to_vec()
                     } else {
-                        // No restrictions, allow absolute path as-is (bootstrap mode)
-                        return Ok(normalized_target);
+                        return Err(
+                            "No allowed paths configured for this workspace. \
+Configure allowed paths before filesystem operations."
+                                .to_string(),
+                        );
                     }
                 }
             };
