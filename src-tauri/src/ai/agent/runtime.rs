@@ -1,4 +1,6 @@
-// @deprecated: This module is being replaced by the new native AgentSpec v2 system.
+// AgentRuntime v2 — Core runtime orchestrating the agent's ReAct workflow.
+// Manages state, history, memory persistence, and the Think→Act execution loop.
+use crate::ai::agent::context_window::ContextWindow;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::workflow::{ActStep, AgentState, ThinkStep, Workflow};
 use crate::ai::router::IntelligentRouter;
@@ -53,8 +55,10 @@ pub enum AgentEvent {
         id: String,
         result: String,
     },
-    #[allow(dead_code)]
+    #[allow(dead_code)] // @RESERVED — will be emitted by error handling in workflow
     Error(String),
+    /// Emitted when the agent stores a memory entry
+    MemoryStored(String),
 }
 
 impl AgentContent {
@@ -253,9 +257,11 @@ Rules:
             tool_call_id: None,
         });
 
-        // Add History to State
+        // Add History to State (capture length for offset calculation later)
+        let history_len;
         {
             let hist = self.history.lock().await;
+            history_len = hist.len();
             state.messages.extend(hist.clone());
         }
 
@@ -266,6 +272,13 @@ Rules:
             tool_calls: None,
             tool_call_id: None,
         });
+
+        // Apply sliding context window — trim old messages to stay within token budget
+        let context_window = ContextWindow::new(self.spec.memory_config.max_tokens as usize);
+        let pre_trim_len = state.messages.len();
+        state.messages = context_window.trim_history(state.messages);
+        let trimmed_count = pre_trim_len - state.messages.len();
+        let history_len = history_len.saturating_sub(trimmed_count);
 
         // 2. Build the Workflow Graph
         // In the future, this could be loaded from JSON.
@@ -291,90 +304,46 @@ Rules:
         workflow.add_step(act_step);
 
         // 3. Execute Workflow
-        // 3. Execute Workflow
+        let on_event_clone = on_event.clone();
         let final_state = workflow
-            .execute(state, self.skills.clone(), on_event)
+            .execute(state, self.skills.clone(), on_event_clone)
             .await
             .map_err(|e| format!("Workflow execution failed: {}", e))?;
 
-        // 4. Update History and Return Result
-        // We take the DIFFERENCE between final state messages and original history + 1 (user msg)
-        // Actually, let's just grab the last message content if it's from assistant
+        // 4. Update persistent history — append the user input + all new responses
         let last_message = final_state.messages.last().ok_or("No response generated")?;
+        let new_messages_start = history_len + 1; // Skip system(1) + old history(N), start at user input
 
-        // Update persistent history
         {
             let mut hist = self.history.lock().await;
-            // Append the User Message (input) first
-            hist.push(AgentMessage {
-                role: "user".to_string(),
-                content: AgentContent::text(input),
-                tool_calls: None,
-                tool_call_id: None,
-            });
-
-            // Append all NEW messages generated during workflow
-            // Note: simple approach is to append everything after the user message we just added
-            // But state.messages includes system + old history + new user msg + new agent msgs...
-            // So we skip (1 + old_history_len + 1)
-            // Let's refine:
-            // The state started with: System + History + User Input.
-            // Any message AFTER that index is new.
-
-            // To be safe, let's just grab the new assistant/tool messages.
-            // We know the input was the last "user" message added.
-
-            // Actually, simpler:
-            // We pushed `input` to `hist` above.
-            // Now we push the RESPONSES.
-
-            // Find messages after the last "user" message that matches our input?
-            // Or just iterate from the known start index?
-
-            // Let's iterate final_state.messages.
-            // Only keep messages that are NOT in the initial set.
-            // We know we added System + Old History + User Input.
-            // So we skip `1 + old_hist_len + 1`.
-
-            // We can calculate offset:
-            // 1 (System)
-            // + (final_state.messages.len() - new_generated_count) ?? No
-
-            // Better: state.messages indices.
-            // Index 0: System
-            // Index 1..N: Old History
-            // Index N+1: User Input
-            // Index N+2...: New Responses
-
-            // We need to know N (Old History Length).
-            // We can get it from locking history again, but it might have changed (race condition? unlikely here).
-            // `hist` lock held above is different scope.
-
-            // Let's assume we are the only writer for this session.
-            // We can match by content or just append the last few.
-
-            // For MVP: Just check the last message. If it's assistant, return it.
-            // And append `last_message` to history?
-            // BUT: What if there were multiple tool calls? We need to save the whole chain in history.
-
-            // Correct approach:
-            // Identify all messages *after* the User Input we added to state.
-            let user_msg_index = final_state
-                .messages
-                .iter()
-                .rposition(|m| m.role == "user")
-                .unwrap();
-
-            for msg in final_state.messages.iter().skip(user_msg_index + 1) {
+            for msg in final_state.messages.iter().skip(new_messages_start) {
                 hist.push(msg.clone());
             }
         }
 
+        // 5. Persist the assistant's final response into long-term memory
         if last_message.role == "assistant" {
+            let response_text = last_message.content.as_text();
+            if !response_text.is_empty() && response_text.len() > 20 {
+                let mut metadata = std::collections::HashMap::new();
+                metadata.insert(
+                    "source_input".to_string(),
+                    input.chars().take(200).collect::<String>(),
+                );
+                metadata.insert("role".to_string(), "assistant".to_string());
+                self.memory
+                    .store(
+                        response_text.chars().take(2000).collect::<String>(),
+                        "agent_conversation".to_string(),
+                        Some(metadata),
+                    )
+                    .await;
+                on_event(AgentEvent::MemoryStored(
+                    "Response persisted to memory".to_string(),
+                ));
+            }
             Ok(last_message.content.as_text())
         } else {
-            // Workflow ended on a Tool output or something?
-            // Usually ThinkStep (Assistant) is the last one.
             Ok("Workflow completed without final response".to_string())
         }
     }

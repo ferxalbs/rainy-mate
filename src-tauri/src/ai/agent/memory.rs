@@ -81,14 +81,11 @@ impl AgentMemory {
                 .unwrap_or_default(),
         };
 
-        memory
-            .migrate_legacy_json_if_present(app_data_dir)
-            .await;
+        memory.migrate_legacy_json_if_present(app_data_dir).await;
 
         memory
     }
 
-    #[allow(dead_code)]
     pub async fn store(
         &self,
         content: String,
@@ -121,9 +118,10 @@ impl AgentMemory {
         }
 
         // Optional entity persistence if the caller provides a structured hint.
-        if let (Some(entity_key), Some(entity_value)) =
-            (entry.metadata.get("entity_key"), entry.metadata.get("entity_value"))
-        {
+        if let (Some(entity_key), Some(entity_value)) = (
+            entry.metadata.get("entity_key"),
+            entry.metadata.get("entity_value"),
+        ) {
             let _ = sqlx::query(
                 "INSERT INTO agent_entities (id, workspace_id, entity_key, entity_value, confidence)
                  VALUES (?, ?, ?, ?, ?)",
@@ -167,7 +165,7 @@ impl AgentMemory {
             .collect()
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // @RESERVED — will be wired to a Tauri command for web page ingestion
     pub async fn ingest_web_page(&self, url: &str) -> Result<String, String> {
         let res = self
             .http_client
@@ -220,7 +218,7 @@ impl AgentMemory {
         ))
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // @RESERVED — will be wired to a Tauri command for memory debugging
     pub async fn dump_context(&self) -> String {
         let rows = sqlx::query_as::<_, (String, i64, String)>(
             "SELECT source, timestamp, content
@@ -239,9 +237,7 @@ impl AgentMemory {
                 format!(
                     "[{}] {}: {}",
                     source,
-                    Utc.timestamp_opt(*timestamp, 0)
-                        .unwrap()
-                        .format("%H:%M:%S"),
+                    Utc.timestamp_opt(*timestamp, 0).unwrap().format("%H:%M:%S"),
                     content
                 )
             })

@@ -5,6 +5,55 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.9] - 2026-02-10 - Agent Memory & Runtime Hardening (P0)
+
+### Added - Agent Memory Persistence & Context Management
+
+**Rust Backend (`src-tauri/src/ai/agent/`)**
+
+- `context_window.rs` - **NEW** — Sliding window context manager:
+  - Token estimation engine (1 token ≈ 4 chars) with tool call overhead
+  - `trim_history()` — evicts oldest non-system messages to stay within budget
+  - System messages always preserved
+  - Configurable via `AgentSpec.memory_config.max_tokens`
+  - 3 unit tests covering trim behavior, system message preservation, and eviction order
+
+- `error.rs` - **NEW** — Unified `AgentError` enum:
+  - Variants: Memory, Provider, Tool, Workflow, Timeout, AirlockDenied, Serialization
+  - `From` impls for `sqlx::Error`, `serde_json::Error`, `reqwest::Error`
+  - `is_retryable()` classifier for retry logic
+  - Converts to `String` for backwards compatibility with existing workflow methods
+
+- `runtime.rs` - **AgentRuntime** hardening:
+  - Wired `memory.store()` — assistant responses persisted to long-term memory after each turn
+  - Integrated `ContextWindow` — history trimmed before each workflow execution
+  - Added `AgentEvent::MemoryStored` variant for memory persistence events
+  - Replaced 70-line fragile history management with clean 5-line index-based approach
+
+- `workflow.rs` - **Workflow Engine** memory integration:
+  - `ThinkStep` now persists user inputs to long-term memory (>10 chars)
+  - `ActStep` persists web research results (`web_search`, `read_web_page`) to memory
+  - Fixed duplicate doc comments in `ThinkStep::execute` and `Workflow`
+
+- `memory.rs` - Removed dead code annotations from `store()` (now actively used)
+
+**Services (`src-tauri/src/services/`)**
+
+- `command_poller.rs` — Added `AgentEvent::MemoryStored` handling in progress reporter
+
+### Changed
+
+- Removed `@deprecated` tags from `runtime.rs` and `workflow.rs` — these are the canonical v2 modules
+- History management in `AgentRuntime::run` simplified from verbose 70-line block to clean index arithmetic
+
+### Technical
+
+- Build: 0 warnings, 0 errors
+- Tests: `context_window::tests` — 3/3 passed
+- Memory persistence: user inputs, assistant responses, and web research results now stored in SQLite
+
+---
+
 ## [0.5.8] - 2026-02-09 - Production Ops Integration (ATM + Native Runtime)
 
 ### Added - Metrics Operations Hardening

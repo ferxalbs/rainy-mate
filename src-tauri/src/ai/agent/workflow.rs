@@ -1,4 +1,5 @@
-// @deprecated: This module is being replaced by the new native AgentSpec v2 system.
+// Workflow Engine v2 — Step-based execution model for the agent's ReAct loop.
+// Contains ThinkStep (LLM interaction) and ActStep (tool execution) with memory persistence.
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::{AgentContent, AgentEvent, AgentMessage, RuntimeOptions};
 use crate::ai::router::IntelligentRouter;
@@ -105,7 +106,6 @@ pub trait WorkflowStep: Debug + Send + Sync {
     fn id(&self) -> String;
 
     /// Execute the step logic
-    /// Execute the step logic
     async fn execute(
         &self,
         state: &mut AgentState,
@@ -204,7 +204,6 @@ impl WorkflowStep for ThinkStep {
         on_event(AgentEvent::Status("Thinking...".to_string()));
 
         // 1. Prepare messages
-        // 1. Prepare messages
         let mut messages: Vec<crate::ai::provider_types::ChatMessage> = state
             .messages
             .iter()
@@ -257,6 +256,23 @@ impl WorkflowStep for ThinkStep {
                     0,
                     crate::ai::provider_types::ChatMessage::system(system_ctx),
                 );
+            }
+        }
+
+        // 1.6. Persist user input to long-term memory (non-blocking)
+        if let Some(last_user_msg) = state.messages.iter().rfind(|m| m.role == "user") {
+            let user_text = last_user_msg.content.as_text();
+            if !user_text.is_empty() && user_text.len() > 10 {
+                let mut metadata = std::collections::HashMap::new();
+                metadata.insert("role".to_string(), "user".to_string());
+                state
+                    .memory
+                    .store(
+                        user_text.chars().take(1000).collect::<String>(),
+                        "agent_conversation".to_string(),
+                        Some(metadata),
+                    )
+                    .await;
             }
         }
 
@@ -462,7 +478,7 @@ impl WorkflowStep for ActStep {
             });
 
             // Convert tool output to proper multimodal content if it's an image
-            let content = tool_output_to_content(final_output);
+            let content = tool_output_to_content(final_output.clone());
 
             results.push(AgentMessage {
                 role: "tool".to_string(),
@@ -470,6 +486,24 @@ impl WorkflowStep for ActStep {
                 tool_calls: None,
                 tool_call_id: Some(call.id.clone()),
             });
+
+            // Persist web research results to long-term memory
+            if matches!(function_name.as_str(), "web_search" | "read_web_page") {
+                let mut metadata = std::collections::HashMap::new();
+                metadata.insert("tool".to_string(), function_name.clone());
+                metadata.insert("role".to_string(), "tool_result".to_string());
+                let content_preview: String = final_output.chars().take(2000).collect();
+                if !content_preview.is_empty() {
+                    state
+                        .memory
+                        .store(
+                            content_preview,
+                            format!("tool:{}", function_name),
+                            Some(metadata),
+                        )
+                        .await;
+                }
+            }
         }
 
         // Update state with all tool outputs

@@ -70,6 +70,13 @@ fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
                 "text": progress_preview(text),
             }),
         ),
+        AgentEvent::MemoryStored(text) => (
+            "Memory stored".to_string(),
+            serde_json::json!({
+                "type": "memory_stored",
+                "text": text,
+            }),
+        ),
     }
 }
 
