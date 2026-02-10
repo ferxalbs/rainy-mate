@@ -100,7 +100,7 @@ export function MessageBubble({
             thought={message.thought}
             thinkingLevel={message.thinkingLevel || "medium"}
             modelName={message.modelUsed?.name}
-            className="w-full max-w-md"
+            className="w-full max-w-md md:max-w-lg lg:max-w-xl"
             isStreaming={message.isLoading}
             durationMs={message.thoughtDuration}
           />
@@ -171,7 +171,7 @@ function PlanCard({
   isExecuting?: boolean;
 }) {
   return (
-    <Card className="w-full max-w-md p-4 space-y-4 border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-900/10">
+    <Card className="w-full max-w-md md:max-w-lg lg:max-w-xl p-4 space-y-4 border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-900/10">
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-sm flex items-center gap-2">
           <FileCode className="size-4 text-purple-500" />

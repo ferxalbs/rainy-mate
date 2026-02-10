@@ -123,7 +123,7 @@ export function AgentChatPanel({
 
   const renderInputArea = (centered: boolean) => (
     <div
-      className={`w-full max-w-2xl mx-auto transition-all duration-500 ${
+      className={`w-full max-w-2xl lg:max-w-3xl mx-auto transition-all duration-500 ${
         centered ? "scale-100 opacity-100" : "scale-100 opacity-100"
       }`}
     >
@@ -280,9 +280,9 @@ export function AgentChatPanel({
       <div className="absolute inset-0 overflow-y-auto w-full h-full scrollbar-none z-10">
         {/* Padding to clear top bar and bottom input */}
         <div
-          className={`flex flex-col px-4 max-w-3xl mx-auto ${
+          className={`flex flex-col px-4 md:px-8 w-full md:max-w-3xl lg:max-w-4xl mx-auto transition-all duration-300 ${
             messages.length === 0
-              ? "h-full justify-center pt-20"
+              ? "h-full justify-center pb-10"
               : "min-h-full pt-32 pb-40"
           }`}
         >
@@ -330,7 +330,7 @@ export function AgentChatPanel({
       {/* Floating Input Area - Absolute Bottom - ONLY SHOW WHEN MESSAGES EXIST */}
       {messages.length > 0 && (
         <div className="absolute bottom-6 left-0 right-0 z-40 px-4 pointer-events-none flex justify-center">
-          <div className="w-full max-w-2xl pointer-events-auto">
+          <div className="w-full max-w-2xl lg:max-w-3xl pointer-events-auto">
             {renderInputArea(false)}
           </div>
         </div>
