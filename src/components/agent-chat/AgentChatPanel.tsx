@@ -10,11 +10,10 @@ import * as tauri from "../../services/tauri";
 import {
   Paperclip,
   ArrowUp,
-  Sparkles,
+  Eraser,
   Trash2,
   Zap,
-  Info,
-  Eraser,
+  Sparkles,
 } from "lucide-react";
 import { useAgentChat } from "../../hooks/useAgentChat";
 import { useTheme } from "../../hooks/useTheme";
@@ -87,14 +86,11 @@ export function AgentChatPanel({
     isPlanning,
     isExecuting,
     currentPlan,
-    sendInstruction,
-    streamChat,
     executePlan,
-    executeDiscussedPlan,
     executeToolCalls,
+    runNativeAgent,
     clearMessages,
     clearMessagesAndContext,
-    runNativeAgent,
   } = useAgentChat();
 
   const isProcessing = isPlanning || isExecuting;
@@ -109,90 +105,21 @@ export function AgentChatPanel({
     const instruction = input.trim();
     setInput("");
 
-    if (isNativeMode) {
-      await runNativeAgent(
-        instruction,
-        currentModelId,
-        workspacePath,
-        selectedAgentId || undefined,
-      );
-      return;
-    }
-
-    const selectedSpec = agentSpecs.find((s) => s.id === selectedAgentId);
-    const selectedAgentContext = selectedSpec
-      ? `[ACTIVE AGENT PROFILE]
-Name: ${selectedSpec.soul.name}
-Description: ${selectedSpec.soul.description}
-Personality: ${selectedSpec.soul.personality}
-Tone: ${selectedSpec.soul.tone}
-Soul:
-${selectedSpec.soul.soul_content}`
-      : undefined;
-
-    // In Deep Mode, inject system context that tells AI about our specific file tools
-    const hiddenContext = isDeepProcessing
-      ? `[SYSTEM: You are a Planning Agent with access to these FILE OPERATIONS:
-- write_file(path, content) - Creates or overwrites a file
-- append_file(path, content) - Appends content to a file
-- read_file(path) - Reads file contents
-- list_files(path) - Lists files in a directory
-- search_files(query, path) - Searches for content in files
-
-IMPORTANT: When the user asks you to create/modify/read files, propose a plan using THESE EXACT OPERATIONS.
-DO NOT suggest shell commands like 'touch', 'echo', 'mkdir'. Use our tools instead.
-After you propose the plan, the user will click "Execute Task" to run it.
-
-Example: If user says "create a test file", respond with:
-"I'll use write_file to create the file with the content you need.
-
-**Plan:**
-1. write_file("test.txt", "Hello World")
-
-Click 'Execute Task' when ready."]`
-      : undefined;
-
-    const mergedHiddenContext =
-      selectedAgentContext && hiddenContext
-        ? `${selectedAgentContext}\n\n${hiddenContext}`
-        : (selectedAgentContext ?? hiddenContext);
-
-    await streamChat(instruction, currentModelId, mergedHiddenContext);
-  };
-
-  const handlePlan = async () => {
-    // If in Deep Mode, we execute the plan from the chat discussion
-    if (isDeepProcessing) {
-      // We don't need input for execution if we have chat history
-      if (messages.length > 0) {
-        await executeDiscussedPlan(workspacePath, currentModelId);
-        return;
-      }
-    }
-
-    // Legacy/Fallback Plan Mode (creates task from input)
-    if (!input.trim() || isProcessing) return;
-    const instruction = input.trim();
-    setInput("");
-    await sendInstruction(instruction, workspacePath, currentModelId);
+    // Always use Native Agent
+    await runNativeAgent(
+      instruction,
+      currentModelId,
+      workspacePath,
+      selectedAgentId || undefined,
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      // If Deep Processing is on, we still default to Chat for "Ask before Plan"
-      // But maybe we allow generic Cmd+Enter to force Plan?
-      if ((e.metaKey || e.ctrlKey) && isDeepProcessing) {
-        handlePlan();
-      } else {
-        handleSubmit();
-      }
+      handleSubmit();
     }
   };
-
-  // Dynamic state for processing mode
-  const [isDeepProcessing, setIsDeepProcessing] = useState(false);
-  const [isNativeMode, setIsNativeMode] = useState(true);
 
   const renderInputArea = (centered: boolean) => (
     <div
@@ -201,21 +128,13 @@ Click 'Execute Task' when ready."]`
       }`}
     >
       <div
-        className={`relative group rounded-[28px] border transition-all duration-300 ${
-          isDeepProcessing
-            ? "bg-background/40 backdrop-blur-xl border-white/10 shadow-xl shadow-purple-500/5"
-            : "bg-background/40 backdrop-blur-xl border-white/10 shadow-lg"
-        }`}
+        className={`relative group rounded-[28px] border transition-all duration-300 bg-background/40 backdrop-blur-xl border-white/10 shadow-lg`}
       >
         <TextArea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            isDeepProcessing
-              ? "Discuss a complex task (⌘+Enter to Plan)..."
-              : "Message Agent..."
-          }
+          placeholder="Message Agent..."
           rows={centered ? 2 : 1}
           className={`w-full bg-transparent border-none shadow-none text-foreground placeholder:text-muted-foreground/40 focus:ring-0 px-5 py-4 resize-none ${
             centered
@@ -243,79 +162,9 @@ Click 'Execute Task' when ready."]`
                 <span className="text-xs">Attach files</span>
               </TooltipContent>
             </Tooltip>
-
-            {/* Deep Think Toggle */}
-            <Tooltip delay={0}>
-              <TooltipTrigger>
-                <button
-                  onClick={() => setIsDeepProcessing(!isDeepProcessing)}
-                  className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all duration-300 ${
-                    isDeepProcessing
-                      ? "bg-purple-500/10 border-purple-500/20 text-purple-400"
-                      : "bg-transparent border-transparent text-muted-foreground/50 hover:bg-muted/30"
-                  }`}
-                >
-                  <Sparkles
-                    className={`size-3 ${isDeepProcessing ? "text-purple-400" : "text-current"}`}
-                  />
-                  <span className="text-[10px] font-medium">Deep Mode</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <span className="text-xs">
-                  Enable advanced reasoning (Chat first, Plan optionally)
-                </span>
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Native Agent Toggle */}
-            <Tooltip delay={0}>
-              <TooltipTrigger>
-                <button
-                  onClick={() => setIsNativeMode(!isNativeMode)}
-                  className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all duration-300 ${
-                    isNativeMode
-                      ? "bg-green-500/10 border-green-500/20 text-green-400"
-                      : "bg-transparent border-transparent text-muted-foreground/50 hover:bg-muted/30"
-                  }`}
-                >
-                  <Zap
-                    className={`size-3 ${isNativeMode ? "text-green-400" : "text-current"}`}
-                  />
-                  <span className="text-[10px] font-medium">
-                    Native Runtime
-                  </span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <span className="text-xs">
-                  Run Autonomous Agent directly on Rust Runtime
-                </span>
-              </TooltipContent>
-            </Tooltip>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Explicit Plan Button (Visible in Deep Mode or if text > 10 chars) */}
-            {(isDeepProcessing || input.length > 10) && (
-              <Button
-                size="sm"
-                onPress={handlePlan}
-                isDisabled={
-                  isDeepProcessing
-                    ? isProcessing || messages.length === 0
-                    : !input.trim() || isProcessing
-                }
-                className={`rounded-full h-8 px-3 text-xs font-medium transition-all duration-300 ${
-                  isDeepProcessing
-                    ? "bg-purple-500/10 text-purple-400 hover:bg-purple-500/20"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                {isDeepProcessing ? "Execute Task" : "Plan Task"}
-              </Button>
-            )}
-
             <Button
               size="sm"
               isIconOnly
@@ -324,9 +173,7 @@ Click 'Execute Task' when ready."]`
               isPending={isProcessing}
               className={`rounded-full transition-all duration-300 shadow-sm ${
                 input.trim()
-                  ? isDeepProcessing
-                    ? "bg-purple-600 hover:bg-purple-500 text-white scale-100 opacity-100 translate-y-0"
-                    : "bg-foreground text-background scale-100 opacity-100 translate-y-0"
+                  ? "bg-foreground text-background scale-100 opacity-100 translate-y-0"
                   : "bg-muted text-muted-foreground scale-90 opacity-0 translate-y-2 pointer-events-none"
               }`}
             >
@@ -335,14 +182,6 @@ Click 'Execute Task' when ready."]`
           </div>
         </div>
       </div>
-      {isDeepProcessing && centered && (
-        <div className="mt-2 text-center">
-          <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
-            <Info className="size-3" />
-            Deep Mode: Chat to analyze & plan (Enter). Cmd+Enter to execute.
-          </p>
-        </div>
-      )}
     </div>
   );
 
@@ -466,30 +305,8 @@ Click 'Execute Task' when ready."]`
               {renderInputArea(true)}
 
               {/* Suggestions */}
-              <div className="mt-12 grid grid-cols-2 gap-4 max-w-lg w-full px-4 mb-20">
-                <SuggestionCard
-                  icon={<Zap className="text-amber-400" />}
-                  title="Quick Question"
-                  desc="Fast answers using lightweight models"
-                  onClick={() => {
-                    const fastModel = "gemini-2.5-flash";
-                    handleModelSelect(fastModel);
-                    setIsDeepProcessing(false);
-                    setInput("How do I...");
-                  }}
-                />
-                <SuggestionCard
-                  icon={<Sparkles className="text-indigo-400" />}
-                  title="Deep Analysis"
-                  desc="Complex tasks using reasoning models"
-                  onClick={() => {
-                    const deepModel = "gemini-2.5-pro";
-                    handleModelSelect(deepModel);
-                    setIsDeepProcessing(true);
-                    setInput("Analyze this project and...");
-                  }}
-                />
-              </div>
+              {/* <div className="mt-12 grid grid-cols-2 gap-4 max-w-lg w-full px-4 mb-20">
+              </div> */}
             </div>
           ) : (
             <div className="space-y-8">
@@ -519,39 +336,5 @@ Click 'Execute Task' when ready."]`
         </div>
       )}
     </div>
-  );
-}
-
-function SuggestionCard({
-  icon,
-  title,
-  desc,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-col gap-2 p-5 rounded-2xl bg-white/5 hover:bg-white/10 hover:scale-[1.02] border border-white/5 hover:border-white/10 transition-all text-left group backdrop-blur-sm"
-    >
-      <div className="size-10 rounded-xl bg-background/50 flex items-center justify-center mb-1 group-hover:bg-background transition-colors shadow-sm">
-        {React.cloneElement(
-          icon as React.ReactElement<{ className?: string }>,
-          {
-            className: "size-5",
-          },
-        )}
-      </div>
-      <div>
-        <span className="block text-sm font-medium mb-0.5">{title}</span>
-        <span className="text-xs text-muted-foreground/80 font-light leading-relaxed">
-          {desc}
-        </span>
-      </div>
-    </button>
   );
 }
