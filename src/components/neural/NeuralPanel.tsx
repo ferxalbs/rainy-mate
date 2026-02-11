@@ -70,7 +70,6 @@ import { useAirlock } from "../../hooks/useAirlock";
 import { DEFAULT_NEURAL_SKILLS } from "../../constants/defaultNeuralSkills";
 import { AgentList } from "./AgentList";
 import { CreateAgentForm } from "./CreateAgentForm";
-import { AgentRuntimePanel } from "./AgentRuntimePanel";
 
 type NeuralState = "idle" | "restored" | "connected" | "connecting";
 type AlertSeverity = "normal" | "warn" | "critical";
@@ -172,9 +171,7 @@ export function NeuralPanel() {
   const { pendingRequests: pendingApprovals, respond: respondAirlock } =
     useAirlock();
   const [hasAtmKey, setHasAtmKey] = useState<boolean | null>(null);
-  const [activeView, setActiveView] = useState<"dashboard" | "runtime">(
-    "dashboard",
-  );
+
   const [recentCommands, setRecentCommands] = useState<AtmCommandSummary[]>([]);
   const [selectedCommandId, setSelectedCommandId] = useState<string | null>(
     null,
@@ -1138,1134 +1135,1091 @@ export function NeuralPanel() {
           {state === "connected" && workspace && (
             <div className="animate-appear space-y-6">
               {/* View Switcher */}
-              <div className="flex justify-center">
-                <div className="bg-white/5 p-1 rounded-lg flex items-center gap-1 border border-white/5">
-                  <Button
-                    size="sm"
-                    variant={activeView === "dashboard" ? "primary" : "ghost"}
-                    onPress={() => setActiveView("dashboard")}
-                    className="h-8"
-                  >
-                    Dashboard
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={activeView === "runtime" ? "primary" : "ghost"}
-                    onPress={() => setActiveView("runtime")}
-                    className="h-8"
-                  >
-                    Agent Runtime
-                  </Button>
-                </div>
-              </div>
 
-              {activeView === "runtime" ? (
-                <div className="h-[600px] animate-appear">
-                  <AgentRuntimePanel workspaceId={workspace.id} />
-                </div>
-              ) : (
-                <div className="space-y-12">
-                  {/* Workspace Info & Quick Stats */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {/* Info Column */}
-                    <div className="md:col-span-2 space-y-6">
-                      <div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <h2 className="text-4xl font-light tracking-tight text-foreground">
-                            {workspace.name}
-                          </h2>
-                          <Chip
-                            color="success"
-                            size="sm"
-                            variant="soft"
-                            className="bg-green-500/10 text-green-500"
-                          >
-                            Active
-                          </Chip>
-                        </div>
-                        <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-                          <span>ID: {workspace.id}</span>
-                          <span className="text-border/40">|</span>
-                          <span>NODE: Desktop_v2</span>
-                          <span className="text-border/40">|</span>
-                          <span className="flex items-center gap-1 text-green-500/80">
-                            <Shield className="size-3" /> Encrypted
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-4">
-                        <Button
-                          variant="outline"
+              <div className="space-y-12">
+                {/* Workspace Info & Quick Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  {/* Info Column */}
+                  <div className="md:col-span-2 space-y-6">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <h2 className="text-4xl font-light tracking-tight text-foreground">
+                          {workspace.name}
+                        </h2>
+                        <Chip
+                          color="success"
                           size="sm"
-                          className="border-white/10 hover:bg-white/5 bg-transparent"
+                          variant="soft"
+                          className="bg-green-500/10 text-green-500"
                         >
-                          <ExternalLink className="size-3 mr-2 opacity-50" />
-                          View in Cloud
-                        </Button>
+                          Active
+                        </Chip>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
+                        <span>ID: {workspace.id}</span>
+                        <span className="text-border/40">|</span>
+                        <span>NODE: Desktop_v2</span>
+                        <span className="text-border/40">|</span>
+                        <span className="flex items-center gap-1 text-green-500/80">
+                          <Shield className="size-3" /> Encrypted
+                        </span>
                       </div>
                     </div>
 
-                    {/* Settings Column */}
-                    <div className="flex flex-col gap-4 justify-center md:items-end font-sans">
-                      {/* Headless Toggle */}
-                      <div className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-default-100/40 hover:bg-default-100/60 transition-all border border-white/5 hover:border-white/10 w-full backdrop-blur-xl group">
-                        <div className="flex items-center gap-4">
-                          <div className="size-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-                            <Shield className="size-5" />
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-sm font-semibold text-foreground">
-                              Headless Mode
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
-                              {isHeadless ? "Active" : "Disabled"}
-                            </span>
-                          </div>
-                        </div>
-                        <Switch
-                          isSelected={isHeadless}
-                          onChange={handleToggleHeadless}
-                          size="lg"
-                          className="group-data-[selected=true]:bg-purple-500"
-                        />
-                      </div>
+                    <div className="flex gap-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-white/10 hover:bg-white/5 bg-transparent"
+                      >
+                        <ExternalLink className="size-3 mr-2 opacity-50" />
+                        View in Cloud
+                      </Button>
+                    </div>
+                  </div>
 
-                      {/* Mobile Link */}
-                      <div className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-default-100/40 hover:bg-default-100/60 transition-all border border-white/5 hover:border-white/10 w-full backdrop-blur-xl group">
-                        <div className="flex items-center gap-4">
-                          <div className="size-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                            <Smartphone className="size-5" />
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-sm font-semibold text-foreground">
-                              Mobile Link
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
-                              Remote Access
-                            </span>
-                          </div>
+                  {/* Settings Column */}
+                  <div className="flex flex-col gap-4 justify-center md:items-end font-sans">
+                    {/* Headless Toggle */}
+                    <div className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-default-100/40 hover:bg-default-100/60 transition-all border border-white/5 hover:border-white/10 w-full backdrop-blur-xl group">
+                      <div className="flex items-center gap-4">
+                        <div className="size-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                          <Shield className="size-5" />
                         </div>
-                        {pairingCode ? (
-                          <div className="flex flex-col items-end">
-                            <span className="font-mono text-xl font-bold text-blue-400 tracking-widest">
-                              {pairingCode}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              Expires in 5m
-                            </span>
-                          </div>
-                        ) : (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-semibold text-foreground">
+                            Headless Mode
+                          </span>
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                            {isHeadless ? "Active" : "Disabled"}
+                          </span>
+                        </div>
+                      </div>
+                      <Switch
+                        isSelected={isHeadless}
+                        onChange={handleToggleHeadless}
+                        size="lg"
+                        className="group-data-[selected=true]:bg-purple-500"
+                      />
+                    </div>
+
+                    {/* Mobile Link */}
+                    <div className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-default-100/40 hover:bg-default-100/60 transition-all border border-white/5 hover:border-white/10 w-full backdrop-blur-xl group">
+                      <div className="flex items-center gap-4">
+                        <div className="size-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                          <Smartphone className="size-5" />
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-semibold text-foreground">
+                            Mobile Link
+                          </span>
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                            Remote Access
+                          </span>
+                        </div>
+                      </div>
+                      {pairingCode ? (
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono text-xl font-bold text-blue-400 tracking-widest">
+                            {pairingCode}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            Expires in 5m
+                          </span>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="font-semibold text-primary"
+                          onPress={handleGeneratePairingCode}
+                        >
+                          Generate
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <Separator className="opacity-20" />
+
+                {/* Agents Section - Clean List */}
+                <div className="space-y-6">
+                  {/* Agent List Container - Transparent */}
+                  <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md overflow-hidden p-1">
+                    <AgentList
+                      onCreateClick={() => setIsCreatingAgent(true)}
+                      refreshToken={agentsRefreshToken}
+                    />
+                  </div>
+                </div>
+
+                {/* Command Stream Section */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <RefreshCw className="size-4 text-blue-500" />
+                      Command Stream
+                    </h3>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onPress={refreshRecentCommands}
+                      isDisabled={isLoadingCommands}
+                    >
+                      {isLoadingCommands ? "Refreshing..." : "Refresh"}
+                    </Button>
+                  </div>
+
+                  <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 space-y-3">
+                    <div className="rounded-lg border border-white/5 bg-background/30 p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                          Admin Policy (Owner Auth)
+                        </span>
+                        <div className="flex items-center gap-2">
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="font-semibold text-primary"
-                            onPress={handleGeneratePairingCode}
+                            onPress={handleSavePermissions}
+                            isDisabled={isSavingPermissions}
                           >
-                            Generate
+                            {isSavingPermissions
+                              ? "Saving..."
+                              : "Save Admin Policy"}
                           </Button>
-                        )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onPress={handleSaveToolPolicy}
+                            isDisabled={isSavingToolPolicy}
+                          >
+                            {isSavingToolPolicy
+                              ? "Saving..."
+                              : "Save Tool Policy"}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-
-                  <Separator className="opacity-20" />
-
-                  {/* Agents Section - Clean List */}
-                  <div className="space-y-6">
-                    {/* Agent List Container - Transparent */}
-                    <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md overflow-hidden p-1">
-                      <AgentList
-                        onCreateClick={() => setIsCreatingAgent(true)}
-                        refreshToken={agentsRefreshToken}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Command Stream Section */}
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold flex items-center gap-2">
-                        <RefreshCw className="size-4 text-blue-500" />
-                        Command Stream
-                      </h3>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onPress={refreshRecentCommands}
-                        isDisabled={isLoadingCommands}
-                      >
-                        {isLoadingCommands ? "Refreshing..." : "Refresh"}
-                      </Button>
-                    </div>
-
-                    <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 space-y-3">
-                      <div className="rounded-lg border border-white/5 bg-background/30 p-3 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                          <span className="text-xs text-muted-foreground">
+                            Allow SLO edits
+                          </span>
+                          <Switch
+                            size="sm"
+                            isSelected={permissionDraft.canEditSlo}
+                            onChange={(enabled) =>
+                              setPermissionDraft((prev) => ({
+                                ...prev,
+                                canEditSlo: enabled,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                          <span className="text-xs text-muted-foreground">
+                            Allow alert ack
+                          </span>
+                          <Switch
+                            size="sm"
+                            isSelected={permissionDraft.canAckAlerts}
+                            onChange={(enabled) =>
+                              setPermissionDraft((prev) => ({
+                                ...prev,
+                                canAckAlerts: enabled,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                          <span className="text-xs text-muted-foreground">
+                            Allow retention edits
+                          </span>
+                          <Switch
+                            size="sm"
+                            isSelected={permissionDraft.canEditAlertRetention}
+                            onChange={(enabled) =>
+                              setPermissionDraft((prev) => ({
+                                ...prev,
+                                canEditAlertRetention: enabled,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
+                          <span className="text-xs text-muted-foreground">
+                            Allow cleanup runs
+                          </span>
+                          <Switch
+                            size="sm"
+                            isSelected={permissionDraft.canRunAlertCleanup}
+                            onChange={(enabled) =>
+                              setPermissionDraft((prev) => ({
+                                ...prev,
+                                canRunAlertCleanup: enabled,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="rounded-md border border-white/5 bg-background/20 p-3 space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                            Admin Policy (Owner Auth)
+                          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                            Tool Access Policy
                           </span>
                           <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onPress={handleSavePermissions}
-                              isDisabled={isSavingPermissions}
-                            >
-                              {isSavingPermissions
-                                ? "Saving..."
-                                : "Save Admin Policy"}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onPress={handleSaveToolPolicy}
-                              isDisabled={isSavingToolPolicy}
-                            >
-                              {isSavingToolPolicy
-                                ? "Saving..."
-                                : "Save Tool Policy"}
-                            </Button>
+                            <Chip size="sm" variant="soft">
+                              v{toolPolicyVersion}
+                            </Chip>
+                            <Chip size="sm" variant="soft">
+                              Deny-first
+                            </Chip>
                           </div>
+                        </div>
+                        <div className="text-[10px] font-mono text-muted-foreground break-all">
+                          hash: {toolPolicyHash || "n/a"}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
                             <span className="text-xs text-muted-foreground">
-                              Allow SLO edits
+                              Tools enabled
                             </span>
                             <Switch
                               size="sm"
-                              isSelected={permissionDraft.canEditSlo}
+                              isSelected={toolPolicyDraft.enabled}
                               onChange={(enabled) =>
-                                setPermissionDraft((prev) => ({
+                                setToolPolicyDraft((prev) => ({
                                   ...prev,
-                                  canEditSlo: enabled,
+                                  enabled,
                                 }))
                               }
                             />
                           </div>
                           <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
                             <span className="text-xs text-muted-foreground">
-                              Allow alert ack
+                              Mode
                             </span>
-                            <Switch
-                              size="sm"
-                              isSelected={permissionDraft.canAckAlerts}
-                              onChange={(enabled) =>
-                                setPermissionDraft((prev) => ({
-                                  ...prev,
-                                  canAckAlerts: enabled,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
-                            <span className="text-xs text-muted-foreground">
-                              Allow retention edits
-                            </span>
-                            <Switch
-                              size="sm"
-                              isSelected={permissionDraft.canEditAlertRetention}
-                              onChange={(enabled) =>
-                                setPermissionDraft((prev) => ({
-                                  ...prev,
-                                  canEditAlertRetention: enabled,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
-                            <span className="text-xs text-muted-foreground">
-                              Allow cleanup runs
-                            </span>
-                            <Switch
-                              size="sm"
-                              isSelected={permissionDraft.canRunAlertCleanup}
-                              onChange={(enabled) =>
-                                setPermissionDraft((prev) => ({
-                                  ...prev,
-                                  canRunAlertCleanup: enabled,
-                                }))
-                              }
-                            />
-                          </div>
-                        </div>
-                        <div className="rounded-md border border-white/5 bg-background/20 p-3 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                              Tool Access Policy
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <Chip size="sm" variant="soft">
-                                v{toolPolicyVersion}
-                              </Chip>
-                              <Chip size="sm" variant="soft">
-                                Deny-first
-                              </Chip>
-                            </div>
-                          </div>
-                          <div className="text-[10px] font-mono text-muted-foreground break-all">
-                            hash: {toolPolicyHash || "n/a"}
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
-                              <span className="text-xs text-muted-foreground">
-                                Tools enabled
-                              </span>
-                              <Switch
+                            <div className="flex items-center gap-1">
+                              <Button
                                 size="sm"
-                                isSelected={toolPolicyDraft.enabled}
-                                onChange={(enabled) =>
+                                variant={
+                                  toolPolicyDraft.mode === "all"
+                                    ? "primary"
+                                    : "ghost"
+                                }
+                                className="text-[10px]"
+                                onPress={() =>
                                   setToolPolicyDraft((prev) => ({
                                     ...prev,
-                                    enabled,
+                                    mode: "all",
                                   }))
                                 }
-                              />
+                              >
+                                All
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={
+                                  toolPolicyDraft.mode === "allowlist"
+                                    ? "primary"
+                                    : "ghost"
+                                }
+                                className="text-[10px]"
+                                onPress={() =>
+                                  setToolPolicyDraft((prev) => ({
+                                    ...prev,
+                                    mode: "allowlist",
+                                  }))
+                                }
+                              >
+                                Allowlist
+                              </Button>
                             </div>
-                            <div className="flex items-center justify-between rounded-md border border-white/5 px-3 py-2">
-                              <span className="text-xs text-muted-foreground">
-                                Mode
-                              </span>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  size="sm"
-                                  variant={
-                                    toolPolicyDraft.mode === "all"
-                                      ? "primary"
-                                      : "ghost"
-                                  }
-                                  className="text-[10px]"
-                                  onPress={() =>
-                                    setToolPolicyDraft((prev) => ({
-                                      ...prev,
-                                      mode: "all",
-                                    }))
-                                  }
-                                >
-                                  All
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant={
-                                    toolPolicyDraft.mode === "allowlist"
-                                      ? "primary"
-                                      : "ghost"
-                                  }
-                                  className="text-[10px]"
-                                  onPress={() =>
-                                    setToolPolicyDraft((prev) => ({
-                                      ...prev,
-                                      mode: "allowlist",
-                                    }))
-                                  }
-                                >
-                                  Allowlist
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Input
-                              value={allowInput}
-                              onChange={(e) => setAllowInput(e.target.value)}
-                              placeholder="Allow list (comma-separated)"
-                            />
-                            <Input
-                              value={denyInput}
-                              onChange={(e) => setDenyInput(e.target.value)}
-                              placeholder="Deny list (comma-separated)"
-                            />
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                              Policy Audit
-                            </span>
-                            <span className="text-[10px] text-muted-foreground font-mono">
-                              {isLoadingPolicyAudit
-                                ? "loading..."
-                                : `${policyAuditEvents.length} events`}
-                            </span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <Input
+                            value={allowInput}
+                            onChange={(e) => setAllowInput(e.target.value)}
+                            placeholder="Allow list (comma-separated)"
+                          />
+                          <Input
+                            value={denyInput}
+                            onChange={(e) => setDenyInput(e.target.value)}
+                            placeholder="Deny list (comma-separated)"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                            Policy Audit
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {isLoadingPolicyAudit
+                              ? "loading..."
+                              : `${policyAuditEvents.length} events`}
+                          </span>
+                        </div>
+                        {policyAuditEvents.length === 0 ? (
+                          <div className="text-[11px] text-muted-foreground">
+                            No policy changes recorded yet.
                           </div>
-                          {policyAuditEvents.length === 0 ? (
-                            <div className="text-[11px] text-muted-foreground">
-                              No policy changes recorded yet.
-                            </div>
-                          ) : (
-                            <div className="space-y-1.5 max-h-28 overflow-y-auto">
-                              {policyAuditEvents.slice(0, 5).map((event) => (
-                                <div
-                                  key={event.id}
-                                  className="rounded-md border border-white/5 bg-white/5 px-2 py-1.5"
-                                >
-                                  <div className="text-[11px] text-foreground">
-                                    {event.eventType}
-                                  </div>
-                                  <div className="text-[10px] text-muted-foreground font-mono">
-                                    {event.actor} -{" "}
-                                    {new Date(event.createdAt).toLocaleString()}
-                                  </div>
-                                  {event.metadata?.changedKeys &&
-                                    Array.isArray(event.metadata.changedKeys) &&
-                                    event.metadata.changedKeys.length > 0 && (
-                                      <div className="mt-1.5 space-y-1">
-                                        {(
-                                          event.metadata.changedKeys as string[]
-                                        ).map((key) => (
-                                          <div
-                                            key={`${event.id}-${key}`}
-                                            className="text-[10px] text-muted-foreground"
-                                          >
-                                            {key}:{" "}
-                                            {formatPolicyValue(
-                                              (
-                                                event.previous as Record<
-                                                  string,
-                                                  unknown
-                                                > | null
-                                              )?.[key],
-                                            )}
-                                            {" -> "}
-                                            {formatPolicyValue(
-                                              (
-                                                event.next as Record<
-                                                  string,
-                                                  unknown
-                                                > | null
-                                              )?.[key],
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
+                        ) : (
+                          <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                            {policyAuditEvents.slice(0, 5).map((event) => (
+                              <div
+                                key={event.id}
+                                className="rounded-md border border-white/5 bg-white/5 px-2 py-1.5"
+                              >
+                                <div className="text-[11px] text-foreground">
+                                  {event.eventType}
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                          SLO Thresholds
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onPress={handleSaveSloThresholds}
-                          isDisabled={
-                            isSavingSlo || !adminPermissions.canEditSlo
-                          }
-                        >
-                          {isSavingSlo ? "Saving..." : "Save Thresholds"}
-                        </Button>
-                      </div>
-                      {!adminPermissions.canEditSlo && (
-                        <div className="text-[11px] text-muted-foreground">
-                          SLO editing is disabled by workspace policy.
-                        </div>
-                      )}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        <Input
-                          type="number"
-                          placeholder="Err Warn %"
-                          value={String(sloThresholds.endpointErrorRateWarn)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointErrorRateWarn",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Err Critical %"
-                          value={String(
-                            sloThresholds.endpointErrorRateCritical,
-                          )}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointErrorRateCritical",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="P95 Warn ms"
-                          value={String(sloThresholds.endpointP95WarnMs)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointP95WarnMs",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="P95 Critical ms"
-                          value={String(sloThresholds.endpointP95CriticalMs)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointP95CriticalMs",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="SLO Err %"
-                          value={String(
-                            sloThresholds.endpointSloErrorRateTarget,
-                          )}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointSloErrorRateTarget",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="SLO P95 ms"
-                          value={String(sloThresholds.endpointSloP95TargetMs)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointSloP95TargetMs",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Reg Err Factor"
-                          value={String(
-                            sloThresholds.endpointRegressionErrorRateFactor,
-                          )}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointRegressionErrorRateFactor",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Reg Err Delta"
-                          value={String(
-                            sloThresholds.endpointRegressionErrorRateDelta,
-                          )}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointRegressionErrorRateDelta",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Reg P95 Factor"
-                          value={String(
-                            sloThresholds.endpointRegressionP95Factor,
-                          )}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointRegressionP95Factor",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Reg P95 Delta"
-                          value={String(
-                            sloThresholds.endpointRegressionP95DeltaMs,
-                          )}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "endpointRegressionP95DeltaMs",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Timeout Warn"
-                          value={String(sloThresholds.failureTimeoutWarn)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "failureTimeoutWarn",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Timeout Critical"
-                          value={String(sloThresholds.failureTimeoutCritical)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "failureTimeoutCritical",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Runtime Warn"
-                          value={String(sloThresholds.failureRuntimeWarn)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "failureRuntimeWarn",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Runtime Critical"
-                          value={String(sloThresholds.failureRuntimeCritical)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "failureRuntimeCritical",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Transport Warn"
-                          value={String(sloThresholds.failureTransportWarn)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "failureTransportWarn",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Transport Critical"
-                          value={String(sloThresholds.failureTransportCritical)}
-                          onChange={(e) =>
-                            handleSloInputChange(
-                              "failureTransportCritical",
-                              e.target.value,
-                            )
-                          }
-                        />
+                                <div className="text-[10px] text-muted-foreground font-mono">
+                                  {event.actor} -{" "}
+                                  {new Date(event.createdAt).toLocaleString()}
+                                </div>
+                                {event.metadata?.changedKeys &&
+                                  Array.isArray(event.metadata.changedKeys) &&
+                                  event.metadata.changedKeys.length > 0 && (
+                                    <div className="mt-1.5 space-y-1">
+                                      {(
+                                        event.metadata.changedKeys as string[]
+                                      ).map((key) => (
+                                        <div
+                                          key={`${event.id}-${key}`}
+                                          className="text-[10px] text-muted-foreground"
+                                        >
+                                          {key}:{" "}
+                                          {formatPolicyValue(
+                                            (
+                                              event.previous as Record<
+                                                string,
+                                                unknown
+                                              > | null
+                                            )?.[key],
+                                          )}
+                                          {" -> "}
+                                          {formatPolicyValue(
+                                            (
+                                              event.next as Record<
+                                                string,
+                                                unknown
+                                              > | null
+                                            )?.[key],
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {workspaceCommandMetrics && (
-                      <div
-                        className={`rounded-xl border backdrop-blur-md p-3 space-y-2 ${severityClass(workspaceFailureSeverity)}`}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                        SLO Thresholds
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onPress={handleSaveSloThresholds}
+                        isDisabled={isSavingSlo || !adminPermissions.canEditSlo}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                            Workspace Metrics
-                          </span>
-                          <span className="text-[11px] text-muted-foreground font-mono">
-                            {(
-                              workspaceCommandMetrics.windowMs /
-                              (60 * 60 * 1000)
-                            ).toFixed(0)}
-                            h window
-                          </span>
-                        </div>
-                        {workspaceFailureSeverity !== "normal" && (
-                          <div
-                            className={`flex items-center gap-2 text-xs ${
-                              workspaceFailureSeverity === "critical"
-                                ? "text-red-400"
-                                : "text-orange-400"
-                            }`}
-                          >
-                            <AlertTriangle className="size-3.5" />
-                            {workspaceFailureSeverity === "critical"
-                              ? "Failure spike detected"
-                              : "Failure rate elevated"}
-                          </div>
+                        {isSavingSlo ? "Saving..." : "Save Thresholds"}
+                      </Button>
+                    </div>
+                    {!adminPermissions.canEditSlo && (
+                      <div className="text-[11px] text-muted-foreground">
+                        SLO editing is disabled by workspace policy.
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Err Warn %"
+                        value={String(sloThresholds.endpointErrorRateWarn)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointErrorRateWarn",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Err Critical %"
+                        value={String(sloThresholds.endpointErrorRateCritical)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointErrorRateCritical",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="P95 Warn ms"
+                        value={String(sloThresholds.endpointP95WarnMs)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointP95WarnMs",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="P95 Critical ms"
+                        value={String(sloThresholds.endpointP95CriticalMs)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointP95CriticalMs",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="SLO Err %"
+                        value={String(sloThresholds.endpointSloErrorRateTarget)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointSloErrorRateTarget",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="SLO P95 ms"
+                        value={String(sloThresholds.endpointSloP95TargetMs)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointSloP95TargetMs",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Reg Err Factor"
+                        value={String(
+                          sloThresholds.endpointRegressionErrorRateFactor,
                         )}
-                        <div className="flex flex-wrap gap-2">
-                          <Chip size="sm" variant="soft">
-                            timeout:{" "}
-                            {workspaceCommandMetrics.failureBuckets.timeout ||
-                              0}
-                          </Chip>
-                          <Chip size="sm" variant="soft">
-                            airlock:{" "}
-                            {workspaceCommandMetrics.failureBuckets
-                              .airlock_rejected || 0}
-                          </Chip>
-                          <Chip size="sm" variant="soft">
-                            runtime:{" "}
-                            {workspaceCommandMetrics.failureBuckets
-                              .runtime_error || 0}
-                          </Chip>
-                          <Chip size="sm" variant="soft">
-                            transport:{" "}
-                            {workspaceCommandMetrics.failureBuckets
-                              .transport_error || 0}
-                          </Chip>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
-                          <div>
-                            queue:{" "}
-                            {formatMs(
-                              workspaceCommandMetrics.averages.queueDelayMs,
-                            )}
-                          </div>
-                          <div>
-                            run:{" "}
-                            {formatMs(
-                              workspaceCommandMetrics.averages.runDurationMs,
-                            )}
-                          </div>
-                          <div>
-                            total:{" "}
-                            {formatMs(
-                              workspaceCommandMetrics.averages.totalDurationMs,
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointRegressionErrorRateFactor",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Reg Err Delta"
+                        value={String(
+                          sloThresholds.endpointRegressionErrorRateDelta,
+                        )}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointRegressionErrorRateDelta",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Reg P95 Factor"
+                        value={String(
+                          sloThresholds.endpointRegressionP95Factor,
+                        )}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointRegressionP95Factor",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Reg P95 Delta"
+                        value={String(
+                          sloThresholds.endpointRegressionP95DeltaMs,
+                        )}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "endpointRegressionP95DeltaMs",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Timeout Warn"
+                        value={String(sloThresholds.failureTimeoutWarn)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "failureTimeoutWarn",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Timeout Critical"
+                        value={String(sloThresholds.failureTimeoutCritical)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "failureTimeoutCritical",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Runtime Warn"
+                        value={String(sloThresholds.failureRuntimeWarn)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "failureRuntimeWarn",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Runtime Critical"
+                        value={String(sloThresholds.failureRuntimeCritical)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "failureRuntimeCritical",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Transport Warn"
+                        value={String(sloThresholds.failureTransportWarn)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "failureTransportWarn",
+                            e.target.value,
+                          )
+                        }
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Transport Critical"
+                        value={String(sloThresholds.failureTransportCritical)}
+                        onChange={(e) =>
+                          handleSloInputChange(
+                            "failureTransportCritical",
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
 
-                    {endpointMetrics &&
-                      endpointMetrics.endpoints.length > 0 && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                          {endpointMetrics.endpoints.map((metric) => {
-                            const p95 =
-                              metric.latency.p95TotalMs ??
-                              metric.latency.p95RunMs;
-                            const avg =
-                              metric.latency.avgTotalMs ??
-                              metric.latency.avgRunMs;
-                            const severity = classifyEndpointSeverity(
-                              metric.errorRate,
-                              p95,
-                            );
-                            return (
-                              <div
-                                key={metric.key}
-                                className={`rounded-xl border backdrop-blur-md p-3 space-y-1.5 ${severityClass(severity)}`}
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                                    {metric.label}
-                                  </div>
-                                  {severity !== "normal" && (
-                                    <Chip
-                                      size="sm"
-                                      variant="soft"
-                                      className={
-                                        severity === "critical"
-                                          ? "bg-red-500/20 text-red-300 border-red-500/30"
-                                          : "bg-orange-500/20 text-orange-300 border-orange-500/30"
-                                      }
-                                    >
-                                      {severity}
-                                    </Chip>
-                                  )}
-                                </div>
-                                <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-muted-foreground">
-                                  <div>req: {metric.requests}</div>
-                                  <div>
-                                    rate: {formatRate(metric.ratePerSecond)}
-                                  </div>
-                                  <div>ok: {formatPct(metric.successRate)}</div>
-                                  <div>err: {formatPct(metric.errorRate)}</div>
-                                  <div>p95: {formatMs(p95)}</div>
-                                  <div>avg: {formatMs(avg)}</div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                    {endpointAlerts.length > 0 && (
-                      <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 backdrop-blur-md p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-xs text-orange-300">
-                          <AlertTriangle className="size-3.5" />
-                          Endpoint SLO/regression alerts (
-                          {endpointAlerts.length})
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {endpointAlerts.slice(0, 6).map((alert, index) => (
-                            <Chip
-                              key={`${alert.alertKey}-${index}`}
-                              size="sm"
-                              variant="soft"
-                              className={
-                                alert.severity === "critical"
-                                  ? "bg-red-500/20 text-red-300 border-red-500/30"
-                                  : "bg-orange-500/20 text-orange-300 border-orange-500/30"
-                              }
-                            >
-                              {alert.label}: {alert.reason}
-                            </Chip>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 space-y-2">
+                  {workspaceCommandMetrics && (
+                    <div
+                      className={`rounded-xl border backdrop-blur-md p-3 space-y-2 ${severityClass(workspaceFailureSeverity)}`}
+                    >
                       <div className="flex items-center justify-between">
                         <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                          Alert History
+                          Workspace Metrics
                         </span>
                         <span className="text-[11px] text-muted-foreground font-mono">
-                          {isSyncingAlerts
-                            ? "syncing..."
-                            : `${persistedAlerts.length} ${alertHistoryStatus}`}
+                          {(
+                            workspaceCommandMetrics.windowMs /
+                            (60 * 60 * 1000)
+                          ).toFixed(0)}
+                          h window
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
-                        <Input
-                          type="number"
-                          placeholder="Retention Days"
-                          value={String(alertRetention.days)}
-                          onChange={(e) => {
-                            const next = Number(e.target.value);
-                            if (Number.isFinite(next)) {
-                              setAlertRetention({
-                                days: Math.max(1, Math.round(next)),
-                              });
-                            }
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onPress={handleSaveAlertRetention}
-                          isDisabled={
-                            isSavingAlertRetention ||
-                            !adminPermissions.canEditAlertRetention
-                          }
+                      {workspaceFailureSeverity !== "normal" && (
+                        <div
+                          className={`flex items-center gap-2 text-xs ${
+                            workspaceFailureSeverity === "critical"
+                              ? "text-red-400"
+                              : "text-orange-400"
+                          }`}
                         >
-                          {isSavingAlertRetention
-                            ? "Saving..."
-                            : "Save Retention"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onPress={handleCleanupAlerts}
-                          isDisabled={
-                            isCleaningAlerts ||
-                            !adminPermissions.canRunAlertCleanup
-                          }
-                        >
-                          {isCleaningAlerts ? "Cleaning..." : "Run Cleanup"}
-                        </Button>
-                      </div>
-                      {(!adminPermissions.canEditAlertRetention ||
-                        !adminPermissions.canRunAlertCleanup) && (
-                        <div className="text-[11px] text-muted-foreground">
-                          Alert retention controls are limited by workspace
-                          policy.
+                          <AlertTriangle className="size-3.5" />
+                          {workspaceFailureSeverity === "critical"
+                            ? "Failure spike detected"
+                            : "Failure rate elevated"}
                         </div>
                       )}
-                      <div className="flex items-center gap-1.5">
-                        {(["open", "acked", "resolved", "all"] as const).map(
-                          (status) => (
-                            <Button
-                              key={status}
-                              size="sm"
-                              variant={
-                                alertHistoryStatus === status
-                                  ? "primary"
-                                  : "ghost"
-                              }
-                              className="text-[11px] capitalize"
-                              onPress={() => setAlertHistoryStatus(status)}
-                            >
-                              {status}
-                            </Button>
-                          ),
-                        )}
+                      <div className="flex flex-wrap gap-2">
+                        <Chip size="sm" variant="soft">
+                          timeout:{" "}
+                          {workspaceCommandMetrics.failureBuckets.timeout || 0}
+                        </Chip>
+                        <Chip size="sm" variant="soft">
+                          airlock:{" "}
+                          {workspaceCommandMetrics.failureBuckets
+                            .airlock_rejected || 0}
+                        </Chip>
+                        <Chip size="sm" variant="soft">
+                          runtime:{" "}
+                          {workspaceCommandMetrics.failureBuckets
+                            .runtime_error || 0}
+                        </Chip>
+                        <Chip size="sm" variant="soft">
+                          transport:{" "}
+                          {workspaceCommandMetrics.failureBuckets
+                            .transport_error || 0}
+                        </Chip>
                       </div>
-                      {persistedAlerts.length === 0 ? (
-                        <div className="text-xs text-muted-foreground">
-                          No persisted alerts for this filter.
+                      <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
+                        <div>
+                          queue:{" "}
+                          {formatMs(
+                            workspaceCommandMetrics.averages.queueDelayMs,
+                          )}
                         </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {persistedAlerts.slice(0, 8).map((alert) => (
-                            <div
-                              key={alert.id}
-                              className="flex items-center justify-between gap-2 p-2 rounded-lg border border-white/5 bg-white/5"
-                            >
-                              <div className="min-w-0">
-                                <div className="text-xs text-foreground truncate">
-                                  {alert.reason}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground font-mono truncate">
-                                  {alert.source}:{alert.key}
-                                </div>
-                                {alert.ackedBy && (
-                                  <div className="text-[10px] text-muted-foreground/80">
-                                    acked by {alert.ackedBy}
-                                  </div>
-                                )}
+                        <div>
+                          run:{" "}
+                          {formatMs(
+                            workspaceCommandMetrics.averages.runDurationMs,
+                          )}
+                        </div>
+                        <div>
+                          total:{" "}
+                          {formatMs(
+                            workspaceCommandMetrics.averages.totalDurationMs,
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {endpointMetrics && endpointMetrics.endpoints.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      {endpointMetrics.endpoints.map((metric) => {
+                        const p95 =
+                          metric.latency.p95TotalMs ?? metric.latency.p95RunMs;
+                        const avg =
+                          metric.latency.avgTotalMs ?? metric.latency.avgRunMs;
+                        const severity = classifyEndpointSeverity(
+                          metric.errorRate,
+                          p95,
+                        );
+                        return (
+                          <div
+                            key={metric.key}
+                            className={`rounded-xl border backdrop-blur-md p-3 space-y-1.5 ${severityClass(severity)}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                                {metric.label}
                               </div>
-                              {alert.status === "open" ? (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-xs"
-                                  onPress={() => handleAckAlert(alert.id)}
-                                  isDisabled={!adminPermissions.canAckAlerts}
-                                >
-                                  Ack
-                                </Button>
-                              ) : (
+                              {severity !== "normal" && (
                                 <Chip
                                   size="sm"
                                   variant="soft"
-                                  className="text-[10px] uppercase tracking-wider"
+                                  className={
+                                    severity === "critical"
+                                      ? "bg-red-500/20 text-red-300 border-red-500/30"
+                                      : "bg-orange-500/20 text-orange-300 border-orange-500/30"
+                                  }
                                 >
-                                  {alert.status}
+                                  {severity}
                                 </Chip>
                               )}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {commandMetrics &&
-                      (commandMetrics.progress.droppedEventsTotal > 0 ||
-                        commandMetrics.progress.suppressedEventsTotal > 0) && (
-                        <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 backdrop-blur-md p-3">
-                          <div className="flex items-center gap-2 text-xs text-orange-300">
-                            <AlertTriangle className="size-3.5" />
-                            Runtime telemetry backpressure detected for selected
-                            command.
+                            <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-muted-foreground">
+                              <div>req: {metric.requests}</div>
+                              <div>
+                                rate: {formatRate(metric.ratePerSecond)}
+                              </div>
+                              <div>ok: {formatPct(metric.successRate)}</div>
+                              <div>err: {formatPct(metric.errorRate)}</div>
+                              <div>p95: {formatMs(p95)}</div>
+                              <div>avg: {formatMs(avg)}</div>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })}
+                    </div>
+                  )}
 
-                    {recentCommands.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-white/10 text-muted-foreground/50">
-                        <span className="text-sm font-medium">
-                          No commands yet
-                        </span>
+                  {endpointAlerts.length > 0 && (
+                    <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 backdrop-blur-md p-3 space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-orange-300">
+                        <AlertTriangle className="size-3.5" />
+                        Endpoint SLO/regression alerts ({endpointAlerts.length})
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 max-h-72 overflow-y-auto space-y-2">
-                          {recentCommands.map((cmd) => (
-                            <button
-                              key={cmd.id}
-                              type="button"
-                              onClick={() => setSelectedCommandId(cmd.id)}
-                              className={`w-full text-left p-3 rounded-lg border transition-all ${
-                                selectedCommandId === cmd.id
-                                  ? "border-primary/40 bg-primary/10"
-                                  : "border-white/5 bg-white/5 hover:border-white/10"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-mono text-foreground/80 truncate">
-                                  {cmd.intent}
-                                </span>
-                                <Chip size="sm" variant="soft">
-                                  {cmd.status}
-                                </Chip>
-                              </div>
-                              <div className="text-[11px] text-muted-foreground mt-1 font-mono">
-                                {cmd.id}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                      <div className="flex flex-wrap gap-2">
+                        {endpointAlerts.slice(0, 6).map((alert, index) => (
+                          <Chip
+                            key={`${alert.alertKey}-${index}`}
+                            size="sm"
+                            variant="soft"
+                            className={
+                              alert.severity === "critical"
+                                ? "bg-red-500/20 text-red-300 border-red-500/30"
+                                : "bg-orange-500/20 text-orange-300 border-orange-500/30"
+                            }
+                          >
+                            {alert.label}: {alert.reason}
+                          </Chip>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                        <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 max-h-72 overflow-y-auto">
-                          {selectedCommandId ? (
-                            <div className="space-y-2">
-                              {commandMetrics && (
-                                <div className="p-2 rounded-md bg-white/5 border border-white/5 space-y-2">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                                      Command Metrics
-                                    </span>
-                                    <Chip size="sm" variant="soft">
-                                      {commandMetrics.status}
-                                    </Chip>
-                                  </div>
-                                  <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
-                                    <div>
-                                      queue:{" "}
-                                      {formatMs(
-                                        commandMetrics.timings.queueDelayMs,
-                                      )}
-                                    </div>
-                                    <div>
-                                      run:{" "}
-                                      {formatMs(
-                                        commandMetrics.timings.runDurationMs,
-                                      )}
-                                    </div>
-                                    <div>
-                                      total:{" "}
-                                      {formatMs(
-                                        commandMetrics.timings.totalDurationMs,
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    <Chip size="sm" variant="soft">
-                                      events:{" "}
-                                      {commandMetrics.progress.totalEvents}
-                                    </Chip>
-                                    <Chip size="sm" variant="soft">
-                                      dropped:{" "}
-                                      {
-                                        commandMetrics.progress
-                                          .droppedEventsTotal
-                                      }
-                                    </Chip>
-                                    <Chip size="sm" variant="soft">
-                                      suppressed:{" "}
-                                      {
-                                        commandMetrics.progress
-                                          .suppressedEventsTotal
-                                      }
-                                    </Chip>
-                                  </div>
-                                </div>
-                              )}
-                              {isLoadingMetrics && !commandMetrics && (
-                                <div className="text-sm text-muted-foreground">
-                                  Loading metrics...
-                                </div>
-                              )}
-                              {isLoadingProgress &&
-                              commandProgress.length === 0 ? (
-                                <div className="text-sm text-muted-foreground">
-                                  Loading progress...
-                                </div>
-                              ) : commandProgress.length === 0 ? (
-                                <div className="text-sm text-muted-foreground">
-                                  No progress events yet.
-                                </div>
-                              ) : (
-                                commandProgress.map((event) => (
-                                  <div
-                                    key={event.id}
-                                    className="p-2 rounded-md bg-white/5 border border-white/5"
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                                        {event.level}
-                                      </span>
-                                      <span className="text-[11px] text-muted-foreground font-mono">
-                                        {new Date(
-                                          event.createdAt,
-                                        ).toLocaleTimeString()}
-                                      </span>
-                                    </div>
-                                    <p className="text-sm text-foreground/90 mt-1">
-                                      {event.message}
-                                    </p>
-                                    {event.data && (
-                                      <pre className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap font-mono">
-                                        {JSON.stringify(event.data, null, 2)}
-                                      </pre>
-                                    )}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground">
-                              Select a command to inspect progress.
-                            </div>
-                          )}
-                        </div>
+                  <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                        Alert History
+                      </span>
+                      <span className="text-[11px] text-muted-foreground font-mono">
+                        {isSyncingAlerts
+                          ? "syncing..."
+                          : `${persistedAlerts.length} ${alertHistoryStatus}`}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                      <Input
+                        type="number"
+                        placeholder="Retention Days"
+                        value={String(alertRetention.days)}
+                        onChange={(e) => {
+                          const next = Number(e.target.value);
+                          if (Number.isFinite(next)) {
+                            setAlertRetention({
+                              days: Math.max(1, Math.round(next)),
+                            });
+                          }
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onPress={handleSaveAlertRetention}
+                        isDisabled={
+                          isSavingAlertRetention ||
+                          !adminPermissions.canEditAlertRetention
+                        }
+                      >
+                        {isSavingAlertRetention
+                          ? "Saving..."
+                          : "Save Retention"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onPress={handleCleanupAlerts}
+                        isDisabled={
+                          isCleaningAlerts ||
+                          !adminPermissions.canRunAlertCleanup
+                        }
+                      >
+                        {isCleaningAlerts ? "Cleaning..." : "Run Cleanup"}
+                      </Button>
+                    </div>
+                    {(!adminPermissions.canEditAlertRetention ||
+                      !adminPermissions.canRunAlertCleanup) && (
+                      <div className="text-[11px] text-muted-foreground">
+                        Alert retention controls are limited by workspace
+                        policy.
                       </div>
                     )}
-                  </div>
-
-                  {/* Airlock Section - Clean Alerts */}
-                  <div className="space-y-6">
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <Shield className="size-4 text-orange-500" />
-                      Airlock Monitor
-                    </h3>
-
-                    {pendingApprovals.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-white/10 text-muted-foreground/50">
-                        <CheckCircle2 className="size-8 mb-2 opacity-20" />
-                        <span className="text-sm font-medium">
-                          Cortex Secure
-                        </span>
+                    <div className="flex items-center gap-1.5">
+                      {(["open", "acked", "resolved", "all"] as const).map(
+                        (status) => (
+                          <Button
+                            key={status}
+                            size="sm"
+                            variant={
+                              alertHistoryStatus === status
+                                ? "primary"
+                                : "ghost"
+                            }
+                            className="text-[11px] capitalize"
+                            onPress={() => setAlertHistoryStatus(status)}
+                          >
+                            {status}
+                          </Button>
+                        ),
+                      )}
+                    </div>
+                    {persistedAlerts.length === 0 ? (
+                      <div className="text-xs text-muted-foreground">
+                        No persisted alerts for this filter.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 gap-3">
-                        {pendingApprovals.map((request) => (
+                      <div className="space-y-2">
+                        {persistedAlerts.slice(0, 8).map((alert) => (
                           <div
-                            key={request.commandId}
-                            className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-all"
+                            key={alert.id}
+                            className="flex items-center justify-between gap-2 p-2 rounded-lg border border-white/5 bg-white/5"
                           >
-                            <div className="flex items-center gap-4">
+                            <div className="min-w-0">
+                              <div className="text-xs text-foreground truncate">
+                                {alert.reason}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground font-mono truncate">
+                                {alert.source}:{alert.key}
+                              </div>
+                              {alert.ackedBy && (
+                                <div className="text-[10px] text-muted-foreground/80">
+                                  acked by {alert.ackedBy}
+                                </div>
+                              )}
+                            </div>
+                            {alert.status === "open" ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs"
+                                onPress={() => handleAckAlert(alert.id)}
+                                isDisabled={!adminPermissions.canAckAlerts}
+                              >
+                                Ack
+                              </Button>
+                            ) : (
                               <Chip
                                 size="sm"
-                                className={
-                                  request.airlockLevel ===
-                                  AirlockLevels.Dangerous
-                                    ? "bg-red-500/20 text-red-400 border-red-500/20"
-                                    : request.airlockLevel ===
-                                        AirlockLevels.Sensitive
-                                      ? "bg-orange-500/20 text-orange-400 border-orange-500/20"
-                                      : "bg-green-500/20 text-green-400 border-green-500/20"
-                                }
                                 variant="soft"
+                                className="text-[10px] uppercase tracking-wider"
                               >
-                                {request.intent}
+                                {alert.status}
                               </Chip>
-                              <code className="text-xs text-muted-foreground font-mono bg-black/20 px-2 py-1 rounded">
-                                {request.payloadSummary.slice(0, 60)}
-                                ...
-                              </code>
-                            </div>
-
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                isIconOnly
-                                className="text-green-500 hover:bg-green-500/10"
-                                onPress={() =>
-                                  handleAirlockRespond(request.commandId, true)
-                                }
-                              >
-                                <CheckCircle2 className="size-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                isIconOnly
-                                className="text-red-500 hover:bg-red-500/10"
-                                onPress={() =>
-                                  handleAirlockRespond(request.commandId, false)
-                                }
-                              >
-                                <XCircle className="size-4" />
-                              </Button>
-                            </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
+
+                  {commandMetrics &&
+                    (commandMetrics.progress.droppedEventsTotal > 0 ||
+                      commandMetrics.progress.suppressedEventsTotal > 0) && (
+                      <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 backdrop-blur-md p-3">
+                        <div className="flex items-center gap-2 text-xs text-orange-300">
+                          <AlertTriangle className="size-3.5" />
+                          Runtime telemetry backpressure detected for selected
+                          command.
+                        </div>
+                      </div>
+                    )}
+
+                  {recentCommands.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-white/10 text-muted-foreground/50">
+                      <span className="text-sm font-medium">
+                        No commands yet
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 max-h-72 overflow-y-auto space-y-2">
+                        {recentCommands.map((cmd) => (
+                          <button
+                            key={cmd.id}
+                            type="button"
+                            onClick={() => setSelectedCommandId(cmd.id)}
+                            className={`w-full text-left p-3 rounded-lg border transition-all ${
+                              selectedCommandId === cmd.id
+                                ? "border-primary/40 bg-primary/10"
+                                : "border-white/5 bg-white/5 hover:border-white/10"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-mono text-foreground/80 truncate">
+                                {cmd.intent}
+                              </span>
+                              <Chip size="sm" variant="soft">
+                                {cmd.status}
+                              </Chip>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground mt-1 font-mono">
+                              {cmd.id}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="rounded-xl border border-white/5 bg-background/20 backdrop-blur-md p-3 max-h-72 overflow-y-auto">
+                        {selectedCommandId ? (
+                          <div className="space-y-2">
+                            {commandMetrics && (
+                              <div className="p-2 rounded-md bg-white/5 border border-white/5 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                                    Command Metrics
+                                  </span>
+                                  <Chip size="sm" variant="soft">
+                                    {commandMetrics.status}
+                                  </Chip>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
+                                  <div>
+                                    queue:{" "}
+                                    {formatMs(
+                                      commandMetrics.timings.queueDelayMs,
+                                    )}
+                                  </div>
+                                  <div>
+                                    run:{" "}
+                                    {formatMs(
+                                      commandMetrics.timings.runDurationMs,
+                                    )}
+                                  </div>
+                                  <div>
+                                    total:{" "}
+                                    {formatMs(
+                                      commandMetrics.timings.totalDurationMs,
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <Chip size="sm" variant="soft">
+                                    events:{" "}
+                                    {commandMetrics.progress.totalEvents}
+                                  </Chip>
+                                  <Chip size="sm" variant="soft">
+                                    dropped:{" "}
+                                    {commandMetrics.progress.droppedEventsTotal}
+                                  </Chip>
+                                  <Chip size="sm" variant="soft">
+                                    suppressed:{" "}
+                                    {
+                                      commandMetrics.progress
+                                        .suppressedEventsTotal
+                                    }
+                                  </Chip>
+                                </div>
+                              </div>
+                            )}
+                            {isLoadingMetrics && !commandMetrics && (
+                              <div className="text-sm text-muted-foreground">
+                                Loading metrics...
+                              </div>
+                            )}
+                            {isLoadingProgress &&
+                            commandProgress.length === 0 ? (
+                              <div className="text-sm text-muted-foreground">
+                                Loading progress...
+                              </div>
+                            ) : commandProgress.length === 0 ? (
+                              <div className="text-sm text-muted-foreground">
+                                No progress events yet.
+                              </div>
+                            ) : (
+                              commandProgress.map((event) => (
+                                <div
+                                  key={event.id}
+                                  className="p-2 rounded-md bg-white/5 border border-white/5"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                                      {event.level}
+                                    </span>
+                                    <span className="text-[11px] text-muted-foreground font-mono">
+                                      {new Date(
+                                        event.createdAt,
+                                      ).toLocaleTimeString()}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-foreground/90 mt-1">
+                                    {event.message}
+                                  </p>
+                                  {event.data && (
+                                    <pre className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap font-mono">
+                                      {JSON.stringify(event.data, null, 2)}
+                                    </pre>
+                                  )}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-muted-foreground">
+                            Select a command to inspect progress.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Airlock Section - Clean Alerts */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Shield className="size-4 text-orange-500" />
+                    Airlock Monitor
+                  </h3>
+
+                  {pendingApprovals.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-white/10 text-muted-foreground/50">
+                      <CheckCircle2 className="size-8 mb-2 opacity-20" />
+                      <span className="text-sm font-medium">Cortex Secure</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {pendingApprovals.map((request) => (
+                        <div
+                          key={request.commandId}
+                          className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-all"
+                        >
+                          <div className="flex items-center gap-4">
+                            <Chip
+                              size="sm"
+                              className={
+                                request.airlockLevel === AirlockLevels.Dangerous
+                                  ? "bg-red-500/20 text-red-400 border-red-500/20"
+                                  : request.airlockLevel ===
+                                      AirlockLevels.Sensitive
+                                    ? "bg-orange-500/20 text-orange-400 border-orange-500/20"
+                                    : "bg-green-500/20 text-green-400 border-green-500/20"
+                              }
+                              variant="soft"
+                            >
+                              {request.intent}
+                            </Chip>
+                            <code className="text-xs text-muted-foreground font-mono bg-black/20 px-2 py-1 rounded">
+                              {request.payloadSummary.slice(0, 60)}
+                              ...
+                            </code>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              isIconOnly
+                              className="text-green-500 hover:bg-green-500/10"
+                              onPress={() =>
+                                handleAirlockRespond(request.commandId, true)
+                              }
+                            >
+                              <CheckCircle2 className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              isIconOnly
+                              className="text-red-500 hover:bg-red-500/10"
+                              onPress={() =>
+                                handleAirlockRespond(request.commandId, false)
+                              }
+                            >
+                              <XCircle className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

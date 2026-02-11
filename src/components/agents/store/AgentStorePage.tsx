@@ -197,8 +197,16 @@ export function AgentStorePage({
           "Rainy-ATM is not authenticated. Configure ATM credentials first.",
         );
       }
-      await tauri.deployAgentSpec(draft);
-      toast.success("Agent deployed to Rainy-ATM");
+      const result = await tauri.deployAgentSpec(draft);
+      const action =
+        result && typeof result === "object" && "action" in result
+          ? String((result as { action?: unknown }).action || "")
+          : "";
+      toast.success(
+        action === "updated"
+          ? "Agent updated in Rainy-ATM"
+          : "Agent deployed to Rainy-ATM",
+      );
     } catch (error) {
       console.error("Failed to deploy agent:", error);
       toast.error(`Deploy failed: ${error}`);

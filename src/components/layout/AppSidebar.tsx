@@ -128,7 +128,7 @@ export function AppSidebar({
         {!isCollapsed && (
           <div className="flex flex-col min-w-0">
             <span className="font-bold text-sm tracking-tight truncate">
-              RAINY COWORK
+              Rainy MaTE
             </span>
             <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">
               Agent Platform
