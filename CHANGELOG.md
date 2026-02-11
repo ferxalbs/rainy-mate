@@ -5,6 +5,71 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.18] - 2026-02-11 - Agent Deploy Upsert (No Duplicate Edit Deploys)
+
+### Fixed - Agent Store Edit/Deploy Duplication
+
+**Cloud Runtime (`Rainy ATM`)**
+
+- `routes/admin.ts`:
+  - `POST /admin/agents` now performs an upsert for `v2_spec`/`v3_spec` agents using logical spec id (`config.id`)
+  - If an existing agent with the same logical spec id exists in the workspace, the endpoint updates that row instead of inserting a new one
+  - Returns `action: "updated"` for upsert updates and `action: "created"` for true inserts
+  - Prevents silent duplicate agents when users edit and redeploy from Agent Store/Builder
+
+### Fixed - Airlock Builder UX for Allowlist + Approval Levels
+
+**Frontend (`src/components/agents/builder/`)**
+
+- `AirlockPanel.tsx`:
+  - Reworked tool permission UI to make `allowlist` mode explicitly manual and usable
+  - Added per-tool controls with clear mode behavior:
+    - `allowlist`: explicit `Allow this tool` selector
+    - `all`: explicit `Block this tool (deny)` selector
+  - Added risk-level guidance tied to approval flow:
+    - L0: auto-approved (no modal)
+    - L1: approval modal / notification gate
+    - L2: explicit approval modal required
+  - Added quick allowlist presets (`L0 only`, `L0+L1`, `all`, `clear`) and custom-tool add flow
+  - Improved visibility of active tool count and per-level active totals
+
+**Shared Constants (`src/constants/`)**
+
+- `toolPolicy.ts`:
+  - Added `KNOWN_TOOL_NAMES` export so Airlock UI always shows a stable tool catalog, even when `tool_levels` starts empty
+
+### Fixed - Dynamic Skill Tool Name Normalization
+
+**Cloud Runtime (`Rainy ATM`)**
+
+- `tool-policy.ts`:
+  - Added normalization for namespaced dynamic tool names (`skill__method` -> `method`) before skill/risk mapping
+- `tool-executor.ts`:
+  - Added parsing of namespaced tool calls so `skill` and `method` are resolved correctly before sending commands to desktop
+  - Prevents false `unknown method` failures when model invokes dynamic tools
+- `tool-policy.test.ts`:
+  - Added test coverage for namespaced tool normalization path
+
+### Fixed - Runtime Enforcement of Agent Airlock Tool Policy/Levels
+
+**Desktop Runtime (`src-tauri/src/ai/agent/`)**
+
+- `workflow.rs`:
+  - Tool advertisement now filters by `spec.airlock.tool_policy` before presenting tools to the model
+  - Tool execution now blocks any tool denied by `spec.airlock.tool_policy` even if the model tries to call it
+  - Airlock command level is now resolved from `spec.airlock.tool_levels` when configured (fallback to canonical defaults otherwise)
+  - Aligns Builder Airlock configuration with actual runtime behavior (Think + Act stages)
+
+### Validation
+
+- `cd rainy-atm && bunx tsc --noEmit` — No TypeScript errors
+- `cd rainy-atm && bun test src/services/agent-runtime-config.test.ts` — 4 tests pass
+- `cd rainy-atm && bun test` — 33 tests pass
+- `pnpm exec tsc --noEmit` — No TypeScript errors
+- `pnpm run build` — Production build passes
+- `cd src-tauri && cargo test tool_policy_is_deny_first -- --nocapture` — pass
+- `cd src-tauri && cargo test tool_policy_disabled_blocks_all -- --nocapture` — pass
+
 ## [0.5.17] - 2026-02-11 - Spec Builder v2
 
 ### Added - Spec Builder v2
@@ -29,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - Spec Integrity + Tool Audit Trail
 
-**Cloud Runtime (`rainy-atm/src/`)**
+**Cloud Runtime (`Rainy ATM`)**
 
 - `services/spec-signing.ts` — **NEW** canonical HMAC-SHA256 signing/verification helpers:
   - Agent spec signature creation + verification
@@ -72,7 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - Workspace-Level Connectors + Unified Lane Queue
 
-**Cloud Runtime (`rainy-atm/src/`)**
+**Cloud Runtime (`Rainy ATM`)**
 
 - `services/workspace-connectors.ts` — **NEW** workspace-level connector configuration:
   - Parses connector channels + agent routing from workspace config
@@ -107,7 +172,7 @@ All passed (28 tests, 0 failures).
 
 ### Added - Dynamic Tool Registry & Manifest Validation
 
-**Cloud Runtime (`rainy-atm/src/`)**
+**Cloud Runtime (`Rainy ATM`)**
 
 - `tools/tool-validator.ts` — **NEW** Security validation for tool manifests:
   - Name sanitization (enforces `[a-z][a-z0-9_]*` pattern)
@@ -417,7 +482,7 @@ All passed with no new Rust warnings in these runs.
 
 ### Fixed - Workspace Path Synchronization
 
-**Cloud (`rainy-atm/src/`)**
+**Cloud (`Rainy ATM`)**
 
 - `services/command-bridge.ts` - Commands now include `allowedPaths` from workspace config:
   - Fetches workspace config to get configured paths
@@ -519,7 +584,7 @@ All passed with no new Rust warnings in these runs.
 
 ### Added - Cloud Cortex (Infrastructure)
 
-**Database & API (`rainy-atm/src/`)**
+**Database & API (`Rainy ATM`)**
 
 - Turso Database Schema:
   - `desktop_nodes` - registry of connected devices
