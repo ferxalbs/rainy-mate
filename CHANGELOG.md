@@ -5,6 +5,124 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.16] - 2026-02-11 - Security Hardening (Phase 5)
+
+### Added - Spec Integrity + Tool Audit Trail
+
+**Cloud Runtime (`rainy-atm/src/`)**
+
+- `services/spec-signing.ts` — **NEW** canonical HMAC-SHA256 signing/verification helpers:
+  - Agent spec signature creation + verification
+  - Skill manifest signature verification
+- `services/tool-execution-audit.ts` — **NEW** immutable tool execution audit writer
+- `db/schema.ts`:
+  - Added `tool_execution_audit` table
+  - Added `idx_tool_execution_audit_workspace` index
+
+**Desktop Runtime (`src-tauri/src/`)**
+
+- `services/manifest_signing.rs` — **NEW** HMAC-SHA256 signing for skill manifests:
+  - Canonical JSON serialization (recursive key-sort matching ATM `stableSortValue`)
+  - `sign_skills_manifest()` produces hex digest compatible with ATM `verifySkillsManifestSignature()`
+
+### Changed
+
+- `routes/admin.ts`:
+  - `POST /admin/agents` and `PATCH /admin/agents/:id` now verify incoming HMAC signatures (when present) and re-sign persisted v2/v3 specs
+  - Added `GET /admin/tools/audit` to inspect execution audit records
+- `routes/nodes.ts`:
+  - Added tool manifest signature verification hook via `x-skills-signature` header
+  - Heartbeat command fetch now includes `status IN ('pending', 'approved')`
+  - Airlock-denied command completions now map to `rejected` status
+- `services/command-bridge.ts`:
+  - Initial queue status now reflects airlock intent (`approved` for level 0, `pending` for level 1/2)
+- `services/tool-executor.ts`:
+  - Logs every tool execution attempt with outcome (`success|error|blocked`) and latency
+- `services/agent-executor.ts`:
+  - Passes session/agent context into tool audit logging
+- `services/neural_service.rs`:
+  - Sends `x-skills-signature` HMAC header on node registration
+
+### Validation
+
+- `cd rainy-atm && bunx tsc --noEmit` — No TypeScript errors
+- `cd src-tauri && cargo test manifest_signing` — 5 tests pass
+
+## [0.5.15] - 2026-02-11 - Unified Connectors (Phase 4)
+
+### Added - Workspace-Level Connectors + Unified Lane Queue
+
+**Cloud Runtime (`rainy-atm/src/`)**
+
+- `services/workspace-connectors.ts` — **NEW** workspace-level connector configuration:
+  - Parses connector channels + agent routing from workspace config
+  - Resolves per-channel auto-reply behavior
+  - Resolves per-channel rate limits
+  - Resolves routed agent by channel + priority
+
+- `services/unified-lane-queue.ts` — **NEW** channel-agnostic queue orchestrator:
+  - `enqueue(channel, job)` wrapper for Telegram/Discord queues
+  - Workspace-aware per-channel rate limiting (`rainy:ratelimit:{channel}:{workspace}`)
+  - Shared interface for queueing and draining lanes
+
+### Changed
+
+- `routes/webhooks.ts`:
+  - Replaced direct `telegramLaneQueue`/`discordLaneQueue` calls with `unifiedLaneQueue`
+  - Added workspace connector auto-reply gating before queueing
+  - Added agent→channel routing application (auto-select routed agent for the channel)
+
+- `routes/workers.ts`:
+  - Replaced channel-specific processing branches with `unifiedLaneQueue.processSession()`
+  - Unified pending-count handling and worker re-dispatch logic
+
+### Validation
+
+- `cd rainy-atm && bun run build`
+- `cd rainy-atm && bun test`
+
+All passed (28 tests, 0 failures).
+
+## [0.5.14] - 2026-02-11 - ATM Dynamic Tools (Phase 3)
+
+### Added - Dynamic Tool Registry & Manifest Validation
+
+**Cloud Runtime (`rainy-atm/src/`)**
+
+- `tools/tool-validator.ts` — **NEW** Security validation for tool manifests:
+  - Name sanitization (enforces `[a-z][a-z0-9_]*` pattern)
+  - Method count limits (max 20 per skill — DoS prevention)
+  - Description length limits (max 500 chars — injection prevention)
+  - Parameter schema validation (type, count, descriptions)
+  - Airlock level validation (0/1/2 only)
+  - Duplicate method name detection
+
+- `services/tool-registry.ts` — **NEW** Dynamic tool loading:
+  - `ToolRegistry.getToolsForAgent(workspaceId, agentId)` replaces hardcoded tool loading
+  - Combines base tools (WORKSPACE_TOOLS) + desktop node skills (online nodes from DB)
+  - Merges workspace + agent airlock policies with deny-first precedence
+  - Node skill methods namespaced as `skillName__methodName` to prevent collisions
+  - Filters combined tool set via `filterAllowedTools()`
+
+### Changed
+
+- `services/agent-executor.ts`:
+  - Replaced hardcoded `getWorkspaceToolsForRun()` with `ToolRegistry.getToolsForAgent()`
+  - Updated legacy OpenAI fallback to accept dynamic tools array instead of boolean flag
+  - Removed unused imports (`WORKSPACE_TOOLS`, `filterAllowedTools`, `normalizeToolAccessPolicy`, `db`)
+
+- `routes/nodes.ts`:
+  - Added `validateToolManifest()` on `/register` and `/:nodeId/heartbeat` endpoints
+  - Invalid skill manifests filtered out with console warnings
+
+### Validation
+
+- `tool-validator.test.ts` — 12 tests (name sanitization, injection prevention, limits, duplicates)
+- `tool-registry.test.ts` — 7 tests (skill→tool conversion, policy merging, deny-first)
+- All 28 tests pass across 5 test files, 0 failures
+
+---
+
 ## [0.5.13] - 2026-02-10 - Auto-Update System (Beta 1 Production)
 
 ### Added - Mandatory Auto-Update System

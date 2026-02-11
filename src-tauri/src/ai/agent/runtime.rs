@@ -244,8 +244,8 @@ Rules:
             workspace_scope,
             capability_lines,
             spec.memory_config.strategy,
-            spec.memory_config.retention_days,
-            spec.memory_config.max_tokens
+            spec.memory_config.effective_retention_days(),
+            spec.memory_config.effective_max_tokens()
         )
     }
 
@@ -287,7 +287,8 @@ Rules:
         });
 
         // Apply sliding context window — trim old messages to stay within token budget
-        let context_window = ContextWindow::new(self.spec.memory_config.max_tokens as usize);
+        let context_window =
+            ContextWindow::new(self.spec.memory_config.effective_max_tokens() as usize);
         let pre_trim_len = state.messages.len();
         state.messages = context_window.trim_history(state.messages);
         let trimmed_count = pre_trim_len - state.messages.len();

@@ -40,11 +40,17 @@ export function AirlockPanel({ airlock, onChange }: AirlockPanelProps) {
       ? Array.from(new Set([...airlock.tool_policy.allow, toolName]))
       : airlock.tool_policy.allow.filter((item) => item !== toolName);
 
+    // Mutual exclusion: remove from deny when allowing
+    const deny = enabled
+      ? airlock.tool_policy.deny.filter((item) => item !== toolName)
+      : airlock.tool_policy.deny;
+
     onChange({
       ...airlock,
       tool_policy: {
         ...airlock.tool_policy,
         allow,
+        deny,
       },
     });
   };
@@ -54,10 +60,16 @@ export function AirlockPanel({ airlock, onChange }: AirlockPanelProps) {
       ? Array.from(new Set([...airlock.tool_policy.deny, toolName]))
       : airlock.tool_policy.deny.filter((item) => item !== toolName);
 
+    // Mutual exclusion: remove from allow when denying
+    const allow = enabled
+      ? airlock.tool_policy.allow.filter((item) => item !== toolName)
+      : airlock.tool_policy.allow;
+
     onChange({
       ...airlock,
       tool_policy: {
         ...airlock.tool_policy,
+        allow,
         deny,
       },
     });
@@ -74,7 +86,9 @@ export function AirlockPanel({ airlock, onChange }: AirlockPanelProps) {
   return (
     <div className="space-y-8 animate-appear">
       <div className="flex flex-col gap-1 border-b border-border/10 pb-6">
-        <h3 className="text-2xl font-bold text-foreground tracking-tight">Airlock</h3>
+        <h3 className="text-2xl font-bold text-foreground tracking-tight">
+          Airlock
+        </h3>
         <p className="text-muted-foreground text-sm">
           Configure tool permissions, risk levels, scopes, and rate limits.
         </p>
@@ -119,7 +133,10 @@ export function AirlockPanel({ airlock, onChange }: AirlockPanelProps) {
                   <select
                     value={level}
                     onChange={(e) =>
-                      setToolLevel(toolName, Number(e.target.value) as AirlockLevel)
+                      setToolLevel(
+                        toolName,
+                        Number(e.target.value) as AirlockLevel,
+                      )
                     }
                     className={inputClass}
                   >
@@ -155,13 +172,18 @@ export function AirlockPanel({ airlock, onChange }: AirlockPanelProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {LEVELS.map((item) => (
-            <div key={item.level} className="rounded-xl border border-border/20 bg-card/20 p-3">
+            <div
+              key={item.level}
+              className="rounded-xl border border-border/20 bg-card/20 p-3"
+            >
               <p className={`text-sm font-semibold ${item.tone}`}>
                 LEVEL {item.level} - {item.title}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {Object.values(airlock.tool_levels).filter((level) => level === item.level)
-                  .length || 0} tool(s)
+                {Object.values(airlock.tool_levels).filter(
+                  (level) => level === item.level,
+                ).length || 0}{" "}
+                tool(s)
               </p>
             </div>
           ))}
