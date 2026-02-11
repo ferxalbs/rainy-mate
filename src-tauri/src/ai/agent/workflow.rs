@@ -4,7 +4,9 @@ use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::{AgentContent, AgentEvent, AgentMessage, RuntimeOptions};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::AgentSpec;
-use crate::models::neural::{CommandPriority, CommandStatus, QueuedCommand, RainyPayload};
+use crate::models::neural::{
+    AirlockLevel, CommandPriority, CommandStatus, QueuedCommand, RainyPayload,
+};
 use crate::services::{get_tool_policy, SkillExecutor};
 use chrono::Utc;
 use schemars::JsonSchema;
@@ -27,6 +29,28 @@ const FILESYSTEM_TOOL_NAMES: &[&str] = &[
     "delete_file",
     "move_file",
 ];
+
+fn is_tool_allowed_by_spec(spec: &AgentSpec, tool_name: &str) -> bool {
+    let policy = &spec.airlock.tool_policy;
+    if policy.deny.iter().any(|item| item == tool_name) {
+        return false;
+    }
+    if policy.mode == "allowlist" {
+        return policy.allow.iter().any(|item| item == tool_name);
+    }
+    true
+}
+
+fn resolve_airlock_level_for_tool(spec: &AgentSpec, tool_name: &str) -> AirlockLevel {
+    if let Some(level) = spec.airlock.tool_levels.get(tool_name) {
+        return match (*level).clamp(0, 2) {
+            0 => AirlockLevel::Safe,
+            1 => AirlockLevel::Sensitive,
+            _ => AirlockLevel::Dangerous,
+        };
+    }
+    get_tool_policy(tool_name).airlock_level
+}
 
 fn truncate_to_max_bytes(input: &str, max_bytes: usize) -> String {
     if input.len() <= max_bytes {
@@ -355,6 +379,8 @@ impl WorkflowStep for ThinkStep {
         if state.allowed_paths.is_empty() {
             tools.retain(|tool| !FILESYSTEM_TOOL_NAMES.contains(&tool.function.name.as_str()));
         }
+        // Enforce AgentSpec Airlock tool policy at tool-advertisement time.
+        tools.retain(|tool| is_tool_allowed_by_spec(state.spec.as_ref(), &tool.function.name));
         let has_tools = !tools.is_empty();
 
         let request = crate::ai::provider_types::ChatCompletionRequest {
@@ -491,6 +517,24 @@ impl WorkflowStep for ActStep {
             let params: serde_json::Value = serde_json::from_str(&arguments_str)
                 .map_err(|e| format!("Failed to parse args: {}", e))?;
 
+            if !is_tool_allowed_by_spec(state.spec.as_ref(), &function_name) {
+                let blocked_msg = format!(
+                    "Tool '{}' blocked by agent Airlock policy",
+                    function_name
+                );
+                on_event(AgentEvent::ToolResult {
+                    id: call.id.clone(),
+                    result: blocked_msg.clone(),
+                });
+                results.push(AgentMessage {
+                    role: "tool".to_string(),
+                    content: AgentContent::text(blocked_msg),
+                    tool_calls: None,
+                    tool_call_id: Some(call.id.clone()),
+                });
+                continue;
+            }
+
             let policy = get_tool_policy(&function_name);
             let skill = policy.skill.as_str();
             let method = function_name.as_str();
@@ -504,7 +548,7 @@ impl WorkflowStep for ActStep {
             // Let's just create a simplified event or use what we have
             on_event(AgentEvent::ToolCall(call.clone()));
 
-            let airlock_level = policy.airlock_level;
+            let airlock_level = resolve_airlock_level_for_tool(state.spec.as_ref(), &function_name);
 
             let command = QueuedCommand {
                 id: uuid::Uuid::new_v4().to_string(),

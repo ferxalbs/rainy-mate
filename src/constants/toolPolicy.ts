@@ -36,6 +36,10 @@ const TOOL_POLICY_MAP: Record<string, ToolPolicy> = {
   move_file: { skill: "filesystem", airlockLevel: AirlockLevels.Dangerous },
 };
 
+export const KNOWN_TOOL_NAMES = Object.keys(TOOL_POLICY_MAP).sort((a, b) =>
+  a.localeCompare(b),
+);
+
 export function getToolPolicy(toolName: string): ToolPolicy {
   return TOOL_POLICY_MAP[toolName] ?? DEFAULT_POLICY;
 }
