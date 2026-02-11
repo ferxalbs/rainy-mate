@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { AgentSpec } from "../../../types/agent-spec";
 import * as tauri from "../../../services/tauri";
 import { useTheme } from "../../../hooks/useTheme";
+import { normalizeAgentSpec } from "../builder/specDefaults";
 import {
   Bot,
   RefreshCw,
@@ -93,7 +94,9 @@ export function AgentStorePage({
   const loadAgents = useCallback(async () => {
     setIsLoading(true);
     try {
-      const specs = (await tauri.listAgentSpecs()) as AgentSpec[];
+      const specs = ((await tauri.listAgentSpecs()) as any[]).map((spec) =>
+        normalizeAgentSpec(spec),
+      );
       setAgents(specs);
       if (specs.length > 0 && !selectedId) {
         setSelectedId(specs[0].id);
@@ -156,7 +159,10 @@ export function AgentStorePage({
       ...draft,
       memory_config: {
         ...draft.memory_config,
-        [field]: nextValue,
+        retrieval: {
+          ...draft.memory_config.retrieval,
+          [field]: nextValue,
+        },
       },
     });
   };
@@ -434,15 +440,16 @@ export function AgentStorePage({
                               Context Window
                             </span>
                             <span className="font-mono text-foreground">
-                              {draft.memory_config.max_tokens} tks
+                              {draft.memory_config.retrieval.max_tokens} tks
                             </span>
                           </div>
                           <div className="flex justify-between text-xs pt-0.5">
                             <span className="text-muted-foreground">
-                              Capabilities
+                              Skill Rules
                             </span>
                             <span className="font-mono text-foreground">
-                              {draft.skills.capabilities.length}
+                              {draft.skills.workflows.length +
+                                draft.skills.behaviors.length}
                             </span>
                           </div>
                         </div>
@@ -524,7 +531,7 @@ export function AgentStorePage({
                             </label>
                             <RawInput
                             type="number"
-                            value={draft.memory_config.retention_days.toString()}
+                            value={draft.memory_config.retrieval.retention_days.toString()}
                             onChange={(e) => setMemoryNumber("retention_days", e.target.value)}
                             className="font-mono text-foreground"
                             />
@@ -535,7 +542,7 @@ export function AgentStorePage({
                             </label>
                             <RawInput
                             type="number"
-                            value={draft.memory_config.max_tokens.toString()}
+                            value={draft.memory_config.retrieval.max_tokens.toString()}
                             onChange={(e) => setMemoryNumber("max_tokens", e.target.value)}
                             className="font-mono text-foreground"
                             />

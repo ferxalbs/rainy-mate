@@ -1,21 +1,13 @@
 import { useEffect, useState } from "react";
 // @ts-ignore
-import { Button, Select, ListBox, Label } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { toast } from "sonner";
-import {
-  Save,
-  Bot,
-  Shield,
-  Network,
-  Cpu,
-  Rocket,
-  ArrowLeft,
-} from "lucide-react";
+import { Save, Bot, Shield, Network, Cpu, Rocket, ArrowLeft } from "lucide-react";
 import { AgentSpec } from "../../../types/agent-spec";
 import { SoulEditor } from "./SoulEditor";
-import { SkillsSelector } from "./SkillsSelector";
-import { SecurityPanel } from "./SecurityPanel";
-import { createDefaultAgentSpec } from "./specDefaults";
+import { SkillsEditor } from "./SkillsEditor";
+import { AirlockPanel } from "./AirlockPanel";
+import { createDefaultAgentSpec, normalizeAgentSpec } from "./specDefaults";
 import * as tauri from "../../../services/tauri";
 import { useTheme } from "../../../hooks/useTheme";
 
@@ -26,7 +18,7 @@ interface AgentBuilderProps {
 
 export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
   const [spec, setSpec] = useState<AgentSpec>(() =>
-    initialSpec ? structuredClone(initialSpec) : createDefaultAgentSpec(),
+    initialSpec ? normalizeAgentSpec(initialSpec) : createDefaultAgentSpec(),
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
@@ -36,7 +28,7 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
 
   useEffect(() => {
     setSpec(
-      initialSpec ? structuredClone(initialSpec) : createDefaultAgentSpec(),
+      initialSpec ? normalizeAgentSpec(initialSpec) : createDefaultAgentSpec(),
     );
   }, [initialSpec]);
 
@@ -76,10 +68,6 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
       setIsDeploying(false);
     }
   };
-
-  // Dynamic Opacity Rule: 60% Light, 20% Dark
-  // Using Tailwind's opacity modifiers on bg-background/card or custom colors
-  // panelClass = "bg-background/60 dark:bg-background/20 backdrop-blur-2xl border border-border/50"
 
   const NavItem = ({
     id,
@@ -129,17 +117,14 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
 
   return (
     <div className="h-full w-full bg-background p-3 flex gap-3 overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground relative">
-      {/* Draggable Background Layer */}
       <div
         className="absolute inset-0 w-full h-full z-0"
         data-tauri-drag-region
       />
 
-      {/* LEFT PANEL: Navigation */}
       <aside
         className={`w-[260px] shrink-0 rounded-[1.5rem] border border-border/40 flex flex-col shadow-xl overflow-hidden relative z-10 ${isDark ? "bg-card/20" : "bg-card/60"} backdrop-blur-2xl`}
       >
-        {/* Header - Explicitly Draggable */}
         <div className="p-6 pb-2" data-tauri-drag-region>
           <button
             onClick={onBack}
@@ -157,19 +142,18 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
           </h1>
         </div>
 
-        {/* Nav Links */}
         <div className="flex-1 px-3 space-y-1 overflow-y-auto relative z-20">
           <NavItem
             id="soul"
             icon={Bot}
-            label="Identity"
+            label="Soul"
             description="Persona & core"
           />
           <NavItem
             id="skills"
             icon={Cpu}
             label="Skills"
-            description="Capabilities"
+            description="Workflows"
           />
           <NavItem
             id="memory"
@@ -178,14 +162,13 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
             description="Knowledge"
           />
           <NavItem
-            id="security"
+            id="airlock"
             icon={Shield}
-            label="Security"
+            label="Airlock"
             description="Permissions"
           />
         </div>
 
-        {/* Footer */}
         <div className="p-4 pt-2">
           <div className="text-[10px] text-muted-foreground font-mono text-center opacity-50 pointer-events-none">
             Rainy Cowork
@@ -193,14 +176,11 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
         </div>
       </aside>
 
-      {/* RIGHT PANEL: Content Editor */}
       <main
         className={`flex-1 rounded-[1.5rem] border border-border/40 shadow-xl flex flex-col overflow-hidden relative z-10 ${isDark ? "bg-card/20" : "bg-card/60"} backdrop-blur-2xl`}
       >
-        {/* Background Gradients - Dynamic Primary Color */}
         <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/[0.03] blur-[100px] rounded-full pointer-events-none z-0" />
 
-        {/* Header - Explicitly Draggable */}
         <header
           className="h-16 shrink-0 flex items-center justify-between px-8 border-b border-border/10 bg-background/20 backdrop-blur-xl z-20 relative"
           data-tauri-drag-region
@@ -239,7 +219,6 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
           </div>
         </header>
 
-        {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-8 z-10 scrollbar-hide">
           <div className="max-w-3xl mx-auto pb-16">
             {activeTab === "soul" && (
@@ -250,118 +229,64 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
             )}
 
             {activeTab === "skills" && (
-              <SkillsSelector
+              <SkillsEditor
                 skills={spec.skills}
                 onChange={(s) => updateSpec({ skills: s })}
               />
             )}
 
-            {activeTab === "security" && (
-              <SecurityPanel
-                spec={spec}
-                onUpdate={(updates) =>
-                  setSpec((prev: AgentSpec) => ({ ...prev, ...updates }))
-                }
+            {activeTab === "airlock" && (
+              <AirlockPanel
+                airlock={spec.airlock}
+                onChange={(a) => updateSpec({ airlock: a })}
               />
             )}
 
             {activeTab === "memory" && (
-              <div className="space-y-8">
-                <div className="flex flex-col gap-1">
-                  <h3 className="text-xl font-bold text-foreground">
-                    Memory Matrix
+              <div className="space-y-8 animate-appear">
+                <div className="flex flex-col gap-1 border-b border-border/10 pb-6">
+                  <h3 className="text-2xl font-bold text-foreground tracking-tight">
+                    Memory
                   </h3>
                   <p className="text-muted-foreground text-sm">
-                    Configure retention and retrieval.
+                    Configure retrieval, persistence, and session isolation.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Strategy */}
                   <div className="space-y-3">
-                    <Label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
+                    <label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
                       Retrieval Strategy
-                    </Label>
-                    <Select
-                      selectedKey={spec.memory_config.strategy}
-                      onSelectionChange={(key) => {
-                        if (key) {
-                          updateSpec({
-                            memory_config: {
-                              ...spec.memory_config,
-                              strategy: key as
-                                | "vector"
-                                | "simple_buffer"
-                                | "hybrid",
-                            },
-                          });
-                        }
-                      }}
-                      className="w-full"
+                    </label>
+                    <select
+                      value={spec.memory_config.strategy}
+                      onChange={(e) =>
+                        updateSpec({
+                          memory_config: {
+                            ...spec.memory_config,
+                            strategy: e.target.value as
+                              | "vector"
+                              | "simple_buffer"
+                              | "hybrid",
+                          },
+                        })
+                      }
+                      className="w-full bg-card/40 hover:bg-card/60 border border-border/20 rounded-xl h-12 px-3 text-foreground transition-all"
                     >
-                      <Label>Select Strategy</Label>
-                      <Select.Trigger className="bg-card/40 hover:bg-card/60 border border-border/20 rounded-xl h-12 px-3 text-foreground transition-all data-[open=true]:border-primary/50 text-sm">
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover className="bg-popover border border-border dark rounded-xl shadow-xl">
-                        <ListBox>
-                          <ListBox.Item
-                            key="hybrid"
-                            textValue="Hybrid Search"
-                            className="data-[hover=true]:bg-foreground/5 py-2 rounded-lg"
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-sm font-bold text-foreground">
-                                Hybrid Search
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">
-                                Vector + Short-term buffer (Recommended)
-                              </span>
-                            </div>
-                          </ListBox.Item>
-                          <ListBox.Item
-                            key="vector"
-                            textValue="Vector Only"
-                            className="data-[hover=true]:bg-foreground/5 py-2 rounded-lg"
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-sm font-bold text-foreground">
-                                Vector Only
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">
-                                Long-term semantic search
-                              </span>
-                            </div>
-                          </ListBox.Item>
-                          <ListBox.Item
-                            key="simple_buffer"
-                            textValue="Simple Buffer"
-                            className="data-[hover=true]:bg-foreground/5 py-2 rounded-lg"
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-sm font-bold text-foreground">
-                                Simple Buffer
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">
-                                FIFO context window only
-                              </span>
-                            </div>
-                          </ListBox.Item>
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
+                      <option value="hybrid">Hybrid</option>
+                      <option value="vector">Vector Only</option>
+                      <option value="simple_buffer">Simple Buffer</option>
+                    </select>
                   </div>
 
-                  {/* Configs */}
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <div className="flex justify-between items-end">
-                        <Label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
+                        <label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
                           Retention
-                        </Label>
+                        </label>
                         <span className="font-mono text-foreground text-xs">
-                          {spec.memory_config.retention_days} days
+                          {spec.memory_config.retrieval.retention_days} days
                         </span>
                       </div>
                       <input
@@ -369,15 +294,18 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
                         min={1}
                         max={90}
                         className="w-full accent-primary h-1 bg-foreground/10 rounded-lg appearance-none cursor-pointer"
-                        value={spec.memory_config.retention_days}
+                        value={spec.memory_config.retrieval.retention_days}
                         onChange={(e) =>
                           updateSpec({
                             memory_config: {
                               ...spec.memory_config,
-                              retention_days: Math.max(
-                                1,
-                                parseInt(e.target.value || "1", 10),
-                              ),
+                              retrieval: {
+                                ...spec.memory_config.retrieval,
+                                retention_days: Math.max(
+                                  1,
+                                  parseInt(e.target.value || "1", 10),
+                                ),
+                              },
                             },
                           })
                         }
@@ -386,11 +314,11 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
 
                     <div className="space-y-3">
                       <div className="flex justify-between items-end">
-                        <Label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
+                        <label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
                           Context Window
-                        </Label>
+                        </label>
                         <span className="font-mono text-foreground text-xs">
-                          {spec.memory_config.max_tokens} tokens
+                          {spec.memory_config.retrieval.max_tokens} tokens
                         </span>
                       </div>
                       <input
@@ -399,21 +327,94 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
                         max={32000}
                         step={512}
                         className="w-full accent-primary h-1 bg-foreground/10 rounded-lg appearance-none cursor-pointer"
-                        value={spec.memory_config.max_tokens}
+                        value={spec.memory_config.retrieval.max_tokens}
                         onChange={(e) =>
                           updateSpec({
                             memory_config: {
                               ...spec.memory_config,
-                              max_tokens: Math.max(
-                                512,
-                                parseInt(e.target.value || "512", 10),
-                              ),
+                              retrieval: {
+                                ...spec.memory_config.retrieval,
+                                max_tokens: Math.max(
+                                  512,
+                                  parseInt(e.target.value || "512", 10),
+                                ),
+                              },
                             },
                           })
                         }
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <label className="text-sm text-foreground flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={spec.memory_config.persistence.cross_session}
+                      onChange={(e) =>
+                        updateSpec({
+                          memory_config: {
+                            ...spec.memory_config,
+                            persistence: {
+                              ...spec.memory_config.persistence,
+                              cross_session: e.target.checked,
+                            },
+                          },
+                        })
+                      }
+                      className="accent-primary"
+                    />
+                    Cross-session persistence
+                  </label>
+
+                  <label className="text-sm text-foreground flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={spec.memory_config.persistence.per_connector_isolation}
+                      onChange={(e) =>
+                        updateSpec({
+                          memory_config: {
+                            ...spec.memory_config,
+                            persistence: {
+                              ...spec.memory_config.persistence,
+                              per_connector_isolation: e.target.checked,
+                            },
+                          },
+                        })
+                      }
+                      className="accent-primary"
+                    />
+                    Per-connector isolation
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
+                    Session Scope
+                  </label>
+                  <select
+                    value={spec.memory_config.persistence.session_scope}
+                    onChange={(e) =>
+                      updateSpec({
+                        memory_config: {
+                          ...spec.memory_config,
+                          persistence: {
+                            ...spec.memory_config.persistence,
+                            session_scope: e.target.value as
+                              | "per_user"
+                              | "per_channel"
+                              | "global",
+                          },
+                        },
+                      })
+                    }
+                    className="w-full md:w-[280px] bg-card/40 hover:bg-card/60 border border-border/20 rounded-xl h-11 px-3 text-foreground transition-all"
+                  >
+                    <option value="per_user">Per User</option>
+                    <option value="per_channel">Per Channel</option>
+                    <option value="global">Global</option>
+                  </select>
                 </div>
               </div>
             )}

@@ -1,11 +1,13 @@
+import type { AirlockConfig } from "./airlock";
+import type { MemoryConfig } from "./memory";
+
 export interface AgentSpec {
   id: string;
   version: string;
   soul: AgentSoul;
   skills: AgentSkills;
+  airlock: AirlockConfig;
   memory_config: MemoryConfig;
-  connectors: ConnectorsConfig;
-  signature?: AgentSignature;
 }
 
 export interface AgentSoul {
@@ -14,13 +16,41 @@ export interface AgentSoul {
   version: string;
   personality: string;
   tone: string;
-  soul_content: string; // Markdown content
+  soul_content: string;
   embedding?: number[];
 }
 
 export interface AgentSkills {
-  capabilities: Capability[];
-  tools: Record<string, any>; // Map of tool_name -> config
+  workflows: SkillWorkflow[];
+  tool_preferences: ToolPreference[];
+  behaviors: SkillBehavior[];
+
+  // @deprecated Compatibility bridge for current Rust AgentSpec v2.
+  capabilities?: Capability[];
+  // @deprecated Compatibility bridge for current Rust AgentSpec v2.
+  tools?: Record<string, unknown>;
+}
+
+export interface SkillWorkflow {
+  id: string;
+  name: string;
+  description: string;
+  trigger: string;
+  steps: string;
+  enabled: boolean;
+}
+
+export interface ToolPreference {
+  tool_name: string;
+  priority: "prefer" | "avoid" | "never";
+  context: string;
+}
+
+export interface SkillBehavior {
+  id: string;
+  name: string;
+  instruction: string;
+  enabled: boolean;
 }
 
 export interface Capability {
@@ -35,24 +65,4 @@ export enum Permission {
   Write = "Write",
   Execute = "Execute",
   Network = "Network",
-}
-
-export interface AgentSignature {
-  signature: string;
-  signer_id: string;
-  capabilities_hash: string;
-  origin_device_id: string;
-  signed_at: number;
-}
-
-export interface MemoryConfig {
-  strategy: "vector" | "simple_buffer" | "hybrid";
-  retention_days: number;
-  max_tokens: number;
-}
-
-export interface ConnectorsConfig {
-  telegram_enabled: boolean;
-  telegram_channel_id?: string;
-  auto_reply: boolean;
 }
