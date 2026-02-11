@@ -5,6 +5,26 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.17] - 2026-02-11 - Spec Builder v2
+
+### Added - Spec Builder v2
+
+**Desktop Runtime (`src-tauri/src/`)**
+
+- `src/lib.rs` — Registered `spec_builder` module with `create_default_spec` and `normalize_spec` functions
+
+### Changed
+
+- `routes/admin.ts`:
+  - `POST /admin/agents` and `PATCH /admin/agents/:id` now use `normalizeAgentSpec()` to sanitize and validate incoming specs
+  - Added comprehensive type-safe validation for all spec fields
+  - Improved error messages for invalid spec fields
+
+### Validation
+
+- `cd rainy-atm && bunx tsc --noEmit` — No TypeScript errors
+- `cd src-tauri && cargo test spec_builder` — 2 tests pass
+
 ## [0.5.16] - 2026-02-11 - Security Hardening (Phase 5)
 
 ### Added - Spec Integrity + Tool Audit Trail
