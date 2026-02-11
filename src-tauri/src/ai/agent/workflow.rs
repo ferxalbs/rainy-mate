@@ -669,6 +669,7 @@ mod tests {
             workspace_id: "test-ws".to_string(),
             max_steps: Some(10),
             allowed_paths: None,
+            custom_system_prompt: None,
         };
 
         let mut workflow = Workflow::new(spec.clone(), options, "start".to_string());

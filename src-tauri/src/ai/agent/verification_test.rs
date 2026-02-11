@@ -84,6 +84,7 @@ mod tests {
             workspace_id: "test-ws".to_string(),
             max_steps: Some(1),
             allowed_paths: None,
+            custom_system_prompt: None,
         };
 
         // We can't easily run() without a real SkillExecutor/Router,

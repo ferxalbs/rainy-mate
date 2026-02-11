@@ -173,6 +173,7 @@ pub async fn run_agent_workflow(
         } else {
             Some(airlock_paths.clone())
         },
+        custom_system_prompt: None,
     };
 
     // Initialize Persistent Memory

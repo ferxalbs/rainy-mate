@@ -16,6 +16,7 @@ pub struct RuntimeOptions {
     pub workspace_id: String,
     pub max_steps: Option<usize>,
     pub allowed_paths: Option<Vec<String>>,
+    pub custom_system_prompt: Option<String>,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
@@ -176,7 +177,13 @@ impl AgentRuntime {
     }
 
     fn generate_system_prompt(&self) -> String {
+        // If a custom system prompt is provided (e.g. from Cloud/ATM), use it directly.
+        if let Some(custom) = &self.options.custom_system_prompt {
+            return custom.clone();
+        }
+
         let spec = &self.spec;
+        // ... (rest of generation logic)
         let workspace_id = &self.options.workspace_id;
         let allowed_paths = self.options.allowed_paths.clone().unwrap_or_default();
         let workspace_scope = if allowed_paths.is_empty() {

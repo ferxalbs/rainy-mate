@@ -481,6 +481,10 @@ impl CommandPoller {
                             } else {
                                 None // will be resolved after spec is loaded
                             },
+                            // Use the agentSystemPrompt from payload if available.
+                            // This ensures the Cloud's "Soul" (instructions, personality) is respected
+                            // even if we load a local (potentially stale) spec.
+                            custom_system_prompt: agent_system_prompt.clone(),
                         };
 
                         // Create config
