@@ -17,24 +17,22 @@ import { SkillsSelector } from "./SkillsSelector";
 import { SecurityPanel } from "./SecurityPanel";
 import { createDefaultAgentSpec } from "./specDefaults";
 import * as tauri from "../../../services/tauri";
+import { useTheme } from "../../../hooks/useTheme";
 
 interface AgentBuilderProps {
   onBack: () => void;
   initialSpec?: AgentSpec;
-  onOpenStore?: () => void;
 }
 
-export function AgentBuilder({
-  onBack,
-  initialSpec,
-  onOpenStore,
-}: AgentBuilderProps) {
+export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
   const [spec, setSpec] = useState<AgentSpec>(() =>
     initialSpec ? structuredClone(initialSpec) : createDefaultAgentSpec(),
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("soul");
+  const { mode } = useTheme();
+  const isDark = mode === "dark";
 
   useEffect(() => {
     setSpec(
@@ -79,6 +77,10 @@ export function AgentBuilder({
     }
   };
 
+  // Dynamic Opacity Rule: 60% Light, 20% Dark
+  // Using Tailwind's opacity modifiers on bg-background/card or custom colors
+  // panelClass = "bg-background/60 dark:bg-background/20 backdrop-blur-2xl border border-border/50"
+
   const NavItem = ({
     id,
     icon: Icon,
@@ -96,8 +98,8 @@ export function AgentBuilder({
         onClick={() => setActiveTab(id)}
         className={`w-full text-left px-4 py-3 rounded-2xl transition-all duration-300 group relative overflow-hidden ${
           isActive
-            ? "bg-[#bef264] text-black shadow-md shadow-[#bef264]/10"
-            : "hover:bg-white/5 text-zinc-400 hover:text-zinc-200"
+            ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
+            : "hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
         }`}
       >
         <div className="flex items-center gap-3 relative z-10">
@@ -110,12 +112,12 @@ export function AgentBuilder({
           </div>
           <div>
             <span
-              className={`block text-sm font-bold ${isActive ? "text-black" : "text-zinc-200"}`}
+              className={`block text-sm font-bold ${isActive ? "text-primary-foreground" : "text-foreground"}`}
             >
               {label}
             </span>
             <span
-              className={`text-[10px] uppercase tracking-wider ${isActive ? "text-black/60" : "text-zinc-600"}`}
+              className={`text-[10px] uppercase tracking-wider ${isActive ? "text-primary-foreground/70" : "text-muted-foreground"}`}
             >
               {description}
             </span>
@@ -126,24 +128,29 @@ export function AgentBuilder({
   };
 
   return (
-    <div
-      className="h-full w-full bg-[#020402] p-3 flex gap-3 overflow-hidden font-sans selection:bg-[#bef264] selection:text-black"
-      data-tauri-drag-region
-    >
+    <div className="h-full w-full bg-background p-3 flex gap-3 overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground relative">
+      {/* Draggable Background Layer */}
+      <div
+        className="absolute inset-0 w-full h-full z-0"
+        data-tauri-drag-region
+      />
+
       {/* LEFT PANEL: Navigation */}
-      <aside className="w-[260px] shrink-0 bg-[#0a0a0a] rounded-[1.5rem] border border-white/5 flex flex-col shadow-xl overflow-hidden relative">
-        {/* Header */}
+      <aside
+        className={`w-[260px] shrink-0 rounded-[1.5rem] border border-border/40 flex flex-col shadow-xl overflow-hidden relative z-10 ${isDark ? "bg-card/20" : "bg-card/60"} backdrop-blur-2xl`}
+      >
+        {/* Header - Explicitly Draggable */}
         <div className="p-6 pb-2" data-tauri-drag-region>
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-zinc-500 hover:text-[#bef264] transition-colors mb-4 group relative z-50"
+            className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-4 group relative z-50 window-no-drag"
           >
             <ArrowLeft className="size-3 group-hover:-translate-x-1 transition-transform" />
             <span className="text-xs font-medium tracking-wide uppercase">
               Back
             </span>
           </button>
-          <h1 className="text-xl font-bold text-white tracking-tight leading-tight pointer-events-none">
+          <h1 className="text-xl font-bold text-foreground tracking-tight leading-tight pointer-events-none">
             Agent
             <br />
             Builder
@@ -151,7 +158,7 @@ export function AgentBuilder({
         </div>
 
         {/* Nav Links */}
-        <div className="flex-1 px-3 space-y-1 overflow-y-auto">
+        <div className="flex-1 px-3 space-y-1 overflow-y-auto relative z-20">
           <NavItem
             id="soul"
             icon={Bot}
@@ -179,30 +186,32 @@ export function AgentBuilder({
         </div>
 
         {/* Footer */}
-        <div className="p-4 pt-2" data-tauri-drag-region>
-          <div className="text-[10px] text-zinc-700 font-mono text-center opacity-50 pointer-events-none">
-            Rainy Cowork v{tauri.VERSION || "0.0.0"}
+        <div className="p-4 pt-2">
+          <div className="text-[10px] text-muted-foreground font-mono text-center opacity-50 pointer-events-none">
+            Rainy Cowork
           </div>
         </div>
       </aside>
 
       {/* RIGHT PANEL: Content Editor */}
-      <main className="flex-1 bg-[#0a0a0a] rounded-[1.5rem] border border-white/5 shadow-xl flex flex-col overflow-hidden relative">
-        {/* Background Gradients */}
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#bef264]/[0.01] blur-[100px] rounded-full pointer-events-none" />
+      <main
+        className={`flex-1 rounded-[1.5rem] border border-border/40 shadow-xl flex flex-col overflow-hidden relative z-10 ${isDark ? "bg-card/20" : "bg-card/60"} backdrop-blur-2xl`}
+      >
+        {/* Background Gradients - Dynamic Primary Color */}
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/[0.03] blur-[100px] rounded-full pointer-events-none z-0" />
 
-        {/* Header */}
+        {/* Header - Explicitly Draggable */}
         <header
-          className="h-16 shrink-0 flex items-center justify-between px-8 border-b border-white/5 bg-[#0a0a0a]/50 backdrop-blur-xl z-20"
+          className="h-16 shrink-0 flex items-center justify-between px-8 border-b border-border/10 bg-background/20 backdrop-blur-xl z-20 relative"
           data-tauri-drag-region
         >
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-white tracking-tight">
+            <h2 className="text-lg font-bold text-foreground tracking-tight">
               {spec.soul.name || "Untitled Agent"}
             </h2>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#bef264]" />
-              <span className="text-xs text-zinc-400 font-mono">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-foreground/5 border border-foreground/5">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <span className="text-xs text-muted-foreground font-mono">
                 v{spec.version}
               </span>
             </div>
@@ -214,7 +223,7 @@ export function AgentBuilder({
               isDisabled={isSaving || isDeploying}
               variant="ghost"
               size="sm"
-              className="text-zinc-500 hover:text-[#bef264] font-medium"
+              className="text-muted-foreground hover:text-primary font-medium"
             >
               <Save className="size-3.5 mr-1.5" />
               Save Draft
@@ -222,7 +231,7 @@ export function AgentBuilder({
             <Button
               onPress={handleDeploy}
               isDisabled={isDeploying || isSaving}
-              className="bg-[#bef264] text-black hover:bg-[#a3e635] font-bold px-6 h-8 min-w-0 rounded-full shadow-lg shadow-[#bef264]/10 text-sm"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-6 h-8 min-w-0 rounded-full shadow-lg shadow-primary/20 text-sm"
             >
               <Rocket className="size-3.5 mr-1.5" />
               {isDeploying ? "Deploying..." : "Deploy"}
@@ -259,10 +268,10 @@ export function AgentBuilder({
             {activeTab === "memory" && (
               <div className="space-y-8">
                 <div className="flex flex-col gap-1">
-                  <h3 className="text-xl font-bold text-white">
+                  <h3 className="text-xl font-bold text-foreground">
                     Memory Matrix
                   </h3>
-                  <p className="text-zinc-500 text-sm">
+                  <p className="text-muted-foreground text-sm">
                     Configure retention and retrieval.
                   </p>
                 </div>
@@ -270,7 +279,7 @@ export function AgentBuilder({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {/* Strategy */}
                   <div className="space-y-3">
-                    <Label className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                    <Label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
                       Retrieval Strategy
                     </Label>
                     <Select
@@ -291,22 +300,22 @@ export function AgentBuilder({
                       className="w-full"
                     >
                       <Label>Select Strategy</Label>
-                      <Select.Trigger className="bg-[#121212] hover:bg-[#1a1a1a] border border-white/5 rounded-xl h-12 px-3 text-zinc-200 transition-all data-[open=true]:border-[#bef264]/50 text-sm">
+                      <Select.Trigger className="bg-card/40 hover:bg-card/60 border border-border/20 rounded-xl h-12 px-3 text-foreground transition-all data-[open=true]:border-primary/50 text-sm">
                         <Select.Value />
                         <Select.Indicator />
                       </Select.Trigger>
-                      <Select.Popover className="bg-[#121212] border border-white/10 dark rounded-xl shadow-xl">
+                      <Select.Popover className="bg-popover border border-border dark rounded-xl shadow-xl">
                         <ListBox>
                           <ListBox.Item
                             key="hybrid"
                             textValue="Hybrid Search"
-                            className="data-[hover=true]:bg-white/5 py-2 rounded-lg"
+                            className="data-[hover=true]:bg-foreground/5 py-2 rounded-lg"
                           >
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-sm font-bold text-white">
+                              <span className="text-sm font-bold text-foreground">
                                 Hybrid Search
                               </span>
-                              <span className="text-[10px] text-zinc-500">
+                              <span className="text-[10px] text-muted-foreground">
                                 Vector + Short-term buffer (Recommended)
                               </span>
                             </div>
@@ -314,13 +323,13 @@ export function AgentBuilder({
                           <ListBox.Item
                             key="vector"
                             textValue="Vector Only"
-                            className="data-[hover=true]:bg-white/5 py-2 rounded-lg"
+                            className="data-[hover=true]:bg-foreground/5 py-2 rounded-lg"
                           >
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-sm font-bold text-white">
+                              <span className="text-sm font-bold text-foreground">
                                 Vector Only
                               </span>
-                              <span className="text-[10px] text-zinc-500">
+                              <span className="text-[10px] text-muted-foreground">
                                 Long-term semantic search
                               </span>
                             </div>
@@ -328,13 +337,13 @@ export function AgentBuilder({
                           <ListBox.Item
                             key="simple_buffer"
                             textValue="Simple Buffer"
-                            className="data-[hover=true]:bg-white/5 py-2 rounded-lg"
+                            className="data-[hover=true]:bg-foreground/5 py-2 rounded-lg"
                           >
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-sm font-bold text-white">
+                              <span className="text-sm font-bold text-foreground">
                                 Simple Buffer
                               </span>
-                              <span className="text-[10px] text-zinc-500">
+                              <span className="text-[10px] text-muted-foreground">
                                 FIFO context window only
                               </span>
                             </div>
@@ -348,10 +357,10 @@ export function AgentBuilder({
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <div className="flex justify-between items-end">
-                        <Label className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                        <Label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
                           Retention
                         </Label>
-                        <span className="font-mono text-zinc-300 text-xs">
+                        <span className="font-mono text-foreground text-xs">
                           {spec.memory_config.retention_days} days
                         </span>
                       </div>
@@ -359,7 +368,7 @@ export function AgentBuilder({
                         type="range"
                         min={1}
                         max={90}
-                        className="w-full accent-[#bef264] h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                        className="w-full accent-primary h-1 bg-foreground/10 rounded-lg appearance-none cursor-pointer"
                         value={spec.memory_config.retention_days}
                         onChange={(e) =>
                           updateSpec({
@@ -377,10 +386,10 @@ export function AgentBuilder({
 
                     <div className="space-y-3">
                       <div className="flex justify-between items-end">
-                        <Label className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                        <Label className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
                           Context Window
                         </Label>
-                        <span className="font-mono text-zinc-300 text-xs">
+                        <span className="font-mono text-foreground text-xs">
                           {spec.memory_config.max_tokens} tokens
                         </span>
                       </div>
@@ -389,7 +398,7 @@ export function AgentBuilder({
                         min={512}
                         max={32000}
                         step={512}
-                        className="w-full accent-[#bef264] h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                        className="w-full accent-primary h-1 bg-foreground/10 rounded-lg appearance-none cursor-pointer"
                         value={spec.memory_config.max_tokens}
                         onChange={(e) =>
                           updateSpec({
