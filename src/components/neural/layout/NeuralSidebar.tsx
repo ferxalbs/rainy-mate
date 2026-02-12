@@ -69,8 +69,21 @@ export function NeuralSidebar({
         isDark ? "bg-card/20" : "bg-card/60"
       } backdrop-blur-2xl`}
     >
-      <div className="p-6 pb-2" data-tauri-drag-region>
-        <h1 className="text-xl font-bold text-foreground tracking-tight leading-tight pointer-events-none">
+      <div className="p-4 flex items-center gap-3 mb-5" data-tauri-drag-region>
+        <div
+          className="w-10 h-10 bg-foreground shrink-0"
+          style={{
+            maskImage: `url(/whale-dnf.png)`,
+            maskSize: "contain",
+            maskRepeat: "no-repeat",
+            maskPosition: "center",
+            WebkitMaskImage: `url(/whale-dnf.png)`,
+            WebkitMaskSize: "contain",
+            WebkitMaskRepeat: "no-repeat",
+            WebkitMaskPosition: "center",
+          }}
+        />
+        <h1 className="text-xl font-bold text-foreground tracking-tight leading-none pointer-events-none">
           Neural
           <br />
           Engine
