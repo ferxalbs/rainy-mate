@@ -1,7 +1,7 @@
 // Rainy Cowork - Settings Page
 // Full-page settings with AI model selection, API keys, and preferences
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   Button,
   Tabs,
@@ -17,7 +17,6 @@ import {
   Key,
   User,
   Check,
-  Lock,
   Sparkles,
   Eye,
   EyeOff,
@@ -52,11 +51,13 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const themeContext = useContext(ThemeContext);
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [selectedModel, setSelectedModel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const { profile, isLoading: isLoadingProfile, saveProfile } = useUserProfile();
+  const {
+    profile,
+    isLoading: isLoadingProfile,
+    saveProfile,
+  } = useUserProfile();
   const [profileForm, setProfileForm] = useState<UserProfile>({
     displayName: "",
     email: "",
@@ -84,21 +85,17 @@ export function SettingsPage({
   const [rainyApiModels, setRainyApiModels] = useState<string[]>([]);
   const [geminiModels, setGeminiModels] = useState<string[]>([]);
 
-  // Load models and current selection
+  // Load available models
   useEffect(() => {
     async function loadData() {
       try {
-        const [rainyModels, geminiModelsList, currentModel] = await Promise.all(
-          [
-            tauri.getProviderModels("rainy_api").catch(() => []),
-            tauri.getProviderModels("gemini").catch(() => []),
-            tauri.getSelectedModel(),
-          ],
-        );
+        const [rainyModels, geminiModelsList] = await Promise.all([
+          tauri.getProviderModels("rainy_api").catch(() => []),
+          tauri.getProviderModels("gemini").catch(() => []),
+        ]);
 
         setRainyApiModels(rainyModels || []);
         setGeminiModels(geminiModelsList || []);
-        setSelectedModel(currentModel);
       } catch (error) {
         console.error("Failed to load settings:", error);
       } finally {
@@ -108,27 +105,11 @@ export function SettingsPage({
     loadData();
   }, []);
 
-  // Handle model selection
-  const handleSelectModel = useCallback(async (modelId: string) => {
-    setIsSaving(true);
-    try {
-      await tauri.setSelectedModel(modelId);
-      setSelectedModel(modelId);
-    } catch (error) {
-      console.error("Failed to set model:", error);
-    } finally {
-      setIsSaving(false);
-    }
-  }, []);
-
   useEffect(() => {
     setProfileForm(profile);
   }, [profile]);
 
-  const updateProfileField = (
-    key: keyof UserProfile,
-    value: string,
-  ) => {
+  const updateProfileField = (key: keyof UserProfile, value: string) => {
     setProfileForm((prev) => ({
       ...prev,
       [key]: value,
@@ -231,61 +212,18 @@ export function SettingsPage({
     });
   };
 
-  // Helper to render model card
+  // Helper to render model card (display-only, no selection)
   const ModelCard = ({
-    id,
     name,
     description,
-    isLocked = false,
-    isSelected = false,
   }: {
-    id: string;
     name: string;
     description: string;
-    isLocked?: boolean;
-    isSelected?: boolean;
   }) => (
-    <div
-      className={`p-4 rounded-xl border transition-all ${
-        isSelected
-          ? "bg-muted/50 border-primary/50 cursor-pointer"
-          : !isLocked
-            ? "bg-transparent border-transparent hover:bg-muted/30 cursor-pointer"
-            : "opacity-60 cursor-not-allowed bg-transparent border-transparent"
-      }`}
-      onClick={() => !isLocked && handleSelectModel(id)}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{name}</span>
-            {isLocked && <Lock className="size-3 text-muted-foreground" />}
-            {isSelected && (
-              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Check className="size-3" />
-                Active
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">{description}</p>
-        </div>
-        {isSelected ? (
-          <div className="size-5 rounded-full border-2 border-primary bg-primary flex items-center justify-center">
-            <Check className="size-3 text-white" />
-          </div>
-        ) : !isLocked ? (
-          <div className="size-5 rounded-full border-2 border-muted-foreground/30" />
-        ) : (
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={() =>
-              window.open("https://enosislabs.com/pricing", "_blank")
-            }
-          >
-            Upgrade
-          </Button>
-        )}
+    <div className="p-4 rounded-xl border border-transparent bg-transparent">
+      <div className="flex-1">
+        <span className="font-medium">{name}</span>
+        <p className="text-sm text-muted-foreground mt-1">{description}</p>
       </div>
     </div>
   );
@@ -377,10 +315,8 @@ export function SettingsPage({
                         {rainyApiModels.map((model) => (
                           <ModelCard
                             key={model}
-                            id={model}
                             name={model}
                             description="Billed per usage (1:1 Token)"
-                            isSelected={selectedModel === model}
                           />
                         ))}
                       </div>
@@ -398,20 +334,11 @@ export function SettingsPage({
                         {geminiModels.map((model) => (
                           <ModelCard
                             key={model}
-                            id={model}
                             name={model}
                             description="Uses your own Gemini API Key"
-                            isSelected={selectedModel === model}
                           />
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {isSaving && (
-                    <div className="fixed bottom-4 right-4 bg-accent text-white px-4 py-2 rounded-lg flex items-center gap-2">
-                      <Spinner size="sm" />
-                      Saving...
                     </div>
                   )}
                 </>
@@ -568,10 +495,11 @@ export function SettingsPage({
                               </Button>
                             </div>
                           )}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Button
-                              variant="secondary"
+                              variant="ghost"
                               size="sm"
+                              className="bg-muted/30 hover:bg-muted/50 text-foreground border border-border/20"
                               onPress={() => handleViewKey(provider.id)}
                               isDisabled={!!visibleKey}
                             >
@@ -579,17 +507,17 @@ export function SettingsPage({
                               View
                             </Button>
                             <Button
-                              variant="secondary"
+                              variant="ghost"
                               size="sm"
+                              className="bg-muted/30 hover:bg-muted/50 text-foreground border border-border/20"
                               onPress={() => handleReplaceKey(provider.id)}
                             >
                               <ExternalLink className="size-4 mr-1" />
                               Replace
                             </Button>
                             <Button
-                              variant="tertiary"
+                              variant="danger-soft"
                               size="sm"
-                              className="text-red-500 hover:text-red-600"
                               onPress={() => handleDeleteKey(provider.id)}
                             >
                               <Trash2 className="size-4 mr-1" />
@@ -702,7 +630,9 @@ export function SettingsPage({
                   <div className="grid gap-3">
                     <TextField
                       name="profile-display-name"
-                      onChange={(value) => updateProfileField("displayName", value)}
+                      onChange={(value) =>
+                        updateProfileField("displayName", value)
+                      }
                     >
                       <Label className="flex items-center gap-1.5">
                         <User className="size-3.5" />
