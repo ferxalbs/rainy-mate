@@ -21,7 +21,7 @@ import {
   Eye,
   EyeOff,
   X,
-  ArrowLeft,
+  ChevronLeft,
   Copy,
   Trash2,
   ExternalLink,
@@ -244,13 +244,20 @@ export function SettingsPage({
   return (
     <div className="h-full flex flex-col relative z-20">
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-border shrink-0">
+      {/* Header - macOS Style Premium */}
+      <div className="flex items-center gap-2 p-4 shrink-0">
         {onBack && (
-          <Button variant="secondary" size="sm" onPress={onBack}>
-            <ArrowLeft className="size-4" />
+          <Button
+            isIconOnly
+            variant="ghost"
+            size="sm"
+            className="rounded-full h-8 w-8 min-w-[32px] hover:bg-foreground/5 text-foreground/80 -ml-1"
+            onPress={onBack}
+          >
+            <ChevronLeft className="size-5" />
           </Button>
         )}
-        <h1 className="text-xl font-semibold">Settings</h1>
+        <h1 className="text-lg font-semibold tracking-tight pl-1">Settings</h1>
       </div>
 
       {/* Tabs Content - Scrollable */}
