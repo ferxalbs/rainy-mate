@@ -61,7 +61,8 @@ pub fn get_tool_policy(function_name: &str) -> ToolPolicy {
             skill: ToolSkill::Filesystem,
             airlock_level: AirlockLevel::Sensitive,
         },
-        "browse_url" | "click_element" | "navigate" | "type_text" => ToolPolicy {
+        "browse_url" | "click_element" | "navigate" | "open_new_tab" | "type_text"
+        | "go_back" => ToolPolicy {
             skill: ToolSkill::Browser,
             airlock_level: AirlockLevel::Sensitive,
         },
@@ -69,6 +70,14 @@ pub fn get_tool_policy(function_name: &str) -> ToolPolicy {
         // Level 2: destructive or external command execution
         "execute_command" => ToolPolicy {
             skill: ToolSkill::Shell,
+            airlock_level: AirlockLevel::Dangerous,
+        },
+        "http_post_json" => ToolPolicy {
+            skill: ToolSkill::Web,
+            airlock_level: AirlockLevel::Dangerous,
+        },
+        "submit_form" => ToolPolicy {
+            skill: ToolSkill::Browser,
             airlock_level: AirlockLevel::Dangerous,
         },
         "delete_file" | "move_file" => ToolPolicy {

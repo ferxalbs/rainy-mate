@@ -144,6 +144,18 @@ pub struct ReadWebPageArgs {
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
+pub struct HttpPostJsonArgs {
+    /// URL to POST to (http/https only)
+    pub url: String,
+    /// JSON body to send
+    pub body: Value,
+    /// Request timeout in milliseconds (default: 15000)
+    pub timeout_ms: Option<u64>,
+    /// Maximum allowed response size in bytes (default: 512KB, max: 2MB)
+    pub max_bytes: Option<usize>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BrowserNavigateArgs {
     /// URL to navigate to
     pub url: String,
@@ -171,6 +183,22 @@ pub struct TypeTextArgs {
     pub text: String,
     /// Whether to clear existing value first
     pub clear_first: Option<bool>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct SubmitFormArgs {
+    /// Optional form selector; defaults to first form element
+    pub form_selector: Option<String>,
+    /// Optional submit control selector to click directly
+    pub submit_selector: Option<String>,
+    /// Wait time after submit in milliseconds (default: 1200, max: 10000)
+    pub wait_ms: Option<u64>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct GoBackArgs {
+    /// Wait time after navigation in milliseconds (default: 1000, max: 10000)
+    pub wait_ms: Option<u64>,
 }
 
 #[derive(JsonSchema, Serialize, Deserialize, Default)]
@@ -388,6 +416,16 @@ impl SkillExecutor {
             crate::ai::provider_types::Tool {
                 r#type: "function".to_string(),
                 function: crate::ai::provider_types::FunctionDefinition {
+                    name: "http_post_json".to_string(),
+                    description:
+                        "POST JSON to an HTTP(S) endpoint with timeout and size limits"
+                            .to_string(),
+                    parameters: serde_json::to_value(schema_for!(HttpPostJsonArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
                     name: "read_web_page".to_string(),
                     description: "Read the content of a web page using a headless scraper (good for static text)".to_string(),
                     parameters: serde_json::to_value(schema_for!(ReadWebPageArgs)).unwrap(),
@@ -398,6 +436,14 @@ impl SkillExecutor {
                 function: crate::ai::provider_types::FunctionDefinition {
                     name: "browse_url".to_string(),
                     description: "Open a URL in the visible browser (for dynamic sites). Returns title and content preview.".to_string(),
+                    parameters: serde_json::to_value(schema_for!(BrowserNavigateArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "open_new_tab".to_string(),
+                    description: "Open a URL in a new browser tab".to_string(),
                     parameters: serde_json::to_value(schema_for!(BrowserNavigateArgs)).unwrap(),
                 },
             },
@@ -425,6 +471,22 @@ impl SkillExecutor {
                         "Type text into an input/textarea using selector, optionally clearing first"
                             .to_string(),
                     parameters: serde_json::to_value(schema_for!(TypeTextArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "submit_form".to_string(),
+                    description: "Submit a form in the active page".to_string(),
+                    parameters: serde_json::to_value(schema_for!(SubmitFormArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "go_back".to_string(),
+                    description: "Navigate one step back in browser history".to_string(),
+                    parameters: serde_json::to_value(schema_for!(GoBackArgs)).unwrap(),
                 },
             },
             crate::ai::provider_types::Tool {
@@ -621,7 +683,7 @@ impl SkillExecutor {
         };
 
         match method {
-            "navigate" | "browse_url" => {
+            "navigate" | "browse_url" | "open_new_tab" => {
                 let args: BrowserNavigateArgs = match serde_json::from_value(params.clone()) {
                     Ok(a) => a,
                     Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
@@ -731,6 +793,79 @@ impl SkillExecutor {
                         exit_code: Some(0),
                     },
                     Err(e) => self.error(&e),
+                }
+            }
+            "submit_form" => {
+                let args: SubmitFormArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                let wait_ms = args.wait_ms.unwrap_or(1200).clamp(100, 10_000);
+                let form_selector_json = match serde_json::to_string(&args.form_selector) {
+                    Ok(v) => v,
+                    Err(e) => return self.error(&format!("Invalid form selector: {}", e)),
+                };
+                let submit_selector_json = match serde_json::to_string(&args.submit_selector) {
+                    Ok(v) => v,
+                    Err(e) => return self.error(&format!("Invalid submit selector: {}", e)),
+                };
+
+                let script = format!(
+                    "(function() {{
+                        const formSel = {form_sel};
+                        const submitSel = {submit_sel};
+                        const form = formSel ? document.querySelector(formSel) : document.querySelector('form');
+                        if (!form) return JSON.stringify({{ ok: false, error: 'form_not_found' }});
+                        if (submitSel) {{
+                            const submitEl = document.querySelector(submitSel);
+                            if (!submitEl) return JSON.stringify({{ ok: false, error: 'submit_not_found' }});
+                            submitEl.click();
+                            return JSON.stringify({{ ok: true, method: 'click_submit' }});
+                        }}
+                        const ev = new Event('submit', {{ bubbles: true, cancelable: true }});
+                        form.dispatchEvent(ev);
+                        if (typeof form.submit === 'function') form.submit();
+                        return JSON.stringify({{ ok: true, method: 'form_submit' }});
+                    }})()",
+                    form_sel = form_selector_json,
+                    submit_sel = submit_selector_json
+                );
+
+                match self.browser.evaluate(script.as_str()).await {
+                    Ok(result) => {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(wait_ms)).await;
+                        CommandResult {
+                            success: true,
+                            output: Some(result),
+                            error: None,
+                            exit_code: Some(0),
+                        }
+                    }
+                    Err(e) => self.error(&format!("Failed to submit form: {}", e)),
+                }
+            }
+            "go_back" => {
+                let args: GoBackArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                let wait_ms = args.wait_ms.unwrap_or(1000).clamp(100, 10_000);
+                let go_back_script = "(function() { history.back(); return JSON.stringify({ ok: true }); })()";
+                match self.browser.evaluate(go_back_script).await {
+                    Ok(_) => {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(wait_ms)).await;
+                        let snapshot_script = "(function() { return JSON.stringify({ url: location.href, title: document.title || '', content_preview: (document.body ? document.body.innerText.substring(0, 2000) : '') }); })()";
+                        match self.browser.evaluate(snapshot_script).await {
+                            Ok(snapshot) => CommandResult {
+                                success: true,
+                                output: Some(snapshot),
+                                error: None,
+                                exit_code: Some(0),
+                            },
+                            Err(e) => self.error(&format!("Back navigation completed but snapshot failed: {}", e)),
+                        }
+                    }
+                    Err(e) => self.error(&format!("Failed to navigate back: {}", e)),
                 }
             }
             "get_content" | "get_page_content" => {
@@ -854,6 +989,13 @@ impl SkillExecutor {
                 };
                 self.handle_http_get_json(args).await
             }
+            "http_post_json" => {
+                let args: HttpPostJsonArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_http_post_json(args).await
+            }
             _ => CommandResult {
                 success: false,
                 output: None,
@@ -909,14 +1051,42 @@ impl SkillExecutor {
     }
 
     async fn handle_http_get_json(&self, args: HttpGetJsonArgs) -> CommandResult {
-        let parsed_url = match Self::validate_http_url(&args.url) {
+        self.handle_http_json_request(
+            "GET",
+            args.url,
+            None,
+            args.timeout_ms,
+            args.max_bytes,
+        )
+        .await
+    }
+
+    async fn handle_http_post_json(&self, args: HttpPostJsonArgs) -> CommandResult {
+        self.handle_http_json_request(
+            "POST",
+            args.url,
+            Some(args.body),
+            args.timeout_ms,
+            args.max_bytes,
+        )
+        .await
+    }
+
+    async fn handle_http_json_request(
+        &self,
+        method: &str,
+        url: String,
+        body: Option<Value>,
+        timeout_ms_opt: Option<u64>,
+        max_bytes_opt: Option<usize>,
+    ) -> CommandResult {
+        let parsed_url = match Self::validate_http_url(&url) {
             Ok(u) => u,
             Err(e) => return self.error(&e),
         };
 
-        let timeout_ms = args.timeout_ms.unwrap_or(15_000).clamp(1_000, 60_000);
-        let max_bytes = args
-            .max_bytes
+        let timeout_ms = timeout_ms_opt.unwrap_or(15_000).clamp(1_000, 60_000);
+        let max_bytes = max_bytes_opt
             .unwrap_or(512 * 1024)
             .clamp(1_024, 2 * 1024 * 1024);
 
@@ -931,11 +1101,22 @@ impl SkillExecutor {
 
         let mut last_error: Option<String> = None;
         for attempt in 0..=2 {
-            let response = client
-                .get(parsed_url.clone())
-                .header("accept", "application/json")
-                .send()
-                .await;
+            let request_builder = if method == "POST" {
+                let req = client
+                    .post(parsed_url.clone())
+                    .header("accept", "application/json")
+                    .header("content-type", "application/json");
+                match &body {
+                    Some(v) => req.json(v),
+                    None => req,
+                }
+            } else {
+                client
+                    .get(parsed_url.clone())
+                    .header("accept", "application/json")
+            };
+
+            let response = request_builder.send().await;
 
             match response {
                 Ok(resp) => {
@@ -985,6 +1166,7 @@ impl SkillExecutor {
                     };
 
                     let output = serde_json::json!({
+                        "method": method,
                         "url": parsed_url.as_str(),
                         "status": status.as_u16(),
                         "content_type": content_type,

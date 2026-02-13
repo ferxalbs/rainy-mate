@@ -282,6 +282,33 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
           },
         },
       },
+      {
+        name: "http_post_json",
+        description: "POST JSON to HTTP(S) APIs",
+        airlockLevel: getToolAirlockLevel("http_post_json"),
+        parameters: {
+          url: {
+            type: "string",
+            description: "HTTP(S) URL",
+            required: true,
+          },
+          body: {
+            type: "object",
+            description: "JSON body",
+            required: true,
+          },
+          timeout_ms: {
+            type: "number",
+            description: "Timeout in milliseconds",
+            required: false,
+          },
+          max_bytes: {
+            type: "number",
+            description: "Maximum response size in bytes",
+            required: false,
+          },
+        },
+      },
     ],
   },
   {
@@ -292,6 +319,18 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
         name: "browse_url",
         description: "Open a URL in the browser",
         airlockLevel: getToolAirlockLevel("browse_url"),
+        parameters: {
+          url: {
+            type: "string",
+            description: "URL to open",
+            required: true,
+          },
+        },
+      },
+      {
+        name: "open_new_tab",
+        description: "Open a URL in a new tab",
+        airlockLevel: getToolAirlockLevel("open_new_tab"),
         parameters: {
           url: {
             type: "string",
@@ -352,6 +391,18 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
         },
       },
       {
+        name: "go_back",
+        description: "Navigate one step back in history",
+        airlockLevel: getToolAirlockLevel("go_back"),
+        parameters: {
+          wait_ms: {
+            type: "number",
+            description: "Wait time after going back",
+            required: false,
+          },
+        },
+      },
+      {
         name: "screenshot",
         description: "Take a screenshot of the current page",
         airlockLevel: getToolAirlockLevel("screenshot"),
@@ -371,6 +422,28 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
           limit: {
             type: "number",
             description: "Maximum number of links to return",
+            required: false,
+          },
+        },
+      },
+      {
+        name: "submit_form",
+        description: "Submit a form in the current page",
+        airlockLevel: getToolAirlockLevel("submit_form"),
+        parameters: {
+          form_selector: {
+            type: "string",
+            description: "Optional form selector",
+            required: false,
+          },
+          submit_selector: {
+            type: "string",
+            description: "Optional submit button selector",
+            required: false,
+          },
+          wait_ms: {
+            type: "number",
+            description: "Wait time after submit",
             required: false,
           },
         },

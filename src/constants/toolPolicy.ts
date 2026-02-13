@@ -35,12 +35,16 @@ const TOOL_POLICY_MAP: Record<string, ToolPolicy> = {
   append_file: { skill: "filesystem", airlockLevel: AirlockLevels.Sensitive },
   mkdir: { skill: "filesystem", airlockLevel: AirlockLevels.Sensitive },
   browse_url: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
+  open_new_tab: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
   click_element: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
   navigate: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
+  go_back: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
   type_text: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
 
   // Level 2: destructive or command execution
   execute_command: { skill: "shell", airlockLevel: AirlockLevels.Dangerous },
+  http_post_json: { skill: "web", airlockLevel: AirlockLevels.Dangerous },
+  submit_form: { skill: "browser", airlockLevel: AirlockLevels.Dangerous },
   delete_file: { skill: "filesystem", airlockLevel: AirlockLevels.Dangerous },
   move_file: { skill: "filesystem", airlockLevel: AirlockLevels.Dangerous },
 };
