@@ -20,10 +20,14 @@ const TOOL_POLICY_MAP: Record<string, ToolPolicy> = {
   file_exists: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   get_file_info: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   read_file_chunk: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
+  git_status: { skill: "shell", airlockLevel: AirlockLevels.Safe },
+  git_diff: { skill: "shell", airlockLevel: AirlockLevels.Safe },
   web_search: { skill: "web", airlockLevel: AirlockLevels.Safe },
   read_web_page: { skill: "web", airlockLevel: AirlockLevels.Safe },
+  http_get_json: { skill: "web", airlockLevel: AirlockLevels.Safe },
   screenshot: { skill: "browser", airlockLevel: AirlockLevels.Safe },
   get_page_content: { skill: "browser", airlockLevel: AirlockLevels.Safe },
+  wait_for_selector: { skill: "browser", airlockLevel: AirlockLevels.Safe },
   extract_links: { skill: "browser", airlockLevel: AirlockLevels.Safe },
 
   // Level 1: state-changing but non-destructive
@@ -33,6 +37,7 @@ const TOOL_POLICY_MAP: Record<string, ToolPolicy> = {
   browse_url: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
   click_element: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
   navigate: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
+  type_text: { skill: "browser", airlockLevel: AirlockLevels.Sensitive },
 
   // Level 2: destructive or command execution
   execute_command: { skill: "shell", airlockLevel: AirlockLevels.Dangerous },

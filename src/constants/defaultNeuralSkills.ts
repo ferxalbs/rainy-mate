@@ -196,6 +196,40 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
           },
         },
       },
+      {
+        name: "git_status",
+        description: "Get git status with stable wrapper",
+        airlockLevel: getToolAirlockLevel("git_status"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Optional directory/file path inside workspace",
+            required: false,
+          },
+          short: {
+            type: "boolean",
+            description: "Compact output",
+            required: false,
+          },
+        },
+      },
+      {
+        name: "git_diff",
+        description: "Get git diff with stable wrapper",
+        airlockLevel: getToolAirlockLevel("git_diff"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Optional directory/file path inside workspace",
+            required: false,
+          },
+          staged: {
+            type: "boolean",
+            description: "Show staged diff",
+            required: false,
+          },
+        },
+      },
     ],
   },
   {
@@ -226,6 +260,28 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
           },
         },
       },
+      {
+        name: "http_get_json",
+        description: "Fetch JSON from HTTP(S) APIs",
+        airlockLevel: getToolAirlockLevel("http_get_json"),
+        parameters: {
+          url: {
+            type: "string",
+            description: "HTTP(S) URL",
+            required: true,
+          },
+          timeout_ms: {
+            type: "number",
+            description: "Timeout in milliseconds",
+            required: false,
+          },
+          max_bytes: {
+            type: "number",
+            description: "Maximum response size in bytes",
+            required: false,
+          },
+        },
+      },
     ],
   },
   {
@@ -253,6 +309,45 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
             type: "string",
             description: "CSS selector",
             required: true,
+          },
+        },
+      },
+      {
+        name: "wait_for_selector",
+        description: "Wait until a selector is present",
+        airlockLevel: getToolAirlockLevel("wait_for_selector"),
+        parameters: {
+          selector: {
+            type: "string",
+            description: "CSS selector",
+            required: true,
+          },
+          timeout_ms: {
+            type: "number",
+            description: "Timeout in milliseconds",
+            required: false,
+          },
+        },
+      },
+      {
+        name: "type_text",
+        description: "Type text into an element",
+        airlockLevel: getToolAirlockLevel("type_text"),
+        parameters: {
+          selector: {
+            type: "string",
+            description: "CSS selector",
+            required: true,
+          },
+          text: {
+            type: "string",
+            description: "Text to type",
+            required: true,
+          },
+          clear_first: {
+            type: "boolean",
+            description: "Clear previous value before typing",
+            required: false,
           },
         },
       },

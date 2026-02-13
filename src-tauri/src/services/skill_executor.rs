@@ -4,10 +4,12 @@ use crate::services::settings::SettingsManager;
 use crate::services::workspace::WorkspaceManager;
 use crate::services::ManagedResearchService;
 use base64::prelude::*;
+use reqwest::header::CONTENT_TYPE;
 use sha2::{Digest, Sha256};
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::net::IpAddr;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
@@ -114,6 +116,22 @@ pub struct ExecuteCommandArgs {
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
+pub struct GitStatusArgs {
+    /// Optional workspace path used as git working directory
+    pub path: Option<String>,
+    /// Use compact output format
+    pub short: Option<bool>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct GitDiffArgs {
+    /// Optional workspace path used as git working directory
+    pub path: Option<String>,
+    /// Show staged diff instead of unstaged
+    pub staged: Option<bool>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
 pub struct WebSearchArgs {
     /// The query to search for
     pub query: String,
@@ -137,10 +155,38 @@ pub struct BrowserClickArgs {
     pub selector: String,
 }
 
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct WaitForSelectorArgs {
+    /// CSS selector to wait for
+    pub selector: String,
+    /// Timeout in milliseconds (default: 10000, max: 60000)
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct TypeTextArgs {
+    /// CSS selector of the input/textarea/contenteditable element
+    pub selector: String,
+    /// Text to type
+    pub text: String,
+    /// Whether to clear existing value first
+    pub clear_first: Option<bool>,
+}
+
 #[derive(JsonSchema, Serialize, Deserialize, Default)]
 pub struct ExtractLinksArgs {
     /// Maximum number of links to return
     pub limit: Option<usize>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct HttpGetJsonArgs {
+    /// URL to fetch (http/https only)
+    pub url: String,
+    /// Request timeout in milliseconds (default: 15000)
+    pub timeout_ms: Option<u64>,
+    /// Maximum allowed response size in bytes (default: 512KB, max: 2MB)
+    pub max_bytes: Option<usize>,
 }
 
 pub struct SkillExecutor {
@@ -308,9 +354,35 @@ impl SkillExecutor {
             crate::ai::provider_types::Tool {
                 r#type: "function".to_string(),
                 function: crate::ai::provider_types::FunctionDefinition {
+                    name: "git_status".to_string(),
+                    description: "Get git status with stable wrapper options".to_string(),
+                    parameters: serde_json::to_value(schema_for!(GitStatusArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "git_diff".to_string(),
+                    description: "Get git diff with stable wrapper options".to_string(),
+                    parameters: serde_json::to_value(schema_for!(GitDiffArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
                     name: "web_search".to_string(),
                     description: "Search the web for information".to_string(),
                     parameters: serde_json::to_value(schema_for!(WebSearchArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "http_get_json".to_string(),
+                    description:
+                        "Fetch JSON from an HTTP(S) endpoint with timeout and size limits"
+                            .to_string(),
+                    parameters: serde_json::to_value(schema_for!(HttpGetJsonArgs)).unwrap(),
                 },
             },
             crate::ai::provider_types::Tool {
@@ -335,6 +407,24 @@ impl SkillExecutor {
                     name: "click_element".to_string(),
                     description: "Click an element in the browser by CSS selector".to_string(),
                     parameters: serde_json::to_value(schema_for!(BrowserClickArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "wait_for_selector".to_string(),
+                    description: "Wait until a CSS selector appears in the active page".to_string(),
+                    parameters: serde_json::to_value(schema_for!(WaitForSelectorArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "type_text".to_string(),
+                    description:
+                        "Type text into an input/textarea using selector, optionally clearing first"
+                            .to_string(),
+                    parameters: serde_json::to_value(schema_for!(TypeTextArgs)).unwrap(),
                 },
             },
             crate::ai::provider_types::Tool {
@@ -600,6 +690,49 @@ impl SkillExecutor {
                     Err(e) => self.error(&e),
                 }
             }
+            "wait_for_selector" => {
+                let args: WaitForSelectorArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                let timeout_ms = args.timeout_ms.unwrap_or(10_000).clamp(500, 60_000);
+                match self
+                    .browser
+                    .wait_for_selector(&args.selector, timeout_ms)
+                    .await
+                {
+                    Ok(()) => CommandResult {
+                        success: true,
+                        output: Some(format!(
+                            "Selector '{}' found within {}ms",
+                            args.selector, timeout_ms
+                        )),
+                        error: None,
+                        exit_code: Some(0),
+                    },
+                    Err(e) => self.error(&e),
+                }
+            }
+            "type_text" => {
+                let args: TypeTextArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                let clear_first = args.clear_first.unwrap_or(false);
+                match self
+                    .browser
+                    .type_text(&args.selector, &args.text, clear_first)
+                    .await
+                {
+                    Ok(()) => CommandResult {
+                        success: true,
+                        output: Some(format!("Typed text into '{}'", args.selector)),
+                        error: None,
+                        exit_code: Some(0),
+                    },
+                    Err(e) => self.error(&e),
+                }
+            }
             "get_content" | "get_page_content" => {
                 // Get page HTML content
                 match self.browser.get_content().await {
@@ -665,6 +798,20 @@ impl SkillExecutor {
                 self.execute_command(&args.command, args.args, &root_path)
                     .await
             }
+            "git_status" => {
+                let args: GitStatusArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_git_status(workspace_id, args, allowed_paths).await
+            }
+            "git_diff" => {
+                let args: GitDiffArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_git_diff(workspace_id, args, allowed_paths).await
+            }
             _ => CommandResult {
                 success: false,
                 output: None,
@@ -699,6 +846,13 @@ impl SkillExecutor {
                     Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
                 };
                 self.handle_read_web_page(&args.url).await
+            }
+            "http_get_json" => {
+                let args: HttpGetJsonArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_http_get_json(args).await
             }
             _ => CommandResult {
                 success: false,
@@ -754,6 +908,210 @@ impl SkillExecutor {
         }
     }
 
+    async fn handle_http_get_json(&self, args: HttpGetJsonArgs) -> CommandResult {
+        let parsed_url = match Self::validate_http_url(&args.url) {
+            Ok(u) => u,
+            Err(e) => return self.error(&e),
+        };
+
+        let timeout_ms = args.timeout_ms.unwrap_or(15_000).clamp(1_000, 60_000);
+        let max_bytes = args
+            .max_bytes
+            .unwrap_or(512 * 1024)
+            .clamp(1_024, 2 * 1024 * 1024);
+
+        let client = match reqwest::Client::builder()
+            .timeout(tokio::time::Duration::from_millis(timeout_ms))
+            .user_agent("rainy-cowork-agent/1.0")
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => return self.error(&format!("Failed to create HTTP client: {}", e)),
+        };
+
+        let mut last_error: Option<String> = None;
+        for attempt in 0..=2 {
+            let response = client
+                .get(parsed_url.clone())
+                .header("accept", "application/json")
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if (status.is_server_error() || status.as_u16() == 429) && attempt < 2 {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                            250 * (attempt as u64 + 1),
+                        ))
+                        .await;
+                        continue;
+                    }
+
+                    if !status.is_success() {
+                        return self.error(&format!(
+                            "HTTP request failed with status {} for {}",
+                            status, parsed_url
+                        ));
+                    }
+
+                    let content_type = resp
+                        .headers()
+                        .get(CONTENT_TYPE)
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("")
+                        .to_string();
+                    let bytes = match resp.bytes().await {
+                        Ok(b) => b,
+                        Err(e) => return self.error(&format!("Failed to read response body: {}", e)),
+                    };
+
+                    if bytes.len() > max_bytes {
+                        return self.error(&format!(
+                            "Response size {} exceeds max_bytes {}",
+                            bytes.len(),
+                            max_bytes
+                        ));
+                    }
+
+                    let parsed_json: Value = match serde_json::from_slice(&bytes) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            return self.error(&format!(
+                                "Response is not valid JSON (content-type '{}'): {}",
+                                content_type, e
+                            ));
+                        }
+                    };
+
+                    let output = serde_json::json!({
+                        "url": parsed_url.as_str(),
+                        "status": status.as_u16(),
+                        "content_type": content_type,
+                        "bytes": bytes.len(),
+                        "data": parsed_json,
+                    });
+
+                    return CommandResult {
+                        success: true,
+                        output: Some(truncate_output(&output.to_string())),
+                        error: None,
+                        exit_code: Some(0),
+                    };
+                }
+                Err(e) => {
+                    last_error = Some(e.to_string());
+                    if attempt < 2 {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                            250 * (attempt as u64 + 1),
+                        ))
+                        .await;
+                    }
+                }
+            }
+        }
+
+        self.error(&format!(
+            "HTTP request failed after retries: {}",
+            last_error.unwrap_or_else(|| "unknown error".to_string())
+        ))
+    }
+
+    fn validate_http_url(url: &str) -> Result<reqwest::Url, String> {
+        let parsed = reqwest::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
+
+        match parsed.scheme() {
+            "http" | "https" => {}
+            _ => return Err("Only http:// and https:// URLs are allowed".to_string()),
+        }
+
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| "URL must include a valid host".to_string())?
+            .to_ascii_lowercase();
+
+        if host == "localhost" || host.ends_with(".localhost") {
+            return Err("localhost URLs are blocked".to_string());
+        }
+
+        if let Ok(ip) = host.parse::<IpAddr>() {
+            match ip {
+                IpAddr::V4(v4) => {
+                    if v4.is_loopback() || v4.is_private() || v4.is_link_local() {
+                        return Err("Private or loopback IPs are blocked".to_string());
+                    }
+                }
+                IpAddr::V6(v6) => {
+                    if v6.is_loopback() || v6.is_unique_local() || v6.is_unspecified() {
+                        return Err("Private or loopback IPs are blocked".to_string());
+                    }
+                }
+            }
+        }
+
+        Ok(parsed)
+    }
+
+    async fn resolve_git_working_dir(
+        &self,
+        workspace_id: String,
+        path: Option<String>,
+        allowed_paths: &[String],
+    ) -> Result<PathBuf, String> {
+        let target = path.unwrap_or_else(|| ".".to_string());
+        let resolved = self.resolve_path(workspace_id, &target, allowed_paths).await?;
+        if resolved.is_dir() {
+            Ok(resolved)
+        } else {
+            resolved
+                .parent()
+                .map(|p| p.to_path_buf())
+                .ok_or_else(|| "Cannot determine parent directory for git path".to_string())
+        }
+    }
+
+    async fn handle_git_status(
+        &self,
+        workspace_id: String,
+        args: GitStatusArgs,
+        allowed_paths: &[String],
+    ) -> CommandResult {
+        let cwd = match self
+            .resolve_git_working_dir(workspace_id, args.path, allowed_paths)
+            .await
+        {
+            Ok(path) => path,
+            Err(e) => return self.error(&e),
+        };
+
+        let mut git_args = vec!["status".to_string()];
+        if args.short.unwrap_or(true) {
+            git_args.push("--short".to_string());
+        }
+        self.execute_command("git", git_args, &cwd).await
+    }
+
+    async fn handle_git_diff(
+        &self,
+        workspace_id: String,
+        args: GitDiffArgs,
+        allowed_paths: &[String],
+    ) -> CommandResult {
+        let cwd = match self
+            .resolve_git_working_dir(workspace_id, args.path, allowed_paths)
+            .await
+        {
+            Ok(path) => path,
+            Err(e) => return self.error(&e),
+        };
+
+        let mut git_args = vec!["diff".to_string()];
+        if args.staged.unwrap_or(false) {
+            git_args.push("--staged".to_string());
+        }
+        self.execute_command("git", git_args, &cwd).await
+    }
+
     /// Execute a shell command
     async fn execute_command(
         &self,
@@ -777,12 +1135,13 @@ impl SkillExecutor {
                 let stdout = String::from_utf8_lossy(&out.stdout).to_string();
                 let stderr = String::from_utf8_lossy(&out.stderr).to_string();
                 let exit_code = out.status.code().unwrap_or(1);
+                let combined = format!("{}\n{}", stdout, stderr).trim().to_string();
 
                 CommandResult {
                     success: out.status.success(),
-                    output: Some(format!("{}\n{}", stdout, stderr).trim().to_string()),
+                    output: Some(truncate_output(&combined)),
                     error: if !out.status.success() {
-                        Some(stderr)
+                        Some(truncate_output(&stderr))
                     } else {
                         None
                     },

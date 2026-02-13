@@ -10,7 +10,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::{timeout, Duration};
+use tokio::time::{timeout, Duration, Instant};
 
 const BROWSER_LAUNCH_TIMEOUT: Duration = Duration::from_secs(20);
 const BROWSER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
@@ -248,6 +248,106 @@ impl BrowserController {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         Ok(())
+    }
+
+    /// Wait until a selector appears on the current page
+    pub async fn wait_for_selector(&self, selector: &str, timeout_ms: u64) -> Result<(), String> {
+        let browser_lock = self.browser.lock().await;
+        let browser = browser_lock
+            .as_ref()
+            .ok_or("No browser instance. Navigate to a page first.")?;
+
+        let pages = browser
+            .pages()
+            .await
+            .map_err(|e| format!("Failed to get pages: {}", e))?;
+
+        let page = pages.last().ok_or("No pages open")?;
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+
+        loop {
+            if page.find_element(selector).await.is_ok() {
+                return Ok(());
+            }
+
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "Timed out after {}ms waiting for selector '{}'",
+                    timeout_ms, selector
+                ));
+            }
+
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+    }
+
+    /// Type text into a form control using JavaScript events
+    pub async fn type_text(
+        &self,
+        selector: &str,
+        text: &str,
+        clear_first: bool,
+    ) -> Result<(), String> {
+        let browser_lock = self.browser.lock().await;
+        let browser = browser_lock
+            .as_ref()
+            .ok_or("No browser instance. Navigate to a page first.")?;
+
+        let pages = browser
+            .pages()
+            .await
+            .map_err(|e| format!("Failed to get pages: {}", e))?;
+
+        let page = pages.last().ok_or("No pages open")?;
+        let selector_json =
+            serde_json::to_string(selector).map_err(|e| format!("Invalid selector: {}", e))?;
+        let text_json = serde_json::to_string(text).map_err(|e| format!("Invalid text: {}", e))?;
+        let clear_literal = if clear_first { "true" } else { "false" };
+
+        let script = format!(
+            "(function() {{
+                const sel = {selector};
+                const txt = {text};
+                const clearFirst = {clear_first};
+                const el = document.querySelector(sel);
+                if (!el) return JSON.stringify({{ ok: false, error: 'not_found' }});
+                if (clearFirst && 'value' in el) el.value = '';
+                if ('focus' in el) el.focus();
+                if ('value' in el) {{
+                    el.value = String(el.value || '') + txt;
+                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    return JSON.stringify({{ ok: true }});
+                }}
+                return JSON.stringify({{ ok: false, error: 'not_editable' }});
+            }})()",
+            selector = selector_json,
+            text = text_json,
+            clear_first = clear_literal
+        );
+
+        let result = timeout(BROWSER_EVAL_TIMEOUT, page.evaluate(script.as_str()))
+            .await
+            .map_err(|_| "Timed out typing into selector".to_string())?
+            .map_err(|e| format!("Type text evaluation failed: {}", e))?
+            .into_value::<String>()
+            .map_err(|e| format!("Failed to parse type text result: {}", e))?;
+
+        let parsed: serde_json::Value = serde_json::from_str(&result)
+            .map_err(|e| format!("Failed to decode type text response: {}", e))?;
+        let ok = parsed.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+        if ok {
+            return Ok(());
+        }
+
+        let error = parsed
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown_error");
+        Err(format!(
+            "Unable to type text on selector '{}': {}",
+            selector, error
+        ))
     }
 
     /// Execute JavaScript and return result

@@ -36,14 +36,21 @@ pub fn get_tool_policy(function_name: &str) -> ToolPolicy {
         | "file_exists"
         | "get_file_info"
         | "read_file_chunk"
+        | "git_status"
+        | "git_diff"
         | "web_search"
         | "read_web_page"
+        | "http_get_json"
         | "screenshot"
         | "get_page_content"
+        | "wait_for_selector"
         | "extract_links" => ToolPolicy {
             skill: match function_name {
-                "web_search" | "read_web_page" => ToolSkill::Web,
-                "screenshot" | "get_page_content" | "extract_links" => ToolSkill::Browser,
+                "web_search" | "read_web_page" | "http_get_json" => ToolSkill::Web,
+                "screenshot" | "get_page_content" | "wait_for_selector" | "extract_links" => {
+                    ToolSkill::Browser
+                }
+                "git_status" | "git_diff" => ToolSkill::Shell,
                 _ => ToolSkill::Filesystem,
             },
             airlock_level: AirlockLevel::Safe,
@@ -54,7 +61,7 @@ pub fn get_tool_policy(function_name: &str) -> ToolPolicy {
             skill: ToolSkill::Filesystem,
             airlock_level: AirlockLevel::Sensitive,
         },
-        "browse_url" | "click_element" | "navigate" => ToolPolicy {
+        "browse_url" | "click_element" | "navigate" | "type_text" => ToolPolicy {
             skill: ToolSkill::Browser,
             airlock_level: AirlockLevel::Sensitive,
         },
