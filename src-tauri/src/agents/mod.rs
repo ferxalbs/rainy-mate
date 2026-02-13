@@ -1,7 +1,12 @@
 // Agents Module - Multi-Agent System for Rainy MaTE
 //
-// DEPRECATED: This module is being replaced by the Native Agent Runtime (src/ai/agent/runtime.rs)
+// @DEPRECATED: This module is being replaced by the Native Agent Runtime (src/ai/agent/runtime.rs)
 // and AgentSpec V2 system. Do not add new features here.
+//
+// Migration guide:
+// - Use ai::agent::runtime::AgentRuntime instead of BaseAgent
+// - Use ai::agent::manager::AgentManager for agent lifecycle
+// - Use commands/agent.rs::run_agent_workflow for agent execution
 //
 // This module implements the foundational agent infrastructure for the multi-agent system.
 // It provides the core traits, types, and base implementations that all specialized agents
@@ -65,9 +70,13 @@ pub mod task_management;
 pub mod types;
 
 // Re-export commonly used types for convenience
+// @DEPRECATED: Use ai::agent::runtime::AgentRuntime instead
+#[deprecated(since = "2.0.0", note = "Use ai::agent::runtime::AgentRuntime instead")]
 pub use agent_trait::{Agent, AgentConfig, AgentError};
+#[deprecated(since = "2.0.0", note = "Use ai::agent::runtime::AgentRuntime instead")]
 pub use base_agent::BaseAgent;
 pub use registry::{AgentRegistry, RegistryStatistics};
+#[allow(deprecated)]
 pub use types::{
     AgentInfo, AgentMessage, AgentStatus, AgentType, MemoryEntry, Task, TaskContext, TaskPriority,
     TaskResult,

@@ -31,6 +31,30 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
         },
       },
       {
+        name: "file_exists",
+        description: "Check whether a path exists",
+        airlockLevel: getToolAirlockLevel("file_exists"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Path to check",
+            required: true,
+          },
+        },
+      },
+      {
+        name: "get_file_info",
+        description: "Get metadata for a file or directory",
+        airlockLevel: getToolAirlockLevel("get_file_info"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Path to inspect",
+            required: true,
+          },
+        },
+      },
+      {
         name: "search_files",
         description: "Search files by query",
         airlockLevel: getToolAirlockLevel("search_files"),
@@ -48,6 +72,28 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
           search_content: {
             type: "boolean",
             description: "Search within file contents",
+            required: false,
+          },
+        },
+      },
+      {
+        name: "read_file_chunk",
+        description: "Read part of a file by offset",
+        airlockLevel: getToolAirlockLevel("read_file_chunk"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Path to file",
+            required: true,
+          },
+          offset: {
+            type: "number",
+            description: "Byte offset to start reading",
+            required: false,
+          },
+          length: {
+            type: "number",
+            description: "Max bytes to read",
             required: false,
           },
         },
@@ -221,6 +267,18 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
         description: "Get HTML content of the current page",
         airlockLevel: getToolAirlockLevel("get_page_content"),
         parameters: {},
+      },
+      {
+        name: "extract_links",
+        description: "Extract links from the current page",
+        airlockLevel: getToolAirlockLevel("extract_links"),
+        parameters: {
+          limit: {
+            type: "number",
+            description: "Maximum number of links to return",
+            required: false,
+          },
+        },
       },
     ],
   },

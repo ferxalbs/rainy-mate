@@ -32,7 +32,8 @@ rainy-docs
 .agent/rules/cowork-architecture.md
 COWORK_INFO.md
 
-#docs/*
+docs/*
+plans/*
 
 DESING_BASE.md
 CLAWDBOT.md

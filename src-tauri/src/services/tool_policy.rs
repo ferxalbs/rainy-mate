@@ -30,11 +30,20 @@ pub struct ToolPolicy {
 pub fn get_tool_policy(function_name: &str) -> ToolPolicy {
     match function_name {
         // Level 0: read-only
-        "read_file" | "list_files" | "search_files" | "web_search" | "read_web_page"
-        | "screenshot" | "get_page_content" => ToolPolicy {
+        "read_file"
+        | "list_files"
+        | "search_files"
+        | "file_exists"
+        | "get_file_info"
+        | "read_file_chunk"
+        | "web_search"
+        | "read_web_page"
+        | "screenshot"
+        | "get_page_content"
+        | "extract_links" => ToolPolicy {
             skill: match function_name {
                 "web_search" | "read_web_page" => ToolSkill::Web,
-                "screenshot" | "get_page_content" => ToolSkill::Browser,
+                "screenshot" | "get_page_content" | "extract_links" => ToolSkill::Browser,
                 _ => ToolSkill::Filesystem,
             },
             airlock_level: AirlockLevel::Safe,

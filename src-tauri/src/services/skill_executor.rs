@@ -10,8 +10,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 const MAX_TOOL_OUTPUT_BYTES: usize = 48 * 1024;
 
@@ -50,6 +51,28 @@ pub struct WriteFileArgs {
 pub struct ListFilesArgs {
     /// The directory path to list
     pub path: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct FileExistsArgs {
+    /// The file or directory path to check
+    pub path: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct FileInfoArgs {
+    /// The file or directory path to inspect
+    pub path: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ReadFileChunkArgs {
+    /// The file path to read from
+    pub path: String,
+    /// Byte offset to start reading from
+    pub offset: Option<u64>,
+    /// Maximum number of bytes to read (defaults to 8192, max 65536)
+    pub length: Option<usize>,
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -112,6 +135,12 @@ pub struct BrowserNavigateArgs {
 pub struct BrowserClickArgs {
     /// CSS selector to click
     pub selector: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize, Default)]
+pub struct ExtractLinksArgs {
+    /// Maximum number of links to return
+    pub limit: Option<usize>,
 }
 
 pub struct SkillExecutor {
@@ -236,9 +265,36 @@ impl SkillExecutor {
             crate::ai::provider_types::Tool {
                 r#type: "function".to_string(),
                 function: crate::ai::provider_types::FunctionDefinition {
+                    name: "file_exists".to_string(),
+                    description: "Check whether a file or directory exists".to_string(),
+                    parameters: serde_json::to_value(schema_for!(FileExistsArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "get_file_info".to_string(),
+                    description: "Get metadata (size, timestamps, type) for a file or directory"
+                        .to_string(),
+                    parameters: serde_json::to_value(schema_for!(FileInfoArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
                     name: "search_files".to_string(),
                     description: "Search for files by name or content using regex".to_string(),
                     parameters: serde_json::to_value(schema_for!(SearchFilesArgs)).unwrap(),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "read_file_chunk".to_string(),
+                    description:
+                        "Read a chunk of a text file by byte offset for large-file processing"
+                            .to_string(),
+                    parameters: serde_json::to_value(schema_for!(ReadFileChunkArgs)).unwrap(),
                 },
             },
             crate::ai::provider_types::Tool {
@@ -295,6 +351,16 @@ impl SkillExecutor {
                     name: "get_page_content".to_string(),
                     description: "Get the HTML content of the current browser page".to_string(),
                     parameters: serde_json::json!({ "type": "object", "properties": {} }),
+                },
+            },
+            crate::ai::provider_types::Tool {
+                r#type: "function".to_string(),
+                function: crate::ai::provider_types::FunctionDefinition {
+                    name: "extract_links".to_string(),
+                    description:
+                        "Extract clickable links from the current browser page (href + text)"
+                            .to_string(),
+                    parameters: serde_json::to_value(schema_for!(ExtractLinksArgs)).unwrap(),
                 },
             },
             crate::ai::provider_types::Tool {
@@ -413,8 +479,20 @@ impl SkillExecutor {
                 self.handle_list_files(workspace_id, params, allowed_paths)
                     .await
             }
+            "file_exists" => {
+                self.handle_file_exists(workspace_id, params, allowed_paths)
+                    .await
+            }
+            "get_file_info" => {
+                self.handle_get_file_info(workspace_id, params, allowed_paths)
+                    .await
+            }
             "search_files" => {
                 self.handle_search_files(workspace_id, params, allowed_paths)
+                    .await
+            }
+            "read_file_chunk" => {
+                self.handle_read_file_chunk(workspace_id, params, allowed_paths)
                     .await
             }
             "write_file" => {
@@ -532,6 +610,24 @@ impl SkillExecutor {
                         exit_code: Some(0),
                     },
                     Err(e) => self.error(&e),
+                }
+            }
+            "extract_links" => {
+                let args: ExtractLinksArgs =
+                    serde_json::from_value(params.clone()).unwrap_or_default();
+                let limit = args.limit.unwrap_or(100).clamp(1, 500);
+                let script = format!(
+                    "(function() {{ const out = []; const els = document.querySelectorAll('a[href]'); for (let i = 0; i < els.length && out.length < {}; i++) {{ const el = els[i]; out.push({{ href: el.href || '', text: (el.innerText || el.textContent || '').trim(), title: (el.getAttribute('title') || '').trim() }}); }} return JSON.stringify(out); }})()",
+                    limit
+                );
+                match self.browser.evaluate(&script).await {
+                    Ok(result) => CommandResult {
+                        success: true,
+                        output: Some(result),
+                        error: None,
+                        exit_code: Some(0),
+                    },
+                    Err(e) => self.error(&format!("Failed to extract links: {}", e)),
                 }
             }
             _ => self.error(&format!("Unknown browser method: {}", method)),
@@ -1033,6 +1129,186 @@ Configure allowed paths before filesystem operations."
         CommandResult {
             success: true,
             output: Some(serde_json::to_string(&results).unwrap()),
+            error: None,
+            exit_code: Some(0),
+        }
+    }
+
+    async fn handle_file_exists(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+    ) -> CommandResult {
+        let args: FileExistsArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+        };
+
+        let path = match self
+            .resolve_path(workspace_id, &args.path, allowed_paths)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => return self.error(&e),
+        };
+
+        match fs::metadata(&path).await {
+            Ok(meta) => {
+                let output = serde_json::json!({
+                    "path": path.to_string_lossy(),
+                    "exists": true,
+                    "is_file": meta.is_file(),
+                    "is_dir": meta.is_dir(),
+                });
+                CommandResult {
+                    success: true,
+                    output: Some(output.to_string()),
+                    error: None,
+                    exit_code: Some(0),
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let output = serde_json::json!({
+                    "path": path.to_string_lossy(),
+                    "exists": false,
+                    "is_file": false,
+                    "is_dir": false,
+                });
+                CommandResult {
+                    success: true,
+                    output: Some(output.to_string()),
+                    error: None,
+                    exit_code: Some(0),
+                }
+            }
+            Err(e) => self.error(&format!("Failed to inspect path: {}", e)),
+        }
+    }
+
+    async fn handle_get_file_info(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+    ) -> CommandResult {
+        let args: FileInfoArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+        };
+
+        let path = match self
+            .resolve_path(workspace_id, &args.path, allowed_paths)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => return self.error(&e),
+        };
+
+        let metadata = match fs::metadata(&path).await {
+            Ok(m) => m,
+            Err(e) => return self.error(&format!("Failed to read file metadata: {}", e)),
+        };
+
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs());
+        let created = metadata
+            .created()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs());
+
+        let output = serde_json::json!({
+            "path": path.to_string_lossy(),
+            "exists": true,
+            "is_file": metadata.is_file(),
+            "is_dir": metadata.is_dir(),
+            "size_bytes": metadata.len(),
+            "readonly": metadata.permissions().readonly(),
+            "modified_unix": modified,
+            "created_unix": created,
+        });
+
+        CommandResult {
+            success: true,
+            output: Some(output.to_string()),
+            error: None,
+            exit_code: Some(0),
+        }
+    }
+
+    async fn handle_read_file_chunk(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+    ) -> CommandResult {
+        let args: ReadFileChunkArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+        };
+
+        let path = match self
+            .resolve_path(workspace_id, &args.path, allowed_paths)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => return self.error(&e),
+        };
+
+        let offset = args.offset.unwrap_or(0);
+        let requested_len = args.length.unwrap_or(8192).clamp(1, 65536);
+
+        let metadata = match fs::metadata(&path).await {
+            Ok(m) => m,
+            Err(e) => return self.error(&format!("Failed to read file metadata: {}", e)),
+        };
+        if metadata.is_dir() {
+            return self.error("Path is a directory; expected a text file");
+        }
+
+        let file_size = metadata.len();
+        if offset > file_size {
+            return self.error("Offset is beyond end of file");
+        }
+
+        let mut file = match fs::File::open(&path).await {
+            Ok(f) => f,
+            Err(e) => return self.error(&format!("Failed to open file: {}", e)),
+        };
+
+        if let Err(e) = file.seek(std::io::SeekFrom::Start(offset)).await {
+            return self.error(&format!("Failed to seek file: {}", e));
+        }
+
+        let mut buffer = vec![0u8; requested_len];
+        let read = match file.read(&mut buffer).await {
+            Ok(n) => n,
+            Err(e) => return self.error(&format!("Failed to read file chunk: {}", e)),
+        };
+        buffer.truncate(read);
+
+        let text = String::from_utf8_lossy(&buffer).to_string();
+        let next_offset = offset.saturating_add(read as u64);
+        let eof = next_offset >= file_size;
+
+        let output = serde_json::json!({
+            "path": path.to_string_lossy(),
+            "offset": offset,
+            "requested_length": requested_len,
+            "bytes_read": read,
+            "next_offset": next_offset,
+            "file_size": file_size,
+            "eof": eof,
+            "content": text,
+        });
+
+        CommandResult {
+            success: true,
+            output: Some(output.to_string()),
             error: None,
             exit_code: Some(0),
         }

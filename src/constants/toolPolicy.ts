@@ -17,10 +17,14 @@ const TOOL_POLICY_MAP: Record<string, ToolPolicy> = {
   read_file: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   list_files: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   search_files: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
+  file_exists: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
+  get_file_info: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
+  read_file_chunk: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   web_search: { skill: "web", airlockLevel: AirlockLevels.Safe },
   read_web_page: { skill: "web", airlockLevel: AirlockLevels.Safe },
   screenshot: { skill: "browser", airlockLevel: AirlockLevels.Safe },
   get_page_content: { skill: "browser", airlockLevel: AirlockLevels.Safe },
+  extract_links: { skill: "browser", airlockLevel: AirlockLevels.Safe },
 
   // Level 1: state-changing but non-destructive
   write_file: { skill: "filesystem", airlockLevel: AirlockLevels.Sensitive },
