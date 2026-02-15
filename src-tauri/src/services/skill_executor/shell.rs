@@ -33,7 +33,7 @@ impl SkillExecutor {
                     Err(e) => return self.error(&e),
                 };
 
-                self.execute_command(&args.command, args.args, &root_path)
+                self.execute_command(&args.command, args.args, args.timeout_ms, &root_path)
                     .await
             }
             "git_status" => {
@@ -58,6 +58,22 @@ impl SkillExecutor {
                     Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
                 };
                 self.handle_git_log(workspace_id, args, allowed_paths, blocked_paths)
+                    .await
+            }
+            "git_show" => {
+                let args: GitShowArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_git_show(workspace_id, args, allowed_paths, blocked_paths)
+                    .await
+            }
+            "git_branch_list" => {
+                let args: GitBranchListArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_git_branch_list(workspace_id, args, allowed_paths, blocked_paths)
                     .await
             }
             _ => CommandResult {
@@ -88,7 +104,7 @@ impl SkillExecutor {
         if args.short.unwrap_or(true) {
             git_args.push("--short".to_string());
         }
-        self.execute_command("git", git_args, &cwd).await
+        self.execute_command("git", git_args, None, &cwd).await
     }
 
     async fn handle_git_diff(
@@ -110,7 +126,7 @@ impl SkillExecutor {
         if args.staged.unwrap_or(false) {
             git_args.push("--staged".to_string());
         }
-        self.execute_command("git", git_args, &cwd).await
+        self.execute_command("git", git_args, None, &cwd).await
     }
 
     async fn handle_git_log(
@@ -135,7 +151,88 @@ impl SkillExecutor {
             "--oneline".to_string(),
             format!("-{}", max_count),
         ];
-        self.execute_command("git", git_args, &cwd).await
+        self.execute_command("git", git_args, None, &cwd).await
+    }
+
+    async fn handle_git_show(
+        &self,
+        workspace_id: String,
+        args: GitShowArgs,
+        allowed_paths: &[String],
+        blocked_paths: &[String],
+    ) -> CommandResult {
+        let cwd = match self
+            .resolve_git_working_dir(workspace_id, args.path, allowed_paths, blocked_paths)
+            .await
+        {
+            Ok(path) => path,
+            Err(e) => return self.error(&e),
+        };
+
+        let target = args.target.unwrap_or_else(|| "HEAD".to_string());
+        let max_lines = args.max_lines.unwrap_or(300).clamp(20, 2000);
+        let git_args = vec![
+            "--no-pager".to_string(),
+            "show".to_string(),
+            "--stat".to_string(),
+            "--patch".to_string(),
+            "--format=fuller".to_string(),
+            "-n".to_string(),
+            "1".to_string(),
+            target,
+        ];
+        let result = self.execute_command("git", git_args, None, &cwd).await;
+        if !result.success {
+            return result;
+        }
+
+        let output = result.output.unwrap_or_default();
+        let mut line_count = 0u32;
+        let mut clipped = String::new();
+        for line in output.lines() {
+            if line_count >= max_lines {
+                clipped.push_str("\n[TRUNCATED: git_show exceeded max_lines]");
+                break;
+            }
+            clipped.push_str(line);
+            clipped.push('\n');
+            line_count += 1;
+        }
+
+        CommandResult {
+            success: true,
+            output: Some(clipped.trim_end().to_string()),
+            error: None,
+            exit_code: Some(0),
+        }
+    }
+
+    async fn handle_git_branch_list(
+        &self,
+        workspace_id: String,
+        args: GitBranchListArgs,
+        allowed_paths: &[String],
+        blocked_paths: &[String],
+    ) -> CommandResult {
+        let cwd = match self
+            .resolve_git_working_dir(workspace_id, args.path, allowed_paths, blocked_paths)
+            .await
+        {
+            Ok(path) => path,
+            Err(e) => return self.error(&e),
+        };
+
+        let include_remote = args.include_remote.unwrap_or(true);
+        let mut git_args = vec![
+            "branch".to_string(),
+            "--list".to_string(),
+            "--verbose".to_string(),
+        ];
+        if include_remote {
+            git_args.push("--all".to_string());
+        }
+
+        self.execute_command("git", git_args, None, &cwd).await
     }
 
     pub(super) async fn resolve_git_working_dir(
@@ -164,20 +261,27 @@ impl SkillExecutor {
         &self,
         command: &str,
         args: Vec<String>,
+        timeout_ms: Option<u64>,
         cwd: &PathBuf,
     ) -> CommandResult {
         if !Self::is_allowed_shell_command(command) {
             return self.error(&format!("Command '{}' is not allowed", command));
         }
 
-        let output = tokio::process::Command::new(command)
+        let timeout = timeout_ms.unwrap_or(120_000).clamp(500, 600_000);
+        let command_future = tokio::process::Command::new(command)
             .args(&args)
             .current_dir(Path::new(cwd))
-            .output()
-            .await;
+            .kill_on_drop(true)
+            .output();
+        let output = tokio::time::timeout(
+            tokio::time::Duration::from_millis(timeout),
+            command_future,
+        )
+        .await;
 
         match output {
-            Ok(out) => {
+            Ok(Ok(out)) => {
                 let stdout = String::from_utf8_lossy(&out.stdout).to_string();
                 let stderr = String::from_utf8_lossy(&out.stderr).to_string();
                 let exit_code = out.status.code().unwrap_or(1);
@@ -194,7 +298,13 @@ impl SkillExecutor {
                     exit_code: Some(exit_code),
                 }
             }
-            Err(e) => self.error(&format!("Failed to execute command: {}", e)),
+            Ok(Err(e)) => self.error(&format!("Failed to execute command: {}", e)),
+            Err(_) => self.error(&format!(
+                "Command timed out after {}ms: {} {}",
+                timeout,
+                command,
+                args.join(" ")
+            )),
         }
     }
 }

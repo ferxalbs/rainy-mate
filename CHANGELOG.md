@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `file_exists`
     - `get_file_info`
     - `read_file_chunk`
+    - `read_many_files`
   - Added browser automation tools:
     - `extract_links`
     - `wait_for_selector`
@@ -23,13 +24,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `open_new_tab`
     - `go_back`
     - `submit_form`
+    - `get_page_snapshot`
   - Added web/API tools:
     - `http_get_json`
     - `http_post_json`
   - Added shell wrappers for developer workflows:
     - `git_status`
     - `git_diff`
+    - `git_log`
   - Hardened command output handling by truncating oversized shell outputs before returning to models.
+
+### Changed - Skill Executor Modularization
+
+**Rust Backend (`src-tauri/src/services/skill_executor/`)**
+
+- Refactored monolithic `skill_executor.rs` into modular structure:
+  - `args.rs` (tool argument schemas)
+  - `registry.rs` (tool definitions exposed to model providers)
+  - `filesystem.rs` (filesystem path resolution + handlers)
+  - `shell.rs` (shell and git wrappers)
+  - `web.rs` (research + HTTP JSON tools)
+  - `browser.rs` (browser automation tools)
+- Kept `skill_executor.rs` as a thin orchestrator for routing, policy checks, and shared scope guards.
+- Established contributor-ready pattern for adding new tools without expanding a single monolithic file.
 
 **Browser Controller (`src-tauri/src/services/browser_controller.rs`)**
 
@@ -43,10 +60,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `src-tauri/src/services/tool_policy.rs`:
   - Updated canonical tool risk mapping for all newly added tools.
-- `src/constants/toolPolicy.ts`:
-  - Synced frontend Airlock policy map with backend tool policy.
 - `src/constants/defaultNeuralSkills.ts`:
-  - Registered all new methods so node registration exposes them to Cloud Cortex.
+  - Registered all new methods so node registration exposes them to Cloud Cortex, including:
+    - `read_many_files`
+    - `git_log`
+    - `get_page_snapshot`
+- `src/constants/toolPolicy.ts`:
+  - Added Airlock policy mappings for:
+    - `read_many_files` (Safe)
+    - `git_log` (Safe)
+    - `get_page_snapshot` (Safe)
 
 ### Changed - Airlock UI Modularization
 
@@ -86,10 +109,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added effective risk-level resolution that escalates to canonical policy level when a command declares a lower `airlock_level`.
   - Approval requests now use effective level (prevents downscoping bypass attempts).
 
+### Fixed - `search_files` Reliability + Model Alignment
+
+**Rust Backend (`src-tauri/src/services/skill_executor/`)**
+
+- `args.rs`:
+  - Extended `SearchFilesArgs` with:
+    - `case_sensitive`
+    - `max_files`
+  - Clarified default behavior docs for `search_content`.
+- `filesystem.rs`:
+  - Changed `search_files` default to search text content when `search_content` is omitted.
+  - Added case-insensitive search by default via regex builder (unless `case_sensitive: true`).
+  - Increased and parameterized scan cap (`max_files`) for larger workspaces.
+  - Expanded text-like file coverage for content search (including extensionless files like `Dockerfile`, `Makefile`, and `.env*`).
+
+**Tool Definitions (`src-tauri/src/services/skill_executor/registry.rs`)**
+
+- Updated `search_files` description to explicitly reflect name + content regex behavior.
+
+**Frontend Skill Manifest (`src/constants/defaultNeuralSkills.ts`)**
+
+- Updated `search_files` method metadata:
+  - Clearer description for content search behavior.
+  - Added exposed parameters:
+    - `case_sensitive`
+    - `max_files`
+  - Clarified `search_content` default in parameter description.
+
+### Changed - AI Feature Cleanup
+
+**Rust Runtime (`src-tauri/src/ai/features/`)**
+
+- Removed unused `security_service` module to reduce dead code and production maintenance surface.
+- Removed `pub mod security_service;` from `ai/features/mod.rs`.
+- Removed unused `ed25519-dalek` dependency from `src-tauri/Cargo.toml`.
+
 ### Validation
 
 - `pnpm run build` — passes
 - `cd src-tauri && cargo check -q` — passes
+- `pnpm exec tsc --noEmit` — passes
+- `cd src-tauri && cargo test -q skill_executor::tests::` — passes
 - `cd src-tauri && cargo test services::tool_policy::tests::maps_core_tools -- --nocapture` — passes
 - `cd src-tauri && cargo test services::skill_executor::tests::shell_allowlist_matches_agents_policy -- --nocapture` — passes
 - `cd src-tauri && cargo test services::skill_executor::tests::domain_scope_enforces_blocked_before_allowed -- --nocapture` — passes

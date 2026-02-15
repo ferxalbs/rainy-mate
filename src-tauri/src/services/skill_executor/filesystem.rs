@@ -182,6 +182,10 @@ impl SkillExecutor {
                 self.handle_list_files(workspace_id, params, allowed_paths, blocked_paths)
                     .await
             }
+            "list_files_detailed" => {
+                self.handle_list_files_detailed(workspace_id, params, allowed_paths, blocked_paths)
+                    .await
+            }
             "file_exists" => {
                 self.handle_file_exists(workspace_id, params, allowed_paths, blocked_paths)
                     .await
@@ -405,6 +409,82 @@ impl SkillExecutor {
         }
     }
 
+    async fn handle_list_files_detailed(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+        blocked_paths: &[String],
+    ) -> CommandResult {
+        let args: ListFilesDetailedArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+        };
+
+        let path_str = args.path.as_deref().unwrap_or(".");
+        let include_hidden = args.include_hidden.unwrap_or(false);
+        let limit = args.limit.unwrap_or(200).clamp(1, 2000);
+
+        let path = match self
+            .resolve_path(workspace_id, path_str, allowed_paths, blocked_paths)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => return self.error(&e),
+        };
+
+        let mut entries = Vec::new();
+        match fs::read_dir(&path).await {
+            Ok(mut dir) => {
+                while let Ok(Some(entry)) = dir.next_entry().await {
+                    if entries.len() >= limit {
+                        break;
+                    }
+
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !include_hidden && name.starts_with('.') {
+                        continue;
+                    }
+
+                    let metadata = match entry.metadata().await {
+                        Ok(m) => m,
+                        Err(_) => continue,
+                    };
+                    let modified = metadata
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs());
+
+                    entries.push(serde_json::json!({
+                        "name": name,
+                        "path": entry.path().to_string_lossy().to_string(),
+                        "is_dir": metadata.is_dir(),
+                        "is_file": metadata.is_file(),
+                        "size_bytes": metadata.len(),
+                        "readonly": metadata.permissions().readonly(),
+                        "modified_unix": modified,
+                    }));
+                }
+
+                let output = serde_json::json!({
+                    "directory": path.to_string_lossy(),
+                    "count": entries.len(),
+                    "limit": limit,
+                    "include_hidden": include_hidden,
+                    "entries": entries,
+                });
+                CommandResult {
+                    success: true,
+                    output: Some(output.to_string()),
+                    error: None,
+                    exit_code: Some(0),
+                }
+            }
+            Err(e) => self.error(&format!("Failed to list files: {}", e)),
+        }
+    }
+
     async fn handle_search_files(
         &self,
         workspace_id: String,
@@ -418,7 +498,9 @@ impl SkillExecutor {
         };
 
         let path_str = args.path.as_deref().unwrap_or(".");
-        let search_content = args.search_content.unwrap_or(false);
+        let search_content = args.search_content.unwrap_or(true);
+        let case_sensitive = args.case_sensitive.unwrap_or(false);
+        let max_files = args.max_files.unwrap_or(2000).clamp(100, 20_000);
 
         let root_path = match self
             .resolve_path(workspace_id, path_str, allowed_paths, blocked_paths)
@@ -428,14 +510,16 @@ impl SkillExecutor {
             Err(e) => return self.error(&e),
         };
 
-        let regex = match regex::Regex::new(&args.query) {
+        let regex = match regex::RegexBuilder::new(&args.query)
+            .case_insensitive(!case_sensitive)
+            .build()
+        {
             Ok(r) => r,
             Err(e) => return self.error(&format!("Invalid regex query: {}", e)),
         };
 
         let mut results = Vec::new();
         let mut queue = vec![root_path];
-        let max_files = 1000;
         let mut scanned_files = 0;
 
         while let Some(current_dir) = queue.pop() {
@@ -466,28 +550,65 @@ impl SkillExecutor {
                     if regex.is_match(&file_name) {
                         matches = true;
                     } else if search_content {
-                        if let Some(ext) = path.extension() {
-                            let ext_str = ext.to_string_lossy();
-                            if matches!(
-                                ext_str.as_ref(),
-                                "txt"
-                                    | "md"
-                                    | "rs"
-                                    | "ts"
-                                    | "tsx"
-                                    | "js"
-                                    | "jsx"
-                                    | "json"
-                                    | "toml"
-                                    | "yml"
-                                    | "yaml"
-                                    | "css"
-                                    | "html"
-                            ) {
-                                if let Ok(content) = fs::read_to_string(&path).await {
-                                    if regex.is_match(&content) {
-                                        matches = true;
-                                    }
+                        let can_scan_by_extension = path
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|ext| {
+                                matches!(
+                                    ext,
+                                    "txt"
+                                        | "md"
+                                        | "rs"
+                                        | "ts"
+                                        | "tsx"
+                                        | "js"
+                                        | "jsx"
+                                        | "json"
+                                        | "toml"
+                                        | "yml"
+                                        | "yaml"
+                                        | "css"
+                                        | "html"
+                                        | "lock"
+                                        | "cfg"
+                                        | "conf"
+                                        | "ini"
+                                        | "env"
+                                        | "sh"
+                                        | "py"
+                                        | "go"
+                                        | "java"
+                                        | "c"
+                                        | "cpp"
+                                        | "h"
+                                        | "hpp"
+                                        | "sql"
+                                        | "graphql"
+                                )
+                            })
+                            .unwrap_or_else(|| {
+                                // Allow extensionless text-like files (Dockerfile, Makefile, etc.)
+                                path.file_name()
+                                    .and_then(|n| n.to_str())
+                                    .map(|name| {
+                                        matches!(
+                                            name,
+                                            "Dockerfile"
+                                                | "Makefile"
+                                                | "justfile"
+                                                | "Procfile"
+                                                | ".env"
+                                                | ".env.local"
+                                                | ".env.example"
+                                        )
+                                    })
+                                    .unwrap_or(false)
+                            });
+
+                        if can_scan_by_extension {
+                            if let Ok(content) = fs::read_to_string(&path).await {
+                                if regex.is_match(&content) {
+                                    matches = true;
                                 }
                             }
                         }

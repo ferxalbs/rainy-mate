@@ -43,6 +43,28 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
         },
       },
       {
+        name: "list_files_detailed",
+        description: "List files with metadata (size, timestamps, type)",
+        airlockLevel: getToolAirlockLevel("list_files_detailed"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Directory path",
+            required: false,
+          },
+          include_hidden: {
+            type: "boolean",
+            description: "Include hidden files and directories",
+            required: false,
+          },
+          limit: {
+            type: "number",
+            description: "Maximum entries to return",
+            required: false,
+          },
+        },
+      },
+      {
         name: "file_exists",
         description: "Check whether a path exists",
         airlockLevel: getToolAirlockLevel("file_exists"),
@@ -68,7 +90,7 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
       },
       {
         name: "search_files",
-        description: "Search files by query",
+        description: "Search files by regex in names and text content",
         airlockLevel: getToolAirlockLevel("search_files"),
         parameters: {
           query: {
@@ -83,7 +105,18 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
           },
           search_content: {
             type: "boolean",
-            description: "Search within file contents",
+            description:
+              "Search within file contents (default: true). Set false for filename-only search",
+            required: false,
+          },
+          case_sensitive: {
+            type: "boolean",
+            description: "Case-sensitive regex match (default: false)",
+            required: false,
+          },
+          max_files: {
+            type: "number",
+            description: "Maximum files/entries to scan",
             required: false,
           },
         },
@@ -206,6 +239,11 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
             description: "Command arguments",
             required: true,
           },
+          timeout_ms: {
+            type: "number",
+            description: "Timeout in milliseconds",
+            required: false,
+          },
         },
       },
       {
@@ -259,6 +297,45 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
           },
         },
       },
+      {
+        name: "git_show",
+        description: "Show details for a commit, tag, or file ref",
+        airlockLevel: getToolAirlockLevel("git_show"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Optional directory/file path inside workspace",
+            required: false,
+          },
+          target: {
+            type: "string",
+            description: "Git object ref (defaults to HEAD)",
+            required: false,
+          },
+          max_lines: {
+            type: "number",
+            description: "Maximum number of lines to return",
+            required: false,
+          },
+        },
+      },
+      {
+        name: "git_branch_list",
+        description: "List local and remote git branches",
+        airlockLevel: getToolAirlockLevel("git_branch_list"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Optional directory/file path inside workspace",
+            required: false,
+          },
+          include_remote: {
+            type: "boolean",
+            description: "Include remote branches",
+            required: false,
+          },
+        },
+      },
     ],
   },
   {
@@ -293,6 +370,28 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
         name: "http_get_json",
         description: "Fetch JSON from HTTP(S) APIs",
         airlockLevel: getToolAirlockLevel("http_get_json"),
+        parameters: {
+          url: {
+            type: "string",
+            description: "HTTP(S) URL",
+            required: true,
+          },
+          timeout_ms: {
+            type: "number",
+            description: "Timeout in milliseconds",
+            required: false,
+          },
+          max_bytes: {
+            type: "number",
+            description: "Maximum response size in bytes",
+            required: false,
+          },
+        },
+      },
+      {
+        name: "http_get_text",
+        description: "Fetch text/HTML from HTTP(S) URLs",
+        airlockLevel: getToolAirlockLevel("http_get_text"),
         parameters: {
           url: {
             type: "string",

@@ -43,7 +43,7 @@ impl SkillExecutor {
     fn is_allowed_shell_command(command: &str) -> bool {
         matches!(
             command,
-            "npm" | "cargo" | "git" | "ls" | "grep" | "echo" | "cat"
+            "npm" | "pnpm" | "bun" | "cargo" | "git" | "ls" | "grep" | "echo" | "cat"
         )
     }
 
@@ -351,14 +351,14 @@ mod tests {
 
     #[test]
     fn shell_allowlist_matches_agents_policy() {
-        for cmd in ["npm", "cargo", "git", "ls", "grep", "echo", "cat"] {
+        for cmd in ["npm", "pnpm", "bun", "cargo", "git", "ls", "grep", "echo", "cat"] {
             assert!(SkillExecutor::is_allowed_shell_command(cmd));
         }
     }
 
     #[test]
     fn shell_allowlist_blocks_dangerous_commands() {
-        for cmd in ["rm", "curl", "wget", "kill", "mv", "cp", "bun"] {
+        for cmd in ["rm", "curl", "wget", "kill", "mv", "cp", "node"] {
             assert!(!SkillExecutor::is_allowed_shell_command(cmd));
         }
     }

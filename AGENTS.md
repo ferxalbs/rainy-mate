@@ -23,6 +23,12 @@
 
 - Rust does the work; TypeScript stays UI-only. Heavy logic belongs in `src-tauri/src/commands/` or `src-tauri/src/services/`.
 - Keep modules small and single-purpose; avoid circular deps and oversized files.
+- **Mandatory modularization rule**: skill/tool runtime code must be split by domain and responsibility, not grown in a single file.
+  - Skill executor entrypoint stays thin in `src-tauri/src/services/skill_executor.rs` (routing, policy, shared guards only).
+  - Tool arguments/schemas live in `src-tauri/src/services/skill_executor/args.rs`.
+  - Tool catalog/registration lives in `src-tauri/src/services/skill_executor/registry.rs`.
+  - Execution logic is separated per domain module (`filesystem.rs`, `shell.rs`, `web.rs`, `browser.rs`).
+  - New tools must be added without turning the orchestrator into a monolith.
 - No dead code. If future work must stay, mark it with `@deprecated`, `@TODO`, or `@RESERVED`.
 - TS/TSX formatting matches existing files: 2-space indent, double quotes, trailing commas.
 - Components are `PascalCase.tsx`; hooks are `useX.ts` in `src/hooks/`.
@@ -59,16 +65,20 @@ The agent connects to the Cloud Cortex via `rainy-atm` and executes local skills
 
 ### Available Skills
 
-- **Filesystem**: `read_file`, `write_file` (Airlock 1), `list_files`
-- **Browser**: `browse_url`, `click_element`, `screenshot`
-- **Shell**: `execute_command` (Allowed: `npm`, `cargo`, `git`, `ls`, `grep`, `echo`, `cat`)
+- **Filesystem**: `read_file`, `read_many_files`, `list_files`, `search_files`, `file_exists`, `get_file_info`, `read_file_chunk`, `write_file`, `append_file`, `mkdir`, `move_file`, `delete_file`
+- **Browser**: `browse_url`, `open_new_tab`, `click_element`, `wait_for_selector`, `type_text`, `submit_form`, `go_back`, `screenshot`, `get_page_content`, `get_page_snapshot`, `extract_links`
+- **Web**: `web_search`, `read_web_page`, `http_get_json`, `http_post_json`
+- **Shell**: `execute_command`, `git_status`, `git_diff`, `git_log` (Allowed command family: `npm`, `cargo`, `git`, `ls`, `grep`, `echo`, `cat`)
 
 ### Adding New Skills
 
-1. Define the skill method in `src-tauri/src/services/skill_executor.rs`.
-2. Add the tool definition to `get_tool_definitions()`.
-3. Implement the handler (e.g., `handle_new_skill`).
-4. Update `DEFAULT_SKILLS` in `src/components/neural/NeuralPanel.tsx` to expose it to the UI/Cloud.
+1. Define arguments/schema in `src-tauri/src/services/skill_executor/args.rs`.
+2. Register the tool in `src-tauri/src/services/skill_executor/registry.rs`.
+3. Implement handler logic in the matching domain module (`filesystem.rs`, `shell.rs`, `web.rs`, `browser.rs`).
+4. Wire method dispatch in the same domain module (do not grow the orchestrator).
+5. Update `src/constants/defaultNeuralSkills.ts` so the node exposes the method to Cloud Cortex.
+6. Update `src/constants/toolPolicy.ts` with correct airlock level mapping.
+7. Validate with `cd src-tauri && cargo check` and `pnpm exec tsc --noEmit`.
 
 ## Airlock Security
 

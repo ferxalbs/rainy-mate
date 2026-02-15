@@ -76,8 +76,12 @@ pub struct SearchFilesArgs {
     pub query: String,
     /// The root path to start searching from
     pub path: Option<String>,
-    /// Whether to search file content (true) or just filenames (false)
+    /// Whether to search file content (default: true). If false, only file names are matched.
     pub search_content: Option<bool>,
+    /// Whether regex matching is case-sensitive (default: false)
+    pub case_sensitive: Option<bool>,
+    /// Maximum filesystem entries to scan (default: 2000, max: 20000)
+    pub max_files: Option<usize>,
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -86,6 +90,8 @@ pub struct ExecuteCommandArgs {
     pub command: String,
     /// Arguments for the command
     pub args: Vec<String>,
+    /// Optional timeout in milliseconds (default: 120000, max: 600000)
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -110,6 +116,24 @@ pub struct GitLogArgs {
     pub path: Option<String>,
     /// Maximum number of commits (default 20, max 100)
     pub max_count: Option<u32>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct GitShowArgs {
+    /// Optional workspace path used as git working directory
+    pub path: Option<String>,
+    /// Git object spec (commit, tag, or file ref), defaults to HEAD
+    pub target: Option<String>,
+    /// Optional maximum lines to include in output (default 300, max 2000)
+    pub max_lines: Option<u32>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct GitBranchListArgs {
+    /// Optional workspace path used as git working directory
+    pub path: Option<String>,
+    /// Include remote branches (default true)
+    pub include_remote: Option<bool>,
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -196,4 +220,24 @@ pub struct HttpGetJsonArgs {
     pub timeout_ms: Option<u64>,
     /// Maximum allowed response size in bytes (default: 512KB, max: 2MB)
     pub max_bytes: Option<usize>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct HttpGetTextArgs {
+    /// URL to fetch as text (http/https only)
+    pub url: String,
+    /// Request timeout in milliseconds (default: 15000)
+    pub timeout_ms: Option<u64>,
+    /// Maximum allowed response size in bytes (default: 512KB, max: 2MB)
+    pub max_bytes: Option<usize>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ListFilesDetailedArgs {
+    /// Directory path to list (default ".")
+    pub path: Option<String>,
+    /// Include entries whose names start with "."
+    pub include_hidden: Option<bool>,
+    /// Maximum number of entries to return (default 200, max 2000)
+    pub limit: Option<usize>,
 }

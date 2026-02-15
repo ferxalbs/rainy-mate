@@ -41,6 +41,14 @@ impl SkillExecutor {
                 self.handle_http_get_json(args, allowed_domains, blocked_domains)
                     .await
             }
+            "http_get_text" => {
+                let args: HttpGetTextArgs = match serde_json::from_value(params.clone()) {
+                    Ok(a) => a,
+                    Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+                };
+                self.handle_http_get_text(args, allowed_domains, blocked_domains)
+                    .await
+            }
             "http_post_json" => {
                 let args: HttpPostJsonArgs = match serde_json::from_value(params.clone()) {
                     Ok(a) => a,
@@ -136,6 +144,113 @@ impl SkillExecutor {
             blocked_domains,
         )
         .await
+    }
+
+    async fn handle_http_get_text(
+        &self,
+        args: HttpGetTextArgs,
+        allowed_domains: &[String],
+        blocked_domains: &[String],
+    ) -> CommandResult {
+        if let Err(e) = Self::enforce_domain_scope(&args.url, allowed_domains, blocked_domains) {
+            return self.error(&e);
+        }
+        let parsed_url = match Self::validate_http_url(&args.url) {
+            Ok(u) => u,
+            Err(e) => return self.error(&e),
+        };
+
+        let timeout_ms = args.timeout_ms.unwrap_or(15_000).clamp(1_000, 60_000);
+        let max_bytes = args
+            .max_bytes
+            .unwrap_or(512 * 1024)
+            .clamp(1_024, 2 * 1024 * 1024);
+
+        let client = match reqwest::Client::builder()
+            .timeout(tokio::time::Duration::from_millis(timeout_ms))
+            .user_agent("rainy-cowork-agent/1.0")
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => return self.error(&format!("Failed to create HTTP client: {}", e)),
+        };
+
+        let mut last_error: Option<String> = None;
+        for attempt in 0..=2 {
+            match client
+                .get(parsed_url.clone())
+                .header("accept", "text/*,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if (status.is_server_error() || status.as_u16() == 429) && attempt < 2 {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                            250 * (attempt as u64 + 1),
+                        ))
+                        .await;
+                        continue;
+                    }
+                    if !status.is_success() {
+                        return self.error(&format!(
+                            "HTTP request failed with status {} for {}",
+                            status, parsed_url
+                        ));
+                    }
+
+                    let content_type = resp
+                        .headers()
+                        .get(CONTENT_TYPE)
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("")
+                        .to_string();
+
+                    let bytes = match resp.bytes().await {
+                        Ok(b) => b,
+                        Err(e) => return self.error(&format!("Failed to read response body: {}", e)),
+                    };
+                    if bytes.len() > max_bytes {
+                        return self.error(&format!(
+                            "Response size {} exceeds max_bytes {}",
+                            bytes.len(),
+                            max_bytes
+                        ));
+                    }
+
+                    let text = String::from_utf8_lossy(&bytes).to_string();
+                    let output = serde_json::json!({
+                        "method": "GET",
+                        "url": parsed_url.as_str(),
+                        "status": status.as_u16(),
+                        "content_type": content_type,
+                        "bytes": bytes.len(),
+                        "text": truncate_output(&text),
+                    });
+
+                    return CommandResult {
+                        success: true,
+                        output: Some(output.to_string()),
+                        error: None,
+                        exit_code: Some(0),
+                    };
+                }
+                Err(e) => {
+                    last_error = Some(e.to_string());
+                    if attempt < 2 {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                            250 * (attempt as u64 + 1),
+                        ))
+                        .await;
+                    }
+                }
+            }
+        }
+
+        self.error(&format!(
+            "HTTP text request failed after retries: {}",
+            last_error.unwrap_or_else(|| "unknown error".to_string())
+        ))
     }
 
     async fn handle_http_json_request(

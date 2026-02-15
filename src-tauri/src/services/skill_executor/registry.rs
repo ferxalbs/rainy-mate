@@ -14,7 +14,17 @@ impl SkillExecutor {
                 schema_for!(ReadManyFilesArgs),
             ),
             tool("write_file", "Write content to a file", schema_for!(WriteFileArgs)),
+            tool(
+                "append_file",
+                "Append content to a file",
+                schema_for!(WriteFileArgs),
+            ),
             tool("list_files", "List files in a directory", schema_for!(ListFilesArgs)),
+            tool(
+                "list_files_detailed",
+                "List files with metadata (size, modified time, type)",
+                schema_for!(ListFilesDetailedArgs),
+            ),
             tool(
                 "file_exists",
                 "Check whether a file or directory exists",
@@ -27,7 +37,7 @@ impl SkillExecutor {
             ),
             tool(
                 "search_files",
-                "Search for files by name or content using regex",
+                "Search files by regex in names and (by default) text content",
                 schema_for!(SearchFilesArgs),
             ),
             tool(
@@ -55,11 +65,26 @@ impl SkillExecutor {
                 "Get recent commit history with stable wrapper options",
                 schema_for!(GitLogArgs),
             ),
+            tool(
+                "git_show",
+                "Show details for a commit/tag/file with optional line limits",
+                schema_for!(GitShowArgs),
+            ),
+            tool(
+                "git_branch_list",
+                "List local/remote git branches with commit summary",
+                schema_for!(GitBranchListArgs),
+            ),
             tool("web_search", "Search the web for information", schema_for!(WebSearchArgs)),
             tool(
                 "http_get_json",
                 "Fetch JSON from an HTTP(S) endpoint with timeout and size limits",
                 schema_for!(HttpGetJsonArgs),
+            ),
+            tool(
+                "http_get_text",
+                "Fetch text/HTML from an HTTP(S) endpoint with timeout and size limits",
+                schema_for!(HttpGetTextArgs),
             ),
             tool(
                 "http_post_json",

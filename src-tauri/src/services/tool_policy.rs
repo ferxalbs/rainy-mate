@@ -31,26 +31,41 @@ pub fn get_tool_policy(function_name: &str) -> ToolPolicy {
     match function_name {
         // Level 0: read-only
         "read_file"
+        | "read_many_files"
         | "list_files"
+        | "list_files_detailed"
         | "search_files"
         | "file_exists"
         | "get_file_info"
         | "read_file_chunk"
         | "git_status"
         | "git_diff"
+        | "git_log"
+        | "git_show"
+        | "git_branch_list"
         | "web_search"
         | "read_web_page"
         | "http_get_json"
+        | "http_get_text"
         | "screenshot"
         | "get_page_content"
+        | "get_page_snapshot"
         | "wait_for_selector"
         | "extract_links" => ToolPolicy {
             skill: match function_name {
-                "web_search" | "read_web_page" | "http_get_json" => ToolSkill::Web,
-                "screenshot" | "get_page_content" | "wait_for_selector" | "extract_links" => {
+                "web_search" | "read_web_page" | "http_get_json" | "http_get_text" => {
+                    ToolSkill::Web
+                }
+                "screenshot"
+                | "get_page_content"
+                | "get_page_snapshot"
+                | "wait_for_selector"
+                | "extract_links" => {
                     ToolSkill::Browser
                 }
-                "git_status" | "git_diff" => ToolSkill::Shell,
+                "git_status" | "git_diff" | "git_log" | "git_show" | "git_branch_list" => {
+                    ToolSkill::Shell
+                }
                 _ => ToolSkill::Filesystem,
             },
             airlock_level: AirlockLevel::Safe,

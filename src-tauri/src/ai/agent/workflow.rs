@@ -21,13 +21,15 @@ const MAX_TOOL_TEXT_BYTES: usize = 48 * 1024;
 const MAX_MEMORY_CONTEXT_BYTES: usize = 24 * 1024;
 const FILESYSTEM_TOOL_NAMES: &[&str] = &[
     "read_file",
+    "read_many_files",
     "write_file",
+    "append_file",
     "list_files",
+    "list_files_detailed",
     "file_exists",
     "get_file_info",
     "search_files",
     "read_file_chunk",
-    "append_file",
     "mkdir",
     "delete_file",
     "move_file",
