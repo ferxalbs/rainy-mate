@@ -19,6 +19,18 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
         },
       },
       {
+        name: "read_many_files",
+        description: "Read multiple text files in one call",
+        airlockLevel: getToolAirlockLevel("read_many_files"),
+        parameters: {
+          paths: {
+            type: "array",
+            description: "List of file paths to read",
+            required: true,
+          },
+        },
+      },
+      {
         name: "list_files",
         description: "List files in a directory",
         airlockLevel: getToolAirlockLevel("list_files"),
@@ -230,6 +242,23 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
           },
         },
       },
+      {
+        name: "git_log",
+        description: "Get recent git commits",
+        airlockLevel: getToolAirlockLevel("git_log"),
+        parameters: {
+          path: {
+            type: "string",
+            description: "Optional directory/file path inside workspace",
+            required: false,
+          },
+          max_count: {
+            type: "number",
+            description: "Maximum number of commits to return",
+            required: false,
+          },
+        },
+      },
     ],
   },
   {
@@ -412,6 +441,12 @@ export const DEFAULT_NEURAL_SKILLS: SkillManifest[] = [
         name: "get_page_content",
         description: "Get HTML content of the current page",
         airlockLevel: getToolAirlockLevel("get_page_content"),
+        parameters: {},
+      },
+      {
+        name: "get_page_snapshot",
+        description: "Get URL, title and text preview of current page",
+        airlockLevel: getToolAirlockLevel("get_page_snapshot"),
         parameters: {},
       },
       {

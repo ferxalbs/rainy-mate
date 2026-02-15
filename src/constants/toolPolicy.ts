@@ -15,6 +15,7 @@ const DEFAULT_POLICY: ToolPolicy = {
 const TOOL_POLICY_MAP: Record<string, ToolPolicy> = {
   // Level 0: read-only
   read_file: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
+  read_many_files: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   list_files: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   search_files: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   file_exists: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
@@ -22,11 +23,13 @@ const TOOL_POLICY_MAP: Record<string, ToolPolicy> = {
   read_file_chunk: { skill: "filesystem", airlockLevel: AirlockLevels.Safe },
   git_status: { skill: "shell", airlockLevel: AirlockLevels.Safe },
   git_diff: { skill: "shell", airlockLevel: AirlockLevels.Safe },
+  git_log: { skill: "shell", airlockLevel: AirlockLevels.Safe },
   web_search: { skill: "web", airlockLevel: AirlockLevels.Safe },
   read_web_page: { skill: "web", airlockLevel: AirlockLevels.Safe },
   http_get_json: { skill: "web", airlockLevel: AirlockLevels.Safe },
   screenshot: { skill: "browser", airlockLevel: AirlockLevels.Safe },
   get_page_content: { skill: "browser", airlockLevel: AirlockLevels.Safe },
+  get_page_snapshot: { skill: "browser", airlockLevel: AirlockLevels.Safe },
   wait_for_selector: { skill: "browser", airlockLevel: AirlockLevels.Safe },
   extract_links: { skill: "browser", airlockLevel: AirlockLevels.Safe },
 
