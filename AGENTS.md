@@ -79,6 +79,7 @@ The agent connects to the Cloud Cortex via `rainy-atm` and executes local skills
 5. Update `src/constants/defaultNeuralSkills.ts` so the node exposes the method to Cloud Cortex.
 6. Update `src/constants/toolPolicy.ts` with correct airlock level mapping.
 7. Validate with `cd src-tauri && cargo check` and `pnpm exec tsc --noEmit`.
+8. **MANDATORY UI UPDATE**: You MUST add a corresponding "Neural State" in `src/components/agent-chat/MessageBubble.tsx`. Every tool must have a visual representation (icon + animation + color) in the UI.
 
 ## Airlock Security
 
@@ -91,3 +92,13 @@ The agent connects to the Cloud Cortex via `rainy-atm` and executes local skills
 - **Agent not responding**: Check `src-tauri` terminal logs. Ensure `rainy-atm` is reachable.
 - **Command rejected**: Check Airlock UI in `NeuralPanel`.
 - **API Errors**: Verify `rainy-atm` credentials in `NeuralPanel`.
+
+## Neural States & UI Feedback
+
+The UI visually represents the agent's internal state based on its current actions:
+
+- **Thinking** (Purple): The agent is processing the prompt or generating a response.
+- **Planning** (Amber): The agent is formulating a plan or strategy (`planning` tool usage).
+- **Reading** (Blue): The agent is forcefully acquiring knowledge from the web (`web_search`, `read_web_page`).
+- **Creating** (Pink): The agent is generating content or files (`write_file`).
+- **Executing** (Cyan): The agent is running commands or applying changes (`execute_command`).
