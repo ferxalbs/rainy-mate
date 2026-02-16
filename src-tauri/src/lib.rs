@@ -15,8 +15,9 @@ use agents::AgentRegistry;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
     ATMClient, BrowserController, CommandPoller, DocumentService, FileManager, FileOperationEngine,
-    FolderManager, ImageService, ManagedResearchService, MemoryManager, NeuralService,
-    NodeAuthenticator, ReflectionEngine, SettingsManager, SkillExecutor, WorkspaceManager,
+    FolderManager, ImageService, LLMClient, ManagedResearchService, MemoryManager, NeuralService,
+    NodeAuthenticator, ReflectionEngine, SettingsManager, SkillExecutor, SocketClient,
+    WorkspaceManager,
 };
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -98,6 +99,13 @@ pub fn run() {
         skill_executor.clone(),
     ));
 
+    // Initialize Socket Client (Thunderbolt)
+    let socket_client = SocketClient::new("wss://rainy-atm-cfe3gvcwua-uc.a.run.app/ws".to_string());
+
+    // Initialize LLM Client (Brain)
+    // API Key will be loaded/set via commands later
+    let llm_client = Arc::new(Mutex::new(LLMClient::new("".to_string())));
+
     // Initialize folder manager (requires app handle for data dir)
     // We'll initialize it in setup since we need the app handle
 
@@ -133,6 +141,8 @@ pub fn run() {
         .manage(browser_controller) // Arc<BrowserController>
         .manage(command_poller) // Arc<CommandPoller>
         .manage(skill_executor) // Arc<SkillExecutor>
+        .manage(socket_client) // SocketClient
+        .manage(llm_client) // Arc<Mutex<LLMClient>>
         .manage(commands::airlock::AirlockServiceState(Arc::new(
             Mutex::new(None),
         ))) // Placeholder, initialized in setup
@@ -199,8 +209,23 @@ pub fn run() {
             let memory_db_path = app_data_dir.join("memory_db");
             let memory_manager = Arc::new(MemoryManager::new(100, memory_db_path));
 
+            // Initialize Crystalline Memory (Watcher)
+            let mm_clone = memory_manager.clone();
+            tauri::async_runtime::spawn(async move {
+                mm_clone.init().await;
+            });
+
             // Manage memory manager state
-            app.manage(commands::memory::MemoryManagerState(memory_manager));
+            app.manage(commands::memory::MemoryManagerState(memory_manager.clone()));
+
+            // Inject MemoryManager into SkillExecutor (Late Binding)
+            {
+                let se = app.state::<Arc<SkillExecutor>>();
+                let mm = memory_manager.clone();
+                tauri::async_runtime::block_on(async move {
+                    se.set_memory_manager(mm).await;
+                });
+            }
 
             // Initialize Airlock Service with app handle
             let airlock = AirlockService::new(app.handle().clone());
@@ -256,6 +281,24 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 // Wait for other services
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+                // Start Socket Client (Thunderbolt)
+                let socket = app_handle_cb.state::<SocketClient>().inner().clone();
+                let poller_for_ws = app_handle_cb.state::<Arc<CommandPoller>>().inner().clone();
+
+                // Subscribe to real-time triggers
+                let mut rx = socket.subscribe();
+                tauri::async_runtime::spawn(async move {
+                    while let Ok(msg) = rx.recv().await {
+                        if msg.event == "command_queued" {
+                            tracing::info!("Real-time trigger received: command_queued");
+                            poller_for_ws.trigger();
+                        }
+                    }
+                });
+
+                socket.connect().await;
+
                 let atm = app_handle_cb
                     .state::<crate::services::ATMClient>()
                     .inner()

@@ -10,9 +10,11 @@ use crate::services::browser_controller::BrowserController;
 use crate::services::settings::SettingsManager;
 use crate::services::workspace::WorkspaceManager;
 use crate::services::ManagedResearchService;
+use crate::services::MemoryManager;
 use sha2::{Digest, Sha256};
 use std::net::IpAddr;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 const MAX_TOOL_OUTPUT_BYTES: usize = 48 * 1024;
 
@@ -37,6 +39,7 @@ pub struct SkillExecutor {
     workspace_manager: Arc<WorkspaceManager>,
     managed_research: Arc<ManagedResearchService>,
     browser: Arc<BrowserController>,
+    memory_manager: Arc<RwLock<Option<Arc<MemoryManager>>>>,
 }
 
 impl SkillExecutor {
@@ -93,7 +96,13 @@ impl SkillExecutor {
             workspace_manager,
             managed_research,
             browser,
+            memory_manager: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub async fn set_memory_manager(&self, mm: Arc<MemoryManager>) {
+        let mut lock = self.memory_manager.write().await;
+        *lock = Some(mm);
     }
 
     #[cfg(test)]
@@ -109,6 +118,7 @@ impl SkillExecutor {
             workspace_manager: wm,
             managed_research: research,
             browser,
+            memory_manager: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -189,6 +199,7 @@ impl SkillExecutor {
                 self.execute_browser(method, &payload.params, allowed_domains, blocked_domains)
                     .await
             }
+            "memory" => self.execute_memory(method, &payload.params).await,
             _ => CommandResult {
                 success: false,
                 output: None,
@@ -289,6 +300,40 @@ impl SkillExecutor {
             exit_code: Some(1),
         }
     }
+
+    async fn execute_memory(
+        &self,
+        method: &str,
+        params: &Option<serde_json::Value>,
+    ) -> CommandResult {
+        let lock = self.memory_manager.read().await;
+        let mm = match lock.as_ref() {
+            Some(m) => m,
+            None => return self.error("MemoryManager not initialized"),
+        };
+
+        let empty_params = serde_json::Value::Object(serde_json::Map::new());
+        let params = params.as_ref().unwrap_or(&empty_params);
+
+        match method {
+            "search_memory" => {
+                let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+
+                match mm.search(query, limit).await {
+                    Ok(results) => CommandResult {
+                        success: true,
+                        output: Some(serde_json::to_string(&results).unwrap_or_default()),
+                        error: None,
+                        exit_code: Some(0),
+                    },
+                    Err(e) => self.error(&e.to_string()),
+                }
+            }
+            // Add "add_memory" later if needed
+            _ => self.error(&format!("Unknown memory method: {}", method)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -319,7 +364,10 @@ mod policy_tests {
         };
 
         assert!(!SkillExecutor::is_tool_allowed("read_file", Some(&policy)));
-        assert!(!SkillExecutor::is_tool_allowed("execute_command", Some(&policy)));
+        assert!(!SkillExecutor::is_tool_allowed(
+            "execute_command",
+            Some(&policy)
+        ));
     }
 
     #[test]
@@ -351,7 +399,9 @@ mod tests {
 
     #[test]
     fn shell_allowlist_matches_agents_policy() {
-        for cmd in ["npm", "pnpm", "bun", "cargo", "git", "ls", "grep", "echo", "cat"] {
+        for cmd in [
+            "npm", "pnpm", "bun", "cargo", "git", "ls", "grep", "echo", "cat",
+        ] {
             assert!(SkillExecutor::is_allowed_shell_command(cmd));
         }
     }
@@ -393,7 +443,10 @@ mod tests {
             "api.example.com",
             "*.example.com"
         ));
-        assert!(!SkillExecutor::domain_rule_matches("evil.com", "example.com"));
+        assert!(!SkillExecutor::domain_rule_matches(
+            "evil.com",
+            "example.com"
+        ));
     }
 
     #[test]
@@ -410,8 +463,9 @@ mod tests {
 
     #[test]
     fn blocked_paths_reject_relative_and_absolute_matches() {
-        let target =
-            PathBuf::from("/Users/fer/Projects/rainy-cowork/src-tauri/src/services/skill_executor.rs");
+        let target = PathBuf::from(
+            "/Users/fer/Projects/rainy-cowork/src-tauri/src/services/skill_executor.rs",
+        );
         let allowed = vec!["/Users/fer/Projects/rainy-cowork".to_string()];
         let blocked_relative = vec!["src-tauri/src/services".to_string()];
         let blocked_absolute = vec!["/Users/fer/Projects/rainy-cowork/src-tauri".to_string()];

@@ -1,6 +1,9 @@
 // Rainy Cowork - AI Provider Trait and Manager
 // Unified abstraction layer using rainy-sdk for premium features
 
+use crate::ai::provider_trait::AIProvider;
+use crate::ai::provider_types::{ProviderConfig, ProviderId};
+use crate::ai::providers::moonshot::MoonshotProvider;
 use crate::ai::{gemini::GeminiProvider, keychain::KeychainManager};
 use crate::models::{AIProviderConfig, ProviderType};
 use futures::StreamExt;
@@ -110,6 +113,15 @@ impl AIProviderManager {
             requires_api_key: true,
         });
 
+        // Show Moonshot AI (Kimi)
+        providers.push(AIProviderConfig {
+            provider: ProviderType::Moonshot,
+            name: "Moonshot AI (Kimi)".to_string(),
+            model: "kimi-k2.5".to_string(),
+            is_available: true,
+            requires_api_key: true,
+        });
+
         // Show Rainy API (Pay-As-You-Go)
         // Always available as option, user provides key
         providers.insert(
@@ -179,6 +191,12 @@ impl AIProviderManager {
             }
 
             "gemini" => Ok(self.gemini.available_models()),
+            "moonshot" => Ok(vec![
+                "moonshot-v1-8k".to_string(),
+                "moonshot-v1-32k".to_string(),
+                "moonshot-v1-128k".to_string(),
+                "kimi-k2.5".to_string(),
+            ]),
             _ => Err(AIError::ProviderNotAvailable(provider.to_string()).to_string()),
         }
     }
@@ -201,6 +219,27 @@ impl AIProviderManager {
                 .validate_key(api_key)
                 .await
                 .map_err(|e| e.to_string()),
+
+            "moonshot" => {
+                // Validate Moonshot key by creating a temporary provider
+                let config = ProviderConfig {
+                    id: ProviderId::new("temp"),
+                    provider_type: crate::ai::provider_types::ProviderType::Moonshot,
+                    api_key: Some(api_key.to_string()),
+                    model: "moonshot-v1-8k".to_string(),
+                    ..Default::default()
+                };
+
+                let provider = MoonshotProvider::new(config).map_err(|e| e.to_string())?;
+
+                match provider.health_check().await {
+                    Ok(health) => match health {
+                        crate::ai::provider_types::ProviderHealth::Healthy => Ok(true),
+                        _ => Err("Moonshot API is not healthy".to_string()),
+                    },
+                    Err(e) => Err(e.to_string()),
+                }
+            }
             _ => Err(AIError::ProviderNotAvailable(provider.to_string()).to_string()),
         }
     }
@@ -357,6 +396,60 @@ impl AIProviderManager {
                     .complete_with_api_key(model, prompt, &api_key, on_progress)
                     .await
                     .map_err(|e| e.to_string())
+            }
+
+            ProviderType::Moonshot => {
+                let api_key = self
+                    .get_api_key("moonshot")
+                    .await?
+                    .ok_or_else(|| "No Moonshot API key configured".to_string())?;
+
+                let config = ProviderConfig {
+                    id: ProviderId::new("moonshot"),
+                    provider_type: crate::ai::provider_types::ProviderType::Moonshot,
+                    api_key: Some(api_key),
+                    model: model.to_string(),
+                    ..Default::default()
+                };
+
+                let provider = MoonshotProvider::new(config).map_err(|e| e.to_string())?;
+
+                // Use streaming if callback provided, else blocking
+                match on_token {
+                    Some(token_callback) => {
+                        on_progress(30, Some("Streaming response...".to_string()));
+
+                        let request = crate::ai::provider_types::ChatCompletionRequest {
+                            model: model.to_string(),
+                            messages: vec![crate::ai::provider_types::ChatMessage::user(prompt)],
+                            stream: true,
+                            ..Default::default()
+                        };
+
+                        provider
+                            .complete_stream(request, Arc::new(token_callback))
+                            .await
+                            .map(|_| String::new()) // Return empty string as token callback handled it
+                            .map_err(|e| e.to_string())
+                    }
+                    None => {
+                        on_progress(50, Some("Generating response...".to_string()));
+
+                        let request = crate::ai::provider_types::ChatCompletionRequest {
+                            model: model.to_string(),
+                            messages: vec![crate::ai::provider_types::ChatMessage::user(prompt)],
+                            stream: false,
+                            ..Default::default()
+                        };
+
+                        let response = provider
+                            .complete(request)
+                            .await
+                            .map_err(|e| e.to_string())?;
+
+                        Ok(response.content.unwrap_or_default())
+                    }
+                }
             }
         }
     }

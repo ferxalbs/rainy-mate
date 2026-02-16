@@ -11,6 +11,7 @@ pub mod file_manager;
 pub mod file_operations;
 pub mod folder_manager;
 pub mod image;
+pub mod llm_client;
 pub mod managed_research; // Phase 3 AI Research
 pub mod manifest_signing;
 pub mod memory;
@@ -19,6 +20,7 @@ pub mod reflection;
 pub mod security;
 pub mod settings;
 pub mod skill_executor;
+pub mod socket_client;
 pub mod task_manager;
 pub mod tool_policy;
 
@@ -40,7 +42,9 @@ pub use reflection::ReflectionEngine;
 pub use security::NodeAuthenticator;
 pub use skill_executor::SkillExecutor;
 
+pub use llm_client::LLMClient;
 pub use settings::SettingsManager;
+pub use socket_client::SocketClient;
 pub use task_manager::TaskManager;
 pub use tool_policy::get_tool_policy;
 

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 use tokio::time::sleep;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
@@ -156,6 +156,7 @@ pub struct CommandPoller {
     agent_context: Arc<RwLock<Option<AgentRuntimeContext>>>,
     is_running: Arc<Mutex<bool>>,
     airlock_service: Arc<RwLock<Option<AirlockService>>>,
+    notify: Arc<Notify>,
 }
 
 impl CommandPoller {
@@ -166,7 +167,12 @@ impl CommandPoller {
             agent_context: Arc::new(RwLock::new(None)),
             is_running: Arc::new(Mutex::new(false)),
             airlock_service: Arc::new(RwLock::new(None)),
+            notify: Arc::new(Notify::new()),
         }
+    }
+
+    pub fn trigger(&self) {
+        self.notify.notify_one();
     }
 
     /// Set the context needed to create AgentRuntime instances
@@ -229,7 +235,14 @@ impl CommandPoller {
                     }
                 };
 
-                sleep(sleep_duration).await;
+                tokio::select! {
+                    _ = sleep(sleep_duration) => {}
+                    _ = poller.notify.notified() => {
+                        println!("[CommandPoller] Triggered by notification (Real-time event)");
+                        // If triggered, likely a command is waiting, so we reset backoff
+                        backoff_failures = 0;
+                    }
+                }
             }
 
             println!("[CommandPoller] Stopped polling loop");

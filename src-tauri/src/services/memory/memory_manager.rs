@@ -4,9 +4,9 @@
 //! It coordinates operations between the two memory types and provides a simple API for
 //! storing, searching, and retrieving memory entries.
 
+use crate::agents::MemoryEntry;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::agents::MemoryEntry;
 
 /// Memory manager that coordinates short-term and long-term memory
 ///
@@ -36,6 +36,8 @@ pub struct MemoryManager {
     short_term: Arc<RwLock<super::short_term::ShortTermMemory>>,
     /// Long-term memory (persistent storage)
     long_term: Arc<super::long_term::LongTermMemory>,
+    /// Crystalline memory (Markdown file watcher)
+    crystalline: Arc<super::crystalline::CrystallineMemory>,
 }
 
 impl MemoryManager {
@@ -57,17 +59,24 @@ impl MemoryManager {
     ///     PathBuf::from("./memory_db"),
     /// );
     /// ```
-    pub fn new(
-        short_term_size: usize,
-        long_term_path: std::path::PathBuf,
-    ) -> Self {
+    pub fn new(short_term_size: usize, long_term_path: std::path::PathBuf) -> Self {
         Self {
-            short_term: Arc::new(RwLock::new(
-                super::short_term::ShortTermMemory::new(short_term_size)
+            short_term: Arc::new(RwLock::new(super::short_term::ShortTermMemory::new(
+                short_term_size,
+            ))),
+            long_term: Arc::new(super::long_term::LongTermMemory::new(
+                long_term_path.clone(),
             )),
-            long_term: Arc::new(
-                super::long_term::LongTermMemory::new(long_term_path)
-            ),
+            crystalline: Arc::new(super::crystalline::CrystallineMemory::new(
+                long_term_path.parent().unwrap().join("memory_markdown"),
+            )),
+        }
+    }
+
+    /// Initialize subsystems (Crystalline watcher)
+    pub async fn init(&self) {
+        if let Err(e) = self.crystalline.init().await {
+            tracing::error!("Failed to init Crystalline memory: {}", e);
         }
     }
 
@@ -146,7 +155,11 @@ impl MemoryManager {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryEntry>, super::long_term::MemoryError> {
+    pub async fn search(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<MemoryEntry>, super::long_term::MemoryError> {
         // Search short-term memory
         let recent = {
             let stm = self.short_term.read().await;
@@ -156,8 +169,12 @@ impl MemoryManager {
         // Search long-term memory
         let long_term_results = self.long_term.search(query, limit).await?;
 
+        // Search Crystalline memory
+        let crystalline_results = self.crystalline.search(query, limit).await;
+
         // Combine results (recent first)
         let mut results = recent;
+        results.extend(crystalline_results);
         results.extend(long_term_results);
 
         // Limit total results
@@ -253,7 +270,9 @@ impl MemoryManager {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_stats(&self) -> Result<super::long_term::MemoryStats, super::long_term::MemoryError> {
+    pub async fn get_stats(
+        &self,
+    ) -> Result<super::long_term::MemoryStats, super::long_term::MemoryError> {
         self.long_term.get_stats().await
     }
 
@@ -288,7 +307,10 @@ impl MemoryManager {
     /// # Returns
     ///
     /// `Some(entry)` if found, `None` otherwise
-    pub async fn get_by_id(&self, id: &str) -> Result<Option<MemoryEntry>, super::long_term::MemoryError> {
+    pub async fn get_by_id(
+        &self,
+        id: &str,
+    ) -> Result<Option<MemoryEntry>, super::long_term::MemoryError> {
         self.long_term.get(id).await
     }
 
@@ -446,11 +468,20 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let manager = MemoryManager::new(2, temp_dir.path().to_path_buf());
 
-        manager.store(create_test_entry("1", "First")).await.unwrap();
-        manager.store(create_test_entry("2", "Second")).await.unwrap();
+        manager
+            .store(create_test_entry("1", "First"))
+            .await
+            .unwrap();
+        manager
+            .store(create_test_entry("2", "Second"))
+            .await
+            .unwrap();
         assert_eq!(manager.short_term_size().await, 2);
 
-        manager.store(create_test_entry("3", "Third")).await.unwrap();
+        manager
+            .store(create_test_entry("3", "Third"))
+            .await
+            .unwrap();
         assert_eq!(manager.short_term_size().await, 2);
 
         let recent = manager.get_recent(10).await;

@@ -67,3 +67,5 @@ chromiumoxide = { version = "0.8.0", features = ["tokio-runtime"], default-featu
 tokio-tungstenite = { version = "0.26.1", features = ["native-tls"] }
 futures-util = "0.3"
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "tls-native-tls", "chrono"] }
+notify = "8.2.0"
+walkdir = "2.5.0"

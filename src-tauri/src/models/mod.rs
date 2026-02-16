@@ -26,6 +26,7 @@ pub enum TaskStatus {
 pub enum ProviderType {
     RainyApi, // Standard Pay-As-You-Go (1:1 Dollar)
     Gemini,   // User's own Google API key
+    Moonshot, // Kimi AI (Moonshot)
 }
 
 /// A single task step for detailed progress tracking

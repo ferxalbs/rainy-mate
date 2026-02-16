@@ -23,6 +23,7 @@ import { UnifiedModelSelector } from "../ai/UnifiedModelSelector";
 import { AgentSelector } from "./AgentSelector";
 import { MessageBubble } from "./MessageBubble";
 import { AgentSpec } from "../../types/agent-spec";
+import { NeuralStream } from "./NeuralStream";
 
 interface AgentChatPanelProps {
   workspacePath: string;
@@ -94,6 +95,45 @@ export function AgentChatPanel({
   } = useAgentChat();
 
   const isProcessing = isPlanning || isExecuting;
+
+  // Neural Stream Logic
+  const [neuralLogs, setNeuralLogs] = useState<string[]>([]);
+  const [currentThought, setCurrentThought] = useState<string>("");
+
+  // Effect to update neural logs from messages
+  useEffect(() => {
+    if (messages.length === 0) {
+      setNeuralLogs([]);
+      setCurrentThought("");
+      return;
+    }
+
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.type === "agent" && lastMsg.isLoading) {
+      // Extract thought if available (e.g. from <thinking> tags or raw content)
+      // For now, we simulate thought process or use content as thought
+      const content = lastMsg.content;
+
+      // If content has <thinking> tags, extract content
+      const thoughtMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/);
+      if (thoughtMatch) {
+        setCurrentThought(thoughtMatch[1].trim());
+      } else {
+        // Fallback: Use last line as "thought" if streaming
+        const lines = content.split("\n");
+        const lastLine = lines[lines.length - 1];
+        if (lastLine && lastLine.length < 100) {
+          setCurrentThought(lastLine);
+        }
+      }
+    } else if (lastMsg.type === "agent" && !lastMsg.isLoading) {
+      setCurrentThought("");
+      // Add completion log
+      if (!neuralLogs.includes("Response complete")) {
+        setNeuralLogs((prev) => [...prev, "Response complete"]);
+      }
+    }
+  }, [messages, isProcessing]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -326,6 +366,15 @@ export function AgentChatPanel({
           )}
         </div>
       </div>
+
+      {/* Neural Stream Overlay */}
+      <NeuralStream
+        isVisible={isProcessing || currentThought.length > 0}
+        isThinking={isPlanning}
+        status={isPlanning ? "thinking" : isExecuting ? "executing" : "idle"}
+        currentThought={currentThought}
+        logs={neuralLogs}
+      />
 
       {/* Floating Input Area - Absolute Bottom - ONLY SHOW WHEN MESSAGES EXIST */}
       {messages.length > 0 && (

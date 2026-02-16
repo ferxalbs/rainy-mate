@@ -1,5 +1,3 @@
-codex resume 019c577f-1b88-7f80-bc09-bfd68944faae
-codex resume 019c576b-08f5-7fd2-a083-8012e56ac166
 # Rust Code Audit Report
 
 **Date**: 2026-02-05

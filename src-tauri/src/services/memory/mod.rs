@@ -29,6 +29,7 @@
 //! let results = manager.search("query", 10).await?;
 //! ```
 
+pub mod crystalline;
 pub mod long_term;
 pub mod memory_manager;
 pub mod short_term;

@@ -42,6 +42,8 @@ pub enum ProviderType {
     Local,
     /// Custom provider
     Custom,
+    /// Moonshot AI (Kimi) provider
+    Moonshot,
     /// Rainy SDK provider
     RainySDK,
 }
@@ -55,6 +57,7 @@ impl std::fmt::Display for ProviderType {
             ProviderType::XAI => write!(f, "xai"),
             ProviderType::Local => write!(f, "local"),
             ProviderType::Custom => write!(f, "custom"),
+            ProviderType::Moonshot => write!(f, "moonshot"),
             ProviderType::RainySDK => write!(f, "rainy-sdk"),
         }
     }
