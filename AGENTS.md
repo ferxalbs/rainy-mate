@@ -79,7 +79,14 @@ The agent connects to the Cloud Cortex via `rainy-atm` and executes local skills
 5. Update `src/constants/defaultNeuralSkills.ts` so the node exposes the method to Cloud Cortex.
 6. Update `src/constants/toolPolicy.ts` with correct airlock level mapping.
 7. Validate with `cd src-tauri && cargo check` and `pnpm exec tsc --noEmit`.
-8. **MANDATORY UI UPDATE**: You MUST add a corresponding "Neural State" in `src/components/agent-chat/MessageBubble.tsx`. Every tool must have a visual representation (icon + animation + color) in the UI.
+8. **MANDATORY UI UPDATE:**
+   - **Update `src/components/agent-chat/neural-config.ts`:**
+     - Add your new tool to the `TOOL_STATE_MAP`.
+     - If it fits an existing state (e.g., "reading"), use it.
+     - If it needs a _new_ state:
+       - Add the state to the `NeuralState` type.
+       - Add a new case in `getNeuralStateConfig` with a unique icon, color, and text.
+   - **Verify:** Ensure the "Neural State" bubble in the chat shows your new state when the tool is used.
 
 ## Airlock Security
 
@@ -100,5 +107,9 @@ The UI visually represents the agent's internal state based on its current actio
 - **Thinking** (Purple): The agent is processing the prompt or generating a response.
 - **Planning** (Amber): The agent is formulating a plan or strategy (`planning` tool usage).
 - **Reading** (Blue): The agent is forcefully acquiring knowledge from the web (`web_search`, `read_web_page`).
+- **Observing** (Emerald): The agent is reading local files or checking status (`read_file`, `list_files`).
+- **Browsing** (Orange): The agent is interacting with a web browser (`click_element`, `type_text`).
+- **Communicating** (Indigo): The agent is performing network requests (`http_get_json`).
 - **Creating** (Pink): The agent is generating content or files (`write_file`).
+- **Pruning** (Red): The agent is deleting or removing data (`delete_file`).
 - **Executing** (Cyan): The agent is running commands or applying changes (`execute_command`).

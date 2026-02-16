@@ -1,16 +1,15 @@
-import React from "react";
-import {
-  Loader2,
-  Play,
-  Ban,
-  FileCode,
-  FolderOpen,
-  ArrowRight,
-} from "lucide-react";
+import React, { useMemo } from "react";
+import { Play, Ban, FileCode, FolderOpen, ArrowRight } from "lucide-react";
 import { Button, Card } from "@heroui/react";
+import { motion } from "framer-motion";
 import type { AgentMessage, TaskPlan } from "../../types/agent";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { PlanConfirmationCard } from "./PlanConfirmationCard";
+import {
+  NeuralState,
+  TOOL_STATE_MAP,
+  getNeuralStateConfig,
+} from "./neural-config";
 
 import { ThoughtDisplay, ThoughtBadge } from "./ThoughtDisplay";
 
@@ -67,8 +66,23 @@ export function MessageBubble({
     );
   }
 
-  // Remove the raw tool calls from the display content if we are visualizing them
-  // checking if toolCalls are present, we might want to keep the context though.
+  // Determine Neural State
+  // Determine Neural State
+  const neuralState = useMemo(() => {
+    if (isExecuting) return "executing";
+    if (message.toolCalls && !message.isExecuted) {
+      // Find the most specific state based on the first tool call
+      // (Simplified logic: first matching tool defines the state)
+      for (const tc of message.toolCalls) {
+        if (TOOL_STATE_MAP[tc.method]) {
+          return TOOL_STATE_MAP[tc.method];
+        }
+      }
+      return "planning"; // Default if no specific tool match
+    }
+    if (message.isLoading) return "thinking";
+    return "idle";
+  }, [isExecuting, message.toolCalls, message.isExecuted, message.isLoading]);
 
   return (
     <div
@@ -79,19 +93,35 @@ export function MessageBubble({
         className={`flex flex-col gap-1 max-w-[85%] ${isUser ? "items-end" : "items-start"}`}
       >
         <div
-          className={`rounded-[20px] px-5 py-3.5 shadow-sm text-[15px] leading-relaxed transition-all ${
+          className={`rounded-[20px] px-5 py-3.5 shadow-sm text-[15px] leading-relaxed transition-all relative overflow-hidden ${
             isUser
               ? "bg-primary text-primary-foreground rounded-br-sm"
-              : "bg-white/40 dark:bg-white/5 border border-white/10 text-foreground backdrop-blur-md rounded-bl-sm"
+              : neuralState !== "idle"
+                ? "bg-white/40 dark:bg-white/5 border border-primary/20 text-foreground backdrop-blur-md rounded-bl-sm shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
+                : "bg-white/40 dark:bg-white/5 border border-white/10 text-foreground backdrop-blur-md rounded-bl-sm"
           }`}
         >
-          {message.content ? (
-            <MarkdownRenderer content={message.content} />
-          ) : message.isLoading ? (
-            <span className="flex items-center gap-2 text-muted-foreground italic">
-              <Loader2 className="size-3 animate-spin" /> Thinking...
-            </span>
-          ) : null}
+          {/* Animated Background for Active States */}
+          {!isUser && neuralState !== "idle" && (
+            <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[20px]">
+              <div className="absolute inset-0 bg-primary/5" />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0.1, 0.3, 0.1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent skew-x-12 translate-x-[-100%]"
+                style={{ translateX: "-100%" }}
+              />
+            </div>
+          )}
+
+          <div className="relative z-10">
+            {message.content ? (
+              <MarkdownRenderer content={message.content} />
+            ) : neuralState !== "idle" ? (
+              <NeuralStatus state={neuralState} />
+            ) : null}
+          </div>
         </div>
 
         {/* Thought/Reasoning Display (Only for Agent with thinking) */}
@@ -223,3 +253,38 @@ function PlanCard({
     </Card>
   );
 }
+
+// Neural Status Component
+const NeuralStatus = ({ state }: { state: NeuralState }) => {
+  const config = useMemo(() => getNeuralStateConfig(state), [state]);
+
+  const Icon = config.icon;
+
+  return (
+    <div className={`flex items-center gap-3 py-1 ${config.color}`}>
+      <div className={`p-2 rounded-full ${config.bgColor}`}>
+        <Icon className="size-4 animate-pulse" />
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm font-medium">{config.text}</span>
+        <div className="flex gap-1 h-1 mt-1">
+          {[1, 2, 3].map((i) => (
+            <motion.div
+              key={i}
+              animate={{
+                opacity: [0.3, 1, 0.3],
+                scale: [1, 1.2, 1],
+              }}
+              transition={{
+                duration: 1.5,
+                repeat: Infinity,
+                delay: i * 0.2,
+              }}
+              className={`w-1.5 h-1.5 rounded-full ${config.bgColor.replace("/10", "")}`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
