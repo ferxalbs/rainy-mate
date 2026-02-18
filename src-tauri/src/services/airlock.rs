@@ -301,6 +301,7 @@ mod tests {
     use crate::models::neural::{
         CommandPriority, CommandStatus, QueuedCommand, RainyPayload, ToolAccessPolicy,
     };
+    use rand::{rngs::StdRng, Rng, SeedableRng};
 
     fn make_request(command_id: &str, timestamp: i64) -> ApprovalRequest {
         ApprovalRequest {
@@ -382,5 +383,103 @@ mod tests {
 
         let level = AirlockService::effective_airlock_level(&command);
         assert_eq!(level, AirlockLevel::Dangerous);
+    }
+
+    fn level_from_u8(value: u8) -> AirlockLevel {
+        match value {
+            0 => AirlockLevel::Safe,
+            1 => AirlockLevel::Sensitive,
+            _ => AirlockLevel::Dangerous,
+        }
+    }
+
+    fn make_command_with_tool(method: &str, declared: AirlockLevel) -> QueuedCommand {
+        QueuedCommand {
+            id: "cmd-prop".to_string(),
+            workspace_id: Some("ws-1".to_string()),
+            desktop_node_id: Some("node-1".to_string()),
+            intent: format!("tool.{}", method),
+            payload: RainyPayload {
+                skill: Some("tool".to_string()),
+                method: Some(method.to_string()),
+                params: None,
+                content: None,
+                allowed_paths: vec![],
+                blocked_paths: vec![],
+                allowed_domains: vec![],
+                blocked_domains: vec![],
+                tool_access_policy: Some(ToolAccessPolicy {
+                    enabled: true,
+                    mode: "all".to_string(),
+                    allow: vec![],
+                    deny: vec![],
+                }),
+                tool_access_policy_version: None,
+                tool_access_policy_hash: None,
+            },
+            priority: CommandPriority::Normal,
+            status: CommandStatus::Pending,
+            airlock_level: declared,
+            approved_by: None,
+            result: None,
+            created_at: None,
+            started_at: None,
+            completed_at: None,
+        }
+    }
+
+    #[test]
+    fn effective_level_never_downscopes_declared_for_known_tools_property_sweep() {
+        let mut rng = StdRng::seed_from_u64(0xA11C0C);
+        let tools = [
+            "read_file",       // Safe
+            "write_file",      // Sensitive
+            "execute_command", // Dangerous
+            "http_post_json",  // Dangerous
+            "browse_url",      // Sensitive
+        ];
+
+        for _ in 0..512 {
+            let declared = level_from_u8(rng.gen_range(0u8..=2u8));
+            let tool = tools[rng.gen_range(0..tools.len())];
+            let command = make_command_with_tool(tool, declared);
+            let effective = AirlockService::effective_airlock_level(&command);
+            assert!(
+                effective >= declared,
+                "effective={:?} declared={:?} tool={}",
+                effective,
+                declared,
+                tool
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_tool_defaults_to_dangerous_property_sweep() {
+        let mut rng = StdRng::seed_from_u64(0xD4E6E2);
+        let alphabet = b"abcdefghijklmnopqrstuvwxyz0123456789_";
+
+        for _ in 0..512 {
+            let declared = level_from_u8(rng.gen_range(0u8..=2u8));
+            let suffix_len = rng.gen_range(1usize..=12usize);
+            let suffix: String = (0..suffix_len)
+                .map(|_| {
+                    let idx = rng.gen_range(0..alphabet.len());
+                    alphabet[idx] as char
+                })
+                .collect();
+
+            let method = format!("unknown_{}", suffix);
+            let command = make_command_with_tool(&method, declared);
+            let effective = AirlockService::effective_airlock_level(&command);
+            assert_eq!(
+                effective,
+                AirlockLevel::Dangerous,
+                "effective={:?} declared={:?} method={}",
+                effective,
+                declared,
+                method
+            );
+        }
     }
 }
