@@ -16,7 +16,6 @@ pub mod managed_research; // Phase 3 AI Research
 pub mod manifest_signing;
 pub mod memory;
 pub mod neural_service;
-pub mod reflection;
 pub mod security;
 pub mod settings;
 pub mod skill_executor;
@@ -38,7 +37,6 @@ pub use image::ImageService;
 pub use managed_research::ManagedResearchService;
 pub use memory::MemoryManager;
 pub use neural_service::NeuralService;
-pub use reflection::ReflectionEngine;
 pub use security::NodeAuthenticator;
 pub use skill_executor::SkillExecutor;
 

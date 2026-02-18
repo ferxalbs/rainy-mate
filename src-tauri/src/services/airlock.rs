@@ -66,8 +66,8 @@ impl AirlockService {
     fn effective_airlock_level(command: &QueuedCommand) -> AirlockLevel {
         let declared = command.airlock_level;
         let policy_level = Self::infer_tool_name(command)
-            .map(|tool| get_tool_policy(&tool).airlock_level)
-            .unwrap_or(AirlockLevel::Sensitive);
+            .and_then(|tool| get_tool_policy(&tool).map(|policy| policy.airlock_level))
+            .unwrap_or(AirlockLevel::Dangerous);
 
         if policy_level > declared {
             policy_level
@@ -120,6 +120,20 @@ impl AirlockService {
 
     // Called during command execution flow
     pub async fn check_permission(&self, command: &QueuedCommand) -> Result<bool, String> {
+        let inferred_tool = Self::infer_tool_name(command);
+        let has_policy = inferred_tool
+            .as_ref()
+            .and_then(|tool| get_tool_policy(tool))
+            .is_some();
+        if !has_policy {
+            tracing::warn!(
+                "Airlock: Denying command {} because tool policy is missing (tool={:?})",
+                command.id,
+                inferred_tool
+            );
+            return Ok(false);
+        }
+
         let effective_level = Self::effective_airlock_level(command);
         if effective_level != command.airlock_level {
             tracing::warn!(

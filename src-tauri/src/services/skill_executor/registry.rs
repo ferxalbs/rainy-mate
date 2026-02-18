@@ -172,3 +172,27 @@ fn tool<S: serde::Serialize>(name: &str, description: &str, schema: S) -> Tool {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::tool_policy::get_tool_policy;
+
+    #[test]
+    fn every_registered_tool_has_explicit_policy_entry() {
+        let executor = SkillExecutor::mock();
+        let tools = executor.get_tool_definitions();
+
+        let missing: Vec<String> = tools
+            .iter()
+            .map(|tool| tool.function.name.clone())
+            .filter(|name| get_tool_policy(name).is_none())
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "Missing explicit tool policy entries for: {:?}",
+            missing
+        );
+    }
+}

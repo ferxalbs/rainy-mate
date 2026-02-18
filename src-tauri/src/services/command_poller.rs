@@ -6,6 +6,7 @@ use crate::services::airlock::AirlockService;
 use crate::services::neural_service::NeuralService;
 use crate::services::settings::SettingsManager;
 use crate::services::skill_executor::SkillExecutor;
+use rand::Rng;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -18,6 +19,17 @@ const MAX_PROGRESS_PREVIEW_CHARS: usize = 300;
 const AGENT_PROGRESS_CHANNEL_CAPACITY: usize = 128;
 const AGENT_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(250);
 const AGENT_PROGRESS_MAX_SUPPRESSED: u32 = 12;
+
+fn with_jitter(duration: Duration) -> Duration {
+    let base_ms = duration.as_millis() as u64;
+    if base_ms == 0 {
+        return duration;
+    }
+    let min_ms = (base_ms * 80) / 100;
+    let max_ms = (base_ms * 120) / 100;
+    let jittered_ms = rand::thread_rng().gen_range(min_ms..=max_ms);
+    Duration::from_millis(jittered_ms)
+}
 
 fn progress_preview(value: &str) -> String {
     let trimmed = value.trim();
@@ -226,12 +238,15 @@ impl CommandPoller {
                             POLL_INTERVAL.as_secs() * (2u64.pow(backoff_failures.min(6) as u32)),
                             MAX_BACKOFF_SECS,
                         );
+                        let sleep_with_jitter = with_jitter(Duration::from_secs(backoff_secs));
 
                         eprintln!(
-                            "[CommandPoller] Error: {}. Retrying in {}s...",
-                            e, backoff_secs
+                            "[CommandPoller] Error: {}. Retrying in {}ms (base={}s)...",
+                            e,
+                            sleep_with_jitter.as_millis(),
+                            backoff_secs
                         );
-                        Duration::from_secs(backoff_secs)
+                        sleep_with_jitter
                     }
                 };
 

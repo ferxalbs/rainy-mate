@@ -283,6 +283,29 @@ impl NeuralService {
         Ok(data.pending_commands)
     }
 
+    /// Gracefully marks the node offline on the server.
+    pub async fn disconnect(&self) -> Result<(), String> {
+        let (node_id, platform_key) = match self.get_auth_context().await {
+            Ok(ctx) => ctx,
+            Err(_) => return Ok(()),
+        };
+
+        let url = format!("{}/v1/nodes/{}/disconnect", self.base_url, node_id);
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", platform_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            return Err(format!("Disconnect failed: {}", res.status()));
+        }
+
+        Ok(())
+    }
+
     /// Polls specifically for commands
     pub async fn poll_commands(&self) -> Result<Vec<QueuedCommand>, String> {
         let node_id = self.get_node_id().await?;

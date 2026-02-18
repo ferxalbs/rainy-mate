@@ -4,7 +4,7 @@
 //! It uses a ring buffer (VecDeque) to maintain a fixed-size cache of the most
 //! recent entries, automatically evicting the oldest entries when the buffer is full.
 
-use crate::agents::MemoryEntry;
+use crate::services::memory::MemoryEntry;
 use std::collections::VecDeque;
 
 /// Short-term memory with ring buffer implementation
@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 ///
 /// ```rust,no_run
 /// use crate::services::memory::short_term::ShortTermMemory;
-/// use crate::agents::MemoryEntry;
+/// use crate::services::memory::MemoryEntry;
 /// use chrono::Utc;
 ///
 /// let mut memory = ShortTermMemory::new(100);
@@ -74,7 +74,7 @@ impl ShortTermMemory {
     ///
     /// ```rust
     /// use crate::services::memory::short_term::ShortTermMemory;
-    /// use crate::agents::MemoryEntry;
+    /// use crate::services::memory::MemoryEntry;
     /// use chrono::Utc;
     ///
     /// let mut memory = ShortTermMemory::new(2);
@@ -133,7 +133,7 @@ impl ShortTermMemory {
     ///
     /// ```rust
     /// use crate::services::memory::short_term::ShortTermMemory;
-    /// use crate::agents::MemoryEntry;
+    /// use crate::services::memory::MemoryEntry;
     /// use chrono::Utc;
     ///
     /// let mut memory = ShortTermMemory::new(10);
@@ -168,7 +168,7 @@ impl ShortTermMemory {
     ///
     /// ```rust
     /// use crate::services::memory::short_term::ShortTermMemory;
-    /// use crate::agents::MemoryEntry;
+    /// use crate::services::memory::MemoryEntry;
     /// use chrono::Utc;
     ///
     /// let mut memory = ShortTermMemory::new(10);
@@ -196,7 +196,7 @@ impl ShortTermMemory {
     ///
     /// ```rust
     /// use crate::services::memory::short_term::ShortTermMemory;
-    /// use crate::agents::MemoryEntry;
+    /// use crate::services::memory::MemoryEntry;
     /// use chrono::Utc;
     ///
     /// let mut memory = ShortTermMemory::new(10);

@@ -33,8 +33,10 @@ pub mod crystalline;
 pub mod long_term;
 pub mod memory_manager;
 pub mod short_term;
+pub mod types;
 
 pub use memory_manager::MemoryManager;
+pub use types::MemoryEntry;
 
 // Not re-exported here, available via full path:
 // - long_term::MemoryError

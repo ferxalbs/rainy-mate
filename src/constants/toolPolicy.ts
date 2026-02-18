@@ -9,7 +9,7 @@ type ToolPolicy = {
 
 const DEFAULT_POLICY: ToolPolicy = {
   skill: "filesystem",
-  airlockLevel: AirlockLevels.Sensitive,
+  airlockLevel: AirlockLevels.Dangerous,
 };
 
 const TOOL_POLICY_MAP: Record<string, ToolPolicy> = {
@@ -62,6 +62,10 @@ export const KNOWN_TOOL_NAMES = Object.keys(TOOL_POLICY_MAP).sort((a, b) =>
 
 export function getToolPolicy(toolName: string): ToolPolicy {
   return TOOL_POLICY_MAP[toolName] ?? DEFAULT_POLICY;
+}
+
+export function hasToolPolicy(toolName: string): boolean {
+  return Boolean(TOOL_POLICY_MAP[toolName]);
 }
 
 export function getToolAirlockLevel(toolName: string): AirlockLevel {

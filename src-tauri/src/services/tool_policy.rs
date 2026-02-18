@@ -26,9 +26,9 @@ pub struct ToolPolicy {
 }
 
 /// Canonical tool policy for desktop runtime.
-/// Unknown tools default to Filesystem + Sensitive for conservative handling.
-pub fn get_tool_policy(function_name: &str) -> ToolPolicy {
-    match function_name {
+/// Unknown tools have no policy entry and must be denied by caller logic.
+pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
+    let policy = match function_name {
         // Level 0: read-only
         "read_file"
         | "read_many_files"
@@ -100,11 +100,10 @@ pub fn get_tool_policy(function_name: &str) -> ToolPolicy {
             airlock_level: AirlockLevel::Dangerous,
         },
 
-        _ => ToolPolicy {
-            skill: ToolSkill::Filesystem,
-            airlock_level: AirlockLevel::Sensitive,
-        },
-    }
+        _ => return None,
+    };
+
+    Some(policy)
 }
 
 #[cfg(test)]
@@ -113,23 +112,22 @@ mod tests {
 
     #[test]
     fn maps_core_tools() {
-        let browse = get_tool_policy("browse_url");
+        let browse = get_tool_policy("browse_url").expect("browse_url should have policy");
         assert_eq!(browse.skill, ToolSkill::Browser);
         assert_eq!(browse.airlock_level, AirlockLevel::Sensitive);
 
-        let shell = get_tool_policy("execute_command");
+        let shell = get_tool_policy("execute_command").expect("execute_command should have policy");
         assert_eq!(shell.skill, ToolSkill::Shell);
         assert_eq!(shell.airlock_level, AirlockLevel::Dangerous);
 
-        let web = get_tool_policy("web_search");
+        let web = get_tool_policy("web_search").expect("web_search should have policy");
         assert_eq!(web.skill, ToolSkill::Web);
         assert_eq!(web.airlock_level, AirlockLevel::Safe);
     }
 
     #[test]
-    fn defaults_unknown_to_sensitive_filesystem() {
+    fn unknown_tool_has_no_policy() {
         let unknown = get_tool_policy("future_tool");
-        assert_eq!(unknown.skill, ToolSkill::Filesystem);
-        assert_eq!(unknown.airlock_level, AirlockLevel::Sensitive);
+        assert!(unknown.is_none());
     }
 }

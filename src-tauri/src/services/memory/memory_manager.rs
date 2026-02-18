@@ -4,7 +4,7 @@
 //! It coordinates operations between the two memory types and provides a simple API for
 //! storing, searching, and retrieving memory entries.
 
-use crate::agents::MemoryEntry;
+use crate::services::memory::MemoryEntry;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -96,7 +96,7 @@ impl MemoryManager {
     ///
     /// ```rust,no_run
     /// use crate::services::memory::MemoryManager;
-    /// use crate::agents::MemoryEntry;
+    /// use crate::services::memory::MemoryEntry;
     /// use chrono::Utc;
     /// use std::path::PathBuf;
     ///
@@ -331,7 +331,7 @@ impl MemoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::MemoryEntry;
+    use crate::services::memory::MemoryEntry;
     use chrono::Utc;
     use tempfile::TempDir;
 

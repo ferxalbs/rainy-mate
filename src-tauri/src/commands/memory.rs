@@ -3,7 +3,7 @@
 //! This module provides Tauri commands that expose the memory system to the frontend.
 //! All commands are thread-safe and use the MemoryManager for operations.
 
-use crate::agents::MemoryEntry;
+use crate::services::memory::MemoryEntry;
 use crate::services::memory::MemoryManager;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

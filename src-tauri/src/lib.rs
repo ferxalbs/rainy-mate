@@ -2,7 +2,6 @@
 // Tauri 2 backend with AI workspace agent capabilities
 // Uses rainy-sdk for premium AI features
 
-mod agents;
 mod ai;
 mod commands;
 pub mod db;
@@ -11,13 +10,11 @@ mod services;
 
 use crate::ai::agent::manager::{self, AgentManager};
 use crate::db::Database;
-use agents::AgentRegistry;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
     ATMClient, BrowserController, CommandPoller, DocumentService, FileManager, FileOperationEngine,
     FolderManager, ImageService, LLMClient, ManagedResearchService, MemoryManager, NeuralService,
-    NodeAuthenticator, ReflectionEngine, SettingsManager, SkillExecutor, SocketClient,
-    WorkspaceManager,
+    NodeAuthenticator, SettingsManager, SkillExecutor, SocketClient, WorkspaceManager,
 };
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -54,12 +51,6 @@ pub fn run() {
     // Initialize workspace manager
     let workspace_manager =
         Arc::new(WorkspaceManager::new().expect("Failed to create workspace manager"));
-
-    // Initialize agent registry for multi-agent system
-    let agent_registry = Arc::new(AgentRegistry::new(ai_provider.clone()));
-
-    // Initialize reflection engine for self-improvement
-    let reflection_engine = Arc::new(ReflectionEngine::new(ai_provider.clone()));
 
     // Initialize intelligent router for PHASE 3
     let intelligent_router = Arc::new(RwLock::new(IntelligentRouter::default()));
@@ -129,10 +120,6 @@ pub fn run() {
             provider_registry,
         )) // Arc<ProviderRegistry>
         .manage(settings_manager) // Arc<Mutex<SettingsManager>>
-        .manage(commands::agents::AgentRegistryState(agent_registry)) // Arc<AgentRegistry>
-        .manage(commands::reflection::ReflectionEngineState(
-            reflection_engine,
-        )) // Arc<ReflectionEngine>
         .manage(commands::router::IntelligentRouterState(
             intelligent_router.clone(),
         )) // Arc<RwLock<IntelligentRouter>>
@@ -403,20 +390,6 @@ pub fn run() {
             commands::redo_file_operation,
             commands::list_enhanced_file_operations,
             commands::set_file_ops_workspace,
-            // Multi-agent system commands (NEW - Agent Registry)
-            commands::register_agent,
-            commands::unregister_agent,
-            commands::list_agents,
-            commands::get_agent_info,
-            commands::get_agent_status,
-            commands::create_multi_agent_task,
-            commands::execute_multi_agent_task,
-            commands::cancel_agent_task,
-            commands::get_task_status,
-            commands::send_agent_message,
-            commands::get_agent_messages,
-            commands::get_agent_statistics,
-            commands::get_agent_capabilities,
             // Memory commands (NEW - Memory System)
             commands::store_memory,
             commands::search_memory,
@@ -454,17 +427,6 @@ pub fn run() {
             commands::save_workspace_template,
             commands::delete_workspace_template,
             commands::get_workspace_analytics,
-            // Reflection & Governance commands (NEW - Reflection System)
-            commands::analyze_task_result,
-            commands::get_error_patterns,
-            commands::get_strategies,
-            commands::optimize_system,
-            commands::clear_error_patterns,
-            commands::clear_strategies,
-            commands::add_security_policy,
-            commands::list_security_policies,
-            commands::remove_security_policy,
-            commands::evaluate_task_quality,
             // Router commands (PHASE 3 - Intelligent Routing)
             commands::get_router_config,
             commands::update_router_config,

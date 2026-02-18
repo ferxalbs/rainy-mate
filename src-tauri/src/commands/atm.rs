@@ -258,7 +258,15 @@ pub async fn reset_neural_workspace(
     // 2. Delete workspace on server
     client.reset_workspace(master_key, user_api_key).await?;
 
-    // 3. Clear local credentials
+    // 3. Mark node offline (best-effort) before clearing credentials.
+    if let Err(e) = neural.0.disconnect().await {
+        println!(
+            "[reset_neural_workspace] Neural disconnect failed (continuing cleanup): {}",
+            e
+        );
+    }
+
+    // 4. Clear local credentials
     neural.0.clear_credentials().await?;
     client.clear_credentials().await?;
 

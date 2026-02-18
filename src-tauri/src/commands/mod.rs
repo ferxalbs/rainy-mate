@@ -3,7 +3,6 @@
 
 pub mod agent;
 pub mod agent_builder;
-pub mod agents;
 pub mod ai;
 pub mod ai_providers;
 pub mod airlock;
@@ -17,7 +16,6 @@ pub mod folder;
 pub mod image;
 pub mod memory;
 pub mod neural;
-pub mod reflection;
 
 pub mod research;
 pub mod router;
@@ -27,7 +25,6 @@ pub mod unified_models;
 pub mod web;
 pub mod workspace;
 
-pub use agents::*;
 pub use agent_builder::*;
 pub use ai::*;
 pub use ai_providers::*;
@@ -42,7 +39,6 @@ pub use folder::*;
 pub use image::*;
 pub use memory::*;
 pub use neural::*;
-pub use reflection::*;
 
 pub use router::*;
 pub use settings::*;

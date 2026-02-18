@@ -54,7 +54,9 @@ fn resolve_airlock_level_for_tool(spec: &AgentSpec, tool_name: &str) -> AirlockL
             _ => AirlockLevel::Dangerous,
         };
     }
-    get_tool_policy(tool_name).airlock_level
+    get_tool_policy(tool_name)
+        .map(|policy| policy.airlock_level)
+        .unwrap_or(AirlockLevel::Dangerous)
 }
 
 fn truncate_to_max_bytes(input: &str, max_bytes: usize) -> String {
@@ -394,7 +396,7 @@ impl WorkflowStep for ThinkStep {
             temperature: Some(0.7),
             max_tokens: None,
             top_p: None,
-            stream: !has_tools, // Stream only when no tools (tool calls need full response)
+            stream: !has_tools,
             tools: if has_tools { Some(tools) } else { None },
             tool_choice: if has_tools {
                 Some(crate::ai::provider_types::ToolChoice::Auto)
@@ -411,15 +413,56 @@ impl WorkflowStep for ThinkStep {
         let router_guard = self.router.read().await;
 
         let (assistant_content, tool_calls) = if has_tools {
-            // Blocking path: tool calls require full ChatCompletionResponse
+            // Buffered interleaving strategy:
+            // 1) stream text to avoid "frozen" UX during tool-capable turns
+            // 2) finalize with non-stream completion to resolve tool calls
+            let accumulated = Arc::new(std::sync::Mutex::new(String::new()));
+            let acc_clone = Arc::clone(&accumulated);
+            let event_fn: Arc<dyn Fn(AgentEvent) + Send + Sync> = Arc::from(on_event);
+            let event_clone = Arc::clone(&event_fn);
+
+            let callback: crate::ai::provider_types::StreamingCallback =
+                Arc::new(move |chunk: crate::ai::provider_types::StreamingChunk| {
+                    if !chunk.content.is_empty() {
+                        event_clone(AgentEvent::StreamChunk(chunk.content.clone()));
+                        if let Ok(mut guard) = acc_clone.lock() {
+                            guard.push_str(&chunk.content);
+                        }
+                    }
+                });
+
+            let mut stream_request = request.clone();
+            stream_request.stream = true;
+            if let Err(e) = router_guard
+                .complete_stream(stream_request, callback)
+                .await
+            {
+                event_fn(AgentEvent::Status(format!(
+                    "Streaming fallback engaged: {}",
+                    e
+                )));
+            }
+
+            let streamed_content = accumulated
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+
+            let mut finalize_request = request.clone();
+            finalize_request.stream = false;
             let response = router_guard
-                .complete(request)
+                .complete(finalize_request)
                 .await
                 .map_err(|e| format!("ThinkStep Failed: {}", e))?;
 
-            let content = response.content.clone().unwrap_or_default();
+            let finalized_content = response.content.clone().unwrap_or_default();
+            let content = if finalized_content.is_empty() {
+                streamed_content
+            } else {
+                finalized_content
+            };
             if !content.is_empty() {
-                on_event(AgentEvent::Thought(content.clone()));
+                event_fn(AgentEvent::Thought(content.clone()));
             }
             (content, response.tool_calls.clone())
         } else {
@@ -540,7 +583,23 @@ impl WorkflowStep for ActStep {
                 continue;
             }
 
-            let policy = get_tool_policy(&function_name);
+            let Some(policy) = get_tool_policy(&function_name) else {
+                let blocked_msg = format!(
+                    "Tool '{}' blocked: no explicit policy entry (fail-closed)",
+                    function_name
+                );
+                on_event(AgentEvent::ToolResult {
+                    id: call.id.clone(),
+                    result: blocked_msg.clone(),
+                });
+                results.push(AgentMessage {
+                    role: "tool".to_string(),
+                    content: AgentContent::text(blocked_msg),
+                    tool_calls: None,
+                    tool_call_id: Some(call.id.clone()),
+                });
+                continue;
+            };
             let skill = policy.skill.as_str();
             let method = function_name.as_str();
 

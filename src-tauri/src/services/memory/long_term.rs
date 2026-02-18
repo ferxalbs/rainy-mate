@@ -10,7 +10,7 @@
 //! - Implement semantic search with vector similarity
 //! - Add batch operations for bulk storage/retrieval
 
-use crate::agents::MemoryEntry;
+use crate::services::memory::MemoryEntry;
 use std::path::PathBuf;
 
 /// Long-term memory with persistent storage
@@ -82,7 +82,7 @@ impl LongTermMemory {
     ///
     /// ```rust,no_run
     /// use crate::services::memory::long_term::LongTermMemory;
-    /// use crate::agents::MemoryEntry;
+    /// use crate::services::memory::MemoryEntry;
     /// use chrono::Utc;
     /// use std::path::PathBuf;
     ///
@@ -287,7 +287,7 @@ pub struct MemoryStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::MemoryEntry;
+    use crate::services::memory::MemoryEntry;
     use chrono::Utc;
 
     fn create_test_entry(id: &str, content: &str) -> MemoryEntry {

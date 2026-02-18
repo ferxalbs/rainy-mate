@@ -1,4 +1,4 @@
-use crate::agents::MemoryEntry;
+use crate::services::memory::MemoryEntry;
 use notify::{Config, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::PathBuf;
