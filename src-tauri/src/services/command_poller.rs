@@ -6,6 +6,7 @@ use crate::services::airlock::AirlockService;
 use crate::services::neural_service::NeuralService;
 use crate::services::settings::SettingsManager;
 use crate::services::skill_executor::SkillExecutor;
+use crate::services::tool_manifest::build_skill_manifest_from_runtime;
 use rand::Rng;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -278,7 +279,17 @@ impl CommandPoller {
         // Check if node is registered (has node_id)
         if !self.neural_service.is_registered().await {
             // Attempt auto-registration for seamless cloud<->desktop connectivity.
-            match self.neural_service.register(Vec::new(), Vec::new()).await {
+            let manifests = match build_skill_manifest_from_runtime() {
+                Ok(value) => value,
+                Err(e) => {
+                    eprintln!(
+                        "[CommandPoller] Failed to build runtime skill manifest for registration: {}",
+                        e
+                    );
+                    return Ok(());
+                }
+            };
+            match self.neural_service.register(manifests, Vec::new()).await {
                 Ok(node_id) => {
                     println!("[CommandPoller] Auto-registered node: {}", node_id);
                 }

@@ -1,4 +1,5 @@
-use crate::models::neural::{DesktopNodeStatus, QueuedCommand, SkillManifest};
+use crate::models::neural::{DesktopNodeStatus, QueuedCommand};
+use crate::services::tool_manifest::build_skill_manifest_from_runtime;
 use crate::services::NeuralService;
 use tauri::{command, State};
 
@@ -16,9 +17,9 @@ pub async fn set_neural_workspace_id(
 #[command]
 pub async fn register_node(
     state: State<'_, NeuralServiceState>,
-    skills: Vec<SkillManifest>,
     allowed_paths: Vec<String>,
 ) -> Result<String, String> {
+    let skills = build_skill_manifest_from_runtime()?;
     state.0.register(skills, allowed_paths).await
 }
 

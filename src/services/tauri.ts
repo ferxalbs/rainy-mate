@@ -12,7 +12,14 @@ export type TaskStatus =
   | "completed"
   | "failed"
   | "cancelled";
-export type ProviderType = "rainyapi" | "gemini";
+export type ProviderType =
+  | "rainyapi"
+  | "gemini"
+  | "openai"
+  | "anthropic"
+  | "xai"
+  | "openrouter"
+  | string;
 export type FileOperation = "create" | "modify" | "delete" | "move" | "rename";
 
 export interface Task {
@@ -1260,10 +1267,9 @@ export type HeartbeatStatus = "online" | "busy" | "offline";
 // ============ Neural System Commands ============
 
 export async function registerNode(
-  skills: SkillManifest[],
-  allowedPaths: string[],
+  allowedPaths: string[] = [],
 ): Promise<string> {
-  return invoke("register_node", { skills, allowedPaths });
+  return invoke("register_node", { allowedPaths });
 }
 
 export async function setNeuralWorkspaceId(workspaceId: string): Promise<void> {
@@ -1591,7 +1597,9 @@ export async function getAtmMetricsAlertRetention(): Promise<AtmMetricsAlertRete
 export async function updateAtmMetricsAlertRetention(
   metricsAlertRetention: AtmMetricsAlertRetentionConfig,
 ): Promise<AtmMetricsAlertRetentionConfig> {
-  return invoke("update_atm_metrics_alert_retention", { metricsAlertRetention });
+  return invoke("update_atm_metrics_alert_retention", {
+    metricsAlertRetention,
+  });
 }
 
 export async function cleanupAtmMetricsAlerts(): Promise<AtmMetricsAlertCleanupResponse> {

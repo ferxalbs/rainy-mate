@@ -11,7 +11,7 @@ import {
   Separator,
   Spinner,
 } from "@heroui/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createAtmAgent } from "../../services/tauri";
 import { toast } from "@heroui/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -24,6 +24,7 @@ import {
   Cpu,
   ChevronDown,
 } from "lucide-react";
+import * as tauri from "../../services/tauri";
 
 interface CreateAgentFormProps {
   onSuccess: () => void;
@@ -40,33 +41,39 @@ const AGENT_TYPES = [
   },
 ];
 
-const GEMINI_MODELS = [
-  {
-    key: "gemini-3-pro-preview",
-    label: "Gemini 3 Pro",
-    description: "1M context, best for complex logic",
-  },
-  {
-    key: "gemini-3-flash-preview",
-    label: "Gemini 3 Flash",
-    description: "Fast and efficient",
-  },
-  {
-    key: "gemini-2.5-flash-preview-05-20",
-    label: "Gemini 2.5 Flash",
-    description: "Stable choice with 1M context",
-  },
-];
-
 export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState("chat");
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("gemini-3-pro-preview");
+  const [model, setModel] = useState("");
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(8192);
   const [showPreview, setShowPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [availableModels, setAvailableModels] = useState<tauri.UnifiedModel[]>(
+    [],
+  );
+  const [loadingModels, setLoadingModels] = useState(false);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      setLoadingModels(true);
+      try {
+        const models = await tauri.getUnifiedModels();
+        setAvailableModels(models || []);
+        // Auto-select first model if none selected and models exist
+        if (models && models.length > 0 && !model) {
+          setModel(models[0].id);
+        }
+      } catch (e) {
+        console.error("Failed to load models", e);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    fetchModels();
+  }, []);
 
   const config = {
     systemPrompt: prompt,
@@ -174,9 +181,10 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
         className="w-full group"
         selectedKey={model}
         onSelectionChange={(key) => setModel(key as string)}
+        isDisabled={loadingModels}
       >
         <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1.5 ml-1 group-focus-within:text-primary transition-colors">
-          Model (Gemini 3 Family)
+          Model
         </Label>
         <Select.Trigger className="h-10 font-mono text-xs bg-background/50 dark:bg-background/20 backdrop-blur-sm border-default-200/50 dark:border-white/10 hover:border-default-300 dark:hover:border-white/20 focus:border-primary/50 transition-all rounded-xl text-foreground shadow-sm">
           <Select.Value className="text-foreground" />
@@ -185,27 +193,36 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
           </Select.Indicator>
         </Select.Trigger>
         <Description className="text-[10px] mt-1.5 text-muted-foreground ml-1 font-medium">
-          All models support up to 1M token input context
+          Select any available model from your providers
         </Description>
         <Select.Popover className="bg-background/60 dark:bg-background/20 backdrop-blur-sm dark:border-white/10 rounded-xl">
-          <ListBox className="bg-background/20 text-foreground p-1">
-            {GEMINI_MODELS.map((m) => (
+          <ListBox
+            className="bg-background/20 text-foreground p-1"
+            items={availableModels}
+          >
+            {(m) => (
               <ListBox.Item
-                key={m.key}
-                id={m.key}
-                textValue={m.label}
+                key={m.id}
+                id={m.id}
+                textValue={m.name}
                 className="rounded-lg data-[hover=true]:bg-background/50 dark:data-[hover=true]:bg-background/5 py-2"
               >
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-medium text-sm text-foreground">
-                    {m.label}
-                  </span>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-sm text-foreground">
+                      {m.name}
+                    </span>
+                    <span className="text-[9px] uppercase font-bold text-muted-foreground/50 border border-white/5 px-1 rounded">
+                      {m.provider}
+                    </span>
+                  </div>
+
                   <span className="text-[10px] text-muted-foreground">
-                    {m.description}
+                    {m.id}
                   </span>
                 </div>
               </ListBox.Item>
-            ))}
+            )}
           </ListBox>
         </Select.Popover>
       </Select>

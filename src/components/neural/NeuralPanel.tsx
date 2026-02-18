@@ -7,12 +7,13 @@ import {
   getNeuralCredentialsValues,
   hasAtmCredentials,
   loadNeuralCredentials,
+  clearNeuralCredentials,
   registerNode,
+  resetNeuralWorkspace,
   setNeuralCredentials,
   setNeuralWorkspaceId,
   WorkspaceAuth,
 } from "../../services/tauri";
-import { DEFAULT_NEURAL_SKILLS } from "../../constants/defaultNeuralSkills";
 import { NeuralLayout } from "./layout/NeuralLayout";
 import { NeuralSidebar } from "./layout/NeuralSidebar";
 import { NeuralActivity } from "./modules/NeuralActivity";
@@ -141,7 +142,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
               setState("connecting");
               try {
                 await setNeuralWorkspaceId(effectiveWorkspace.id);
-                await registerNode(DEFAULT_NEURAL_SKILLS, []);
+                await registerNode();
                 if (!cancelled) {
                   setState("connected");
                 }
@@ -183,7 +184,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       );
       await setNeuralCredentials(platformKey, userApiKey);
       await setNeuralWorkspaceId(ws.id);
-      await registerNode(DEFAULT_NEURAL_SKILLS, []);
+      await registerNode();
 
       setWorkspace(ws);
       writeStoredWorkspace(ws);
@@ -203,8 +204,6 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       )
     ) {
       try {
-        const { resetNeuralWorkspace, clearNeuralCredentials } =
-          await import("../../services/tauri");
         await resetNeuralWorkspace(platformKey, userApiKey);
         // Explicit frontend credential cleanup for defense-in-depth
         await clearNeuralCredentials().catch(() => {});

@@ -15,6 +15,7 @@ import {
   Globe,
   Brain,
   Filter,
+  Cpu,
 } from "lucide-react";
 import * as tauri from "../../services/tauri";
 
@@ -22,7 +23,7 @@ import * as tauri from "../../services/tauri";
 export interface UnifiedModel {
   id: string;
   name: string;
-  provider: string; // rainy, cowork, openai, anthropic, xai, local
+  provider: string; // rainy, cowork, openai, anthropic, xai, openrouter, local
   capabilities: {
     chat: boolean;
     streaming: boolean;
@@ -79,7 +80,7 @@ export function UnifiedModelSelector({
     } catch (err) {
       console.error("Failed to load unified models:", err);
       // Fallback/Mock for development if backend fails
-      setModels(MOCK_MODELS);
+      setModels([]);
     } finally {
       // setLoading(false); // Removed
     }
@@ -94,23 +95,9 @@ export function UnifiedModelSelector({
     return models.filter((model) => {
       const displayName = getDisplayModelName(model.name).toLowerCase();
       // Hide OpenAI, Claude, and Astronomer models as requested
-      const normalizedProvider = model.provider.toLowerCase();
-      const normalizedId = model.id.toLowerCase();
+      // Variables previously used for filtering removed
 
-      if (
-        normalizedProvider.includes("openai") ||
-        normalizedProvider.includes("anthropic") ||
-        normalizedId.includes("gpt") ||
-        normalizedId.includes("claude") ||
-        normalizedId.includes("astronomer") ||
-        normalizedId.includes("o1-") ||
-        normalizedId.includes("o3") ||
-        normalizedId.includes("o4") ||
-        normalizedId.includes("o5")
-        || normalizedId.includes("gemini-3-pro-image")
-      ) {
-        return false;
-      }
+      // Filter logic removed to allow all available providers
 
       // Search filter
       if (
@@ -146,7 +133,6 @@ export function UnifiedModelSelector({
   const getProviderIcon = (model: UnifiedModel, className = "size-3.5") => {
     const normalizedProvider = model.provider.toLowerCase();
     const normalizedId = model.id.toLowerCase();
-    const normalizedName = model.name.toLowerCase();
 
     // Helper for tinted SVG icons
     const RenderTintedIcon = ({
@@ -172,15 +158,7 @@ export function UnifiedModelSelector({
       />
     );
 
-    if (
-      normalizedProvider.includes("openai") ||
-      normalizedId.includes("gpt") ||
-      normalizedName.includes("gpt") ||
-      normalizedId.includes("o1") ||
-      normalizedId.includes("o3") ||
-      normalizedId.includes("o4") ||
-      normalizedId.includes("o5")
-    ) {
+    if (normalizedProvider.includes("openai") || normalizedId.includes("gpt")) {
       return (
         <RenderTintedIcon
           src="/openai.svg"
@@ -191,8 +169,7 @@ export function UnifiedModelSelector({
 
     if (
       normalizedProvider.includes("anthropic") ||
-      normalizedId.includes("claude") ||
-      normalizedName.includes("claude")
+      normalizedId.includes("claude")
     ) {
       return (
         <RenderTintedIcon
@@ -204,9 +181,7 @@ export function UnifiedModelSelector({
 
     if (
       normalizedProvider.includes("google") ||
-      normalizedProvider.includes("gemini") ||
-      normalizedId.includes("gemini") ||
-      normalizedName.includes("gemini")
+      normalizedProvider.includes("gemini")
     ) {
       return (
         <RenderTintedIcon
@@ -218,8 +193,7 @@ export function UnifiedModelSelector({
 
     if (
       normalizedProvider.includes("moonshot") ||
-      normalizedId.includes("kimi") ||
-      normalizedName.includes("kimi")
+      normalizedId.includes("kimi")
     ) {
       return (
         <RenderTintedIcon
@@ -229,17 +203,33 @@ export function UnifiedModelSelector({
       );
     }
 
-    if (
-      normalizedProvider.includes("meta") ||
-      normalizedId.includes("llama") ||
-      normalizedName.includes("llama")
-    ) {
+    if (normalizedProvider.includes("meta") || normalizedId.includes("llama")) {
       return (
         <RenderTintedIcon
           src="/meta.svg"
           colorClass="text-[#0668E1] dark:text-[#0668E1]"
         />
       );
+    }
+
+    if (normalizedProvider.includes("mistral")) {
+      return <Sparkles className={`${className} text-orange-500`} />;
+    }
+
+    if (normalizedProvider.includes("perplexity")) {
+      return <Search className={`${className} text-teal-500`} />;
+    }
+
+    if (normalizedProvider.includes("nvidia")) {
+      return <Cpu className={`${className} text-green-500`} />;
+    }
+
+    if (normalizedProvider.includes("cerebras")) {
+      return <Zap className={`${className} text-blue-600`} />;
+    }
+
+    if (normalizedProvider.includes("openrouter")) {
+      return <Sparkles className={`${className} text-primary`} />;
     }
 
     if (
@@ -257,6 +247,7 @@ export function UnifiedModelSelector({
       return <Globe className={`${className} text-blue-500`} />;
     }
 
+    // Generic fallback based on name hash/char to give some variety or just generic icon
     return <Zap className={`${className} text-muted-foreground`} />;
   };
 
@@ -279,7 +270,14 @@ export function UnifiedModelSelector({
     const name = modelName.trim();
     if (!/[-_]/.test(name)) return name;
 
-    const suffixes = new Set(["minimal", "low", "medium", "high", "preview", "latest"]);
+    const suffixes = new Set([
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "preview",
+      "latest",
+    ]);
     const tokens = name
       .split(/[-_]+/)
       .map((token) => token.trim())
@@ -309,11 +307,15 @@ export function UnifiedModelSelector({
   function formatContextWindow(maxContext: number): string {
     if (maxContext >= 1000000) {
       const inMillions = maxContext / 1000000;
-      return Number.isInteger(inMillions) ? `${inMillions}M` : `${inMillions.toFixed(1)}M`;
+      return Number.isInteger(inMillions)
+        ? `${inMillions}M`
+        : `${inMillions.toFixed(1)}M`;
     }
 
     const inThousands = maxContext / 1000;
-    return Number.isInteger(inThousands) ? `${inThousands}k` : `${inThousands.toFixed(1)}k`;
+    return Number.isInteger(inThousands)
+      ? `${inThousands}k`
+      : `${inThousands.toFixed(1)}k`;
   }
 
   return (
@@ -399,7 +401,8 @@ export function UnifiedModelSelector({
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-muted-foreground/80 truncate font-medium">
-                          {formatContextWindow(model.capabilities.max_context)} context
+                          {formatContextWindow(model.capabilities.max_context)}{" "}
+                          context
                         </span>
                         {model.capabilities.web_search && (
                           <span className="flex items-center gap-0.5 text-[10px] text-blue-500 bg-blue-500/10 px-1.5 py-px rounded-md font-medium">
@@ -443,280 +446,3 @@ export function UnifiedModelSelector({
     </Popover>
   );
 }
-
-// Fallback data for development
-// Models that actually exist in the Rainy SDK and are available via the API
-const MOCK_MODELS: UnifiedModel[] = [
-  // OPENAI MODELS
-  {
-    id: "openai:gpt-4o",
-    name: "GPT-4o",
-    provider: "OpenAI",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: true,
-      max_context: 128000,
-      thinking: false,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-  },
-  {
-    id: "openai:o1-preview",
-    name: "o1 Preview",
-    provider: "OpenAI",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: false,
-      vision: false,
-      web_search: false,
-      max_context: 128000,
-      thinking: true,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-    thinkingLevel: "high",
-  },
-  // ANTHROPIC MODELS
-  {
-    id: "anthropic:claude-3-5-sonnet-latest",
-    name: "Claude 3.5 Sonnet",
-    provider: "Anthropic",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: true,
-      max_context: 200000,
-      thinking: true,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-    thinkingLevel: "high",
-  },
-  // GEMINI 3 SERIES - Advanced reasoning models with thinking capabilities
-  {
-    id: "gemini-3-pro-preview",
-    name: "Gemini 3 Pro (Preview)",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: true,
-      max_context: 2000000,
-      thinking: true,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-    thinkingLevel: "high",
-  },
-  {
-    id: "gemini-3-flash-preview",
-    name: "Gemini 3 Flash (Preview)",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: true,
-      max_context: 1000000,
-      thinking: true,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-    thinkingLevel: "medium",
-  },
-  {
-    id: "gemini-3-pro-image-preview",
-    name: "Gemini 3 Pro Image (Preview)",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: true,
-      max_context: 2000000,
-      thinking: true,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-    thinkingLevel: "high",
-  },
-  // GEMINI 2.5 SERIES - Stable models with thinking budget support
-  {
-    id: "gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: true,
-      max_context: 2000000,
-      thinking: true,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-    thinkingLevel: "high",
-  },
-  {
-    id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: true,
-      max_context: 1000000,
-      thinking: true,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-    thinkingLevel: "medium",
-  },
-  {
-    id: "gemini-2.5-flash-lite",
-    name: "Gemini 2.5 Flash Lite",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: true,
-      web_search: false,
-      max_context: 1000000,
-      thinking: false,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-  },
-  // GROQ MODELS - High-speed inference
-  {
-    id: "llama-3.1-8b-instant",
-    name: "Llama 3.1 8B Instant (Groq)",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: false,
-      web_search: false,
-      max_context: 128000,
-      thinking: false,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-  },
-  {
-    id: "llama-3.3-70b-versatile",
-    name: "Llama 3.3 70B Versatile (Groq)",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: false,
-      web_search: false,
-      max_context: 128000,
-      thinking: false,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-  },
-  // KIMI K2 - Via Groq for high-speed inference
-  {
-    id: "moonshotai/kimi-k2-instruct-0905",
-    name: "Kimi K2 (Groq)",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: false,
-      web_search: false,
-      max_context: 256000,
-      thinking: true,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-    thinkingLevel: "high",
-  },
-  // CEREBRAS MODELS
-  {
-    id: "cerebras/llama3.1-8b",
-    name: "Llama 3.1 8B (Cerebras)",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: false,
-      web_search: false,
-      max_context: 128000,
-      thinking: false,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-  },
-  // ENOSIS LABS MODELS - Proprietary models
-  {
-    id: "astronomer-2-pro",
-    name: "Astronomer 2 Pro",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: false,
-      web_search: false,
-      max_context: 128000,
-      thinking: false,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-  },
-  {
-    id: "astronomer-2",
-    name: "Astronomer 2",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: false,
-      web_search: false,
-      max_context: 128000,
-      thinking: false,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-  },
-  {
-    id: "astronomer-1-5",
-    name: "Astronomer 1.5",
-    provider: "Rainy API",
-    capabilities: {
-      chat: true,
-      streaming: true,
-      function_calling: true,
-      vision: false,
-      web_search: false,
-      max_context: 128000,
-      thinking: false,
-    },
-    enabled: true,
-    processing_mode: "rainy_api",
-  },
-];

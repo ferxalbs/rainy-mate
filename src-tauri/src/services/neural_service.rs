@@ -276,7 +276,13 @@ impl NeuralService {
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
-            return Err(format!("Heartbeat failed: {}", res.status()));
+            let status = res.status();
+            if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::NOT_FOUND
+            {
+                let mut metadata = self.metadata.lock().await;
+                metadata.node_id = None;
+            }
+            return Err(format!("Heartbeat failed: {}", status));
         }
 
         let data: HeartbeatResponse = res.json().await.map_err(|e| e.to_string())?;
@@ -302,6 +308,9 @@ impl NeuralService {
         if !res.status().is_success() {
             return Err(format!("Disconnect failed: {}", res.status()));
         }
+
+        let mut metadata = self.metadata.lock().await;
+        metadata.node_id = None;
 
         Ok(())
     }

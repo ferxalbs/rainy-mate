@@ -21,6 +21,7 @@ pub mod settings;
 pub mod skill_executor;
 pub mod socket_client;
 pub mod task_manager;
+pub mod tool_manifest;
 pub mod tool_policy;
 
 pub mod workspace;

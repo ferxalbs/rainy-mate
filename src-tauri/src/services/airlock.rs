@@ -482,4 +482,22 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn infer_tool_name_handles_malformed_intent() {
+        let mut command = make_command_with_tool("read_file", AirlockLevel::Safe);
+        command.payload.method = None;
+        command.intent = "malformed-intent-without-dot".to_string();
+        let inferred = AirlockService::infer_tool_name(&command);
+        assert_eq!(inferred.as_deref(), Some("malformed-intent-without-dot"));
+    }
+
+    #[test]
+    fn infer_tool_name_returns_none_when_payload_and_intent_are_empty() {
+        let mut command = make_command_with_tool("read_file", AirlockLevel::Safe);
+        command.payload.method = None;
+        command.intent = String::new();
+        let inferred = AirlockService::infer_tool_name(&command);
+        assert!(inferred.is_none());
+    }
 }

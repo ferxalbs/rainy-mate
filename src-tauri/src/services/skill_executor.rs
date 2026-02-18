@@ -43,6 +43,10 @@ pub struct SkillExecutor {
 }
 
 impl SkillExecutor {
+    pub fn get_registered_tool_definitions() -> Vec<crate::ai::provider_types::Tool> {
+        registry::registered_tool_definitions()
+    }
+
     fn is_allowed_shell_command(command: &str) -> bool {
         matches!(
             command,

@@ -127,7 +127,6 @@ export function useAIProvider(): UseAIProviderResult {
     async (currentProviders: ProviderInfo[]) => {
       // Only check "rainy_api" - the main provider for all Rainy SDK models
       const RAINY_PROVIDER_ID = "rainy_api";
-      const DEFAULT_MODEL = "gemini-2.5-flash"; // Valid model from SDK capabilities
 
       const exists = currentProviders.find((p) => p.id === RAINY_PROVIDER_ID);
 
@@ -141,10 +140,12 @@ export function useAIProvider(): UseAIProviderResult {
           const enabled = !!apiKey;
 
           // Register the provider
+          // We provide a placeholder model string because the API requires it,
+          // but v3 will handle routing dynamically.
           await tauri.registerProvider({
             id: RAINY_PROVIDER_ID,
             provider_type: "rainy-sdk",
-            model: DEFAULT_MODEL,
+            model: "openai/gpt-4o", // Placeholder for initial registration
             enabled,
             priority: 10,
             timeout: 60000,

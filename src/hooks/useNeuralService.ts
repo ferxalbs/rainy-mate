@@ -6,7 +6,6 @@ import {
   setHeadlessMode,
 } from "../services/tauri";
 import { useAirlock } from "./useAirlock";
-import { DEFAULT_NEURAL_SKILLS } from "../constants/defaultNeuralSkills";
 import { toast } from "@heroui/react";
 
 export function useNeuralService() {
@@ -42,7 +41,7 @@ export function useNeuralService() {
   const connect = useCallback(async () => {
     try {
       console.log("Registering Neural Node...");
-      const id = await registerNode(DEFAULT_NEURAL_SKILLS, []);
+      const id = await registerNode();
       setNodeId(id);
       setStatus("connected");
       toast.success("Connected to Neural Network");

@@ -5,6 +5,44 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.90] - 2026-02-18 - IRON FLOOR (Foundation Hardening)
+
+### Changed - Dynamic Tool Manifest Source of Truth
+
+**Rust Backend (`src-tauri/src/`)**
+
+- Added `src-tauri/src/services/tool_manifest.rs` to build node `SkillManifest` directly from runtime-registered tools and canonical Rust tool policy.
+- `register_node` now generates skills server-side in Rust (no frontend static tool manifest coupling).
+- `CommandPoller` auto-registration now uses the same runtime-generated manifest, keeping reconnect/heartbeat capability advertisements accurate.
+- `skill_executor/registry.rs` now exposes reusable `registered_tool_definitions()` to avoid duplicated tool catalogs.
+
+**Frontend (`src/`)**
+
+- Removed static runtime registration catalog `src/constants/defaultNeuralSkills.ts`.
+- Updated Neural registration call sites to `registerNode(allowedPaths)`:
+  - `src/components/neural/NeuralPanel.tsx`
+  - `src/hooks/useNeuralService.ts`
+  - `src/services/tauri.ts`
+
+### Fixed - Reconnect/Airlock Hardening
+
+**Rust Backend (`src-tauri/src/services/`)**
+
+- `neural_service.rs`:
+  - Heartbeat now clears cached `node_id` on `401/404` so reconnect paths re-register cleanly.
+  - `disconnect()` now clears local `node_id` after successful server disconnect.
+- `airlock.rs`:
+  - Added malformed-intent inference tests and empty-intent inference deny-path coverage.
+- `tool_manifest.rs`:
+  - Added regression test that fails if legacy `src-tauri/src/agents/` directory returns.
+
+### Validation
+
+- `pnpm exec tsc --noEmit` — passes
+- `cd src-tauri && cargo check -q` — passes
+- `cd src-tauri && cargo test -q manifest_covers_every_registered_tool` — passes
+- `cd src-tauri && cargo test -q infer_tool_name_returns_none_when_payload_and_intent_are_empty` — passes
+
 ## [0.5.22] - 2026-02-15 - Airlock Hardening + Tooling Expansion
 
 ### Added - Agent Tools (Desktop Runtime)
