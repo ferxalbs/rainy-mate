@@ -6,7 +6,7 @@ import type { AgentMessage, TaskPlan } from "../../types/agent";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { PlanConfirmationCard } from "./PlanConfirmationCard";
 import {
-  NeuralState,
+  type NeuralState,
   TOOL_STATE_MAP,
   getNeuralStateConfig,
 } from "./neural-config";
@@ -67,22 +67,38 @@ export function MessageBubble({
   }
 
   // Determine Neural State
-  // Determine Neural State
-  const neuralState = useMemo(() => {
-    if (isExecuting) return "executing";
-    if (message.toolCalls && !message.isExecuted) {
-      // Find the most specific state based on the first tool call
-      // (Simplified logic: first matching tool defines the state)
+  const neuralState = useMemo((): NeuralState => {
+    // 1. Top Priority: Real-time state from backend agent events
+    if (message.neuralState && message.isLoading) {
+      return message.neuralState as NeuralState;
+    }
+
+    // 2. Check for specific tool calls (Deep Mode - pre-existing analysis)
+    if (
+      message.toolCalls &&
+      message.toolCalls.length > 0 &&
+      !message.isExecuted
+    ) {
       for (const tc of message.toolCalls) {
         if (TOOL_STATE_MAP[tc.method]) {
           return TOOL_STATE_MAP[tc.method];
         }
       }
-      return "planning"; // Default if no specific tool match
+      return "planning";
     }
+
+    // 3. Generic execution / loading fallbacks
+    if (isExecuting) return "executing";
     if (message.isLoading) return "thinking";
+
     return "idle";
-  }, [isExecuting, message.toolCalls, message.isExecuted, message.isLoading]);
+  }, [
+    isExecuting,
+    message.toolCalls,
+    message.isExecuted,
+    message.isLoading,
+    message.neuralState,
+  ]);
 
   return (
     <div
@@ -119,7 +135,10 @@ export function MessageBubble({
             {message.content ? (
               <MarkdownRenderer content={message.content} />
             ) : neuralState !== "idle" ? (
-              <NeuralStatus state={neuralState} />
+              <NeuralStatus
+                state={neuralState}
+                toolName={message.activeToolName}
+              />
             ) : null}
           </div>
         </div>
@@ -255,7 +274,13 @@ function PlanCard({
 }
 
 // Neural Status Component
-const NeuralStatus = ({ state }: { state: NeuralState }) => {
+const NeuralStatus = ({
+  state,
+  toolName,
+}: {
+  state: NeuralState;
+  toolName?: string;
+}) => {
   const config = useMemo(() => getNeuralStateConfig(state), [state]);
 
   const Icon = config.icon;
@@ -266,21 +291,22 @@ const NeuralStatus = ({ state }: { state: NeuralState }) => {
         <Icon className="size-4 animate-pulse" />
       </div>
       <div className="flex flex-col gap-0.5">
-        <span className="text-sm font-medium">{config.text}</span>
-        <div className="flex gap-1 h-1 mt-1">
-          {[1, 2, 3].map((i) => (
+        <span className="text-sm font-medium">{toolName || config.text}</span>
+        {/* Animated progress bar */}
+        <div className="flex gap-0.5 h-1 mt-1 overflow-hidden rounded-full w-16">
+          {[0, 1, 2, 3].map((i) => (
             <motion.div
               key={i}
               animate={{
-                opacity: [0.3, 1, 0.3],
-                scale: [1, 1.2, 1],
+                opacity: [0.2, 0.8, 0.2],
               }}
               transition={{
-                duration: 1.5,
+                duration: 1.2,
                 repeat: Infinity,
-                delay: i * 0.2,
+                delay: i * 0.15,
+                ease: "easeInOut",
               }}
-              className={`w-1.5 h-1.5 rounded-full ${config.bgColor.replace("/10", "")}`}
+              className={`flex-1 h-full rounded-full ${config.bgColor}`}
             />
           ))}
         </div>

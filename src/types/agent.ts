@@ -144,4 +144,8 @@ export interface AgentMessage {
     params: Record<string, any>;
   }>;
   isExecuted?: boolean;
+  /** Real-time neural state from backend agent events */
+  neuralState?: string;
+  /** Name of the tool currently being executed by the agent */
+  activeToolName?: string;
 }

@@ -74,6 +74,44 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   git_log: "executing",
 };
 
+/** Human-readable display names for raw tool function names */
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  read_file: "Reading File",
+  read_many_files: "Reading Files",
+  write_file: "Writing File",
+  append_file: "Appending to File",
+  delete_file: "Deleting File",
+  list_files: "Listing Files",
+  search_files: "Searching Files",
+  file_exists: "Checking File",
+  get_file_info: "Inspecting File",
+  mkdir: "Creating Directory",
+  move_file: "Moving File",
+  web_search: "Searching the Web",
+  google_search: "Searching Google",
+  brave_search: "Searching the Web",
+  fetch_web_content: "Fetching URL",
+  read_url: "Reading URL",
+  browse_url: "Browsing URL",
+  execute_command: "Running Command",
+  git_status: "Checking Git Status",
+  git_diff: "Reading Git Diff",
+  git_log: "Reading Git Log",
+  http_get_json: "Fetching API",
+  http_post_json: "Calling API",
+  screenshot: "Taking Screenshot",
+};
+
+/** Resolves a function name to a human-readable display name */
+export const getToolDisplayName = (functionName: string): string => {
+  return TOOL_DISPLAY_NAMES[functionName] || functionName.replace(/_/g, " ");
+};
+
+/** Resolves a function name to the corresponding NeuralState */
+export const resolveNeuralState = (functionName: string): NeuralState => {
+  return TOOL_STATE_MAP[functionName] || "executing";
+};
+
 export interface NeuralStateConfig {
   icon: LucideIcon;
   text: string;

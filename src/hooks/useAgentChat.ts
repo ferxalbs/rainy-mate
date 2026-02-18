@@ -4,6 +4,10 @@ import { useTauriTask } from "./useTauriTask";
 import type { AgentMessage, TaskPlan } from "../types/agent";
 import * as tauri from "../services/tauri";
 import { runAgentWorkflow } from "../services/tauri";
+import {
+  resolveNeuralState,
+  getToolDisplayName,
+} from "../components/agent-chat/neural-config";
 
 export function useAgentChat() {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -513,16 +517,70 @@ export function useAgentChat() {
       const initialAgentMsg: AgentMessage = {
         id: agentMsgId,
         type: "agent",
-        content: "Running native agent workflow...",
+        content: "",
         isLoading: true,
         timestamp: new Date(),
         modelUsed: { name: modelId, thinkingEnabled: true },
+        neuralState: "thinking",
       };
       setMessages((prev) => [...prev, initialAgentMsg]);
 
       setIsExecuting(true);
 
+      // Listen to real-time agent events from Rust backend
+      let unlisten: (() => void) | null = null;
       try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<{
+          type: string;
+          data: any;
+        }>("agent://event", (event) => {
+          const payload = event.payload;
+
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== agentMsgId) return m;
+
+              switch (payload.type) {
+                case "tool_call": {
+                  // payload.data is a ToolCall: { id, type, function: { name, arguments } }
+                  const functionName = payload.data?.function?.name || "";
+                  return {
+                    ...m,
+                    neuralState: resolveNeuralState(functionName),
+                    activeToolName: getToolDisplayName(functionName),
+                  };
+                }
+                case "tool_result": {
+                  // Tool finished, back to thinking for next iteration
+                  return {
+                    ...m,
+                    neuralState: "thinking",
+                    activeToolName: undefined,
+                  };
+                }
+                case "thought":
+                case "stream_chunk": {
+                  return {
+                    ...m,
+                    neuralState: "thinking",
+                    activeToolName: undefined,
+                  };
+                }
+                case "status": {
+                  return {
+                    ...m,
+                    neuralState: "planning",
+                    activeToolName: undefined,
+                  };
+                }
+                default:
+                  return m;
+              }
+            }),
+          );
+        });
+
         const result = await runAgentWorkflow(
           instruction,
           modelId,
@@ -537,6 +595,8 @@ export function useAgentChat() {
                   ...m,
                   content: result,
                   isLoading: false,
+                  neuralState: undefined,
+                  activeToolName: undefined,
                 }
               : m,
           ),
@@ -550,12 +610,15 @@ export function useAgentChat() {
                   ...m,
                   content: `❌ Agent Runtime Error: ${err.message || err}`,
                   isLoading: false,
+                  neuralState: undefined,
+                  activeToolName: undefined,
                 }
               : m,
           ),
         );
       } finally {
         setIsExecuting(false);
+        if (unlisten) unlisten();
       }
     },
     [],
