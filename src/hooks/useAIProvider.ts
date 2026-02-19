@@ -140,12 +140,13 @@ export function useAIProvider(): UseAIProviderResult {
           const enabled = !!apiKey;
 
           // Register the provider
-          // We provide a placeholder model string because the API requires it,
-          // but v3 will handle routing dynamically.
+          // We provide a bootstrap model that is GUARANTEED to work with current API (v2/v3 transition)
+          // This model is only used for initial registration/health check.
+          // The UI will still allow dynamic selection of other models.
           await tauri.registerProvider({
             id: RAINY_PROVIDER_ID,
             provider_type: "rainy-sdk",
-            model: "openai/gpt-4o", // Placeholder for initial registration
+            model: "gemini-2.5-flash", // Reverting to known working model for bootstrap
             enabled,
             priority: 10,
             timeout: 60000,
