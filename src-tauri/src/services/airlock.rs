@@ -51,7 +51,23 @@ pub struct AirlockService {
 }
 
 impl AirlockService {
+    fn is_agent_run_bootstrap(command: &QueuedCommand) -> bool {
+        if command.intent == "agent.run" {
+            return true;
+        }
+        matches!(
+            (
+                command.payload.skill.as_deref(),
+                command.payload.method.as_deref()
+            ),
+            (Some("agent"), Some("run"))
+        )
+    }
+
     fn infer_tool_name(command: &QueuedCommand) -> Option<String> {
+        if Self::is_agent_run_bootstrap(command) {
+            return Some("agent.run".to_string());
+        }
         if let Some(method) = command.payload.method.as_ref() {
             return Some(method.clone());
         }
@@ -64,6 +80,9 @@ impl AirlockService {
     }
 
     fn effective_airlock_level(command: &QueuedCommand) -> AirlockLevel {
+        if Self::is_agent_run_bootstrap(command) {
+            return AirlockLevel::Safe;
+        }
         let declared = command.airlock_level;
         let policy_level = Self::infer_tool_name(command)
             .and_then(|tool| get_tool_policy(&tool).map(|policy| policy.airlock_level))
@@ -120,6 +139,14 @@ impl AirlockService {
 
     // Called during command execution flow
     pub async fn check_permission(&self, command: &QueuedCommand) -> Result<bool, String> {
+        if Self::is_agent_run_bootstrap(command) {
+            tracing::debug!(
+                "Airlock: Auto-approved agent.run bootstrap command {}",
+                command.id
+            );
+            return Ok(true);
+        }
+
         let inferred_tool = Self::infer_tool_name(command);
         let has_policy = inferred_tool
             .as_ref()
@@ -499,5 +526,15 @@ mod tests {
         command.intent = String::new();
         let inferred = AirlockService::infer_tool_name(&command);
         assert!(inferred.is_none());
+    }
+
+    #[test]
+    fn agent_run_bootstrap_is_detected() {
+        let mut command = make_command_with_tool("read_file", AirlockLevel::Dangerous);
+        command.intent = "agent.run".to_string();
+        command.payload.skill = Some("agent".to_string());
+        command.payload.method = Some("run".to_string());
+        assert!(AirlockService::is_agent_run_bootstrap(&command));
+        assert_eq!(AirlockService::effective_airlock_level(&command), AirlockLevel::Safe);
     }
 }
