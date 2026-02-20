@@ -361,21 +361,20 @@ export function SettingsPage({
                       <h3 className="text-sm font-medium text-foreground mb-3">
                         Embedder Provider
                       </h3>
-                      <Select
-                        className="w-full max-w-sm bg-background/30"
-                        // @ts-expect-error HeroUI beta incorrect typing for selectedKeys
-                        selectedKeys={new Set([embedderProvider])}
-                        onSelectionChange={(keys: any) => {
-                          const val = Array.from(keys)[0] as string;
-                          if (val) handleEmbedderProviderChange(val);
-                        }}
-                      >
+                      <Select className="w-full max-w-sm bg-background/30">
                         <Select.Trigger>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
                         <Select.Popover>
-                          <ListBox>
+                          <ListBox
+                            selectionMode="single"
+                            selectedKeys={new Set([embedderProvider])}
+                            onSelectionChange={(keys: any) => {
+                              const val = Array.from(keys)[0] as string;
+                              if (val) handleEmbedderProviderChange(val);
+                            }}
+                          >
                             <ListBox.Item id="gemini" textValue="Gemini">
                               Gemini
                               <ListBox.ItemIndicator />
@@ -394,12 +393,6 @@ export function SettingsPage({
                       {embedderProvider === "gemini" && (
                         <Select
                           className="w-full max-w-sm mt-3"
-                          // @ts-expect-error HeroUI beta incorrect typing for selectedKeys
-                          selectedKeys={new Set([embedderModel])}
-                          onSelectionChange={(keys: any) => {
-                            const val = Array.from(keys)[0] as string;
-                            if (val) handleEmbedderModelChange(val);
-                          }}
                           placeholder="Select a model"
                         >
                           <Select.Trigger>
@@ -407,7 +400,14 @@ export function SettingsPage({
                             <Select.Indicator />
                           </Select.Trigger>
                           <Select.Popover>
-                            <ListBox>
+                            <ListBox
+                              selectionMode="single"
+                              selectedKeys={new Set([embedderModel])}
+                              onSelectionChange={(keys: any) => {
+                                const val = Array.from(keys)[0] as string;
+                                if (val) handleEmbedderModelChange(val);
+                              }}
+                            >
                               <ListBox.Item
                                 id="text-embedding-004"
                                 textValue="text-embedding-004 (768 dimensions)"
@@ -433,18 +433,16 @@ export function SettingsPage({
                       <h3 className="text-sm font-medium text-foreground mb-3">
                         Vector Store Provider
                       </h3>
-                      <Select
-                        className="w-full max-w-sm"
-                        // @ts-expect-error HeroUI beta incorrect typing for selectedKeys
-                        selectedKeys={new Set(["turso"])}
-                        isDisabled
-                      >
+                      <Select className="w-full max-w-sm" isDisabled>
                         <Select.Trigger>
                           <Select.Value />
                           <Select.Indicator />
                         </Select.Trigger>
                         <Select.Popover>
-                          <ListBox>
+                          <ListBox
+                            selectionMode="single"
+                            selectedKeys={new Set(["turso"])}
+                          >
                             <ListBox.Item id="turso" textValue="Turso (libSQL)">
                               Turso (libSQL)
                               <ListBox.ItemIndicator />
