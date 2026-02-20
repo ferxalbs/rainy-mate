@@ -17,6 +17,9 @@ pub struct VaultRow {
     pub metadata_ciphertext: Option<Vec<u8>>,
     pub metadata_nonce: Option<Vec<u8>>,
     pub embedding: Option<Vec<u8>>,
+    pub embedding_model: Option<String>,
+    pub embedding_provider: Option<String>,
+    pub embedding_dim: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +61,10 @@ impl MemoryVaultRepository {
                 tags_nonce BLOB NOT NULL,
                 metadata_ciphertext BLOB,
                 metadata_nonce BLOB,
-                embedding F32_BLOB(1536),
+                embedding F32_BLOB(3072),
+                embedding_model TEXT,
+                embedding_provider TEXT,
+                embedding_dim INTEGER,
                 key_version INTEGER NOT NULL DEFAULT 1
             )",
             (),
@@ -95,8 +101,8 @@ impl MemoryVaultRepository {
         self.conn.execute(
             "INSERT INTO memory_vault_entries
              (id, workspace_id, source, sensitivity, created_at, last_accessed, access_count,
-              content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding, key_version)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding, embedding_model, embedding_provider, embedding_dim, key_version)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                workspace_id = excluded.workspace_id,
                source = excluded.source,
@@ -111,6 +117,9 @@ impl MemoryVaultRepository {
                metadata_ciphertext = excluded.metadata_ciphertext,
                metadata_nonce = excluded.metadata_nonce,
                embedding = excluded.embedding,
+               embedding_model = excluded.embedding_model,
+               embedding_provider = excluded.embedding_provider,
+               embedding_dim = excluded.embedding_dim,
                key_version = excluded.key_version",
             params![
                 row.id.clone(),
@@ -127,6 +136,9 @@ impl MemoryVaultRepository {
                 row.metadata_ciphertext.clone(),
                 row.metadata_nonce.clone(),
                 row.embedding.clone(),
+                row.embedding_model.clone(),
+                row.embedding_provider.clone(),
+                row.embedding_dim.map(|v| v as i64),
                 key_version
             ]
         )
@@ -143,7 +155,7 @@ impl MemoryVaultRepository {
     ) -> Result<Vec<VaultRow>, String> {
         let mut rows = self.conn.query(
             "SELECT id, workspace_id, source, sensitivity, created_at, last_accessed, access_count,
-                    content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding
+                    content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding, embedding_model, embedding_provider, embedding_dim
              FROM memory_vault_entries
              WHERE workspace_id = ?1
              ORDER BY created_at DESC
@@ -174,10 +186,10 @@ impl MemoryVaultRepository {
 
         let mut rows = self.conn.query(
             "SELECT id, workspace_id, source, sensitivity, created_at, last_accessed, access_count,
-                    content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding,
+                    content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding, embedding_model, embedding_provider, embedding_dim,
                     vector_distance_cos(embedding, ?1) as distance
              FROM memory_vault_entries
-             WHERE workspace_id = ?2 AND embedding IS NOT NULL
+             WHERE workspace_id = ?2 AND embedding IS NOT NULL AND embedding_dim = 3072 AND embedding_model = 'gemini-embedding-001'
              ORDER BY distance ASC
              LIMIT ?3",
             params![bytes, workspace_id.to_string(), limit as i64]
@@ -187,7 +199,7 @@ impl MemoryVaultRepository {
 
         let mut results = Vec::new();
         while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
-            let distance: f64 = row.get(14).unwrap_or(0.0);
+            let distance: f64 = row.get(17).unwrap_or(0.0);
             results.push((row_to_vault(&row)?, distance as f32));
         }
 
@@ -197,7 +209,7 @@ impl MemoryVaultRepository {
     pub async fn get_by_id(&self, id: &str) -> Result<Option<VaultRow>, String> {
         let mut rows = self.conn.query(
             "SELECT id, workspace_id, source, sensitivity, created_at, last_accessed, access_count,
-                    content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding
+                    content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding, embedding_model, embedding_provider, embedding_dim
              FROM memory_vault_entries WHERE id = ?1",
             params![id.to_string()]
         )
@@ -314,6 +326,12 @@ fn row_to_vault(row: &libsql::Row) -> Result<VaultRow, String> {
         metadata_ciphertext: row.get::<Option<Vec<u8>>>(11).unwrap_or(None),
         metadata_nonce: row.get::<Option<Vec<u8>>>(12).unwrap_or(None),
         embedding: row.get::<Option<Vec<u8>>>(13).unwrap_or(None),
+        embedding_model: row.get::<Option<String>>(14).unwrap_or(None),
+        embedding_provider: row.get::<Option<String>>(15).unwrap_or(None),
+        embedding_dim: row
+            .get::<Option<i64>>(16)
+            .unwrap_or(None)
+            .map(|v| v as usize),
     })
 }
 
@@ -347,6 +365,9 @@ mod tests {
             metadata_ciphertext: None,
             metadata_nonce: None,
             embedding: None, // Test with no embedding first
+            embedding_model: None,
+            embedding_provider: None,
+            embedding_dim: None,
         };
 
         // Test insertion

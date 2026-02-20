@@ -50,8 +50,13 @@ export function ModelsTab() {
           ]);
         setRainyApiModels(rainyModels || []);
         setGeminiModels(geminiModelsList || []);
-        setEmbedderProvider(eProvider || "gemini");
-        setEmbedderModel(eModel || "gemini-embedding-001");
+        setEmbedderProvider("gemini");
+        setEmbedderModel("gemini-embedding-001");
+
+        if (eProvider !== "gemini")
+          tauri.setEmbedderProvider("gemini").catch(console.error);
+        if (eModel !== "gemini-embedding-001")
+          tauri.setEmbedderModel("gemini-embedding-001").catch(console.error);
       } catch (error) {
         console.error("Failed to load settings:", error);
       } finally {
@@ -96,6 +101,7 @@ export function ModelsTab() {
           </h3>
           <Select
             className="w-full max-w-sm bg-background/30"
+            isDisabled
             aria-label="Embedder Provider"
           >
             <Select.Trigger>
@@ -123,36 +129,35 @@ export function ModelsTab() {
             </Select.Popover>
           </Select>
 
-          {embedderProvider === "gemini" && (
-            <Select
-              className="w-full max-w-sm mt-3"
-              aria-label="Embedder Model"
-              placeholder="Select a model"
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox
-                  selectionMode="single"
-                  selectedKeys={new Set([embedderModel])}
-                  onSelectionChange={(selection: unknown) => {
-                    const val = selectionToValue(selection);
-                    if (val) handleEmbedderModelChange(val);
-                  }}
+          <Select
+            className="w-full max-w-sm mt-3"
+            isDisabled
+            aria-label="Embedder Model"
+            placeholder="Select a model"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox
+                selectionMode="single"
+                selectedKeys={new Set([embedderModel])}
+                onSelectionChange={(selection: unknown) => {
+                  const val = selectionToValue(selection);
+                  if (val) handleEmbedderModelChange(val);
+                }}
+              >
+                <ListBox.Item
+                  id="gemini-embedding-001"
+                  textValue="gemini-embedding-001 (3072 dimensions)"
                 >
-                  <ListBox.Item
-                    id="gemini-embedding-001"
-                    textValue="gemini-embedding-001 (3072 dimensions)"
-                  >
-                    gemini-embedding-001 (3072 dimensions)
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          )}
+                  gemini-embedding-001 (3072 dimensions)
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </div>
 
         <div className="pt-2">

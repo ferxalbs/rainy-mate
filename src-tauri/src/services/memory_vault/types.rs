@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub const EMBEDDING_PROVIDER: &str = "gemini";
+pub const EMBEDDING_MODEL: &str = "gemini-embedding-001";
+pub const EMBEDDING_DIM: usize = 3072;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum MemorySensitivity {
@@ -53,6 +57,9 @@ pub struct DecryptedMemoryEntry {
     pub access_count: i64,
     pub metadata: HashMap<String, String>,
     pub embedding: Option<Vec<f32>>,
+    pub embedding_model: Option<String>,
+    pub embedding_provider: Option<String>,
+    pub embedding_dim: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

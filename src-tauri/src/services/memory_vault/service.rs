@@ -34,6 +34,7 @@ impl MemoryVaultService {
             master_key,
         };
         service.run_plaintext_migration().await?;
+        service.run_reembed_backfill().await?;
         Ok(service)
     }
 
@@ -62,7 +63,23 @@ impl MemoryVaultService {
             &metadata_json,
         )?;
 
-        let embedding_bytes = input.embedding.as_ref().map(|v| {
+        let valid_embedding = if let Some(emb) = input.embedding {
+            if emb.len() != super::types::EMBEDDING_DIM {
+                println!(
+                    "Warning: Invalid embedding dimension {} (expected {}) for vault entry {}. Storing without embedding.",
+                    emb.len(),
+                    super::types::EMBEDDING_DIM,
+                    input.id
+                );
+                None
+            } else {
+                Some(emb)
+            }
+        } else {
+            None
+        };
+
+        let embedding_bytes = valid_embedding.as_ref().map(|v| {
             let mut bytes = Vec::with_capacity(v.len() * 4);
             for f in v {
                 bytes.extend_from_slice(&f.to_le_bytes());
@@ -85,6 +102,9 @@ impl MemoryVaultService {
             metadata_ciphertext: Some(metadata.ciphertext),
             metadata_nonce: Some(metadata.nonce),
             embedding: embedding_bytes,
+            embedding_model: Some(super::types::EMBEDDING_MODEL.to_string()),
+            embedding_provider: Some(super::types::EMBEDDING_PROVIDER.to_string()),
+            embedding_dim: Some(super::types::EMBEDDING_DIM),
         };
 
         self.repository.upsert_encrypted(&row, 1).await
@@ -243,6 +263,9 @@ impl MemoryVaultService {
             access_count: row.access_count,
             metadata,
             embedding,
+            embedding_model: row.embedding_model.clone(),
+            embedding_provider: row.embedding_provider.clone(),
+            embedding_dim: row.embedding_dim,
         })
     }
 
@@ -308,6 +331,112 @@ impl MemoryVaultService {
 
         self.repository
             .mark_migration_completed(MIGRATION_PLAINTEXT_DB)
+            .await
+    }
+
+    async fn run_reembed_backfill(&self) -> Result<(), String> {
+        let migration_key = "migrate_memory_reembed_3072_v1";
+        if self.repository.migration_completed(migration_key).await? {
+            return Ok(());
+        }
+
+        // We need to query rows that have no embedding or the wrong dimension.
+        // We can't fetch everything at once if the DB is huge, but doing it in chunks
+        // or just fetching IDs first is safer.
+        let mut rows = self
+            .repository
+            .conn()
+            .query(
+                "SELECT id FROM memory_vault_entries WHERE embedding IS NULL OR embedding_dim != 3072",
+                (),
+            )
+            .await
+            .map_err(|e| format!("Failed to query rows for backfill: {}", e))?;
+
+        let mut ids_to_reembed = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+            let id: String = row.get(0).unwrap_or_default();
+            ids_to_reembed.push(id);
+        }
+
+        if ids_to_reembed.is_empty() {
+            return self
+                .repository
+                .mark_migration_completed(migration_key)
+                .await;
+        }
+
+        println!(
+            "Found {} rows needing 3072 dimension re-embedding.",
+            ids_to_reembed.len()
+        );
+
+        // In a real production system, this should be done in a background task queue.
+        // For Tauri startup, we will process them using the global EmbedderService.
+        // Since MemoryVaultService doesn't have an embedder attached natively, we will
+        // just set up a local embedder for the backfill using standard environment/keychain.
+
+        let settings = crate::services::settings::SettingsManager::new();
+        let provider_raw = settings.get_embedder_provider().to_string();
+        let provider = match provider_raw.trim().to_lowercase().as_str() {
+            "g" | "google" | "gemini" => "gemini".to_string(),
+            "oai" | "openai" => "openai".to_string(),
+            other => other.to_string(),
+        };
+        let model = settings.get_embedder_model().to_string();
+
+        let keychain = crate::ai::keychain::KeychainManager::new();
+        let api_key = keychain
+            .get_key(&provider)
+            .or_else(|_| keychain.get_key(&provider_raw))
+            .unwrap_or_default()
+            .unwrap_or_default();
+
+        let embedder = crate::services::embedder::EmbedderService::new(
+            provider,
+            api_key.clone(),
+            Some(model.clone()),
+        );
+
+        if api_key.is_empty() {
+            println!("Skipping re-embedding backfill: No API key available.");
+            return Ok(());
+        }
+
+        for id in ids_to_reembed {
+            if let Ok(Some(entry)) = self.get_by_id(&id).await {
+                // If the entry already has the right dimensions (e.g. was processed in another thread/session), skip.
+                if entry.embedding_dim == Some(3072) {
+                    continue;
+                }
+                match embedder.embed_text(&entry.content).await {
+                    Ok(new_embedding) => {
+                        let _ = self
+                            .put(StoreMemoryInput {
+                                id: entry.id,
+                                workspace_id: entry.workspace_id,
+                                content: entry.content,
+                                tags: entry.tags,
+                                source: entry.source,
+                                sensitivity: entry.sensitivity,
+                                metadata: entry.metadata,
+                                created_at: entry.created_at,
+                                embedding: Some(new_embedding),
+                            })
+                            .await;
+                    }
+                    Err(e) => {
+                        println!("Failed to re-embed memory {}: {}", id, e);
+                    }
+                }
+
+                // Sleep slightly to avoid blasting embedding API quota concurrently
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            }
+        }
+
+        self.repository
+            .mark_migration_completed(migration_key)
             .await
     }
 }
