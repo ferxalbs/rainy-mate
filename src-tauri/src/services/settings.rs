@@ -102,7 +102,19 @@ impl SettingsManager {
     fn load_from_disk(path: &PathBuf) -> UserSettings {
         if path.exists() {
             if let Ok(contents) = fs::read_to_string(path) {
-                if let Ok(settings) = serde_json::from_str(&contents) {
+                if let Ok(mut settings) = serde_json::from_str::<UserSettings>(&contents) {
+                    if settings.embedder_provider == "gemini" {
+                        match settings.embedder_model.as_str() {
+                            "text-embedding-004"
+                            | "embedding-001"
+                            | "embedding-gecko-001"
+                            | "gemini-embedding-exp"
+                            | "gemini-embedding-exp-03-07" => {
+                                settings.embedder_model = "gemini-embedding-001".to_string();
+                            }
+                            _ => {}
+                        }
+                    }
                     return settings;
                 }
             }

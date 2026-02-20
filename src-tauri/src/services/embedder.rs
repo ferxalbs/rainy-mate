@@ -52,17 +52,37 @@ pub struct EmbedderService {
 
 impl EmbedderService {
     pub fn new(provider: String, api_key: String, model: Option<String>) -> Self {
-        let default_model = if provider.to_lowercase() == "gemini" {
-            "text-embedding-004".to_string()
+        let normalized_provider = match provider.trim().to_lowercase().as_str() {
+            "g" | "google" | "gemini" => "gemini".to_string(),
+            "oai" | "openai" => "openai".to_string(),
+            other => other.to_string(),
+        };
+
+        let default_model = if normalized_provider == "gemini" {
+            "gemini-embedding-001".to_string()
         } else {
             "text-embedding-3-small".to_string()
         };
 
+        let selected_model = model.unwrap_or(default_model);
+        let normalized_model = if normalized_provider == "gemini" {
+            match selected_model.as_str() {
+                "text-embedding-004"
+                | "embedding-001"
+                | "embedding-gecko-001"
+                | "gemini-embedding-exp"
+                | "gemini-embedding-exp-03-07" => "gemini-embedding-001".to_string(),
+                other => other.to_string(),
+            }
+        } else {
+            selected_model
+        };
+
         Self {
             client: Client::new(),
-            provider,
+            provider: normalized_provider,
             api_key,
-            model: model.unwrap_or(default_model),
+            model: normalized_model,
         }
     }
 

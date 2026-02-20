@@ -5,7 +5,7 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.92] - 2026-02-19 - DARK ARCHIVE (Polish & Hardening)
+## [0.5.91] - 2026-02-20 - DARK ARCHIVE (Polish & Hardening) PT. 2
 
 ### Added - Native Vector Similarity SQL via libSQL
 
@@ -19,7 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enforced `Dangerous` (Level 2) gate restrictions before resolving `Confidential` Memories in `ThinkStep`.
 - Migrated `run_plaintext_migration` schema iterators to execute purely over `libsql::Row` cursors.
 
-## [0.5.91] - 2026-02-19 - DARK ARCHIVE (Encrypted Memory Vault)
+### Fixed - Gemini Embedding Provider/Model State
+
+- Fixed embedder provider selection parsing in settings UI so `"gemini"` is no longer truncated to `"g"` during persistence, which caused keychain lookups to fail with `Missing embedding API key for provider: g`.
+- Added defensive provider normalization in memory/embedder runtime (`g|google|gemini -> gemini`, `oai|openai -> openai`) before resolving credentials and routing embedding requests.
+- Updated Gemini embedding defaults to use `gemini-embedding-001` and added compatibility normalization for deprecated legacy Gemini embedding model IDs.
+- Updated settings load path to migrate persisted deprecated Gemini embedding models to `gemini-embedding-001`.
+- Updated settings model picker UI to remove deprecated Gemini embedding model options and keep the supported `gemini-embedding-001 (3072 dimensions)` option.
+
+## [0.5.91] - 2026-02-19 - DARK ARCHIVE (Encrypted Memory Vault) - PT. 1
 
 ### Added - Encrypted Memory Vault (AES-256-GCM)
 
