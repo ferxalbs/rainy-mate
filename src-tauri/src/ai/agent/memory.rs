@@ -25,6 +25,7 @@ pub struct AgentMemory {
     workspace_id: String,
     db: Arc<sqlx::SqlitePool>,
     vault: Arc<MemoryVaultService>,
+    manager: Option<Arc<crate::services::MemoryManager>>,
     embedder: Arc<crate::services::embedder::EmbedderService>,
     #[allow(dead_code)]
     http_client: Client,
@@ -84,6 +85,7 @@ impl AgentMemory {
             workspace_id: workspace_id.to_string(),
             db: Arc::new(pool),
             vault,
+            manager: None, // Will be set by set_manager if provided
             embedder: Arc::new(crate::services::embedder::EmbedderService::new(
                 provider,
                 api_key,
@@ -97,6 +99,16 @@ impl AgentMemory {
 
         memory.migrate_legacy_json_if_present(app_data_dir).await;
         memory
+    }
+
+    pub fn manager(&self) -> Option<Arc<crate::services::MemoryManager>> {
+        self.manager.clone()
+    }
+
+    // @RESERVED - will be implemented for agent runtime init cycle
+    #[allow(dead_code)]
+    pub fn set_manager(&mut self, manager: Arc<crate::services::MemoryManager>) {
+        self.manager = Some(manager);
     }
 
     pub async fn store(

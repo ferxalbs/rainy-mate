@@ -5,6 +5,21 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.92] - 2026-02-21 - HIVE MIND SEED (Vector Knowledge Graph)
+
+### Added - Knowledge Ingestion & Semantic Retrieval
+
+**Rust Backend (`src-tauri/src/`)**
+
+- Added `pdf-extract` (v0.7.0) to parse PDF documents natively.
+- Implemented `ingest_document` level 0 tool in `skill_executor/filesystem.rs` to read plaintext, Markdown, and PDF documents.
+- Added `ingest_text` and `search_semantic` to `MemoryManager`. The manager now automatically chunks large ingested texts (1500 chars limit), embeds them using `gemini-embedding-001`, and persists them into the AES-256-GCM encrypted `MemoryVaultService`.
+- Wired the semantic retrieval into the `AgentRuntime`. The agent now silently searches the encrypted vault using the user's input before the ReAct `ThinkStep` and statically injects the top 5 most relevant semantic memory entries natively into its context window.
+
+**Frontend & Tooling**
+
+- Registered `ingest_document` in `registry.rs` and the frontend so agents can ingest user-provided documents directly into the workspace knowledge graph.
+
 ## [0.5.91] - 2026-02-20 - DARK ARCHIVE (Memory V3) PT. 3
 
 ### Added - Gemini 3072-Dimension Vector Support

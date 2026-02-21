@@ -49,6 +49,7 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   search_files: "observing",
   file_exists: "observing",
   get_file_info: "observing",
+  ingest_document: "observing",
 
   // Browsing (Browser Interaction)
   browse_url: "browsing",
@@ -85,6 +86,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   search_files: "Searching Files",
   file_exists: "Checking File",
   get_file_info: "Inspecting File",
+  ingest_document: "Ingesting Document",
   mkdir: "Creating Directory",
   move_file: "Moving File",
   web_search: "Searching the Web",

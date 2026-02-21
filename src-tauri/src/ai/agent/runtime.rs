@@ -281,6 +281,40 @@ Rules:
             tool_call_id: None,
         });
 
+        // --- SEMANTIC RETRIEVAL (Hive Mind Seed) ---
+        // Retrieve relevant context from the encrypted memory vault using the user input
+        // Since we don't have direct access to memory_manager here, we use AgentMemory wrapped methods.
+        // We'll add the semantic results as an invisible "system" state message or inject into the system prompt.
+        let mut appended_context = String::new();
+        if let Some(mm) = self.memory.manager() {
+            if let Ok(results) = mm
+                .search_semantic(&self.options.workspace_id, input, 5)
+                .await
+            {
+                if !results.is_empty() {
+                    appended_context
+                        .push_str("\n\n--- RELEVANT CONTEXT FROM WORKSPACE MEMORY ---\n");
+                    for (i, entry) in results.iter().enumerate() {
+                        appended_context.push_str(&format!("[{}] {}\n", i + 1, entry.content));
+                    }
+                    appended_context.push_str("----------------------------------------------\n");
+                }
+            }
+        }
+
+        if !appended_context.is_empty() {
+            if let AgentContent::Text(ref mut sys_text) = state.messages[0].content {
+                sys_text.push_str(&appended_context);
+            } else {
+                state.messages[0].content = AgentContent::text(format!(
+                    "{}{}",
+                    self.generate_system_prompt(),
+                    appended_context
+                ));
+            }
+        }
+        // -------------------------------------------
+
         // Add History to State (capture length for offset calculation later)
         let history_len;
         {

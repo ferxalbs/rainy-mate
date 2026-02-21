@@ -6,6 +6,7 @@ use schemars::schema_for;
 pub fn registered_tool_definitions() -> Vec<Tool> {
     vec![
         tool("read_file", "Read the contents of a file", schema_for!(ReadFileArgs)),
+        tool("ingest_document", "Ingest a document (PDF, Text, Markdown) into the semantic workspace memory", schema_for!(IngestDocumentArgs)),
         tool(
             "read_many_files",
             "Read multiple UTF-8 text files in one call",

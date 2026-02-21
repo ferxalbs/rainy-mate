@@ -9,6 +9,14 @@ pub struct ReadFileArgs {
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
+pub struct IngestDocumentArgs {
+    /// The path to the document to ingest (PDF, Markdown, or plaintext)
+    pub path: String,
+    /// Optional tags to attach to the ingested memory
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ReadManyFilesArgs {
     /// Paths to read as UTF-8 text
     pub paths: Vec<String>,

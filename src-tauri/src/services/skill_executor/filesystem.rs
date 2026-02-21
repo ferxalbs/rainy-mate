@@ -222,6 +222,10 @@ impl SkillExecutor {
                 self.handle_move_file(workspace_id, params, allowed_paths, blocked_paths)
                     .await
             }
+            "ingest_document" => {
+                self.handle_ingest_document(workspace_id, params, allowed_paths, blocked_paths)
+                    .await
+            }
             _ => CommandResult {
                 success: false,
                 output: None,
@@ -993,7 +997,12 @@ impl SkillExecutor {
         };
 
         let destination = match self
-            .resolve_path(workspace_id, &args.destination, allowed_paths, blocked_paths)
+            .resolve_path(
+                workspace_id,
+                &args.destination,
+                allowed_paths,
+                blocked_paths,
+            )
             .await
         {
             Ok(p) => p,
@@ -1020,6 +1029,95 @@ impl SkillExecutor {
                 exit_code: Some(0),
             },
             Err(e) => self.error(&format!("Failed to move file: {}", e)),
+        }
+    }
+
+    async fn handle_ingest_document(
+        &self,
+        workspace_id: String,
+        params: &Value,
+        allowed_paths: &[String],
+        blocked_paths: &[String],
+    ) -> CommandResult {
+        let args: IngestDocumentArgs = match serde_json::from_value(params.clone()) {
+            Ok(a) => a,
+            Err(e) => return self.error(&format!("Invalid parameters: {}", e)),
+        };
+
+        let path = match self
+            .resolve_path(
+                workspace_id.clone(),
+                &args.path,
+                allowed_paths,
+                blocked_paths,
+            )
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => return self.error(&e),
+        };
+
+        if !path.is_file() {
+            return self.error("Path is not a regular file");
+        }
+
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let content = if extension == "pdf" {
+            // Read PDF using pure-rust pdf-extract
+            let bytes = match fs::read(&path).await {
+                Ok(b) => b,
+                Err(e) => return self.error(&format!("Failed to read PDF file: {}", e)),
+            };
+
+            // pdf-extract is mostly sync, so we run it in a blocking task
+            match tokio::task::spawn_blocking(move || pdf_extract::extract_text_from_mem(&bytes))
+                .await
+            {
+                Ok(Ok(text)) => text,
+                Ok(Err(e)) => return self.error(&format!("Failed to parse PDF: {:?}", e)),
+                Err(e) => return self.error(&format!("Task panicked: {}", e)),
+            }
+        } else {
+            // Treat as text/markdown
+            let bytes = match fs::read(&path).await {
+                Ok(b) => b,
+                Err(e) => return self.error(&format!("Failed to read file: {}", e)),
+            };
+            String::from_utf8_lossy(&bytes).to_string()
+        };
+
+        if content.trim().is_empty() {
+            return self.error("File is empty or contained no extractable text");
+        }
+
+        // Send to MemoryManager to chunk, embed, and put in the vault
+        let lock = self.memory_manager.read().await;
+        if let Some(mm) = lock.as_ref() {
+            let num_chunks = match mm
+                .ingest_text(&workspace_id, &path.to_string_lossy(), &content, args.tags)
+                .await
+            {
+                Ok(n) => n,
+                Err(e) => {
+                    return self.error(&format!("Failed to ingest document into memory: {}", e))
+                }
+            };
+
+            CommandResult {
+                success: true,
+                output: Some(format!(
+                    "Successfully ingested document {} into {} chunks",
+                    args.path, num_chunks
+                )),
+                error: None,
+                exit_code: Some(0),
+            }
+        } else {
+            self.error("MemoryManager not configured; cannot ingest documents")
         }
     }
 }

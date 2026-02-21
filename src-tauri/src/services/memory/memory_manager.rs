@@ -184,6 +184,129 @@ impl MemoryManager {
             })
             .collect())
     }
+    pub async fn search_semantic(
+        &self,
+        workspace_id: &str,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<MemoryEntry>, MemoryError> {
+        // We will need the embedder
+        // To be safe and clean, we instantiate it dynamically matching the Vault backfill logic
+        // Ideally we'd pull these from settings
+        let provider = std::env::var("EMBEDDING_PROVIDER").unwrap_or_else(|_| "gemini".to_string());
+        let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
+        let model =
+            std::env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "gemini-embedding-001".to_string());
+
+        // Return fallback context query if no API key is available
+        if api_key.is_empty() {
+            return self
+                .query_workspace_memory(workspace_id, query, limit)
+                .await;
+        }
+
+        let embedder =
+            crate::services::embedder::EmbedderService::new(provider, api_key, Some(model));
+        let query_embedding = embedder
+            .embed_text(query)
+            .await
+            .map_err(|e| MemoryError::Other(e))?;
+
+        let vault = self.ensure_vault().await?;
+        let rows = vault
+            .search_workspace_vector(workspace_id, &query_embedding, limit.max(1))
+            .await
+            .map_err(|e| MemoryError::Other(e.to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(entry, _distance)| MemoryEntry {
+                id: entry.id,
+                content: entry.content,
+                embedding: None,
+                timestamp: chrono::DateTime::from_timestamp(entry.created_at, 0)
+                    .unwrap_or_else(chrono::Utc::now),
+                tags: entry.tags,
+            })
+            .collect())
+    }
+
+    pub async fn ingest_text(
+        &self,
+        workspace_id: &str,
+        source_path: &str,
+        text: &str,
+        mut raw_tags: Option<Vec<String>>,
+    ) -> Result<usize, MemoryError> {
+        let vault = self.ensure_vault().await?;
+
+        let provider = std::env::var("EMBEDDING_PROVIDER").unwrap_or_else(|_| "gemini".to_string());
+        let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
+        let model =
+            std::env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "gemini-embedding-001".to_string());
+
+        let embedder = if api_key.is_empty() {
+            None
+        } else {
+            Some(crate::services::embedder::EmbedderService::new(
+                provider,
+                api_key,
+                Some(model),
+            ))
+        };
+
+        // Highly simplified chunking for the seed implementation (e.g. 1000 chars)
+        // In a real system, we'd use semantic chunking or token-based chunking
+        let chunks: Vec<String> = text
+            .chars()
+            .collect::<Vec<char>>()
+            .chunks(1500)
+            .map(|c| c.into_iter().collect())
+            .filter(|c: &String| !c.trim().is_empty())
+            .collect();
+
+        let mut ingested_count = 0;
+
+        let mut tags_out = vec![
+            format!("workspace:{}", workspace_id),
+            format!("source:{}", source_path),
+            "type:document".to_string(),
+        ];
+
+        if let Some(mut user_tags) = raw_tags.take() {
+            tags_out.append(&mut user_tags);
+        }
+
+        for chunk in &chunks {
+            let embedding = if let Some(ref e) = embedder {
+                e.embed_text(chunk).await.ok()
+            } else {
+                None
+            };
+
+            let id = uuid::Uuid::new_v4().to_string();
+            let now = chrono::Utc::now().timestamp();
+
+            vault
+                .put(StoreMemoryInput {
+                    id: id.clone(),
+                    workspace_id: workspace_id.to_string(),
+                    content: chunk.clone(),
+                    tags: tags_out.clone(),
+                    source: source_path.to_string(),
+                    sensitivity: MemorySensitivity::Internal,
+                    metadata: HashMap::new(),
+                    created_at: now,
+                    embedding,
+                })
+                .await
+                .map_err(MemoryError::Other)?;
+
+            ingested_count += 1;
+        }
+
+        Ok(ingested_count)
+    }
 }
 
 fn derive_workspace_id(tags: &[String]) -> String {

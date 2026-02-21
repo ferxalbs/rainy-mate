@@ -71,3 +71,4 @@ sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "tls-native-t
 notify = "8.2.0"
 walkdir = "2.5.0"
 libsql = "0.9.29"
+pdf-extract = "0.7.0"
