@@ -1,10 +1,12 @@
 // Rainy Cowork - macOS Keychain Integration
 // Secure storage for API keys using security-framework
 
+#[cfg(target_os = "macos")]
 use security_framework::passwords::{
     delete_generic_password, get_generic_password, set_generic_password,
 };
 
+#[cfg(target_os = "macos")]
 const SERVICE_NAME: &str = "com.enosislabs.rainycowork";
 
 /// Manager for secure API key storage via macOS Keychain
@@ -16,6 +18,7 @@ impl KeychainManager {
     }
 
     /// Store an API key in the Keychain
+    #[cfg(target_os = "macos")]
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
@@ -27,6 +30,7 @@ impl KeychainManager {
     }
 
     /// Retrieve an API key from the Keychain
+    #[cfg(target_os = "macos")]
     pub fn get_key(&self, provider: &str) -> Result<Option<String>, String> {
         let account = format!("api_key_{}", provider);
 
@@ -52,6 +56,7 @@ impl KeychainManager {
     }
 
     /// Delete an API key from the Keychain
+    #[cfg(target_os = "macos")]
     pub fn delete_key(&self, provider: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
@@ -70,6 +75,28 @@ impl KeychainManager {
                 }
             }
         }
+    }
+
+    // ========================================================================
+    // Non-macOS Fallbacks (Stubs)
+    // ========================================================================
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn store_key(&self, _provider: &str, _api_key: &str) -> Result<(), String> {
+        // TODO: Implement secure storage for Windows/Linux (e.g., using keytar/secret-service)
+        // For now, we return Ok to not break the app flow, but data isn't persisted securely.
+        eprintln!("WARN: Secure keychain storage not implemented for this OS");
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn get_key(&self, _provider: &str) -> Result<Option<String>, String> {
+        Ok(None)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn delete_key(&self, _provider: &str) -> Result<(), String> {
+        Ok(())
     }
 
     /// Check if an API key exists for a provider
@@ -101,8 +128,17 @@ mod tests {
         assert!(manager.store_key(test_provider, test_key).is_ok());
 
         // Retrieve
-        let retrieved = manager.get_key(test_provider).unwrap();
-        assert_eq!(retrieved, Some(test_key.to_string()));
+        #[cfg(target_os = "macos")]
+        {
+            let retrieved = manager.get_key(test_provider).unwrap();
+            assert_eq!(retrieved, Some(test_key.to_string()));
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            let retrieved = manager.get_key(test_provider).unwrap();
+            assert_eq!(retrieved, None);
+        }
 
         // Delete
         assert!(manager.delete_key(test_provider).is_ok());

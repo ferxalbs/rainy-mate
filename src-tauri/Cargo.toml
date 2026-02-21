@@ -36,7 +36,6 @@ uuid = { version = "1.19.0", features = ["v4"] }
 chrono = { version = "0.4.43", features = ["serde"] }
 thiserror = "2.0.17"
 futures = "0.3.31"
-security-framework = "3.5.1"
 tracing = "0.1.44"
 env_logger = "0.11"
 rand = "0.8"
@@ -71,3 +70,6 @@ sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "tls-native-t
 notify = "8.2.0"
 walkdir = "2.5.0"
 libsql = "0.9.29"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3.5.1"
