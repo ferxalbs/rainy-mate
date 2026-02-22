@@ -315,6 +315,56 @@ impl MemoryVaultRepository {
             .map_err(|e| format!("Failed to mark vault migration: {}", e))?;
         Ok(())
     }
+
+    // New methods to abstract connection access
+    pub async fn get_legacy_plaintext_entries(&self) -> Result<Vec<(String, String, String, String, i64, String)>, String> {
+        let mut rows = match self
+            .conn
+            .query(
+                "SELECT id, workspace_id, content, source, timestamp, metadata_json FROM memory_entries",
+                (),
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => return Ok(Vec::new()), // Table doesn't exist, ignore
+        };
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+            results.push((
+                row.get(0).unwrap_or_default(),
+                row.get(1).unwrap_or_default(),
+                row.get(2).unwrap_or_default(),
+                row.get(3).unwrap_or_default(),
+                row.get(4).unwrap_or(0),
+                row.get(5).unwrap_or_default(),
+            ));
+        }
+        Ok(results)
+    }
+
+    pub async fn drop_legacy_plaintext_table(&self) -> Result<(), String> {
+        let _ = self.conn.execute("DELETE FROM memory_entries", ()).await;
+        Ok(())
+    }
+
+    pub async fn get_ids_needing_reembed(&self) -> Result<Vec<String>, String> {
+         let mut rows = self
+            .conn
+            .query(
+                "SELECT id FROM memory_vault_entries WHERE embedding IS NULL OR embedding_dim != 3072",
+                (),
+            )
+            .await
+            .map_err(|e| format!("Failed to query rows for backfill: {}", e))?;
+
+        let mut ids = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+            ids.push(row.get(0).unwrap_or_default());
+        }
+        Ok(ids)
+    }
 }
 
 // Stub implementation for when vector-db feature is disabled
@@ -373,6 +423,19 @@ impl MemoryVaultRepository {
 
     pub async fn mark_migration_completed(&self, _id: &str) -> Result<(), String> {
         Ok(())
+    }
+
+    // Stubbed abstract methods
+    pub async fn get_legacy_plaintext_entries(&self) -> Result<Vec<(String, String, String, String, i64, String)>, String> {
+        Ok(Vec::new())
+    }
+
+    pub async fn drop_legacy_plaintext_table(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub async fn get_ids_needing_reembed(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
     }
 }
 

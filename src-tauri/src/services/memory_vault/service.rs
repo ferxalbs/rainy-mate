@@ -278,30 +278,19 @@ impl MemoryVaultService {
             return Ok(());
         }
 
-        let mut rows = match self
-            .repository
-            .conn()
-            .query(
-                "SELECT id, workspace_id, content, source, timestamp, metadata_json
-             FROM memory_entries",
-                (),
-            )
-            .await
-        {
-            Ok(r) => r,
-            Err(_) => return Ok(()), // Table doesn't exist, ignore
-        };
+        // Use new repository method instead of direct conn().query()
+        let rows = self.repository.get_legacy_plaintext_entries().await?;
 
-        while let Ok(Some(row)) = rows.next().await {
-            let id: String = row.get(0).unwrap_or_default();
+        for row in rows {
+            let id = row.0;
             if self.repository.get_by_id(&id).await?.is_some() {
                 continue;
             }
-            let workspace_id: String = row.get(1).unwrap_or_default();
-            let content: String = row.get(2).unwrap_or_default();
-            let source: String = row.get(3).unwrap_or_default();
-            let timestamp: i64 = row.get(4).unwrap_or(0);
-            let metadata_json: String = row.get(5).unwrap_or_default();
+            let workspace_id = row.1;
+            let content = row.2;
+            let source = row.3;
+            let timestamp = row.4;
+            let metadata_json = row.5;
             let metadata: HashMap<String, String> =
                 serde_json::from_str(&metadata_json).unwrap_or_default();
 
@@ -323,11 +312,8 @@ impl MemoryVaultService {
             .await?;
         }
 
-        let _ = self
-            .repository
-            .conn()
-            .execute("DELETE FROM memory_entries", ())
-            .await;
+        // Use repository method to delete table
+        let _ = self.repository.drop_legacy_plaintext_table().await;
 
         self.repository
             .mark_migration_completed(MIGRATION_PLAINTEXT_DB)
@@ -340,24 +326,8 @@ impl MemoryVaultService {
             return Ok(());
         }
 
-        // We need to query rows that have no embedding or the wrong dimension.
-        // We can't fetch everything at once if the DB is huge, but doing it in chunks
-        // or just fetching IDs first is safer.
-        let mut rows = self
-            .repository
-            .conn()
-            .query(
-                "SELECT id FROM memory_vault_entries WHERE embedding IS NULL OR embedding_dim != 3072",
-                (),
-            )
-            .await
-            .map_err(|e| format!("Failed to query rows for backfill: {}", e))?;
-
-        let mut ids_to_reembed = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
-            let id: String = row.get(0).unwrap_or_default();
-            ids_to_reembed.push(id);
-        }
+        // Use repository method instead of direct query
+        let ids_to_reembed = self.repository.get_ids_needing_reembed().await?;
 
         if ids_to_reembed.is_empty() {
             return self
