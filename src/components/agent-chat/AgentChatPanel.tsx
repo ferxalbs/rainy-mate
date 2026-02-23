@@ -85,7 +85,6 @@ export function AgentChatPanel({
     messages,
     isPlanning,
     isExecuting,
-    currentPlan,
     executePlan,
     executeToolCalls,
     runNativeAgent,
@@ -314,8 +313,11 @@ export function AgentChatPanel({
                 <MessageBubble
                   key={message.id}
                   message={message}
-                  currentPlan={currentPlan}
-                  isExecuting={isExecuting}
+                  isExecuting={
+                    isExecuting &&
+                    ((!!message.toolCalls && !message.isExecuted) ||
+                      !!message.plan)
+                  }
                   onExecute={executePlan}
                   onExecuteToolCalls={executeToolCalls}
                   workspaceId={workspacePath}

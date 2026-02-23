@@ -29,7 +29,6 @@ function TrashIcon(props: any) {
 
 interface MessageBubbleProps {
   message: AgentMessage;
-  currentPlan?: TaskPlan | null;
   isExecuting?: boolean;
   onExecute?: (planId: string) => void;
   onExecuteToolCalls?: (
@@ -40,7 +39,7 @@ interface MessageBubbleProps {
   workspaceId?: string;
 }
 
-export function MessageBubble({
+export const MessageBubble = React.memo(function MessageBubble({
   message,
   onExecute,
   onExecuteToolCalls,
@@ -208,7 +207,7 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});
 
 function PlanCard({
   plan,
