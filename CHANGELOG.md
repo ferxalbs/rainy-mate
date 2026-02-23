@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added modular third-party skill persistence and metadata registry in `services/third_party_skill_registry.rs`.
 - Added `services/skill_installer/` to parse `skill.toml`, verify Wasm SHA-256, enforce built-in-domain collision checks, and persist installed packages in the local app data directory.
-- Added `services/wasm_sandbox/` execution host service with concurrency limits, Wasm binary validation, and fail-closed execution path (runtime host ABI intentionally not enabled yet).
+- Added `services/wasm_sandbox/` execution host service with concurrency limits, Wasm binary validation, and a deny-first capability model (filesystem/network permissions remain fail-closed until host capability bindings are enabled).
+- Added Wasmtime/wasmtime-wasi runtime integration for QUARANTINE ZONE basic WASI execution (JSON stdin envelope with `method` + `params`, captured stdout/stderr, fuel limit, stack limit, bounded stdio).
 - Added Tauri commands for skill management:
   - `list_installed_skills`
   - `install_local_skill`
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tool_manifest.rs` now merges installed third-party skill manifests into the runtime-generated node skill manifest (built-ins remain canonical + fail-closed).
 - `SkillExecutor` now resolves unknown skill domains against the third-party skill registry and routes them to the Wasm sandbox service (currently fail-closed execution for undeployed ABI).
+- `SkillExecutor` third-party calls now execute in the Wasm sandbox for skills that declare no filesystem/network capabilities; capability-bearing skills remain fail-closed until those host capabilities are explicitly implemented in the runtime.
 - Added third-party skill pre-execution policy enforcement in `SkillExecutor`:
   - command Airlock level must satisfy installed method minimum level
   - declared filesystem/domain permissions must fit within current command Airlock scopes
