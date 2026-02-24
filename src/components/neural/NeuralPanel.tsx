@@ -68,6 +68,25 @@ interface NeuralPanelProps {
   onNavigate?: (section: string) => void;
 }
 
+function getNeuralConnectErrorMessage(error: unknown): string {
+  const text =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : JSON.stringify(error);
+
+  if (/Duplicate workspace mapping/i.test(text)) {
+    return "ATM has duplicate workspaces for this Platform Key. Reset/clean duplicate workspace records, then reconnect.";
+  }
+
+  if (/Owner credentials mismatch|Invalid Credentials|Validation failed/i.test(text)) {
+    return "Platform Key / Creator API Key are invalid for this ATM instance.";
+  }
+
+  return "Connection failed. Please check your credentials.";
+}
+
 export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
   const [state, setState] = useState<NeuralState>("idle");
   const [workspace, setWorkspace] = useState<WorkspaceAuth | null>(null);
@@ -87,9 +106,8 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
-      let atmKeyPresent = false;
       try {
-        atmKeyPresent = await hasAtmCredentials();
+        await hasAtmCredentials();
       } catch (err) {
         console.error("Failed to check ATM admin key:", err);
       }
@@ -108,33 +126,21 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
 
             const storedWorkspace = readStoredWorkspace();
             let effectiveWorkspace: WorkspaceAuth | null = null;
-            const shouldBootstrap = !storedWorkspace || !atmKeyPresent;
 
-            if (shouldBootstrap) {
-              try {
-                const ws = await bootstrapAtm(
-                  platform,
-                  userKey,
-                  storedWorkspace?.name || "Desktop Workspace",
-                );
-                writeStoredWorkspace(ws);
-                effectiveWorkspace = ws;
-              } catch (err) {
-                console.error("Failed to restore ATM admin key:", err);
-                if (storedWorkspace) {
-                  effectiveWorkspace = {
-                    id: storedWorkspace.id,
-                    name: storedWorkspace.name,
-                    apiKey: "",
-                  };
-                }
-              }
-            } else if (storedWorkspace) {
-              effectiveWorkspace = {
-                id: storedWorkspace.id,
-                name: storedWorkspace.name,
-                apiKey: "",
-              };
+            // Always refresh canonical workspace identity from ATM.
+            // Local storage is only a UI hint and may be stale after resets or key changes.
+            try {
+              const ws = await bootstrapAtm(
+                platform,
+                userKey,
+                storedWorkspace?.name || "Desktop Workspace",
+              );
+              writeStoredWorkspace(ws);
+              effectiveWorkspace = ws;
+            } catch (err) {
+              console.error("Failed to restore ATM admin key:", err);
+              // Do not auto-fallback to a stale local workspace id, as it can split
+              // admin workspace and node workspace contexts.
             }
 
             if (effectiveWorkspace) {
@@ -142,7 +148,13 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
               setState("connecting");
               try {
                 await setNeuralWorkspaceId(effectiveWorkspace.id);
-                await registerNode();
+                try {
+                  await registerNode();
+                } catch (registerErr) {
+                  // The background poller may be racing to re-register after auth-context sync.
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                  await registerNode();
+                }
                 if (!cancelled) {
                   setState("connected");
                 }
@@ -184,7 +196,13 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       );
       await setNeuralCredentials(platformKey, userApiKey);
       await setNeuralWorkspaceId(ws.id);
-      await registerNode();
+      try {
+        await registerNode();
+      } catch {
+        // Retry once to tolerate startup race with CommandPoller auth-context sync.
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await registerNode();
+      }
 
       setWorkspace(ws);
       writeStoredWorkspace(ws);
@@ -193,7 +211,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
     } catch (err: any) {
       console.error("Connection failed:", err);
       setState("idle");
-      toast.error("Connection failed. Please check your credentials.");
+      toast.error(getNeuralConnectErrorMessage(err));
     }
   };
 
