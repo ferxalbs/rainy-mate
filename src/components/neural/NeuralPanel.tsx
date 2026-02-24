@@ -20,7 +20,7 @@ import { NeuralActivity } from "./modules/NeuralActivity";
 import { NeuralAgents } from "./modules/NeuralAgents";
 import { NeuralDashboard } from "./modules/NeuralDashboard";
 // import { NeuralHealth } from "./modules/NeuralHealth"; // @TODO: Remove
-// import { NeuralSettings } from "./modules/NeuralSettings"; // @TODO: Remove
+import { NeuralSettings } from "./modules/NeuralSettings";
 
 type NeuralState = "idle" | "restored" | "connected" | "connecting";
 
@@ -408,10 +408,10 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       {activeTab === "agents" && <NeuralAgents onNavigate={onNavigate} />}
       {activeTab === "activity" && <NeuralActivity />}
       {/* @TODO: Remove in next version - Legacy panels */}
-      {/* {activeTab === "health" && <NeuralHealth />}
+      {/* {activeTab === "health" && <NeuralHealth />} */}
       {activeTab === "settings" && (
         <NeuralSettings platformKey={platformKey} userApiKey={userApiKey} />
-      )} */}
+      )}
     </NeuralLayout>
   );
 }

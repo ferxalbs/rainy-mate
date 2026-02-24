@@ -1,4 +1,4 @@
-import { Activity, LayoutDashboard, Users } from "lucide-react";
+import { Activity, LayoutDashboard, Settings, Users } from "lucide-react";
 import { Button } from "@heroui/react";
 
 interface NeuralSidebarProps {
@@ -103,6 +103,12 @@ export function NeuralSidebar({ activeTab, onTabChange }: NeuralSidebarProps) {
           icon={Activity}
           label="Activity"
           description="Command History"
+        />
+        <NavItem
+          id="settings"
+          icon={Settings}
+          label="Settings"
+          description="Policies & Skills"
         />
       </div>
 
