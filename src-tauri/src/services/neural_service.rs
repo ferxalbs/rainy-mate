@@ -45,7 +45,32 @@ struct CommandsResponse {
     commands: Vec<QueuedCommand>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct AuthContextResponse {
+    success: bool,
+    #[serde(rename = "workspaceId")]
+    workspace_id: String,
+    #[serde(rename = "workspaceName")]
+    workspace_name: String,
+}
+
 impl NeuralService {
+    async fn clear_node_id(&self) {
+        let mut metadata = self.metadata.lock().await;
+        metadata.node_id = None;
+    }
+
+    async fn reset_node_on_status(&self, status: reqwest::StatusCode) {
+        if matches!(
+            status,
+            reqwest::StatusCode::UNAUTHORIZED
+                | reqwest::StatusCode::NOT_FOUND
+                | reqwest::StatusCode::CONFLICT
+        ) {
+            self.clear_node_id().await;
+        }
+    }
+
     async fn get_auth_context(&self) -> Result<(String, String), String> {
         let metadata = self.metadata.lock().await;
         let node_id = metadata
@@ -184,6 +209,62 @@ impl NeuralService {
         }
     }
 
+    pub async fn can_attempt_registration(&self) -> bool {
+        let metadata = self.metadata.lock().await;
+        metadata.platform_key.is_some()
+            && metadata.user_api_key.is_some()
+            && !metadata.workspace_id.trim().is_empty()
+            && metadata.workspace_id != "pending-pairing"
+    }
+
+    pub async fn sync_workspace_id_with_auth_context(&self) -> Result<Option<String>, String> {
+        let (platform_key, local_workspace_id) = {
+            let metadata = self.metadata.lock().await;
+            (
+                metadata
+                    .platform_key
+                    .clone()
+                    .ok_or("Not authenticated: Platform Key required".to_string())?,
+                metadata.workspace_id.clone(),
+            )
+        };
+
+        let url = format!("{}/v1/nodes/auth-context", self.base_url);
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", platform_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Auth context sync failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let data: AuthContextResponse = res.json().await.map_err(|e| e.to_string())?;
+        if !data.success {
+            return Err("Auth context sync failed: success=false".to_string());
+        }
+
+        if data.workspace_id != local_workspace_id {
+            eprintln!(
+                "[NeuralService] Auth-context workspace mismatch. local={} server={}. Updating local workspace and clearing node_id.",
+                local_workspace_id, data.workspace_id
+            );
+            self.set_workspace_id(data.workspace_id.clone()).await;
+            self.clear_node_id().await;
+            return Ok(Some(data.workspace_id));
+        }
+
+        Ok(None)
+    }
+
     /// Registers this Desktop Node with the Cloud Cortex
     pub async fn register(
         &self,
@@ -218,7 +299,7 @@ impl NeuralService {
             .unwrap_or_else(|_| "unknown".to_string());
 
         let body = serde_json::json!({
-            "workspaceId": workspace_id,
+            "workspaceId": workspace_id.clone(),
             "hostname": hostname,
             "platform": platform,
             "skills": skills,
@@ -242,7 +323,10 @@ impl NeuralService {
         if !res.status().is_success() {
             let status = res.status();
             let err_text = res.text().await.unwrap_or_default();
-            return Err(format!("Registration failed: {} - {}", status, err_text));
+            return Err(format!(
+                "Registration failed: {} - {} (workspace_id={})",
+                status, err_text, workspace_id
+            ));
         }
 
         let data: RegisterResponse = res.json().await.map_err(|e| e.to_string())?;
@@ -277,12 +361,9 @@ impl NeuralService {
 
         if !res.status().is_success() {
             let status = res.status();
-            if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::NOT_FOUND
-            {
-                let mut metadata = self.metadata.lock().await;
-                metadata.node_id = None;
-            }
-            return Err(format!("Heartbeat failed: {}", status));
+            self.reset_node_on_status(status).await;
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!("Heartbeat failed: {} - {}", status, err_text));
         }
 
         let data: HeartbeatResponse = res.json().await.map_err(|e| e.to_string())?;
@@ -354,7 +435,13 @@ impl NeuralService {
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
-            return Err(format!("Start command failed: {}", res.status()));
+            let status = res.status();
+            self.reset_node_on_status(status).await;
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Start command failed: {} - {} (command_id={})",
+                status, err_text, command_id
+            ));
         }
 
         Ok(())
@@ -383,7 +470,13 @@ impl NeuralService {
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
-            return Err(format!("Complete command failed: {}", res.status()));
+            let status = res.status();
+            self.reset_node_on_status(status).await;
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Complete command failed: {} - {} (command_id={})",
+                status, err_text, command_id
+            ));
         }
 
         Ok(())
@@ -426,9 +519,19 @@ impl NeuralService {
                 Ok(response) if response.status().is_success() => return Ok(()),
                 Ok(response) => {
                     let status = response.status();
+                    if status == reqwest::StatusCode::UNAUTHORIZED
+                        || status == reqwest::StatusCode::NOT_FOUND
+                        || status == reqwest::StatusCode::CONFLICT
+                    {
+                        self.reset_node_on_status(status).await;
+                    }
                     let retryable = status.is_server_error();
                     if !retryable || attempt >= MAX_ATTEMPTS {
-                        return Err(format!("Report progress failed: {}", status));
+                        let err_text = response.text().await.unwrap_or_default();
+                        return Err(format!(
+                            "Report progress failed: {} - {} (command_id={})",
+                            status, err_text, command_id
+                        ));
                     }
                 }
                 Err(err) => {

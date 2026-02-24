@@ -281,6 +281,15 @@ impl CommandPoller {
 
         // Check if node is registered (has node_id)
         if !self.neural_service.is_registered().await {
+            if !self.neural_service.can_attempt_registration().await {
+                return Ok(());
+            }
+
+            if let Err(e) = self.neural_service.sync_workspace_id_with_auth_context().await {
+                eprintln!("[CommandPoller] Auth-context sync failed before register: {}", e);
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)));
+            }
+
             // Attempt auto-registration for seamless cloud<->desktop connectivity.
             let manifests = match build_skill_manifest_from_runtime() {
                 Ok(value) => value,
@@ -298,7 +307,7 @@ impl CommandPoller {
                 }
                 Err(e) => {
                     eprintln!("[CommandPoller] Auto-registration failed: {}", e);
-                    return Ok(());
+                    return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)));
                 }
             }
         }
@@ -388,6 +397,9 @@ impl CommandPoller {
                 "[CommandPoller] Failed to mark command {} as started: {}",
                 command.id, e
             );
+            if e.contains("404") || e.contains("409") {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)));
+            }
         }
         let _ = self
             .neural_service
