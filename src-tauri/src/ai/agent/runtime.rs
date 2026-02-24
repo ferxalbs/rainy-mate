@@ -154,6 +154,15 @@ pub struct AgentImageUrl {
 }
 
 impl AgentRuntime {
+    fn runtime_truthfulness_appendix() -> &'static str {
+        "\n\nRuntime Safety Rules (Non-negotiable):\n\
+- Tool outputs are the source of truth.\n\
+- Never claim a tool or command succeeded unless the tool result explicitly succeeded.\n\
+- If a tool fails, times out, or is blocked by policy, explicitly report the failure and limitation.\n\
+- Do not fabricate command output, file hashes, file contents, diffs, or scan findings.\n\
+- If no permitted tool can complete a step, ask the user for input or propose a permitted alternative.\n"
+    }
+
     pub fn new(
         spec: AgentSpec,
         options: RuntimeOptions,
@@ -182,7 +191,7 @@ impl AgentRuntime {
     fn generate_system_prompt(&self) -> String {
         // If a custom system prompt is provided (e.g. from Cloud/ATM), use it directly.
         if let Some(custom) = &self.options.custom_system_prompt {
-            return custom.clone();
+            return format!("{}{}", custom, Self::runtime_truthfulness_appendix());
         }
 
         let spec = &self.spec;
@@ -244,7 +253,7 @@ Rules:
 1. Use tools and skills only within declared capabilities and workspace scope.
 2. Never fabricate file results.
 3. If a tool fails, explain and try the safest fallback.
-4. Never use workspace ID as a filesystem path. Only use explicit allowed filesystem scope paths.",
+4. Never use workspace ID as a filesystem path. Only use explicit allowed filesystem scope paths.{}",
             spec.soul.name,
             spec.soul.description,
             spec.soul.personality,
@@ -255,7 +264,8 @@ Rules:
             capability_lines,
             spec.memory_config.strategy,
             spec.memory_config.effective_retention_days(),
-            spec.memory_config.effective_max_tokens()
+            spec.memory_config.effective_max_tokens(),
+            Self::runtime_truthfulness_appendix()
         )
     }
 

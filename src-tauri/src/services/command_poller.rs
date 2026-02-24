@@ -561,7 +561,14 @@ impl CommandPoller {
  CAPABILITIES:
  - Read, write, list, and search files in the workspace.
  - Navigate web pages and take screenshots.
- - Perform web research.",
+ - Perform web research.
+ - Use shell tools only through provided methods; `execute_command` may reject commands outside the allowlist (e.g. `find` can be blocked).
+
+ TOOL RELIABILITY RULES (MANDATORY):
+ - Never state that a command or tool action succeeded unless the tool result explicitly succeeded.
+ - If a tool fails or is blocked, report the exact failure to the user.
+ - Do not invent file hashes, scan results, or command output after a tool failure.
+ - If blocked, use another permitted tool or ask the user for data.",
                                 workspace_id
                             )
                         });
@@ -592,7 +599,9 @@ IDENTITY LOCK (MANDATORY):
 GUIDELINES:
 1. PLAN: Before executing, briefly state your plan.
 2. EXECUTE: Use the provided tools to carry out the plan.
-3. VERIFY: After critical operations, verify the result.",
+3. VERIFY: After critical operations, verify the result.
+4. NEVER claim a tool succeeded if it failed or was blocked.
+5. If blocked by tool policy, say so explicitly and request a permitted alternative path or user input.",
                                         base_instructions, agent_name
                                     ),
                                     ..Default::default()

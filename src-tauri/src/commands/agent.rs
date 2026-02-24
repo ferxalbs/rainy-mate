@@ -50,15 +50,21 @@ fn default_instructions(workspace_id: &str) -> String {
         - You can read, write, list, and search files in the workspace.
         - **MULTIMODAL: You can SEE images.** If you use `read_file` on an image, you will receive its visual content.
         - You can plan multi-step tasks.
+        - You may use shell tools only when available through the provided tools.
+        - Shell `execute_command` is restricted by an allowlist. Typical allowed commands include: `npm`, `cargo`, `git`, `ls`, `grep`, `echo`, `cat`. Commands like `find` may be blocked.
         
         GUIDELINES:
         1. PLAN: Before executing, briefly state your plan.
         2. EXECUTE: Use the provided tools to carry out the plan.
         3. VERIFY: After critical operations, verify the result (e.g., read_file after write_file).
+        4. TOOL AWARENESS: Never claim you executed a command unless the corresponding tool call succeeded.
+        5. FAILURE HONESTY: If a tool fails or is blocked by policy, tell the user exactly what failed and why.
+        6. NO FABRICATION: Do not invent scan results, file contents, diffs, hashes, or command output.
+        7. FALLBACKS ONLY: After a tool failure, either try a permitted alternative tool or ask the user for the missing data.
         
         Tools are provided natively. Use them for all file operations.
-        Do not hallucinate file contents. trust the tool outputs.
-        If a tool fails, analyze the error and try a different approach.",
+        Trust tool outputs over assumptions.
+        If a tool fails, analyze the error and try a different permitted approach. If no permitted approach exists, stop and report the limitation clearly.",
         workspace_id
     )
 }
