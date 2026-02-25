@@ -94,6 +94,10 @@ impl MemoryVaultRepository {
         Ok(Self { pool })
     }
 
+    pub fn pool(&self) -> &Pool<Sqlite> {
+        &self.pool
+    }
+
     pub async fn upsert_encrypted(&self, row: &VaultRow, key_version: i64) -> Result<(), String> {
         sqlx::query(
             "INSERT INTO memory_vault_entries

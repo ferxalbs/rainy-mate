@@ -2,6 +2,7 @@ use super::crypto::{decrypt_bytes, encrypt_bytes};
 use super::key_provider::{MacOSKeychainVaultKeyProvider, VaultKeyProvider};
 use super::repository::{MemoryVaultRepository, VaultRow};
 use super::types::{DecryptedMemoryEntry, MemorySensitivity, MemoryVaultStats, StoreMemoryInput};
+use sqlx::Row;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ pub enum VectorSearchMode {
 
 #[derive(Debug, Clone)]
 pub struct MemoryVaultService {
-    repository: Arc<MemoryVaultRepository>,
+    pub(crate) repository: Arc<MemoryVaultRepository>,
     master_key: Arc<Vec<u8>>,
 }
 
@@ -305,30 +306,27 @@ impl MemoryVaultService {
             return Ok(());
         }
 
-        let mut rows = match self
-            .repository
-            .conn()
-            .query(
-                "SELECT id, workspace_id, content, source, timestamp, metadata_json
-             FROM memory_entries",
-                (),
-            )
-            .await
+        // We access the pool directly here to check for the old legacy table.
+        let rows = match sqlx::query(
+            "SELECT id, workspace_id, content, source, timestamp, metadata_json FROM memory_entries",
+        )
+        .fetch_all(self.repository.pool())
+        .await
         {
             Ok(r) => r,
             Err(_) => return Ok(()), // Table doesn't exist, ignore
         };
 
-        while let Ok(Some(row)) = rows.next().await {
-            let id: String = row.get(0).unwrap_or_default();
+        for row in rows {
+            let id: String = row.get("id");
             if self.repository.get_by_id(&id).await?.is_some() {
                 continue;
             }
-            let workspace_id: String = row.get(1).unwrap_or_default();
-            let content: String = row.get(2).unwrap_or_default();
-            let source: String = row.get(3).unwrap_or_default();
-            let timestamp: i64 = row.get(4).unwrap_or(0);
-            let metadata_json: String = row.get(5).unwrap_or_default();
+            let workspace_id: String = row.get("workspace_id");
+            let content: String = row.get("content");
+            let source: String = row.get("source");
+            let timestamp: i64 = row.get("timestamp");
+            let metadata_json: String = row.get("metadata_json");
             let metadata: HashMap<String, String> =
                 serde_json::from_str(&metadata_json).unwrap_or_default();
 
@@ -350,10 +348,8 @@ impl MemoryVaultService {
             .await?;
         }
 
-        let _ = self
-            .repository
-            .conn()
-            .execute("DELETE FROM memory_entries", ())
+        let _ = sqlx::query("DELETE FROM memory_entries")
+            .execute(self.repository.pool())
             .await;
 
         self.repository
@@ -370,19 +366,16 @@ impl MemoryVaultService {
         // We need to query rows that have no embedding or the wrong dimension.
         // We can't fetch everything at once if the DB is huge, but doing it in chunks
         // or just fetching IDs first is safer.
-        let mut rows = self
-            .repository
-            .conn()
-            .query(
-                "SELECT id FROM memory_vault_entries WHERE embedding IS NULL OR embedding_dim != 3072",
-                (),
-            )
-            .await
-            .map_err(|e| format!("Failed to query rows for backfill: {}", e))?;
+        let rows = sqlx::query(
+            "SELECT id FROM memory_vault_entries WHERE embedding IS NULL OR embedding_dim != 3072",
+        )
+        .fetch_all(self.repository.pool())
+        .await
+        .map_err(|e| format!("Failed to query rows for backfill: {}", e))?;
 
         let mut ids_to_reembed = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
-            let id: String = row.get(0).unwrap_or_default();
+        for row in rows {
+            let id: String = row.get("id");
             ids_to_reembed.push(id);
         }
 
