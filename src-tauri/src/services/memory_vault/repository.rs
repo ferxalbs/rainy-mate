@@ -27,6 +27,16 @@ pub struct VaultRow {
 }
 
 #[derive(Debug, Clone)]
+pub struct LegacyEntry {
+    pub id: String,
+    pub workspace_id: String,
+    pub content: String,
+    pub source: String,
+    pub timestamp: i64,
+    pub metadata_json: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct MemoryVaultRepository {
     #[cfg(not(windows))]
     conn: Connection,
@@ -184,9 +194,7 @@ impl MemoryVaultRepository {
 
     #[cfg(windows)]
     pub async fn upsert_encrypted(&self, _row: &VaultRow, _key_version: i64) -> Result<(), String> {
-        // Stub: No-op or return error. Returning Ok to avoid breaking app flow, but data won't persist.
-        // Ideally should log warning.
-        Ok(())
+        Err("Memory Vault (libsql) is not supported on Windows".to_string())
     }
 
     #[cfg(not(windows))]
@@ -221,7 +229,7 @@ impl MemoryVaultRepository {
         _workspace_id: &str,
         _limit: usize,
     ) -> Result<Vec<VaultRow>, String> {
-        Ok(Vec::new())
+        Err("Memory Vault (libsql) is not supported on Windows".to_string())
     }
 
     #[cfg(not(windows))]
@@ -273,7 +281,7 @@ impl MemoryVaultRepository {
         _query_embedding: &[f32],
         _limit: usize,
     ) -> Result<Vec<(VaultRow, f32)>, String> {
-        Ok(Vec::new())
+        Err("Memory Vault (libsql) is not supported on Windows".to_string())
     }
 
     #[cfg(not(windows))]
@@ -317,7 +325,7 @@ impl MemoryVaultRepository {
         _query_embedding: &[f32],
         _limit: usize,
     ) -> Result<Vec<(VaultRow, f32)>, String> {
-        Ok(Vec::new())
+        Err("Memory Vault (libsql) is not supported on Windows".to_string())
     }
 
     #[cfg(not(windows))]
@@ -340,7 +348,7 @@ impl MemoryVaultRepository {
 
     #[cfg(windows)]
     pub async fn get_by_id(&self, _id: &str) -> Result<Option<VaultRow>, String> {
-        Ok(None)
+        Err("Memory Vault (libsql) is not supported on Windows".to_string())
     }
 
     #[cfg(not(windows))]
@@ -357,7 +365,7 @@ impl MemoryVaultRepository {
 
     #[cfg(windows)]
     pub async fn delete_by_id(&self, _id: &str) -> Result<(), String> {
-        Ok(())
+        Err("Memory Vault (libsql) is not supported on Windows".to_string())
     }
 
     #[cfg(not(windows))]
@@ -386,7 +394,8 @@ impl MemoryVaultRepository {
         _last_accessed: i64,
         _access_count: i64,
     ) -> Result<(), String> {
-        Ok(())
+        // Access logging is non-critical, can return Ok or Err. Err is safer to be consistent.
+        Err("Memory Vault (libsql) is not supported on Windows".to_string())
     }
 
     #[cfg(not(windows))]
@@ -425,7 +434,7 @@ impl MemoryVaultRepository {
 
     #[cfg(windows)]
     pub async fn counts(&self, _workspace_id: Option<&str>) -> Result<(usize, usize), String> {
-        Ok((0, 0))
+        Err("Memory Vault (libsql) is not supported on Windows".to_string())
     }
 
     #[cfg(not(windows))]
@@ -462,6 +471,78 @@ impl MemoryVaultRepository {
     #[cfg(windows)]
     pub async fn mark_migration_completed(&self, _id: &str) -> Result<(), String> {
         Ok(())
+    }
+
+    #[cfg(not(windows))]
+    pub async fn fetch_legacy_plaintext_entries(&self) -> Result<Vec<LegacyEntry>, String> {
+        let mut rows = match self
+            .conn
+            .query(
+                "SELECT id, workspace_id, content, source, timestamp, metadata_json
+             FROM memory_entries",
+                (),
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => return Ok(Vec::new()), // Table doesn't exist, ignore
+        };
+
+        let mut entries = Vec::new();
+        while let Ok(Some(row)) = rows.next().await {
+            entries.push(LegacyEntry {
+                id: row.get(0).unwrap_or_default(),
+                workspace_id: row.get(1).unwrap_or_default(),
+                content: row.get(2).unwrap_or_default(),
+                source: row.get(3).unwrap_or_default(),
+                timestamp: row.get(4).unwrap_or(0),
+                metadata_json: row.get(5).unwrap_or_default(),
+            });
+        }
+        Ok(entries)
+    }
+
+    #[cfg(windows)]
+    pub async fn fetch_legacy_plaintext_entries(&self) -> Result<Vec<LegacyEntry>, String> {
+        Ok(Vec::new())
+    }
+
+    #[cfg(not(windows))]
+    pub async fn delete_legacy_entries(&self) -> Result<(), String> {
+        self.conn
+            .execute("DELETE FROM memory_entries", ())
+            .await
+            .map_err(|e| format!("Failed to delete legacy entries: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    pub async fn delete_legacy_entries(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    pub async fn fetch_entries_needing_reembedding(&self) -> Result<Vec<String>, String> {
+        let mut rows = self
+            .conn
+            .query(
+                "SELECT id FROM memory_vault_entries WHERE embedding IS NULL OR embedding_dim != 3072",
+                (),
+            )
+            .await
+            .map_err(|e| format!("Failed to query rows for backfill: {}", e))?;
+
+        let mut ids = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+            let id: String = row.get(0).unwrap_or_default();
+            ids.push(id);
+        }
+        Ok(ids)
+    }
+
+    #[cfg(windows)]
+    pub async fn fetch_entries_needing_reembedding(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
     }
 }
 

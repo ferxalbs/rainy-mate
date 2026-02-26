@@ -35,7 +35,7 @@
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -46,6 +46,11 @@
     ]
   },
   "plugins": {
-
+    "updater": {
+      "endpoints": [
+        "https://github.com/ferxalbs/rainy-mate/releases/latest/download/latest.json"
+      ],
+      "pubkey": "RWQqVas/9+9/4s8c+7k+9+9/4s8c+7k+9+9/4s8c+7k+9+9/4s8c+7k+"
+    }
   }
 }
