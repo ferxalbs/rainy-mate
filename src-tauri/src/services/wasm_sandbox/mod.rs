@@ -9,12 +9,46 @@ use std::net::IpAddr;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
-use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime::Config;
+use wasmtime::{Engine, Linker, Module, ResourceLimiter, Store};
 use wasmtime_wasi::{DirPerms, FilePerms};
 use wasmtime_wasi::p1;
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::p2::pipe::{MemoryInputPipe, MemoryOutputPipe};
 use wasmtime_wasi::WasiCtxBuilder;
+
+struct SandboxCtx {
+    wasi: WasiP1Ctx,
+    limits: SandboxLimits,
+}
+
+struct SandboxLimits {
+    max_memory_bytes: usize,
+    max_table_elements: usize,
+    instances: usize,
+    tables: usize,
+    memories: usize,
+}
+
+impl ResourceLimiter for SandboxLimits {
+    fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool, anyhow::Error> {
+        Ok(desired <= self.max_memory_bytes)
+    }
+
+    fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool, anyhow::Error> {
+        Ok(desired <= self.max_table_elements)
+    }
+}
 
 pub struct WasmSandboxService {
     concurrency: Arc<Semaphore>,
@@ -22,6 +56,7 @@ pub struct WasmSandboxService {
     module_cache: Arc<DashMap<String, Module>>,
     max_binary_bytes: usize,
     max_stdio_bytes: usize,
+    max_memory_bytes: usize,
     fuel_limit: u64,
     exec_timeout_ms: u64,
 }
@@ -46,6 +81,7 @@ impl WasmSandboxService {
             module_cache: Arc::new(DashMap::new()),
             max_binary_bytes: 8 * 1024 * 1024,
             max_stdio_bytes: 64 * 1024,
+            max_memory_bytes: 128 * 1024 * 1024, // 128 MB max memory
             fuel_limit: 5_000_000,
             exec_timeout_ms: 3_000,
         }
@@ -120,6 +156,7 @@ impl WasmSandboxService {
         let engine = self.engine.clone();
         let module_cache = self.module_cache.clone();
         let max_stdio_bytes = self.max_stdio_bytes;
+        let max_memory_bytes = self.max_memory_bytes;
         let fuel_limit = self.fuel_limit;
         let bytes_for_exec = bytes;
         let module_sha = WasmSandboxService::sha256_hex(&bytes_for_exec);
@@ -135,6 +172,7 @@ impl WasmSandboxService {
                 &envelope_for_exec,
                 &fs_perms,
                 max_stdio_bytes,
+                max_memory_bytes,
                 fuel_limit,
             )
         });
@@ -172,6 +210,7 @@ impl WasmSandboxService {
         params_json: &str,
         fs_perms: &[crate::services::third_party_skill_registry::SkillPermissionFs],
         max_stdio_bytes: usize,
+        max_memory_bytes: usize,
         fuel_limit: u64,
     ) -> Result<WasmExecutionResult, String> {
         let module = if let Some(existing) = module_cache.get(module_sha) {
@@ -213,11 +252,23 @@ impl WasmSandboxService {
         }
         let wasi = builder.build_p1();
 
-        let mut linker: Linker<WasiP1Ctx> = Linker::new(engine);
-        p1::add_to_linker_sync(&mut linker, |cx| cx)
+        let ctx = SandboxCtx {
+            wasi,
+            limits: SandboxLimits {
+                max_memory_bytes,
+                max_table_elements: 10_000,
+                instances: 0,
+                tables: 0,
+                memories: 0,
+            },
+        };
+
+        let mut linker: Linker<SandboxCtx> = Linker::new(engine);
+        p1::add_to_linker_sync(&mut linker, |cx| &mut cx.wasi)
             .map_err(|e| format!("Failed to add WASI linker imports: {}", e))?;
 
-        let mut store: Store<WasiP1Ctx> = Store::new(engine, wasi);
+        let mut store: Store<SandboxCtx> = Store::new(engine, ctx);
+        store.limiter(|cx| &mut cx.limits);
         store
             .set_fuel(fuel_limit)
             .map_err(|e| format!("Failed to set fuel limit: {}", e))?;

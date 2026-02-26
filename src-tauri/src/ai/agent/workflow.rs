@@ -831,8 +831,12 @@ impl WorkflowStep for ActStep {
 mod tests {
     use super::*;
     use crate::ai::AIProviderManager;
+    use crate::ai::agent::memory::AgentMemory;
+    use crate::ai::specs::manifest::AgentSpec;
     use crate::services::workspace::WorkspaceManager;
-    use crate::services::{BrowserController, ManagedResearchService};
+    use crate::services::{BrowserController, ManagedResearchService, SkillExecutor};
+    use serial_test::serial;
+    use std::sync::Arc;
 
     #[derive(Debug)]
     struct MockStep {
@@ -863,6 +867,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_workflow_execution() {
         use crate::ai::specs::skills::AgentSkills;
         use crate::ai::specs::soul::AgentSoul;
@@ -908,9 +913,9 @@ mod tests {
         }));
 
         // Note: This relies on being able to create WorkspaceManager in test env.
-        // We need a dummy path for memory
-        let temp_dir = std::env::temp_dir();
-        let memory = Arc::new(AgentMemory::new("test-ws", temp_dir).await);
+        // We need an isolated temp dir for memory
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let memory = Arc::new(AgentMemory::new("test-ws", temp_dir.path().to_path_buf()).await);
 
         let state = AgentState::new(
             "test-ws".to_string(),

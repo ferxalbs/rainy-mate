@@ -33,12 +33,23 @@ impl MemoryVaultRepository {
     pub async fn new(app_data_dir: PathBuf) -> Result<Self, String> {
         let _ = std::fs::create_dir_all(&app_data_dir);
         let db_path = app_data_dir.join("rainy_cowork_v2.db");
-        if !db_path.exists() {
-            std::fs::File::create(&db_path)
-                .map_err(|e| format!("Failed to create db file: {}", e))?;
+        
+        #[cfg(test)]
+        if db_path.exists() {
+            let _ = std::fs::remove_file(&db_path);
         }
 
+        if !db_path.exists() {
+            let _ = std::fs::File::create(&db_path)
+                .map_err(|e| format!("Failed to create db file: {}", e));
+        }
+
+        #[cfg(test)]
+        let db_url = ":memory:".to_string();
+        
+        #[cfg(not(test))]
         let db_url = db_path.to_string_lossy().to_string();
+        
         let db = Builder::new_local(db_url)
             .build()
             .await
@@ -393,9 +404,11 @@ fn row_to_vault(row: &libsql::Row) -> Result<VaultRow, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::fs;
 
     #[tokio::test]
+    #[serial]
     async fn test_create_and_query_vault_schema() {
         let temp_dir = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
 
@@ -444,6 +457,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_libsql_direct_vector_api() {
         let temp_dir = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
 

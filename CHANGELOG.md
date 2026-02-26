@@ -5,7 +5,13 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - QUARANTINE ZONE (WASM Skill Sandbox) PT. 1
+## [0.5.93] - QUARANTINE ZONE (WASM Skill Sandbox) PT. 1 - 2026-02-25
+
+### Fixed - 0.5.93 Stabilizations
+
+- Migrated Wasm Skill installers to verify `Ed25519` signatures instead of symmetric HMAC `sha256` for robust public-key cryptography payload verification.
+- Hardened Wasmtime execution limits in `src-tauri/src/services/wasm_sandbox/mod.rs` by adding `wasmtime::ResourceLimiter` to clamp max memory per instance to strict limits (e.g., `< 50MB`).
+- Fixed process-wide C-library lock panics (`SQLITE_MISUSE`) between `sqlx` and `libsql` statically-linked `libsqlite3-sys` in the `cargo test` suite by explicitly enforcing `libsql` global state initialization before `sqlx` connection pooling across test modules.
 
 ### Added - Third-Party Wasm Skill Registry + Installer Foundation
 

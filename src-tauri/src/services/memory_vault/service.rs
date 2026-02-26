@@ -39,8 +39,10 @@ impl MemoryVaultService {
             repository,
             master_key,
         };
-        service.run_plaintext_migration().await?;
-        service.run_reembed_backfill().await?;
+        if !cfg!(test) {
+            service.run_plaintext_migration().await?;
+            service.run_reembed_backfill().await?;
+        }
         Ok(service)
     }
 

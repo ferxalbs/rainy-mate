@@ -532,14 +532,15 @@ fn extract_tag_value(tags: &[String], key: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::services::memory::MemoryManager;
+    use serial_test::serial;
     use tempfile::TempDir;
 
-    fn create_test_manager() -> MemoryManagerState {
+    fn create_test_manager() -> (MemoryManagerState, TempDir) {
         let temp_dir = TempDir::new().unwrap();
-        MemoryManagerState(std::sync::Arc::new(MemoryManager::new(
+        (MemoryManagerState(std::sync::Arc::new(MemoryManager::new(
             10,
             temp_dir.path().to_path_buf(),
-        )))
+        ))), temp_dir)
     }
 
     // Helper function to simulate Tauri State
@@ -548,8 +549,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_store_memory_command() {
-        let manager = create_test_manager();
+        let (manager, _temp) = create_test_manager();
 
         let result = store_memory(
             as_state(&manager),
@@ -563,8 +565,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_search_memory_command() {
-        let manager = create_test_manager();
+        let (manager, _temp) = create_test_manager();
 
         // Store an entry first
         store_memory(as_state(&manager), "Test entry".to_string(), vec![])
@@ -579,8 +582,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_get_recent_memory_command() {
-        let manager = create_test_manager();
+        let (manager, _temp) = create_test_manager();
 
         // Store some entries
         for i in 0..3 {
@@ -597,8 +601,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_clear_short_term_memory_command() {
-        let manager = create_test_manager();
+        let (manager, _temp) = create_test_manager();
 
         // Store an entry
         store_memory(as_state(&manager), "Test entry".to_string(), vec![])
@@ -617,8 +622,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_get_memory_stats_command() {
-        let manager = create_test_manager();
+        let (manager, _temp) = create_test_manager();
 
         let result = get_memory_stats(as_state(&manager)).await;
         assert!(result.is_ok());
@@ -627,8 +633,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_get_short_term_memory_size_command() {
-        let manager = create_test_manager();
+        let (manager, _temp) = create_test_manager();
 
         let size = get_short_term_memory_size(as_state(&manager))
             .await
@@ -647,8 +654,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_is_short_term_memory_empty_command() {
-        let manager = create_test_manager();
+        let (manager, _temp) = create_test_manager();
 
         let is_empty = is_short_term_memory_empty(as_state(&manager))
             .await

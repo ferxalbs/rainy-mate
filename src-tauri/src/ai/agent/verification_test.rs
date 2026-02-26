@@ -10,9 +10,14 @@ mod tests {
     use crate::services::SkillExecutor;
     use std::sync::Arc;
     use tokio::sync::RwLock;
+    use serial_test::serial;
 
     #[tokio::test]
+    #[serial]
     async fn test_persisted_agent_execution() {
+        // 0. Force LibSQL to initialize its global C-state first to prevent panic when sqlx initializes first
+        let _ = libsql::Builder::new_local(":memory:").build().await;
+
         // 1. Setup DB directly (Database struct needs AppHandle)
         let db_url = "sqlite::memory:";
         // Connect returns Pool<Sqlite>
@@ -62,10 +67,9 @@ mod tests {
             .expect("Spec not found");
         assert_eq!(loaded_spec.soul.name, "Test Agent");
 
-        // 5. Run Runtime with Loaded Spec (this tests INTEGRATION)
-        let temp_dir = std::env::temp_dir();
-        let memory =
-            Arc::new(crate::ai::agent::memory::AgentMemory::new("test-ws", temp_dir).await);
+        // 5. Run Runtime with Loaded        // Provide an isolated temp dir for memory
+        let temp_dir_mem = tempfile::TempDir::new().unwrap();
+        let memory = Arc::new(crate::ai::agent::memory::AgentMemory::new("test-persisted", temp_dir_mem.path().to_path_buf()).await);
         let router = Arc::new(RwLock::new(IntelligentRouter::default()));
         // Mock skills for now or use basic one
         // We need a proper SkillExecutor construction or mock.

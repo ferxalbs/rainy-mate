@@ -40,6 +40,12 @@ impl AgentMemory {
         }
         let db_url = format!("sqlite://{}", db_path.to_string_lossy());
 
+        let vault = Arc::new(
+            MemoryVaultService::new(app_data_dir.clone())
+                .await
+                .expect("failed to initialize memory vault"),
+        );
+
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect(&db_url)
@@ -58,12 +64,6 @@ impl AgentMemory {
         )
         .execute(&pool)
         .await;
-
-        let vault = Arc::new(
-            MemoryVaultService::new(app_data_dir.clone())
-                .await
-                .expect("failed to initialize memory vault"),
-        );
 
         let settings = crate::services::settings::SettingsManager::new();
         let provider_raw = settings.get_embedder_provider().to_string();
