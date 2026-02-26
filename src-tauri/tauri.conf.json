@@ -46,10 +46,6 @@
     ]
   },
   "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/ferxalbs/rainy-mate/releases/latest/download/latest.json"
-      ]
-    }
+
   }
 }

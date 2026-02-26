@@ -70,13 +70,17 @@ futures-util = "0.3"
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "tls-native-tls", "chrono"] }
 notify = "8.2.0"
 walkdir = "2.5.0"
-libsql = "0.9.29"
 pdf-extract = "0.7.0"
 wasmtime = "41.0.3"
 wasmtime-wasi = "41.0.3"
 
+# macOS dependencies
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3.5.1"
+
+# Non-Windows dependencies (libsql conflicts with sqlx on Windows linking)
+[target.'cfg(not(windows))'.dependencies]
+libsql = "0.9.29"
 
 [dev-dependencies]
 serial_test = "3.0"
