@@ -25,15 +25,13 @@ struct SandboxCtx {
 struct SandboxLimits {
     max_memory_bytes: usize,
     max_table_elements: usize,
-    instances: usize,
-    tables: usize,
-    memories: usize,
+
 }
 
 impl ResourceLimiter for SandboxLimits {
     fn memory_growing(
         &mut self,
-        current: usize,
+        _current: usize,
         desired: usize,
         _maximum: Option<usize>,
     ) -> Result<bool, anyhow::Error> {
@@ -42,7 +40,7 @@ impl ResourceLimiter for SandboxLimits {
 
     fn table_growing(
         &mut self,
-        current: usize,
+        _current: usize,
         desired: usize,
         _maximum: Option<usize>,
     ) -> Result<bool, anyhow::Error> {
@@ -257,9 +255,6 @@ impl WasmSandboxService {
             limits: SandboxLimits {
                 max_memory_bytes,
                 max_table_elements: 10_000,
-                instances: 0,
-                tables: 0,
-                memories: 0,
             },
         };
 

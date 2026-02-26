@@ -147,42 +147,7 @@ impl SkillInstaller {
     }
 }
 
-fn safe_equal_hex(expected_hex: &str, provided_hex: &str) -> bool {
-    let expected = match hex::decode(expected_hex) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    let provided = match hex::decode(provided_hex) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    if expected.len() != provided.len() || expected.is_empty() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (a, b) in expected.iter().zip(provided.iter()) {
-        diff |= a ^ b;
-    }
-    diff == 0
-}
 
-fn stable_sort_value(value: &serde_json::Value) -> serde_json::Value {
-    match value {
-        serde_json::Value::Object(map) => {
-            let mut sorted = serde_json::Map::new();
-            let mut keys: Vec<&String> = map.keys().collect();
-            keys.sort();
-            for key in keys {
-                sorted.insert(key.clone(), stable_sort_value(&map[key]));
-            }
-            serde_json::Value::Object(sorted)
-        }
-        serde_json::Value::Array(items) => {
-            serde_json::Value::Array(items.iter().map(stable_sort_value).collect())
-        }
-        _ => value.clone(),
-    }
-}
 
 pub fn verify_ed25519_signature(message: &[u8], signature_hex: &str, public_key_hex: &str) -> bool {
     let sig_bytes = match hex::decode(signature_hex) {
@@ -242,40 +207,6 @@ pub fn verify_downloaded_bundle_signature(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::neural::AirlockLevel;
-    use crate::services::skill_installer::types::{
-        SkillBinary, SkillTomlFsPerm, SkillTomlMethod, SkillTomlNetworkPerm, SkillTomlParameter,
-        SkillTomlPermissions,
-    };
-    use std::collections::HashMap;
-
-    fn minimal_manifest_with_method(name: &str) -> SkillToml {
-        SkillToml {
-            id: "tp_demo".to_string(),
-            name: "Demo".to_string(),
-            version: "1.0.0".to_string(),
-            author: "tester".to_string(),
-            description: String::new(),
-            runtime: "wasi-core-v1".to_string(),
-            entry: None,
-            binary: SkillBinary {
-                path: "module.wasm".to_string(),
-                sha256: "00".to_string(),
-            },
-            permissions: SkillTomlPermissions {
-                filesystem: Vec::<SkillTomlFsPerm>::new(),
-                network: SkillTomlNetworkPerm { domains: vec![] },
-            },
-            methods: vec![SkillTomlMethod {
-                name: name.to_string(),
-                description: "demo".to_string(),
-                airlock_level: AirlockLevel::Safe,
-                parameters: HashMap::<String, SkillTomlParameter>::new(),
-            }],
-            signature: None,
-        }
-    }
-
     use ed25519_dalek::{Signer, SigningKey};
     use rand::rngs::OsRng;
 

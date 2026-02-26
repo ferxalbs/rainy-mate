@@ -16,8 +16,7 @@ pub struct SkillToml {
     pub description: String,
     #[serde(default = "default_runtime")]
     pub runtime: String,
-    #[serde(default)]
-    pub entry: Option<String>,
+
     pub binary: SkillBinary,
     #[serde(default)]
     pub permissions: SkillTomlPermissions,
