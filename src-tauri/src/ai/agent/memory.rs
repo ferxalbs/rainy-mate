@@ -1,9 +1,9 @@
 use crate::services::memory_vault::{MemorySensitivity, MemoryVaultService, StoreMemoryInput};
 use chrono::{TimeZone, Utc};
+use libsql::{params, Builder, Connection};
 use reqwest::Client;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
-use sqlx::sqlite::SqlitePoolOptions;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,7 +23,7 @@ pub struct MemoryEntry {
 #[derive(Debug, Clone)]
 pub struct AgentMemory {
     workspace_id: String,
-    db: Arc<sqlx::SqlitePool>,
+    db: Arc<Connection>,
     vault: Arc<MemoryVaultService>,
     manager: Option<Arc<crate::services::MemoryManager>>,
     embedder: Arc<crate::services::embedder::EmbedderService>,
@@ -38,15 +38,15 @@ impl AgentMemory {
         if !db_path.exists() {
             let _ = std::fs::File::create(&db_path);
         }
-        let db_url = format!("sqlite://{}", db_path.to_string_lossy());
+        let db_url = db_path.to_string_lossy().to_string();
 
-        let pool = SqlitePoolOptions::new()
-            .max_connections(5)
-            .connect(&db_url)
+        let db = Builder::new_local(db_url)
+            .build()
             .await
-            .expect("failed to connect to sqlite db for agent memory");
+            .expect("failed to build libsql db");
+        let conn = db.connect().expect("failed to connect to libsql db");
 
-        let _ = sqlx::query(
+        let _ = conn.execute(
             "CREATE TABLE IF NOT EXISTS agent_entities (
                 id TEXT PRIMARY KEY,
                 workspace_id TEXT NOT NULL,
@@ -55,8 +55,8 @@ impl AgentMemory {
                 confidence REAL NOT NULL DEFAULT 0.5,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )",
+            (),
         )
-        .execute(&pool)
         .await;
 
         let vault = Arc::new(
@@ -84,7 +84,7 @@ impl AgentMemory {
 
         let memory = Self {
             workspace_id: workspace_id.to_string(),
-            db: Arc::new(pool),
+            db: Arc::new(conn),
             vault,
             manager: None, // Will be set by set_manager if provided
             embedder: Arc::new(crate::services::embedder::EmbedderService::new(
@@ -161,16 +161,17 @@ impl AgentMemory {
         if let (Some(entity_key), Some(entity_value)) =
             (metadata.get("entity_key"), metadata.get("entity_value"))
         {
-            let _ = sqlx::query(
+            let _ = self.db.execute(
                 "INSERT INTO agent_entities (id, workspace_id, entity_key, entity_value, confidence)
-                 VALUES (?, ?, ?, ?, ?)",
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    uuid::Uuid::new_v4().to_string(),
+                    self.workspace_id.clone(),
+                    entity_key.clone(),
+                    entity_value.clone(),
+                    0.5_f64
+                ]
             )
-            .bind(uuid::Uuid::new_v4().to_string())
-            .bind(&self.workspace_id)
-            .bind(entity_key)
-            .bind(entity_value)
-            .bind(0.5_f32)
-            .execute(&*self.db)
             .await;
         }
     }

@@ -1,11 +1,11 @@
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use libsql::{Builder, Connection};
 use std::fs;
 
 use tauri::AppHandle;
 use tauri::Manager;
 
 pub struct Database {
-    pub pool: SqlitePool,
+    pub conn: Connection,
 }
 
 impl Database {
@@ -14,32 +14,56 @@ impl Database {
         fs::create_dir_all(&app_dir)?;
 
         let db_path = app_dir.join("rainy_cowork_v2.db");
-        let db_url = format!("sqlite://{}", db_path.to_string_lossy());
-
         if !db_path.exists() {
             fs::File::create(&db_path)?;
         }
 
-        let pool = SqlitePoolOptions::new()
-            .max_connections(5)
-            .connect(&db_url)
+        let db_url = db_path.to_string_lossy().to_string();
+        let db = Builder::new_local(db_url)
+            .build()
             .await?;
+        let conn = db.connect()?;
 
-        if let Err(err) = sqlx::migrate!("./migrations").run(&pool).await {
-            let err_text = err.to_string();
-            let is_known_vector_index_compat_failure = err_text.contains("20260222090000")
-                && err_text.contains("vector index: unable to update global metadata table");
+        // Run migrations manually since we removed sqlx
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS agents (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                soul TEXT,
+                created_at INTEGER NOT NULL,
+                spec_json TEXT,
+                version TEXT
+            )",
+            ()
+        ).await?;
 
-            if is_known_vector_index_compat_failure {
-                eprintln!(
-                    "Skipping non-fatal migration 20260222090000 (libSQL vector index compatibility): {}",
-                    err_text
-                );
-            } else {
-                return Err(err.into());
-            }
-        }
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                chat_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )",
+            ()
+        ).await?;
 
-        Ok(Self { pool })
+        conn.execute(
+             "CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id, created_at)",
+             ()
+        ).await?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS chats (
+                id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                title TEXT,
+                created_at INTEGER NOT NULL
+            )",
+            ()
+        ).await?;
+
+        Ok(Self { conn })
     }
 }

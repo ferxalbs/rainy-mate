@@ -45,8 +45,8 @@ impl fmt::Display for AgentError {
 
 impl std::error::Error for AgentError {}
 
-impl From<sqlx::Error> for AgentError {
-    fn from(e: sqlx::Error) -> Self {
+impl From<libsql::Error> for AgentError {
+    fn from(e: libsql::Error) -> Self {
         Self::Memory(e.to_string())
     }
 }
