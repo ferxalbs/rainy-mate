@@ -833,6 +833,7 @@ mod tests {
     use crate::ai::AIProviderManager;
     use crate::services::workspace::WorkspaceManager;
     use crate::services::{BrowserController, ManagedResearchService};
+    use serial_test::serial;
 
     #[derive(Debug)]
     struct MockStep {
@@ -863,6 +864,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_workflow_execution() {
         use crate::ai::specs::skills::AgentSkills;
         use crate::ai::specs::soul::AgentSoul;

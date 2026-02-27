@@ -532,6 +532,7 @@ fn extract_tag_value(tags: &[String], key: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::services::memory::MemoryManager;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     fn create_test_manager() -> MemoryManagerState {
@@ -548,6 +549,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_store_memory_command() {
         let manager = create_test_manager();
 
@@ -563,6 +565,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_search_memory_command() {
         let manager = create_test_manager();
 
@@ -579,6 +582,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_get_recent_memory_command() {
         let manager = create_test_manager();
 
@@ -597,6 +601,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_clear_short_term_memory_command() {
         let manager = create_test_manager();
 
@@ -617,6 +622,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_get_memory_stats_command() {
         let manager = create_test_manager();
 
@@ -627,6 +633,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_get_short_term_memory_size_command() {
         let manager = create_test_manager();
 
@@ -647,6 +654,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_is_short_term_memory_empty_command() {
         let manager = create_test_manager();
 
