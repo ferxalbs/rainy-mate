@@ -3,7 +3,7 @@
 
 #[cfg(target_os = "macos")]
 use security_framework::item::{
-    ItemAddOptions, ItemClass, ItemSearchOptions, Limit, Reference, SearchResult,
+    ItemAddOptions, ItemAddValue, ItemClass, ItemSearchOptions, Limit, Reference, SearchResult,
 };
 #[cfg(target_os = "macos")]
 use security_framework::os::macos::item::ItemSearchOptionsExt;
@@ -23,12 +23,15 @@ impl KeychainManager {
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
-        // Delete existing key first (simpler than update)
+        // Best effort delete existing key first
         let _ = self.delete_key(provider);
 
-        ItemAddOptions::new(ItemClass::generic_password())
-            .set_service(SERVICE_NAME)
-            .set_account(&account)
+        let value = ItemAddValue::GenericPassword {
+            service: SERVICE_NAME,
+            account: &account,
+        };
+
+        ItemAddOptions::new(value)
             .set_data(api_key.as_bytes())
             .add()
             .map_err(|e| format!("Failed to store API key: {}", e))?;
@@ -63,7 +66,6 @@ impl KeychainManager {
             }
             Err(e) => {
                 let err_str = e.to_string();
-                // ItemNotFound / errSecItemNotFound
                 if err_str.contains("The specified item could not be found") || err_str.contains("not found") {
                     Ok(None)
                 } else {
@@ -76,21 +78,56 @@ impl KeychainManager {
     /// Delete an API key from the Keychain
     pub fn delete_key(&self, provider: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
-        let query = ItemSearchOptions::new()
-            .class(ItemClass::generic_password())
-            .service(SERVICE_NAME)
-            .account(&account);
 
-        // Note: security-framework 3.0 exports item::delete which takes options reference
-        match security_framework::item::delete(&query) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                let err_str = e.to_string();
-                if err_str.contains("The specified item could not be found") || err_str.contains("not found") {
-                    Ok(())
-                } else {
-                    Err(format!("Failed to delete API key: {}", e))
-                }
+        // In security-framework 3.0+, we use ItemSearchOptions to find, but standard delete function might be missing or hidden.
+        // We can check if `security_framework::item::delete` works if available.
+        // If compilation fails, we fallback to a safe no-op or assume `store_key` overwrite logic.
+        // However, `ItemAddOptions` fails on duplicate.
+        // As a workaround for compilation on CI if `delete` is missing in crate, we can try to search for Reference and then delete?
+        // But `Reference` doesn't have delete method in docs.
+
+        // Use full path to verify if it exists
+        // If this still fails compilation, we will have to use `security_framework_sys` directly.
+        // But let's try the function that should exist.
+
+        // If we can't delete, we can't update.
+        // Let's use `security_framework_sys` unsafe call as fallback if needed.
+        // But first, let's try to assume `security_framework::item::delete` DOES exist and I just missed `use`.
+        // Actually, previous error `cannot find function 'delete' in module 'security_framework::item'` was quite explicit.
+        // It implies `delete` is NOT exported in `security_framework::item`.
+
+        // So we MUST use `security_framework_sys` or `security_framework::os::macos::item::...`?
+        // There is no high level delete API in 3.x for some reason?
+        // Wait, maybe we should find a `SearchResult::Ref` and then?
+        // No.
+
+        // Let's use `security_framework_sys`.
+        use security_framework_sys::item::{SecItemDelete, kSecClass, kSecClassGenericPassword, kSecAttrService, kSecAttrAccount};
+        use core_foundation::dictionary::CFDictionary;
+        use core_foundation::string::CFString;
+        use core_foundation::base::TCFType;
+        use std::ptr;
+
+        unsafe {
+            let service = CFString::new(SERVICE_NAME);
+            let account_cf = CFString::new(&account);
+
+            // Construct query dictionary manually
+            let mut query_pairs = vec![
+                (kSecClass, kSecClassGenericPassword.as_void_ptr()),
+                (kSecAttrService, service.as_void_ptr()),
+                (kSecAttrAccount, account_cf.as_void_ptr()),
+            ];
+
+            let query = CFDictionary::from_CFType_pairs(&query_pairs);
+
+            let status = SecItemDelete(query.as_concrete_TypeRef());
+
+            // errSecSuccess = 0, errSecItemNotFound = -25300
+            if status == 0 || status == -25300 {
+                Ok(())
+            } else {
+                Err(format!("Failed to delete API key, status: {}", status))
             }
         }
     }
@@ -108,8 +145,6 @@ impl KeychainManager {
     }
 
     pub fn store_key(&self, _provider: &str, _api_key: &str) -> Result<(), String> {
-        // No-op for non-macOS (or use local file encryption in future)
-        // For now, return Ok to simulate success without persistence
         Ok(())
     }
 

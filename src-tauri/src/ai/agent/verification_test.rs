@@ -6,7 +6,6 @@ mod tests {
     use crate::ai::specs::manifest::AgentSpec;
     use crate::ai::specs::skills::AgentSkills;
     use crate::ai::specs::soul::AgentSoul;
-    use crate::db::Database;
     use crate::services::SkillExecutor;
     use serial_test::serial;
     use std::sync::Arc;
@@ -15,22 +14,31 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_persisted_agent_execution() {
-        // 1. Setup DB directly (Database struct needs AppHandle)
-        let db_url = "sqlite::memory:";
-        // Connect returns Pool<Sqlite>
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect(db_url)
+        // 1. Setup DB directly (using libsql in-memory)
+        let db = libsql::Builder::new_local(":memory:")
+            .build()
             .await
-            .expect("Failed to connect to memory db");
+            .expect("Failed to open memory db");
+        let conn = db.connect().expect("Failed to connect to db");
 
-        sqlx::migrate!("./migrations")
-            .run(&pool)
-            .await
-            .expect("Failed to run migrations");
+        // Manually create schema since we don't have migrations in this test context
+        conn.execute(
+            "CREATE TABLE agents (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                soul TEXT,
+                created_at INTEGER NOT NULL,
+                spec_json TEXT,
+                version TEXT
+            )",
+            (),
+        )
+        .await
+        .expect("Failed to create agents table");
 
-        // AgentManager::new takes Pool<Sqlite>, not Arc<Pool>
-        let agent_manager = Arc::new(AgentManager::new(pool));
+        // AgentManager::new takes Connection
+        let agent_manager = Arc::new(AgentManager::new(conn));
 
         // 2. Create AgentSpec V3
         let spec = AgentSpec {
@@ -69,16 +77,6 @@ mod tests {
         let memory =
             Arc::new(crate::ai::agent::memory::AgentMemory::new("test-ws", temp_dir).await);
         let router = Arc::new(RwLock::new(IntelligentRouter::default()));
-        // Mock skills for now or use basic one
-        // We need a proper SkillExecutor construction or mock.
-        // For this test, we might need to construct a minimal one or mock the trait if possible?
-        // SkillExecutor is a struct, not a trait. Let's try to construct it with minimal dependencies.
-        // It requires WorkspaceManager which might be heavy.
-        // Let's assume for this integration test we can't easily spin up the full SkillExecutor without mocking.
-        // BUT, verification_test.rs is in the crate, so we can access internals.
-
-        // Let's skip full execution if SkillExecutor is too hard to mock,
-        // but getting here proves Persistence + Runtime loading works.
 
         // Verify Runtime Construction
         let options = RuntimeOptions {
