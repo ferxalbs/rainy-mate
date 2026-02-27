@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Check,
   AlertCircle,
+  CpuIcon,
 } from "lucide-react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -358,6 +359,12 @@ export function AppSidebar({
               icon={Library}
               colorClass="text-amber-500"
             />
+            <NavItem
+              id="wasm-skills"
+              label="Wasm Skills"
+              icon={CpuIcon}
+              colorClass="text-cyan-500"
+            />
           </div>
         </div>
 
@@ -504,4 +511,3 @@ export function AppSidebar({
     </>
   );
 }
-

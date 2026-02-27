@@ -6,6 +6,7 @@ import { AgentChatPanel } from "./components/agent-chat/AgentChatPanel";
 import { NeuralPanel, AirlockEvents } from "./components/neural";
 import { AgentBuilder } from "./components/agents/builder/AgentBuilder";
 import { AgentStorePage } from "./components/agents/store/AgentStorePage";
+import { WasmSkillsPage } from "./components/wasm-skills/WasmSkillsPage";
 import { Button, Card } from "@heroui/react";
 import { Toaster } from "sonner";
 import { AlertCircle, FolderPlus } from "lucide-react";
@@ -186,6 +187,13 @@ function App() {
                 onCreateAgent={() => handleOpenAgentBuilder()}
                 onEditInBuilder={(spec) => handleOpenAgentBuilder(spec)}
               />
+            </div>
+          )}
+
+          {/* Wasm Skills Sandbox */}
+          {activeSection === "wasm-skills" && (
+            <div className="flex-1 h-full min-h-0 overflow-hidden">
+              <WasmSkillsPage />
             </div>
           )}
 
