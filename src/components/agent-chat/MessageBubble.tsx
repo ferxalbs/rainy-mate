@@ -40,7 +40,7 @@ interface MessageBubbleProps {
   workspaceId?: string;
 }
 
-export function MessageBubble({
+export const MessageBubble = React.memo(function MessageBubble({
   message,
   onExecute,
   onExecuteToolCalls,
@@ -208,7 +208,8 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});
+
 
 function PlanCard({
   plan,
