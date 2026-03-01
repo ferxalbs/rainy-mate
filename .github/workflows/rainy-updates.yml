@@ -1,0 +1,37 @@
+name: Rainy Updates
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run dependency check
+        run: |
+          npx @rainy-updates/cli ci \
+            --workspace \
+            --mode minimal \
+            --ci \
+            --stream \
+            --registry-timeout-ms 12000 \
+            --registry-retries 4 \
+            --format table
