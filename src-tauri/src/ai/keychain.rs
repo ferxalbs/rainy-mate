@@ -1,10 +1,13 @@
-// Rainy Cowork - macOS Keychain Integration
-// Secure storage for API keys using security-framework
+// Rainy Cowork - Keychain Integration
+// Secure storage for API keys using security-framework on macOS
+// Fallback stub for other platforms
 
+#[cfg(target_os = "macos")]
 use security_framework::passwords::{
     delete_generic_password, get_generic_password, set_generic_password,
 };
 
+#[allow(dead_code)]
 const SERVICE_NAME: &str = "com.enosislabs.rainycowork";
 
 /// Manager for secure API key storage via macOS Keychain
@@ -16,6 +19,7 @@ impl KeychainManager {
     }
 
     /// Store an API key in the Keychain
+    #[cfg(target_os = "macos")]
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
@@ -26,7 +30,14 @@ impl KeychainManager {
             .map_err(|e| format!("Failed to store API key: {}", e))
     }
 
+    #[cfg(not(target_os = "macos"))]
+    pub fn store_key(&self, _provider: &str, _api_key: &str) -> Result<(), String> {
+        // Stub for non-macOS platforms
+        Err("Keychain storage is only supported on macOS".to_string())
+    }
+
     /// Retrieve an API key from the Keychain
+    #[cfg(target_os = "macos")]
     pub fn get_key(&self, provider: &str) -> Result<Option<String>, String> {
         let account = format!("api_key_{}", provider);
 
@@ -51,7 +62,14 @@ impl KeychainManager {
         }
     }
 
+    #[cfg(not(target_os = "macos"))]
+    pub fn get_key(&self, _provider: &str) -> Result<Option<String>, String> {
+        // Stub for non-macOS platforms
+        Ok(None)
+    }
+
     /// Delete an API key from the Keychain
+    #[cfg(target_os = "macos")]
     pub fn delete_key(&self, provider: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
@@ -72,6 +90,12 @@ impl KeychainManager {
         }
     }
 
+    #[cfg(not(target_os = "macos"))]
+    pub fn delete_key(&self, _provider: &str) -> Result<(), String> {
+        // Stub for non-macOS platforms
+        Ok(())
+    }
+
     /// Check if an API key exists for a provider
     pub fn has_key(&self, provider: &str) -> bool {
         self.get_key(provider).map(|k| k.is_some()).unwrap_or(false)
@@ -85,6 +109,7 @@ impl Default for KeychainManager {
 }
 
 #[cfg(test)]
+#[cfg(target_os = "macos")]
 mod tests {
     use super::*;
 
