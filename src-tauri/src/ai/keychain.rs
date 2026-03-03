@@ -1,10 +1,12 @@
 // Rainy Cowork - macOS Keychain Integration
 // Secure storage for API keys using security-framework
 
+#[cfg(target_os = "macos")]
 use security_framework::passwords::{
     delete_generic_password, get_generic_password, set_generic_password,
 };
 
+#[cfg(target_os = "macos")]
 const SERVICE_NAME: &str = "com.enosislabs.rainycowork";
 
 /// Manager for secure API key storage via macOS Keychain
@@ -16,6 +18,7 @@ impl KeychainManager {
     }
 
     /// Store an API key in the Keychain
+    #[cfg(target_os = "macos")]
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
@@ -26,7 +29,13 @@ impl KeychainManager {
             .map_err(|e| format!("Failed to store API key: {}", e))
     }
 
+    #[cfg(not(target_os = "macos"))]
+    pub fn store_key(&self, _provider: &str, _api_key: &str) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Retrieve an API key from the Keychain
+    #[cfg(target_os = "macos")]
     pub fn get_key(&self, provider: &str) -> Result<Option<String>, String> {
         let account = format!("api_key_{}", provider);
 
@@ -51,7 +60,13 @@ impl KeychainManager {
         }
     }
 
+    #[cfg(not(target_os = "macos"))]
+    pub fn get_key(&self, _provider: &str) -> Result<Option<String>, String> {
+        Ok(None)
+    }
+
     /// Delete an API key from the Keychain
+    #[cfg(target_os = "macos")]
     pub fn delete_key(&self, provider: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
@@ -70,6 +85,11 @@ impl KeychainManager {
                 }
             }
         }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn delete_key(&self, _provider: &str) -> Result<(), String> {
+        Ok(())
     }
 
     /// Check if an API key exists for a provider
