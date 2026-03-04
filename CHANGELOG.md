@@ -1,4 +1,4 @@
-# Changelog
+# CHANGELOG
 
 All notable changes to Rainy Cowork will be documented in this file.
 
@@ -52,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pnpm exec tsc --noEmit` — passes
 - `pnpm run build` — passes
 - `cd src-tauri && cargo check -q` — passes
-- `cd src-tauri && cargo test -q` — passes (111/111)
+- `cd src-tauri && cargo test -q` — passes (116/116)
 - `cd rainy-atm && bun test` — passes (43/43)
 - `cd rainy-atm && bun run build` — passes
 
