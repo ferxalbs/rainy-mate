@@ -11,7 +11,7 @@ use super::runtime_registry::RuntimeRegistry;
 use super::specialist::SpecialistAgent;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::router::IntelligentRouter;
-use crate::ai::specs::manifest::AgentSpec;
+use crate::ai::specs::manifest::{AgentSpec, RuntimeConfig};
 use crate::services::{airlock::AirlockService, SkillExecutor};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
@@ -64,11 +64,15 @@ impl SupervisorAgent {
     }
 
     fn build_plan(&self, input: &str) -> SupervisorPlan {
+        Self::build_plan_for_runtime(&self.spec.runtime, input)
+    }
+
+    fn build_plan_for_runtime(runtime: &RuntimeConfig, input: &str) -> SupervisorPlan {
         let mut steps = vec!["Assess the request and allocate specialist roles".to_string()];
-        let mut assignments = Vec::new();
+        let mut base_assignments = Vec::new();
 
         if Self::should_use_research(input) || !Self::should_use_executor(input) {
-            assignments.push(SpecialistAssignment {
+            base_assignments.push(SpecialistAssignment {
                 agent_id: "research-1".to_string(),
                 role: SpecialistRole::Research,
                 title: "Gather supporting context".to_string(),
@@ -79,7 +83,7 @@ impl SupervisorAgent {
         }
 
         if Self::should_use_executor(input) {
-            assignments.push(SpecialistAssignment {
+            base_assignments.push(SpecialistAssignment {
                 agent_id: "executor-1".to_string(),
                 role: SpecialistRole::Executor,
                 title: "Execute the requested changes".to_string(),
@@ -89,11 +93,48 @@ impl SupervisorAgent {
             steps.push("Executor Agent performs the requested workspace actions".to_string());
         }
 
-        let verification_required = self.spec.runtime.verification_required
+        let has_executor = base_assignments
+            .iter()
+            .any(|assignment| assignment.role == SpecialistRole::Executor);
+        let max_specialists = runtime.max_specialists.clamp(1, 3) as usize;
+        let verification_required = runtime.verification_required
+            && has_executor
+            && max_specialists >= 2;
+
+        let max_non_verifier = if verification_required {
+            max_specialists.saturating_sub(1).max(1)
+        } else {
+            max_specialists
+        };
+
+        let mut assignments: Vec<SpecialistAssignment> = if base_assignments.len() <= max_non_verifier {
+            base_assignments
+        } else {
+            let mut prioritized = Vec::new();
+            if let Some(exec) = base_assignments
+                .iter()
+                .find(|assignment| assignment.role == SpecialistRole::Executor)
+                .cloned()
+            {
+                prioritized.push(exec);
+            }
+            if prioritized.len() < max_non_verifier {
+                if let Some(research) = base_assignments
+                    .iter()
+                    .find(|assignment| assignment.role == SpecialistRole::Research)
+                    .cloned()
+                {
+                    prioritized.push(research);
+                }
+            }
+            prioritized
+        };
+
+        if verification_required
             && assignments
                 .iter()
-                .any(|assignment| assignment.role == SpecialistRole::Executor);
-        if verification_required {
+                .any(|assignment| assignment.role == SpecialistRole::Executor)
+        {
             assignments.push(SpecialistAssignment {
                 agent_id: "verifier-1".to_string(),
                 role: SpecialistRole::Verifier,
@@ -112,11 +153,7 @@ impl SupervisorAgent {
         }
     }
 
-    fn synthesize_final_response(
-        &self,
-        plan: &SupervisorPlan,
-        outcomes: &[SpecialistOutcome],
-    ) -> String {
+    fn synthesize_final_response(plan: &SupervisorPlan, outcomes: &[SpecialistOutcome]) -> String {
         let mut sections = vec![format!("Supervisor completed {} specialist lane(s).", plan.assignments.len())];
 
         for outcome in outcomes {
@@ -379,7 +416,7 @@ impl SupervisorAgent {
         drop(tx);
         let _ = emitter.await;
 
-        let summary = self.synthesize_final_response(&plan, &outcomes);
+        let summary = Self::synthesize_final_response(&plan, &outcomes);
         on_event(AgentEvent::SupervisorSummary(SupervisorSummaryPayload {
             run_id: run_id.clone(),
             summary: summary.clone(),
@@ -388,5 +425,36 @@ impl SupervisorAgent {
             registry.finish_supervisor_run(&run_id, "completed").await;
         }
         Ok(summary)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ai::specs::manifest::{RuntimeConfig, RuntimeMode};
+
+    fn test_runtime(max_specialists: u8, verification_required: bool) -> RuntimeConfig {
+        RuntimeConfig {
+            mode: RuntimeMode::Supervisor,
+            max_specialists,
+            verification_required,
+        }
+    }
+
+    #[test]
+    fn build_plan_prioritizes_executor_when_limited() {
+        let runtime = test_runtime(2, true);
+        let plan = SupervisorAgent::build_plan_for_runtime(&runtime, "research and implement feature x");
+        assert!(plan.assignments.iter().any(|a| a.role == SpecialistRole::Executor));
+        assert!(plan.assignments.iter().any(|a| a.role == SpecialistRole::Verifier));
+        assert_eq!(plan.assignments.len(), 2);
+    }
+
+    #[test]
+    fn build_plan_can_disable_verifier_when_capacity_one() {
+        let runtime = test_runtime(1, true);
+        let plan = SupervisorAgent::build_plan_for_runtime(&runtime, "implement feature y");
+        assert!(!plan.assignments.iter().any(|a| a.role == SpecialistRole::Verifier));
+        assert!(!plan.verification_required);
     }
 }

@@ -8,6 +8,7 @@ export interface AgentSpec {
   skills: AgentSkills;
   airlock: AirlockConfig;
   memory_config: MemoryConfig;
+  runtime?: RuntimeConfig;
 }
 
 export interface AgentSoul {
@@ -65,4 +66,10 @@ export enum Permission {
   Write = "Write",
   Execute = "Execute",
   Network = "Network",
+}
+
+export interface RuntimeConfig {
+  mode?: "single" | "supervisor";
+  max_specialists?: number;
+  verification_required?: boolean;
 }

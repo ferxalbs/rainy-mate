@@ -132,3 +132,31 @@ impl RuntimeRegistry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ai::agent::protocol::{SpecialistRole, SpecialistStatus};
+
+    #[tokio::test]
+    async fn snapshot_reflects_active_supervisor_and_tool_usage() {
+        let registry = RuntimeRegistry::new();
+        registry
+            .start_supervisor_run("run-1", &[SpecialistRole::Research, SpecialistRole::Executor])
+            .await;
+        registry
+            .update_specialist_status(
+                "run-1",
+                "research-1",
+                &SpecialistRole::Research,
+                &SpecialistStatus::Running,
+            )
+            .await;
+        registry.record_tool_use(&SpecialistRole::Research).await;
+
+        let snapshot = registry.snapshot().await;
+        assert_eq!(snapshot.active_supervisor_runs, 1);
+        assert_eq!(snapshot.active_specialists, 2);
+        assert_eq!(snapshot.tool_usage_by_role.research, 1);
+    }
+}

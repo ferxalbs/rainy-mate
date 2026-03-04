@@ -223,3 +223,26 @@ impl SpecialistAgent {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verifier_tools_are_read_only() {
+        let tools = SpecialistAgent::allowed_tools(&SpecialistRole::Verifier);
+        assert!(!tools.contains(&"write_file"));
+        assert!(!tools.contains(&"append_file"));
+        assert!(!tools.contains(&"delete_file"));
+        assert!(!tools.contains(&"execute_command"));
+    }
+
+    #[test]
+    fn executor_tools_include_mutating_actions() {
+        let tools = SpecialistAgent::allowed_tools(&SpecialistRole::Executor);
+        assert!(tools.contains(&"write_file"));
+        assert!(tools.contains(&"append_file"));
+        assert!(tools.contains(&"delete_file"));
+        assert!(tools.contains(&"execute_command"));
+    }
+}
