@@ -1,15 +1,18 @@
 // Rainy Cowork - macOS Keychain Integration
-// Secure storage for API keys using security-framework
+// Secure storage for API keys using security-framework on macOS, and an explicit error on other platforms
 
+#[cfg(all(target_os = "macos", not(test)))]
 use security_framework::passwords::{
     delete_generic_password, get_generic_password, set_generic_password,
 };
+
 #[cfg(test)]
 use std::collections::HashMap;
 #[cfg(test)]
 use std::sync::{Mutex, OnceLock};
 
 #[cfg(not(test))]
+#[allow(dead_code)]
 const SERVICE_NAME: &str = "com.enosislabs.rainycowork";
 
 #[cfg(test)]
@@ -18,7 +21,7 @@ fn test_store() -> &'static Mutex<HashMap<String, String>> {
     STORE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Manager for secure API key storage via macOS Keychain
+/// Manager for secure API key storage via macOS Keychain or OS keyring
 pub struct KeychainManager;
 
 impl KeychainManager {
@@ -26,7 +29,8 @@ impl KeychainManager {
         Self
     }
 
-    /// Store an API key in the Keychain
+    /// Store an API key in the Keychain/Keyring
+    #[allow(unused_variables)]
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
@@ -39,7 +43,7 @@ impl KeychainManager {
             return Ok(());
         }
 
-        #[cfg(not(test))]
+        #[cfg(all(target_os = "macos", not(test)))]
         {
             // Try to delete existing key first (in case of update)
             let _ = delete_generic_password(SERVICE_NAME, &account);
@@ -47,9 +51,15 @@ impl KeychainManager {
             set_generic_password(SERVICE_NAME, &account, api_key.as_bytes())
                 .map_err(|e| format!("Failed to store API key: {}", e))
         }
+
+        #[cfg(all(not(target_os = "macos"), not(test)))]
+        {
+            Err("Secure keychain storage is only supported on macOS currently.".to_string())
+        }
     }
 
-    /// Retrieve an API key from the Keychain
+    /// Retrieve an API key from the Keychain/Keyring
+    #[allow(unused_variables)]
     pub fn get_key(&self, provider: &str) -> Result<Option<String>, String> {
         let account = format!("api_key_{}", provider);
 
@@ -61,7 +71,7 @@ impl KeychainManager {
             return Ok(store.get(&account).cloned());
         }
 
-        #[cfg(not(test))]
+        #[cfg(all(target_os = "macos", not(test)))]
         {
             match get_generic_password(SERVICE_NAME, &account) {
                 Ok(bytes) => {
@@ -83,9 +93,15 @@ impl KeychainManager {
                 }
             }
         }
+
+        #[cfg(all(not(target_os = "macos"), not(test)))]
+        {
+            Ok(None)
+        }
     }
 
-    /// Delete an API key from the Keychain
+    /// Delete an API key from the Keychain/Keyring
+    #[allow(unused_variables)]
     pub fn delete_key(&self, provider: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
 
@@ -98,7 +114,7 @@ impl KeychainManager {
             return Ok(());
         }
 
-        #[cfg(not(test))]
+        #[cfg(all(target_os = "macos", not(test)))]
         {
             match delete_generic_password(SERVICE_NAME, &account) {
                 Ok(_) => Ok(()),
@@ -115,6 +131,11 @@ impl KeychainManager {
                     }
                 }
             }
+        }
+
+        #[cfg(all(not(target_os = "macos"), not(test)))]
+        {
+            Ok(())
         }
     }
 
