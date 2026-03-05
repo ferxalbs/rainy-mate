@@ -257,3 +257,9 @@ pub fn all_catalog_models() -> Vec<CatalogModel> {
         },
     ]
 }
+
+pub fn find_catalog_model(slug: &str, provider: ModelProvider) -> Option<CatalogModel> {
+    all_catalog_models()
+        .into_iter()
+        .find(|entry| entry.slug == slug && entry.provider == provider)
+}

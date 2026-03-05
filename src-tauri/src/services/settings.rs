@@ -2,8 +2,9 @@
 // Manages user preferences including AI model selection
 
 use crate::ai::model_catalog::{
-    all_catalog_models, ensure_supported_model_slug, ModelProvider,
+    all_catalog_models, ensure_supported_model_slug, find_catalog_model, ModelProvider,
 };
+use crate::ai::provider::AIProviderManager;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -215,9 +216,35 @@ impl SettingsManager {
         self.save_to_disk()
     }
 
+    fn dynamic_model_option(slug: &str) -> ModelOption {
+        if let Some(entry) = find_catalog_model(slug, ModelProvider::RainyApi) {
+            return ModelOption {
+                id: entry.slug.to_string(),
+                name: entry.name.to_string(),
+                description: entry.description.to_string(),
+                thinking_level: entry.thinking_level.unwrap_or("n/a").to_string(),
+                is_premium: true,
+                is_available: true,
+                provider: "Rainy API".to_string(),
+            };
+        }
+
+        ModelOption {
+            id: slug.to_string(),
+            name: slug.to_string(),
+            description: "Discovered dynamically from Rainy API v3.".to_string(),
+            thinking_level: "n/a".to_string(),
+            is_premium: true,
+            is_available: true,
+            provider: "Rainy API".to_string(),
+        }
+    }
+
     /// Get available models
-    pub fn get_available_models() -> Vec<ModelOption> {
-        all_catalog_models()
+    pub async fn get_available_models(
+        provider_manager: Option<&AIProviderManager>,
+    ) -> Vec<ModelOption> {
+        let mut models = all_catalog_models()
             .into_iter()
             .filter(|entry| matches!(entry.provider, ModelProvider::RainyApi))
             .map(|entry| ModelOption {
@@ -229,7 +256,20 @@ impl SettingsManager {
                 is_available: true,
                 provider: "Rainy API".to_string(),
             })
-            .collect()
+            .collect::<Vec<_>>();
+
+        if let Some(provider_manager) = provider_manager {
+            if let Ok(dynamic_models) = provider_manager.get_models("rainy_api").await {
+                for slug in dynamic_models {
+                    if !models.iter().any(|model| model.id == slug) {
+                        models.push(Self::dynamic_model_option(&slug));
+                    }
+                }
+            }
+        }
+
+        models.sort_by(|a, b| a.name.cmp(&b.name));
+        models
     }
 }
 

@@ -143,19 +143,27 @@ impl AIProviderManager {
     pub async fn get_models(&self, provider: &str) -> Result<Vec<String>, String> {
         match provider {
             "rainy_api" => {
-                // Get models from API key if available, otherwise return default SDK models
-                // Note: OpenAI and Anthropic models are not currently available via Rainy API
                 if let Ok(api_key) = self.keychain.get_key("rainy_api") {
                     if let Some(key) = api_key {
                         if let Ok(client) = RainyClient::with_api_key(&key) {
-                            // SDK call may fail (e.g., API format mismatch) - fall through to hardcoded list
-                            if let Ok(available) = client.list_available_models().await {
-                                // Flatten all models from all providers
-                                let mut all_models: Vec<String> = Vec::new();
-                                for (_provider_name, models) in available.providers {
-                                    all_models.extend(models);
+                            if let Ok(catalog) = client.get_models_catalog().await {
+                                let mut models: Vec<String> =
+                                    catalog.into_iter().map(|item| item.id).collect();
+                                models.sort();
+                                models.dedup();
+                                if !models.is_empty() {
+                                    return Ok(models);
                                 }
+                            }
 
+                            if let Ok(available) = client.list_available_models().await {
+                                let mut all_models: Vec<String> = available
+                                    .providers
+                                    .into_values()
+                                    .flatten()
+                                    .collect();
+                                all_models.sort();
+                                all_models.dedup();
                                 if !all_models.is_empty() {
                                     return Ok(all_models);
                                 }
@@ -164,27 +172,24 @@ impl AIProviderManager {
                     }
                 }
 
-                // Fallback: Return models that are confirmed to exist in the SDK
-                // These are the actual models available via the Rainy API
                 Ok(vec![
-                    // Gemini 3 Series - Advanced reasoning
                     "gemini-3-pro-preview".to_string(),
                     "gemini-3-flash-preview".to_string(),
-                    "gemini-3-pro-image-preview".to_string(),
-                    // Gemini 2.5 Series - Stable production models
-                    "gemini-2.5-pro".to_string(),
-                    "gemini-3-flash-preview".to_string(),
                     "gemini-3.1-flash-lite-preview".to_string(),
-                    // Groq Models - High-speed inference
+                    "gemini-3-pro-image-preview".to_string(),
+                    "gemini-2.5-pro".to_string(),
+                    "gpt-4o".to_string(),
+                    "gpt-5".to_string(),
+                    "gpt-5-pro".to_string(),
+                    "claude-sonnet-4".to_string(),
+                    "claude-opus-4-1".to_string(),
                     "llama-3.1-8b-instant".to_string(),
                     "llama-3.3-70b-versatile".to_string(),
                     "moonshotai/kimi-k2-instruct-0905".to_string(),
-                    // Cerebras Models
                     "cerebras/llama3.1-8b".to_string(),
-                    // Enosis Labs Models
                     "astronomer-2-pro".to_string(),
                     "astronomer-2".to_string(),
-                    "astronomer-1-5".to_string(),
+                    "astronomer-1.5".to_string(),
                     "astronomer-1-max".to_string(),
                     "astronomer-1".to_string(),
                 ])

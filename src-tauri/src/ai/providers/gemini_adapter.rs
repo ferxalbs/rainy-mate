@@ -31,6 +31,8 @@ struct GeminiRequest {
     generation_config: Option<GeminiGenerationConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<GeminiTool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_config: Option<GeminiToolConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,6 +129,21 @@ struct GeminiGenerationConfig {
     max_output_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thinking_config: Option<GeminiThinkingConfig>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiToolConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    function_calling_config: Option<GeminiFunctionCallingConfig>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiFunctionCallingConfig {
+    mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    allowed_function_names: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -323,6 +340,51 @@ fn build_gemini_request_parts(
         };
 
     (system_instruction, contents, generation_config)
+}
+
+fn build_function_calling_config(
+    tools: Option<&[crate::ai::provider_types::Tool]>,
+    tool_choice: Option<&crate::ai::provider_types::ToolChoice>,
+) -> Option<GeminiFunctionCallingConfig> {
+    let has_tools = tools.map(|t| !t.is_empty()).unwrap_or(false);
+    if !has_tools {
+        return None;
+    }
+
+    match tool_choice {
+        Some(crate::ai::provider_types::ToolChoice::None) => Some(GeminiFunctionCallingConfig {
+            mode: "NONE".to_string(),
+            allowed_function_names: None,
+        }),
+        Some(crate::ai::provider_types::ToolChoice::Tool(tool)) => {
+            Some(GeminiFunctionCallingConfig {
+                mode: "ANY".to_string(),
+                allowed_function_names: Some(vec![tool.function.name.clone()]),
+            })
+        }
+        Some(crate::ai::provider_types::ToolChoice::Auto) => Some(GeminiFunctionCallingConfig {
+            // Agent runtime requires deterministic, tool-first behavior to avoid fabricated text.
+            mode: "ANY".to_string(),
+            allowed_function_names: None,
+        }),
+        None => Some(GeminiFunctionCallingConfig {
+            mode: "AUTO".to_string(),
+            allowed_function_names: None,
+        }),
+    }
+}
+
+fn build_tool_config(
+    tools: Option<&[crate::ai::provider_types::Tool]>,
+    tool_choice: Option<&crate::ai::provider_types::ToolChoice>,
+) -> Option<GeminiToolConfig> {
+    let function_calling_config = build_function_calling_config(tools, tool_choice);
+    if function_calling_config.is_none() {
+        return None;
+    }
+    Some(GeminiToolConfig {
+        function_calling_config,
+    })
 }
 
 fn normalize_gemini_type(value: &str) -> Option<&'static str> {
@@ -538,6 +600,7 @@ impl AIProvider for GeminiProviderAdapter {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| extract_thinking_level(&request.model));
+        let tool_config = build_tool_config(request.tools.as_deref(), request.tool_choice.as_ref());
 
         let (system_instruction, contents, generation_config) = build_gemini_request_parts(
             &request.messages,
@@ -556,6 +619,7 @@ impl AIProvider for GeminiProviderAdapter {
             system_instruction,
             generation_config,
             tools: gemini_tools,
+            tool_config,
         };
 
         let url = self.model_url(&request.model, "generateContent");
@@ -679,6 +743,7 @@ impl AIProvider for GeminiProviderAdapter {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| extract_thinking_level(&request.model));
+        let tool_config = build_tool_config(request.tools.as_deref(), request.tool_choice.as_ref());
 
         let (system_instruction, contents, generation_config) = build_gemini_request_parts(
             &request.messages,
@@ -697,6 +762,7 @@ impl AIProvider for GeminiProviderAdapter {
             system_instruction,
             generation_config,
             tools: gemini_tools,
+            tool_config,
         };
 
         let url = self.model_url(&request.model, "streamGenerateContent?alt=sse");

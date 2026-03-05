@@ -5677,7 +5677,7 @@ checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
 name = "rainy-cowork"
-version = "0.5.100"
+version = "0.5.102"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -5738,9 +5738,9 @@ dependencies = [
 
 [[package]]
 name = "rainy-sdk"
-version = "0.6.4"
+version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e35e76d7e220d7d1d401eb7fa27faf295d4c0d5ebddf49b4f37baf23b3fa4bb"
+checksum = "5edf6109ee8f2e3bcaee2bd6a14d959e8b86f7be2eae354bb62b0f66f6be4cbf"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

@@ -1,5 +1,6 @@
 use crate::ai::model_catalog::{
-    all_catalog_models, ensure_supported_model_slug, normalize_model_slug, CatalogModel,
+    all_catalog_models, ensure_supported_model_slug, find_catalog_model, normalize_model_slug,
+    CatalogModel,
     ModelProvider,
 };
 use crate::ai::mode_selector::{ModeSelector, TaskComplexity, UseCase};
@@ -72,10 +73,47 @@ fn to_unified_model(entry: &CatalogModel) -> UnifiedModel {
     }
 }
 
+fn slug_to_title(slug: &str) -> String {
+    slug.split(['/', '-', '.'])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn dynamic_rainy_model(slug: &str) -> UnifiedModel {
+    if let Some(entry) = find_catalog_model(slug, ModelProvider::RainyApi) {
+        return to_unified_model(&entry);
+    }
+
+    UnifiedModel {
+        id: format!("rainy:{slug}"),
+        name: slug_to_title(slug),
+        provider: "Rainy API".to_string(),
+        capabilities: ModelCapabilities {
+            chat: true,
+            streaming: true,
+            function_calling: true,
+            vision: false,
+            web_search: true,
+            max_context: 128_000,
+            max_output: 65_536,
+        },
+        enabled: true,
+        processing_mode: "rainy_api".to_string(),
+    }
+}
+
 #[tauri::command]
 pub async fn get_unified_models(
     app: AppHandle,
-    _provider_manager: tauri::State<'_, Arc<AIProviderManager>>,
+    provider_manager: tauri::State<'_, Arc<AIProviderManager>>,
 ) -> Result<Vec<UnifiedModel>, String> {
     use crate::ai::keychain::KeychainManager;
 
@@ -92,8 +130,20 @@ pub async fn get_unified_models(
         .map(|entry| to_unified_model(&entry))
         .collect();
 
+    if has_rainy_key {
+        if let Ok(dynamic_models) = provider_manager.get_models("rainy_api").await {
+            for slug in dynamic_models {
+                let candidate = dynamic_rainy_model(&slug);
+                if !models.iter().any(|existing| existing.id == candidate.id) {
+                    models.push(candidate);
+                }
+            }
+        }
+    }
+
     let preferences = load_user_preferences(&app).await;
     models.retain(|m| !preferences.disabled_models.contains(&m.id));
+    models.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(models)
 }

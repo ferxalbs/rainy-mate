@@ -2,6 +2,7 @@
 // Tauri commands for user settings and model selection
 
 use crate::services::settings::{ModelOption, SettingsManager, UserProfile, UserSettings};
+use crate::ai::provider::AIProviderManager;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -114,6 +115,7 @@ pub async fn set_embedder_model(
 /// Get available models based on user's plan
 #[tauri::command]
 pub async fn get_available_models(
+    provider_manager: State<'_, Arc<AIProviderManager>>,
 ) -> Result<Vec<ModelOption>, String> {
-    Ok(SettingsManager::get_available_models())
+    Ok(SettingsManager::get_available_models(Some(provider_manager.inner().as_ref())).await)
 }

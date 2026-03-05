@@ -1,7 +1,7 @@
 {
   "name": "rainy-mate",
   "private": true,
-  "version": "0.5.100",
+  "version": "0.5.102",
   "type": "module",
   "scripts": {
     "dev": "vite",

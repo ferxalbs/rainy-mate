@@ -5,6 +5,62 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.101] - 2026-03-05 - RAINY SDK MEGA UPDATE + BYOK ISSUE TRACKING
+
+## [0.5.102] - 2026-03-05 - RAINY SDK V3 CONNECTOR MIGRATION
+
+### Changed
+
+- Replaced the legacy Rainy direct HTTP bridge in `src-tauri/src/ai/providers/rainy_sdk.rs` with the native `rainy-sdk 0.6.11` OpenAI chat replay surface:
+  - `create_openai_chat_completion`
+  - `create_openai_chat_completion_stream`
+  - native replay of assistant `tool_calls`, `tool` messages, multimodal content, and provider metadata
+- Rainy provider capabilities now prefer live v3 catalog metadata from `RainyClient::get_models_catalog()` instead of a fixed hardcoded list.
+- `src-tauri/src/ai/provider.rs`
+  - Rainy model discovery now prefers live v3 catalog entries, then falls back to `list_available_models()`, then local static defaults.
+- `src-tauri/src/commands/unified_models.rs`
+  - unified model selector now augments static Rainy entries with dynamically discovered Rainy v3 models when an API key is present.
+- `src-tauri/src/services/settings.rs`
+  - settings model picker now augments static Rainy entries with dynamically discovered Rainy v3 models.
+- Updated `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock` to consume `rainy-sdk 0.6.11`.
+
+### Changed - Versioning
+
+- `package.json` -> `0.5.102`
+- `src-tauri/Cargo.toml` -> `0.5.102`
+- `src-tauri/tauri.conf.json` -> `0.5.102`
+
+### Validation
+
+- `cd src-tauri && cargo check -q` - passes
+- `pnpm exec tsc --noEmit` - passes
+- `cd src-tauri && cargo test -q agent::workflow::tests::test_workflow_execution --lib` - passes
+- `cd src-tauri && cargo test -q router::router::tests --lib` - passes
+
+### Changed
+
+- Updated `rainy-sdk` dependency to latest available stable release:
+  - `src-tauri/Cargo.toml`: `rainy-sdk = 0.6.10`
+  - `src-tauri/Cargo.lock`: resolved `rainy-sdk 0.6.10`
+
+### Added
+
+- Added formal BYOK instability issue record with repro, impact, mitigations, and next milestones:
+  - `ISSUES/BYOK_GEMINI_TOOLCALLING_2026-03-05.md`
+
+### Changed - Versioning
+
+- `package.json` -> `0.5.101`
+- `src-tauri/Cargo.toml` -> `0.5.101`
+- `src-tauri/tauri.conf.json` -> `0.5.101`
+
+### Validation
+
+- `cd src-tauri && cargo check -q` — passes
+- `pnpm exec tsc --noEmit` — passes
+- `cd src-tauri && cargo test -q agent::workflow::tests::test_workflow_execution --lib` — passes
+- `cd src-tauri && cargo test -q router::router::tests --lib` — passes
+
 ## [0.5.100] - 2026-03-05 - GEMINI TOOLCHAIN HARDENING
 
 ### Fixed
@@ -34,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - adjusted `functionResponse` history serialization to `role: user` for manual `generateContent` compatibility in BYOK flows.
   - wrapped function responses under `response.result` for Gemini manual orchestration compatibility.
   - preserved and rehydrated Gemini `thought_signature` metadata across assistant tool-call turns.
+  - added native `function_calling_config` mapping from internal `tool_choice` to Gemini modes (`ANY/AUTO/NONE`) for deterministic BYOK tool execution.
   - added warning logs for empty Gemini assistant turns with raw parts payload context.
   - improved schema sanitizer for Gemini OpenAPI subset compatibility.
   - tool schema conversion now fail-fast on invalid root schema shapes.
