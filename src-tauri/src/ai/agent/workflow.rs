@@ -491,13 +491,41 @@ impl WorkflowStep for ThinkStep {
                 .await
                 .map_err(|e| format!("ThinkStep Failed: {}", e))?;
 
-            let content = response.content.clone().unwrap_or_default();
+            let mut content = response.content.clone().unwrap_or_default();
+            let mut resolved_tool_calls = response.tool_calls.clone();
+
+            // Recovery guard: some providers may emit an empty assistant turn after tool execution.
+            // Force a final textual answer from accumulated tool results with tools disabled.
+            if content.trim().is_empty()
+                && resolved_tool_calls
+                    .as_ref()
+                    .map(|calls| calls.is_empty())
+                    .unwrap_or(true)
+            {
+                let mut recovery_request = request.clone();
+                recovery_request.stream = false;
+                recovery_request.tools = None;
+                recovery_request.tool_choice = None;
+                recovery_request.messages.push(crate::ai::provider_types::ChatMessage::user(
+                    "Using the previous tool results, provide the final answer in plain text. Do not call tools.",
+                ));
+
+                let recovery = router_guard
+                    .complete(recovery_request)
+                    .await
+                    .map_err(|e| format!("ThinkStep Recovery Failed: {}", e))?;
+
+                if let Some(recovered_text) = recovery.content {
+                    content = recovered_text;
+                }
+                resolved_tool_calls = recovery.tool_calls;
+            }
 
             if !content.is_empty() {
                 event_fn(AgentEvent::Thought(content.clone()));
             }
 
-            (content, response.tool_calls.clone())
+            (content, resolved_tool_calls)
         } else {
             // Streaming path: emit token-by-token chunks to the frontend
             let accumulated = Arc::new(std::sync::Mutex::new(String::new()));

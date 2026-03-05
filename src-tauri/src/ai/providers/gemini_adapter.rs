@@ -278,7 +278,7 @@ fn build_gemini_request_parts(
                 };
 
                 contents.push(GeminiContent {
-                    role: "tool".to_string(),
+                    role: "user".to_string(),
                     parts: vec![GeminiPart::FunctionResponse {
                         function_response: GeminiFunctionResponse {
                             name: tool_name,
@@ -592,6 +592,7 @@ impl AIProvider for GeminiProviderAdapter {
             .finish_reason
             .clone()
             .unwrap_or_else(|| "stop".to_string());
+        let raw_parts_debug = serde_json::to_string(&candidate.content.parts).ok();
 
         // Separate text parts from functionCall parts.
         let mut text_parts: Vec<String> = Vec::new();
@@ -628,6 +629,14 @@ impl AIProvider for GeminiProviderAdapter {
         }
 
         let text = text_parts.join("");
+        if text.trim().is_empty() && tool_calls.is_empty() {
+            tracing::warn!(
+                "[Gemini BYOK] Empty assistant response after completion. finish_reason={}, model={}, parts={}",
+                finish_reason,
+                request.model,
+                raw_parts_debug.unwrap_or_else(|| "<unavailable>".to_string())
+            );
+        }
 
         let (prompt_tokens, completion_tokens, total_tokens) =
             if let Some(usage) = gemini_response.usage_metadata {

@@ -28,11 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - final response selection now falls back to latest non-empty assistant output.
 - `src-tauri/src/ai/agent/workflow.rs`
   - ThinkStep streaming path is now gated by `allow_streaming` and remains non-streaming for tool turns.
+  - added post-tool empty-response recovery pass that forces a final plain-text answer with tools disabled.
 - `src-tauri/src/ai/providers/gemini_adapter.rs`
   - added Gemini-native `function_response` support.
-  - switched tool result role serialization to `tool` for `functionResponse` history turns.
+  - adjusted `functionResponse` history serialization to `role: user` for manual `generateContent` compatibility in BYOK flows.
   - wrapped function responses under `response.result` for Gemini manual orchestration compatibility.
   - preserved and rehydrated Gemini `thought_signature` metadata across assistant tool-call turns.
+  - added warning logs for empty Gemini assistant turns with raw parts payload context.
   - improved schema sanitizer for Gemini OpenAPI subset compatibility.
   - tool schema conversion now fail-fast on invalid root schema shapes.
 - `src-tauri/src/ai/model_catalog.rs`
