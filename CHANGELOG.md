@@ -24,12 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/components/agent-chat/MessageBubble.tsx`
   - shows `message.modelUsed.name` below non-user bubbles alongside timestamp.
 
-### Changed - Versioning
-
-- `package.json` -> `0.5.99`
-- `src-tauri/Cargo.toml` -> `0.5.99`
-- `src-tauri/tauri.conf.json` -> `0.5.99`
-
 ### Validation
 
 - `cd src-tauri && cargo check -q` — passes
@@ -80,12 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src-tauri/src/ai/router/router.rs`
   - provider pinning recognizes `gemini:` prefixed model IDs as Gemini BYOK candidates.
 
-### Changed - Versioning
-
-- `package.json` -> `0.5.97`
-- `src-tauri/Cargo.toml` -> `0.5.97`
-- `src-tauri/tauri.conf.json` -> `0.5.97`
-
 ### Validation
 
 - `cd src-tauri && cargo check -q` — passes
@@ -120,12 +108,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/src/ai/providers/gemini_adapter.rs`
   - `src-tauri/src/ai/gemini.rs`
   - `src-tauri/src/ai/providers/rainy_sdk.rs`
-
-### Changed - Versioning
-
-- `package.json` -> `0.5.96`
-- `src-tauri/Cargo.toml` -> `0.5.96`
-- `src-tauri/tauri.conf.json` -> `0.5.96`
 
 ### Validation
 

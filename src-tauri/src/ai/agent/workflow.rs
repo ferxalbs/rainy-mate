@@ -481,17 +481,22 @@ impl WorkflowStep for ThinkStep {
             let accumulated = Arc::new(std::sync::Mutex::new(String::new()));
             let acc_clone = Arc::clone(&accumulated);
             let event_fn: Arc<dyn Fn(AgentEvent) + Send + Sync> = Arc::from(on_event);
-            let event_clone = Arc::clone(&event_fn);
 
+            // Pre-stream: accumulate silently — do NOT emit StreamChunks here.
+            // Models like Gemini emit internal tool_code blocks as streaming text before
+            // issuing a structured tool call; surfacing those chunks produces visual noise.
+            // The real response (with tool_calls resolved) comes from the finalize call below.
             let callback: crate::ai::provider_types::StreamingCallback =
                 Arc::new(move |chunk: crate::ai::provider_types::StreamingChunk| {
                     if !chunk.content.is_empty() {
-                        event_clone(AgentEvent::StreamChunk(chunk.content.clone()));
                         if let Ok(mut guard) = acc_clone.lock() {
                             guard.push_str(&chunk.content);
                         }
                     }
                 });
+
+            // Emit a single status so the UI doesn't appear frozen while streaming.
+            event_fn(AgentEvent::Status("Preparing tool calls...".to_string()));
 
             let mut stream_request = request.clone();
             stream_request.stream = true;
