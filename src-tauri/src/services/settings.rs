@@ -2,9 +2,10 @@
 // Manages user preferences including AI model selection
 
 use crate::ai::model_catalog::{
-    all_catalog_models, ensure_supported_model_slug, find_catalog_model, ModelProvider,
+    ensure_supported_model_slug, find_catalog_model, ModelProvider,
 };
 use crate::ai::provider::AIProviderManager;
+use rainy_sdk::models::{CapabilityFlag, ModelCatalogItem};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -82,6 +83,10 @@ pub struct SettingsManager {
 }
 
 impl SettingsManager {
+    fn capability_flag_enabled(flag: Option<&CapabilityFlag>) -> bool {
+        matches!(flag, Some(CapabilityFlag::Bool(true)))
+    }
+
     pub fn new() -> Self {
         let settings_path = Self::get_settings_path();
         let settings = Self::load_from_disk(&settings_path);
@@ -240,14 +245,9 @@ impl SettingsManager {
         }
     }
 
-    /// Get available models
-    pub async fn get_available_models(
-        provider_manager: Option<&AIProviderManager>,
-    ) -> Vec<ModelOption> {
-        let mut models = all_catalog_models()
-            .into_iter()
-            .filter(|entry| matches!(entry.provider, ModelProvider::RainyApi))
-            .map(|entry| ModelOption {
+    fn dynamic_model_option_from_catalog(item: &ModelCatalogItem) -> ModelOption {
+        if let Some(entry) = find_catalog_model(&item.id, ModelProvider::RainyApi) {
+            return ModelOption {
                 id: entry.slug.to_string(),
                 name: entry.name.to_string(),
                 description: entry.description.to_string(),
@@ -255,20 +255,44 @@ impl SettingsManager {
                 is_premium: true,
                 is_available: true,
                 provider: "Rainy API".to_string(),
-            })
-            .collect::<Vec<_>>();
+            };
+        }
+
+        let caps = item.rainy_capabilities.as_ref();
+        let thinking_level =
+            if Self::capability_flag_enabled(caps.and_then(|caps| caps.reasoning.as_ref())) {
+                "dynamic"
+            } else {
+                "n/a"
+            };
+
+        ModelOption {
+            id: item.id.clone(),
+            name: item.name.clone().unwrap_or_else(|| item.id.clone()),
+            description: "Discovered dynamically from Rainy API v3.".to_string(),
+            thinking_level: thinking_level.to_string(),
+            is_premium: true,
+            is_available: true,
+            provider: "Rainy API".to_string(),
+        }
+    }
+
+    /// Get available models
+    pub async fn get_available_models(
+        provider_manager: Option<&AIProviderManager>,
+    ) -> Vec<ModelOption> {
+        let mut models = Vec::new();
 
         if let Some(provider_manager) = provider_manager {
-            if let Ok(dynamic_models) = provider_manager.get_models("rainy_api").await {
-                for slug in dynamic_models {
-                    if !models.iter().any(|model| model.id == slug) {
-                        models.push(Self::dynamic_model_option(&slug));
-                    }
-                }
+            if let Ok(catalog) = provider_manager.get_models_catalog("rainy_api").await {
+                models.extend(catalog.iter().map(Self::dynamic_model_option_from_catalog));
+            } else if let Ok(dynamic_models) = provider_manager.get_models("rainy_api").await {
+                models.extend(dynamic_models.iter().map(|slug| Self::dynamic_model_option(slug)));
             }
         }
 
         models.sort_by(|a, b| a.name.cmp(&b.name));
+        models.dedup_by(|a, b| a.id == b.id);
         models
     }
 }

@@ -18,10 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rainy provider capabilities now prefer live v3 catalog metadata from `RainyClient::get_models_catalog()` instead of a fixed hardcoded list.
 - `src-tauri/src/ai/provider.rs`
   - Rainy model discovery now prefers live v3 catalog entries, then falls back to `list_available_models()`, then local static defaults.
+  - added in-memory catalog cache with invalidation on Rainy API key changes to avoid hammering `/api/v1/models/catalog`.
 - `src-tauri/src/commands/unified_models.rs`
-  - unified model selector now augments static Rainy entries with dynamically discovered Rainy v3 models when an API key is present.
+  - unified model selector now augments static Rainy entries with dynamically discovered Rainy v3 catalog models when an API key is present.
 - `src-tauri/src/services/settings.rs`
-  - settings model picker now augments static Rainy entries with dynamically discovered Rainy v3 models.
+  - settings model picker now augments static Rainy entries with dynamically discovered Rainy v3 catalog models.
 - Updated `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock` to consume `rainy-sdk 0.6.11`.
 
 ### Changed - Versioning

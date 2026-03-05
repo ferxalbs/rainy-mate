@@ -88,6 +88,12 @@ export function UnifiedModelSelector({
     loadModels();
   }, []);
 
+  useEffect(() => {
+    if (isPopoverOpen) {
+      loadModels();
+    }
+  }, [isPopoverOpen]);
+
   const loadModels = async () => {
     // setLoading(true); // Removed
     try {

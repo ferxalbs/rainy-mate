@@ -8,9 +8,10 @@ use crate::ai::{gemini::GeminiProvider, keychain::KeychainManager};
 use crate::models::{AIProviderConfig, ProviderType};
 use futures::StreamExt;
 use rainy_sdk::{
-    models::{ThinkingConfig, ThinkingLevel},
-    ChatCompletionRequest, ChatMessage, RainyClient,
+    models::{ModelCatalogItem, ThinkingConfig, ThinkingLevel},
+    ChatCompletionRequest, ChatMessage, RainyClient, DEFAULT_BASE_URL,
 };
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -36,6 +37,12 @@ struct PooledClient {
     created_at: Instant,
 }
 
+#[derive(Clone)]
+struct CachedModelCatalog {
+    models: Vec<ModelCatalogItem>,
+    fetched_at: Instant,
+}
+
 /// Manager for AI providers - uses rainy-sdk for paid plans, Gemini for free tier
 pub struct AIProviderManager {
     keychain: KeychainManager,
@@ -43,12 +50,30 @@ pub struct AIProviderManager {
 
     /// Connection pool for RainyClient instances
     client_pool: Arc<RwLock<HashMap<String, PooledClient>>>,
+    /// Cached Rainy model catalogs keyed by provider.
+    model_catalog_cache: Arc<RwLock<HashMap<String, CachedModelCatalog>>>,
     /// HTTP client with optimized settings
     #[allow(dead_code)]
     http_client: reqwest::Client,
 }
 
 impl AIProviderManager {
+    fn provider_aliases(provider: &str) -> &'static [&'static str] {
+        match provider {
+            "rainy_api" => &["rainy_api", "rainyapi", "cowork_api"],
+            "gemini" => &["gemini", "gemini_byok"],
+            _ => &[],
+        }
+    }
+
+    fn provider_env_keys(provider: &str) -> &'static [&'static str] {
+        match provider {
+            "rainy_api" => &["RAINY_API_KEY", "COWORK_API_KEY"],
+            "gemini" => &["GEMINI_API_KEY"],
+            _ => &[],
+        }
+    }
+
     pub fn new() -> Self {
         // Create optimized HTTP client with timeouts and connection pooling
         let http_client = reqwest::Client::builder()
@@ -66,9 +91,12 @@ impl AIProviderManager {
             keychain: KeychainManager::new(),
             gemini: GeminiProvider::new(),
             client_pool: Arc::new(RwLock::new(HashMap::new())),
+            model_catalog_cache: Arc::new(RwLock::new(HashMap::new())),
             http_client,
         }
     }
+
+    const MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
 
     /// Get or create a pooled RainyClient instance
     async fn get_or_create_client(
@@ -99,6 +127,170 @@ impl AIProviderManager {
         );
 
         Some(client)
+    }
+
+    async fn invalidate_model_cache(&self, provider_key: &str) {
+        let mut cache = self.model_catalog_cache.write().await;
+        cache.remove(provider_key);
+    }
+
+    async fn resolve_api_key(&self, provider: &str) -> Result<Option<String>, String> {
+        for alias in Self::provider_aliases(provider) {
+            if let Some(key) = self.keychain.get_key(alias)? {
+                return Ok(Some(key));
+            }
+        }
+
+        for env_key in Self::provider_env_keys(provider) {
+            if let Ok(value) = std::env::var(env_key) {
+                if !value.trim().is_empty() {
+                    return Ok(Some(value));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn rainy_base_url(&self) -> String {
+        std::env::var("RAINY_API_BASE_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| {
+                std::env::var("COWORK_API_BASE_URL")
+                    .ok()
+                    .filter(|value| !value.trim().is_empty())
+            })
+            .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
+    }
+
+    async fn fetch_public_rainy_model_catalog(&self) -> Result<Vec<ModelCatalogItem>, String> {
+        #[derive(Debug, Deserialize)]
+        struct ModelListData<T> {
+            data: Vec<T>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct Envelope<T> {
+            data: ModelListData<T>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct PublicModelItem {
+            id: String,
+            #[allow(dead_code)]
+            object: Option<String>,
+            #[allow(dead_code)]
+            created: Option<i64>,
+            #[allow(dead_code)]
+            owned_by: Option<String>,
+            #[allow(dead_code)]
+            root: Option<String>,
+            #[allow(dead_code)]
+            parent: Option<String>,
+        }
+
+        let base_url = self.rainy_base_url().trim_end_matches('/').to_string();
+        let catalog_url = format!("{base_url}/api/v1/models/catalog");
+        let public_models_url = format!("{base_url}/api/v1/models");
+
+        let catalog_attempt = self
+            .http_client
+            .get(&catalog_url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if catalog_attempt.status().is_success() {
+            let envelope = catalog_attempt
+                .json::<Envelope<ModelCatalogItem>>()
+                .await
+                .map_err(|e| e.to_string())?;
+            if !envelope.data.data.is_empty() {
+                return Ok(envelope.data.data);
+            }
+        } else {
+            tracing::warn!(
+                "[AIProviderManager] Public Rainy model catalog fetch failed: {}",
+                catalog_attempt.status()
+            );
+        }
+
+        let public_models_response = self
+            .http_client
+            .get(&public_models_url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !public_models_response.status().is_success() {
+            return Err(format!(
+                "Public Rainy model list fetch failed with status {}",
+                public_models_response.status()
+            ));
+        }
+
+        let envelope = public_models_response
+            .json::<Envelope<PublicModelItem>>()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(envelope
+            .data
+            .data
+            .into_iter()
+            .map(|item| ModelCatalogItem {
+                id: item.id,
+                ..Default::default()
+            })
+            .collect())
+    }
+
+    pub async fn get_models_catalog(&self, provider: &str) -> Result<Vec<ModelCatalogItem>, String> {
+        match provider {
+            "rainy_api" => {
+                {
+                    let cache = self.model_catalog_cache.read().await;
+                    if let Some(entry) = cache.get(provider) {
+                        if entry.fetched_at.elapsed() < Self::MODEL_CACHE_TTL {
+                            return Ok(entry.models.clone());
+                        }
+                    }
+                }
+
+                let models = match self.fetch_public_rainy_model_catalog().await {
+                    Ok(models) if !models.is_empty() => models,
+                    Ok(_) | Err(_) => {
+                        let api_key = self
+                            .resolve_api_key("rainy_api")
+                            .await?
+                            .ok_or_else(|| "No public Rainy model catalog and no Rainy API key found".to_string())?;
+
+                        let client = self
+                            .get_or_create_client("rainy_api", &api_key)
+                            .await
+                            .ok_or_else(|| "Failed to create Rainy API client".to_string())?;
+
+                        client
+                            .get_models_catalog()
+                            .await
+                            .map_err(|e| e.to_string())?
+                    }
+                };
+
+                let mut cache = self.model_catalog_cache.write().await;
+                cache.insert(
+                    provider.to_string(),
+                    CachedModelCatalog {
+                        models: models.clone(),
+                        fetched_at: Instant::now(),
+                    },
+                );
+
+                Ok(models)
+            }
+            _ => Err(AIError::ProviderNotAvailable(provider.to_string()).to_string()),
+        }
     }
 
     pub async fn list_providers(&self) -> Vec<AIProviderConfig> {
@@ -143,25 +335,21 @@ impl AIProviderManager {
     pub async fn get_models(&self, provider: &str) -> Result<Vec<String>, String> {
         match provider {
             "rainy_api" => {
+                if let Ok(catalog) = self.get_models_catalog("rainy_api").await {
+                    let mut models: Vec<String> = catalog.into_iter().map(|item| item.id).collect();
+                    models.sort();
+                    models.dedup();
+                    if !models.is_empty() {
+                        return Ok(models);
+                    }
+                }
+
                 if let Ok(api_key) = self.keychain.get_key("rainy_api") {
                     if let Some(key) = api_key {
                         if let Ok(client) = RainyClient::with_api_key(&key) {
-                            if let Ok(catalog) = client.get_models_catalog().await {
-                                let mut models: Vec<String> =
-                                    catalog.into_iter().map(|item| item.id).collect();
-                                models.sort();
-                                models.dedup();
-                                if !models.is_empty() {
-                                    return Ok(models);
-                                }
-                            }
-
                             if let Ok(available) = client.list_available_models().await {
-                                let mut all_models: Vec<String> = available
-                                    .providers
-                                    .into_values()
-                                    .flatten()
-                                    .collect();
+                                let mut all_models: Vec<String> =
+                                    available.providers.into_values().flatten().collect();
                                 all_models.sort();
                                 all_models.dedup();
                                 if !all_models.is_empty() {
@@ -172,27 +360,10 @@ impl AIProviderManager {
                     }
                 }
 
-                Ok(vec![
-                    "gemini-3-pro-preview".to_string(),
-                    "gemini-3-flash-preview".to_string(),
-                    "gemini-3.1-flash-lite-preview".to_string(),
-                    "gemini-3-pro-image-preview".to_string(),
-                    "gemini-2.5-pro".to_string(),
-                    "gpt-4o".to_string(),
-                    "gpt-5".to_string(),
-                    "gpt-5-pro".to_string(),
-                    "claude-sonnet-4".to_string(),
-                    "claude-opus-4-1".to_string(),
-                    "llama-3.1-8b-instant".to_string(),
-                    "llama-3.3-70b-versatile".to_string(),
-                    "moonshotai/kimi-k2-instruct-0905".to_string(),
-                    "cerebras/llama3.1-8b".to_string(),
-                    "astronomer-2-pro".to_string(),
-                    "astronomer-2".to_string(),
-                    "astronomer-1.5".to_string(),
-                    "astronomer-1-max".to_string(),
-                    "astronomer-1".to_string(),
-                ])
+                tracing::warn!(
+                    "[AIProviderManager] Rainy model catalog unavailable and no dynamic model list could be fetched; returning empty model set instead of stale legacy defaults"
+                );
+                Ok(Vec::new())
             }
 
             "gemini" => Ok(self.gemini.available_models()),
@@ -251,22 +422,33 @@ impl AIProviderManager {
 
     /// Store API key in macOS Keychain
     pub async fn store_api_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
-        self.keychain.store_key(provider, api_key)
+        self.keychain.store_key(provider, api_key)?;
+        self.invalidate_model_cache(provider).await;
+        Ok(())
     }
 
     /// Get API key from macOS Keychain
     pub async fn get_api_key(&self, provider: &str) -> Result<Option<String>, String> {
-        self.keychain.get_key(provider)
+        self.resolve_api_key(provider).await
     }
 
     /// Delete API key from macOS Keychain
     pub async fn delete_api_key(&self, provider: &str) -> Result<(), String> {
-        self.keychain.delete_key(provider)
+        let aliases = Self::provider_aliases(provider);
+        if aliases.is_empty() {
+            self.keychain.delete_key(provider)?;
+        } else {
+            for alias in aliases {
+                self.keychain.delete_key(alias)?;
+            }
+        }
+        self.invalidate_model_cache(provider).await;
+        Ok(())
     }
 
     /// Check if API key exists for a provider
     pub async fn has_api_key(&self, provider: &str) -> Result<bool, String> {
-        Ok(self.keychain.has_key(provider))
+        Ok(self.resolve_api_key(provider).await?.is_some())
     }
 
     /// Execute a prompt using the specified provider
@@ -295,9 +477,8 @@ impl AIProviderManager {
                 // Standard Rainy API (Pay-as-you-go)
                 // Just needs a valid key, no plan checks
                 let api_key = self
-                    .keychain
-                    .get_key("rainy_api")
-                    .map_err(|e| e.to_string())?
+                    .resolve_api_key("rainy_api")
+                    .await?
                     .ok_or("No Rainy API key found")?;
 
                 on_progress(10, Some("Connecting to Rainy API...".to_string()));
@@ -464,6 +645,9 @@ impl AIProviderManager {
     pub async fn invalidate_cache(&self) {
         let mut pool = self.client_pool.write().await;
         pool.clear();
+        drop(pool);
+        let mut catalog_cache = self.model_catalog_cache.write().await;
+        catalog_cache.clear();
     }
 
     /// Batch multiple API calls for better performance

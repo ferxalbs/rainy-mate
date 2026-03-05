@@ -7,6 +7,7 @@ use crate::ai::mode_selector::{ModeSelector, TaskComplexity, UseCase};
 use crate::ai::provider::AIProviderManager;
 use crate::ai::provider_types::StreamingChunk;
 use crate::models::ProviderType;
+use rainy_sdk::models::{CapabilityFlag, ModelCatalogItem};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
@@ -87,6 +88,38 @@ fn slug_to_title(slug: &str) -> String {
         .join(" ")
 }
 
+fn capability_flag_enabled(flag: Option<&CapabilityFlag>) -> bool {
+    matches!(flag, Some(CapabilityFlag::Bool(true)))
+}
+
+fn dynamic_rainy_model_from_catalog(item: &ModelCatalogItem) -> UnifiedModel {
+    if let Some(entry) = find_catalog_model(&item.id, ModelProvider::RainyApi) {
+        return to_unified_model(&entry);
+    }
+
+    let caps = item.rainy_capabilities.as_ref();
+
+    UnifiedModel {
+        id: format!("rainy:{}", item.id),
+        name: item
+            .name
+            .clone()
+            .unwrap_or_else(|| slug_to_title(&item.id)),
+        provider: "Rainy API".to_string(),
+        capabilities: ModelCapabilities {
+            chat: true,
+            streaming: true,
+            function_calling: capability_flag_enabled(caps.and_then(|caps| caps.tools.as_ref())),
+            vision: capability_flag_enabled(caps.and_then(|caps| caps.image_input.as_ref())),
+            web_search: true,
+            max_context: item.context_length.unwrap_or(128_000) as usize,
+            max_output: 65_536,
+        },
+        enabled: true,
+        processing_mode: "rainy_api".to_string(),
+    }
+}
+
 fn dynamic_rainy_model(slug: &str) -> UnifiedModel {
     if let Some(entry) = find_catalog_model(slug, ModelProvider::RainyApi) {
         return to_unified_model(&entry);
@@ -115,35 +148,24 @@ pub async fn get_unified_models(
     app: AppHandle,
     provider_manager: tauri::State<'_, Arc<AIProviderManager>>,
 ) -> Result<Vec<UnifiedModel>, String> {
-    use crate::ai::keychain::KeychainManager;
-
-    let keychain = KeychainManager::new();
-    let has_rainy_key = keychain.get_key("rainy_api").ok().flatten().is_some();
-    let has_gemini_key = keychain.get_key("gemini").ok().flatten().is_some();
+    let has_gemini_key = provider_manager.has_api_key("gemini").await.unwrap_or(false);
 
     let mut models: Vec<UnifiedModel> = all_catalog_models()
         .into_iter()
-        .filter(|entry| match entry.provider {
-            ModelProvider::RainyApi => has_rainy_key,
-            ModelProvider::GeminiByok => has_gemini_key,
-        })
+        .filter(|entry| matches!(entry.provider, ModelProvider::GeminiByok) && has_gemini_key)
         .map(|entry| to_unified_model(&entry))
         .collect();
 
-    if has_rainy_key {
-        if let Ok(dynamic_models) = provider_manager.get_models("rainy_api").await {
-            for slug in dynamic_models {
-                let candidate = dynamic_rainy_model(&slug);
-                if !models.iter().any(|existing| existing.id == candidate.id) {
-                    models.push(candidate);
-                }
-            }
-        }
+    if let Ok(catalog) = provider_manager.get_models_catalog("rainy_api").await {
+        models.extend(catalog.iter().map(dynamic_rainy_model_from_catalog));
+    } else if let Ok(dynamic_models) = provider_manager.get_models("rainy_api").await {
+        models.extend(dynamic_models.iter().map(|slug| dynamic_rainy_model(slug)));
     }
 
     let preferences = load_user_preferences(&app).await;
     models.retain(|m| !preferences.disabled_models.contains(&m.id));
     models.sort_by(|a, b| a.name.cmp(&b.name));
+    models.dedup_by(|a, b| a.id == b.id);
 
     Ok(models)
 }
@@ -318,12 +340,12 @@ pub async fn get_recommended_model(
         }
     }
 
-    let fallback_entry = all_catalog_models()
+    let provider_manager = app.state::<Arc<AIProviderManager>>();
+    let models = get_unified_models(app.clone(), provider_manager).await?;
+    models
         .into_iter()
-        .find(|m| m.provider == ModelProvider::RainyApi && m.slug == "gemini-3-flash-preview")
-        .ok_or_else(|| "Fallback model not found in catalog".to_string())?;
-
-    Ok(to_unified_model(&fallback_entry))
+        .next()
+        .ok_or_else(|| "No available models found".to_string())
 }
 
 #[derive(Clone, Serialize)]
