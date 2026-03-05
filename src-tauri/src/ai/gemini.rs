@@ -53,8 +53,7 @@ impl GeminiProvider {
     /// All other models (GPT-4o, GPT-5, Claude, Gemini Pro, etc.) require Rainy API.
     pub fn available_models(&self) -> Vec<String> {
         vec![
-            "gemini-3-flash-minimal".to_string(),
-            "gemini-3-flash-high".to_string(),
+            "gemini-3-flash-preview".to_string(),
             "gemini-3.1-flash-lite-preview".to_string(),
         ]
     }

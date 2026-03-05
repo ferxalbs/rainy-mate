@@ -119,6 +119,10 @@ impl IntelligentRouter {
         &self,
         request: ChatCompletionRequest,
     ) -> ProviderResult<ChatCompletionResponse> {
+        if request.model != "default" {
+            crate::ai::model_catalog::ensure_supported_model_slug(&request.model)
+                .map_err(AIError::InvalidRequest)?;
+        }
         let mut last_error = None;
 
         for attempt in 0..self.config.max_retries {
@@ -183,6 +187,10 @@ impl IntelligentRouter {
         request: ChatCompletionRequest,
         callback: StreamingCallback,
     ) -> ProviderResult<()> {
+        if request.model != "default" {
+            crate::ai::model_catalog::ensure_supported_model_slug(&request.model)
+                .map_err(AIError::InvalidRequest)?;
+        }
         let mut last_error = None;
 
         for attempt in 0..self.config.max_retries {

@@ -5,6 +5,48 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.96] - 2026-03-05 - MODEL CORE UNIFICATION
+
+### Added
+
+- Added canonical model catalog module in `src-tauri/src/ai/model_catalog.rs` as a single Rust source of truth for:
+  - supported model slugs
+  - provider ownership (`rainy_api` vs `gemini_byok`)
+  - model capabilities and thinking metadata
+- Added strict obsolete-slug guardrails to reject deprecated flash slugs globally (`gemini-2.5-flash`, `gemini-2.5-flash-lite`).
+- Added `GeminiProviderFactory` in `src-tauri/src/ai/providers/gemini_adapter.rs` and wired it into provider exports for first-class provider registration.
+
+### Changed
+
+- Replaced duplicated static model lists in `src-tauri/src/commands/unified_models.rs` with catalog-backed generation.
+- Reworked `src-tauri/src/services/settings.rs` model listing to derive from the new Rust catalog.
+- Updated default selected model in settings to `gemini-3-flash-preview`.
+- Enabled `provider_type = google` in `src-tauri/src/commands/ai_providers.rs` via the new Gemini factory.
+- Bootstrapped `rainy_api` and `gemini_byok` providers from keychain at startup in `src-tauri/src/lib.rs` and auto-added them to the router.
+- Removed ad-hoc Gemini provider injection from `src-tauri/src/commands/agent.rs`; provider lifecycle is now centralized.
+- Extended router streaming events in `src-tauri/src/commands/router.rs` with `thought` payload emission.
+- Updated frontend streaming types/hooks to handle thought chunks:
+  - `src/services/tauri.ts`
+  - `src/hooks/useStreaming.ts`
+  - `src/hooks/useAgentChat.ts`
+- Updated `src/hooks/useAIProvider.ts` to auto-register `gemini_byok` (in addition to `rainy_api`) and add it to the router when enabled.
+- Aligned Gemini provider capability model lists to current preview slugs:
+  - `src-tauri/src/ai/providers/gemini_adapter.rs`
+  - `src-tauri/src/ai/gemini.rs`
+  - `src-tauri/src/ai/providers/rainy_sdk.rs`
+
+### Changed - Versioning
+
+- `package.json` -> `0.5.96`
+- `src-tauri/Cargo.toml` -> `0.5.96`
+- `src-tauri/tauri.conf.json` -> `0.5.96`
+
+### Validation
+
+- `cd src-tauri && cargo check -q` — passes
+- `pnpm exec tsc --noEmit` — passes
+- `cd src-tauri && cargo test -q test_streaming_event_serialization --lib` — passes
+
 ## [0.5.95] - 2026-03-05 - NERVE CENTER (FLEET COMMAND CENTER)
 
 ### Added - STEP 6 Fleet Foundations

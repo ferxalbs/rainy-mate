@@ -5,7 +5,7 @@
 // conversations (chat history), non-streaming completions (for tool-calling
 // turns), and SSE streaming for plain-text turns.
 
-use crate::ai::provider_trait::AIProvider;
+use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
 use crate::ai::provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
     MessageContent, ProviderCapabilities, ProviderConfig, ProviderHealth, ProviderId,
@@ -217,8 +217,7 @@ impl AIProvider for GeminiProviderAdapter {
             max_context_tokens: 1_000_000,
             max_output_tokens: 8192,
             models: vec![
-                "gemini-3-flash-minimal".to_string(),
-                "gemini-3-flash-high".to_string(),
+                "gemini-3-flash-preview".to_string(),
                 "gemini-3.1-flash-lite-preview".to_string(),
             ],
         })
@@ -417,13 +416,34 @@ impl AIProvider for GeminiProviderAdapter {
 
     async fn available_models(&self) -> ProviderResult<Vec<String>> {
         Ok(vec![
-            "gemini-3-flash-minimal".to_string(),
-            "gemini-3-flash-high".to_string(),
+            "gemini-3-flash-preview".to_string(),
             "gemini-3.1-flash-lite-preview".to_string(),
         ])
     }
 
     fn config(&self) -> &ProviderConfig {
         &self.config
+    }
+}
+
+pub struct GeminiProviderFactory;
+
+#[async_trait]
+impl AIProviderFactory for GeminiProviderFactory {
+    async fn create(config: ProviderConfig) -> ProviderResult<Arc<dyn AIProvider>> {
+        Self::validate_config(&config)?;
+        Ok(Arc::new(GeminiProviderAdapter::new(config)?))
+    }
+
+    fn validate_config(config: &ProviderConfig) -> ProviderResult<()> {
+        if config.api_key.is_none() {
+            return Err(AIError::Authentication("API key is required".to_string()));
+        }
+
+        if config.model.is_empty() {
+            return Err(AIError::InvalidRequest("Model is required".to_string()));
+        }
+
+        Ok(())
     }
 }

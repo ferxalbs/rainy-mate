@@ -82,6 +82,15 @@ export function useStreaming(): UseStreamingResult {
                         setChunks(prev => [...prev, chunk]);
                         break;
                     }
+                    case 'thought': {
+                        const chunk: StreamingChunk = {
+                            content: '',
+                            thought: event.data.content,
+                            is_final: false,
+                        };
+                        setChunks(prev => [...prev, chunk]);
+                        break;
+                    }
                     
                     case 'finished':
                         setFinishReason(event.data.finishReason);

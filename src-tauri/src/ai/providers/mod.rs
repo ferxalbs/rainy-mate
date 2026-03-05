@@ -10,7 +10,7 @@ pub mod xai;
 
 // Only re-export factories (which are used for registration)
 pub use anthropic::AnthropicProviderFactory;
-pub use gemini_adapter::GeminiProviderAdapter;
+pub use gemini_adapter::{GeminiProviderAdapter, GeminiProviderFactory};
 pub use moonshot::MoonshotProviderFactory;
 pub use openai::OpenAIProviderFactory;
 pub use rainy_sdk::RainySDKProviderFactory;

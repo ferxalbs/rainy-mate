@@ -3,7 +3,8 @@
 
 use crate::ai::provider_trait::AIProviderFactory;
 use crate::ai::providers::{
-    AnthropicProviderFactory, OpenAIProviderFactory, RainySDKProviderFactory, XAIProviderFactory,
+    AnthropicProviderFactory, GeminiProviderFactory, OpenAIProviderFactory,
+    RainySDKProviderFactory, XAIProviderFactory,
 };
 use crate::ai::{
     AIProvider, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
@@ -214,6 +215,13 @@ pub async fn register_provider(
             <AnthropicProviderFactory as AIProviderFactory>::validate_config(&config)
                 .map_err(|e| format!("Invalid config: {}", e))?;
             <AnthropicProviderFactory as AIProviderFactory>::create(config)
+                .await
+                .map_err(|e| format!("Failed to create provider: {}", e))?
+        }
+        ProviderType::Google => {
+            <GeminiProviderFactory as AIProviderFactory>::validate_config(&config)
+                .map_err(|e| format!("Invalid config: {}", e))?;
+            <GeminiProviderFactory as AIProviderFactory>::create(config)
                 .await
                 .map_err(|e| format!("Failed to create provider: {}", e))?
         }

@@ -125,12 +125,13 @@ export function useAIProvider(): UseAIProviderResult {
   // Auto-register default providers if they don't exist
   const ensureDefaultProviders = useCallback(
     async (currentProviders: ProviderInfo[]) => {
-      // Only check "rainy_api" - the main provider for all Rainy SDK models
       const RAINY_PROVIDER_ID = "rainy_api";
+      const GEMINI_PROVIDER_ID = "gemini_byok";
 
-      const exists = currentProviders.find((p) => p.id === RAINY_PROVIDER_ID);
+      const rainyProvider = currentProviders.find((p) => p.id === RAINY_PROVIDER_ID);
+      const geminiProvider = currentProviders.find((p) => p.id === GEMINI_PROVIDER_ID);
 
-      if (!exists) {
+      if (!rainyProvider) {
         console.log(
           "[useAIProvider] Registering default rainy_api provider...",
         );
@@ -139,14 +140,10 @@ export function useAIProvider(): UseAIProviderResult {
           const apiKey = await tauri.getApiKey(RAINY_PROVIDER_ID);
           const enabled = !!apiKey;
 
-          // Register the provider
-          // We provide a bootstrap model that is GUARANTEED to work with current API (v2/v3 transition)
-          // This model is only used for initial registration/health check.
-          // The UI will still allow dynamic selection of other models.
           await tauri.registerProvider({
             id: RAINY_PROVIDER_ID,
             provider_type: "rainy-sdk",
-            model: "gemini-3-flash-preview", // Reverting to known working model for bootstrap
+            model: "gemini-3-flash-preview",
             enabled,
             priority: 10,
             timeout: 60000,
@@ -165,7 +162,7 @@ export function useAIProvider(): UseAIProviderResult {
         } catch (err) {
           console.warn("[useAIProvider] Failed to init rainy_api:", err);
         }
-      } else if (exists.enabled) {
+      } else if (rainyProvider.enabled) {
         // Ensure it's in the router
         try {
           const routerProviders = await tauri.getRouterProviders();
@@ -175,6 +172,40 @@ export function useAIProvider(): UseAIProviderResult {
           }
         } catch (e) {
           console.warn("[useAIProvider] Failed to add rainy_api to router:", e);
+        }
+      }
+
+      if (!geminiProvider) {
+        try {
+          const apiKey = await tauri.getApiKey("gemini");
+          const enabled = !!apiKey;
+
+          await tauri.registerProvider({
+            id: GEMINI_PROVIDER_ID,
+            provider_type: "google",
+            model: "gemini-3-flash-preview",
+            enabled,
+            priority: 20,
+            timeout: 60000,
+            api_key: apiKey || undefined,
+          });
+
+          if (enabled) {
+            await tauri.addProviderToRouter(GEMINI_PROVIDER_ID);
+            console.log("[useAIProvider] Added gemini_byok to router");
+          }
+        } catch (err) {
+          console.warn("[useAIProvider] Failed to init gemini_byok:", err);
+        }
+      } else if (geminiProvider.enabled) {
+        try {
+          const routerProviders = await tauri.getRouterProviders();
+          if (!routerProviders.includes(GEMINI_PROVIDER_ID)) {
+            await tauri.addProviderToRouter(GEMINI_PROVIDER_ID);
+            console.log("[useAIProvider] Added existing gemini_byok to router");
+          }
+        } catch (e) {
+          console.warn("[useAIProvider] Failed to add gemini_byok to router:", e);
         }
       }
     },

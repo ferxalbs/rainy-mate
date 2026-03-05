@@ -1,7 +1,6 @@
 // Rainy Cowork - Settings Commands
 // Tauri commands for user settings and model selection
 
-use crate::ai::provider::AIProviderManager;
 use crate::services::settings::{ModelOption, SettingsManager, UserProfile, UserSettings};
 use std::sync::Arc;
 use tauri::State;
@@ -115,7 +114,6 @@ pub async fn set_embedder_model(
 /// Get available models based on user's plan
 #[tauri::command]
 pub async fn get_available_models(
-    _ai_provider: State<'_, Arc<AIProviderManager>>,
 ) -> Result<Vec<ModelOption>, String> {
     Ok(SettingsManager::get_available_models())
 }

@@ -1045,6 +1045,7 @@ export interface EmbeddingResponse {
 
 export interface StreamingChunk {
   content: string;
+  thought?: string;
   is_final: boolean;
   finish_reason?: string;
 }
@@ -1160,6 +1161,7 @@ export interface RoutedEmbeddingRequest {
 export type StreamingEvent =
   | { event: "started"; data: { model: string; providerId: string } }
   | { event: "chunk"; data: { content: string; isFinal: boolean } }
+  | { event: "thought"; data: { content: string } }
   | { event: "finished"; data: { finishReason: string; totalChunks: number } }
   | { event: "error"; data: { message: string } };
 

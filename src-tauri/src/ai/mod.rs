@@ -4,6 +4,7 @@
 
 pub mod gemini;
 pub mod keychain;
+pub mod model_catalog;
 pub mod provider;
 
 // PHASE 3: AI Provider Integration

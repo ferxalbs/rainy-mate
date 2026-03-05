@@ -165,6 +165,18 @@ export function useAgentChat() {
                     : m,
                 ),
               );
+            } else if (event.event === "thought") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === agentMsgId
+                    ? {
+                        ...m,
+                        thought: event.data.content,
+                        modelUsed: { name: modelId, thinkingEnabled: true },
+                      }
+                    : m,
+                ),
+              );
             } else if (event.event === "finished") {
               setMessages((prev) =>
                 prev.map((m) =>

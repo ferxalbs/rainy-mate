@@ -284,6 +284,7 @@ impl AIProviderManager {
         F: Fn(u8, Option<String>) + Send + Sync + 'static,
         S: Fn(crate::ai::provider_types::StreamingChunk) + Send + Sync + 'static,
     {
+        crate::ai::model_catalog::ensure_supported_model_slug(model)?;
         match provider {
             ProviderType::RainyApi => {
                 // Standard Rainy API (Pay-as-you-go)

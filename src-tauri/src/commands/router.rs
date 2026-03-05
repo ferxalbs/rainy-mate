@@ -99,6 +99,8 @@ pub enum StreamingEvent {
     #[serde(rename_all = "camelCase")]
     Chunk { content: String, is_final: bool },
     #[serde(rename_all = "camelCase")]
+    Thought { content: String },
+    #[serde(rename_all = "camelCase")]
     Finished {
         finish_reason: String,
         total_chunks: usize,
@@ -265,6 +267,9 @@ pub async fn stream_with_routing(
 
     // Create callback for streaming chunks
     let callback = Arc::new(move |chunk: StreamingChunk| {
+        if let Some(thought) = chunk.thought {
+            let _ = channel.send(StreamingEvent::Thought { content: thought });
+        }
         let event = StreamingEvent::Chunk {
             content: chunk.content,
             is_final: chunk.is_final,

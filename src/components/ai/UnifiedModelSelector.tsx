@@ -260,14 +260,13 @@ export function UnifiedModelSelector({
 
   // Helper to check if model supports thinking/reasoning
   const supportsThinking = (modelId: string): boolean => {
-    return modelId.includes("gemini-3") || modelId.includes("gemini-2.5");
+    return modelId.includes("gemini-3");
   };
 
   // Get thinking level for a model
   const getThinkingLevel = (modelId: string): string | null => {
     if (modelId.includes("gemini-3-pro")) return "high";
     if (modelId.includes("gemini-3-flash")) return "medium";
-    if (modelId.includes("gemini-2.5-pro")) return "high";
     if (modelId.includes("gemini-3.1-flash-lite")) return null;
     return null;
   };

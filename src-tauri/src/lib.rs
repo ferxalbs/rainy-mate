@@ -193,6 +193,77 @@ pub fn run() {
                 }
             });
 
+            // Bootstrap built-in providers from keychain to keep router usable in headless flows.
+            let app_handle_providers = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                use crate::ai::keychain::KeychainManager;
+                use crate::ai::provider_trait::{AIProviderFactory, ProviderWithStats};
+                use crate::ai::provider_types::{ProviderConfig, ProviderId, ProviderType};
+                use crate::ai::providers::{GeminiProviderFactory, RainySDKProviderFactory};
+
+                let registry =
+                    app_handle_providers.state::<commands::ai_providers::ProviderRegistryState>();
+                let router_state =
+                    app_handle_providers.state::<commands::router::IntelligentRouterState>();
+                let keychain = KeychainManager::new();
+
+                if let Ok(Some(api_key)) = keychain.get_key("rainy_api") {
+                    let provider_id = ProviderId::new("rainy_api");
+                    if registry.0.get(&provider_id).is_err() {
+                        let config = ProviderConfig {
+                            id: provider_id.clone(),
+                            provider_type: ProviderType::RainySDK,
+                            api_key: Some(api_key),
+                            base_url: None,
+                            model: "gemini-3-flash-preview".to_string(),
+                            params: std::collections::HashMap::new(),
+                            enabled: true,
+                            priority: 10,
+                            rate_limit: None,
+                            timeout: 120,
+                        };
+                        if let Ok(provider) =
+                            <RainySDKProviderFactory as AIProviderFactory>::create(config).await
+                        {
+                            let _ = registry.0.register(provider.clone());
+                            router_state
+                                .0
+                                .write()
+                                .await
+                                .add_provider(Arc::new(ProviderWithStats::new(provider)));
+                        }
+                    }
+                }
+
+                if let Ok(Some(api_key)) = keychain.get_key("gemini") {
+                    let provider_id = ProviderId::new("gemini_byok");
+                    if registry.0.get(&provider_id).is_err() {
+                        let config = ProviderConfig {
+                            id: provider_id.clone(),
+                            provider_type: ProviderType::Google,
+                            api_key: Some(api_key),
+                            base_url: None,
+                            model: "gemini-3-flash-preview".to_string(),
+                            params: std::collections::HashMap::new(),
+                            enabled: true,
+                            priority: 20,
+                            rate_limit: None,
+                            timeout: 120,
+                        };
+                        if let Ok(provider) =
+                            <GeminiProviderFactory as AIProviderFactory>::create(config).await
+                        {
+                            let _ = registry.0.register(provider.clone());
+                            router_state
+                                .0
+                                .write()
+                                .await
+                                .add_provider(Arc::new(ProviderWithStats::new(provider)));
+                        }
+                    }
+                }
+            });
+
             // Initialize memory manager with app data dir
             let app_data_dir = app
                 .path()
