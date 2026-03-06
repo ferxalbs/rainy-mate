@@ -412,6 +412,9 @@ pub struct ChatCompletionResponse {
     pub finish_reason: String,
     /// Tool calls
     pub tool_calls: Option<Vec<ToolCall>>,
+    /// Provider-specific metadata for follow-up turns and diagnostics
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_metadata: Option<serde_json::Value>,
 }
 
 /// Token usage information

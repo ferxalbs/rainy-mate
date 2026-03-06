@@ -34,6 +34,13 @@ pub fn normalize_model_slug(model: &str) -> &str {
         .unwrap_or(model)
 }
 
+pub fn is_rainy_catalog_slug(model: &str) -> bool {
+    let normalized = normalize_model_slug(model);
+    normalized.contains('/')
+        && !normalized.starts_with("gemini:")
+        && !normalized.starts_with("ollama:")
+}
+
 pub fn ensure_supported_model_slug(model: &str) -> Result<(), String> {
     let normalized = normalize_model_slug(model);
     if OBSOLETE_MODEL_SLUGS.contains(&normalized) {

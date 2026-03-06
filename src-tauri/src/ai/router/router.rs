@@ -326,30 +326,37 @@ impl IntelligentRouter {
         // Explicit provider prefixes are authoritative and deterministic.
         let is_rainy_model = model.starts_with("rainy-api/") || model.starts_with("rainy:");
         if is_rainy_model {
-            if let Some(p) = all_providers
+            return all_providers
                 .iter()
                 .find(|p| {
                     let id = p.provider().id().to_string().to_lowercase();
                     id.contains("rainy")
                 })
-                .cloned()
-            {
-                return Some(p);
-            }
+                .cloned();
         }
 
         let is_prefixed_gemini = model.starts_with("gemini:");
         if is_prefixed_gemini {
-            if let Some(p) = all_providers
+            return all_providers
                 .iter()
                 .find(|p| {
                     let id = p.provider().id().to_string().to_lowercase();
                     id.contains("gemini") && !id.contains("rainy")
                 })
-                .cloned()
-            {
-                return Some(p);
-            }
+                .cloned();
+        }
+
+        // Rainy v3 catalog models use provider-qualified slugs such as
+        // `openai/gpt-5-nano` or `anthropic/claude-sonnet-4.6`.
+        // These must never fall through to Gemini BYOK heuristics.
+        if crate::ai::model_catalog::is_rainy_catalog_slug(&model) {
+            return all_providers
+                .iter()
+                .find(|p| {
+                    let id = p.provider().id().to_string().to_lowercase();
+                    id.contains("rainy")
+                })
+                .cloned();
         }
 
         // Unprefixed pure-Gemini models default to BYOK when available.

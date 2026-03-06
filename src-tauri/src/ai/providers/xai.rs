@@ -364,6 +364,7 @@ impl XAIChatResponse {
             model: self.model.clone(),
             usage,
             finish_reason,
+            provider_metadata: None,
         }
     }
 }

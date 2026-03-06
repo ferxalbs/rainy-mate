@@ -320,6 +320,7 @@ impl AIProvider for AnthropicProvider {
             finish_reason: chat_response
                 .stop_reason
                 .unwrap_or_else(|| "stop".to_string()),
+            provider_metadata: None,
         })
     }
 

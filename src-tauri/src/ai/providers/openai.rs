@@ -306,6 +306,7 @@ impl AIProvider for OpenAIProvider {
                 total_tokens: chat_response.usage.total_tokens,
             },
             finish_reason: choice.finish_reason,
+            provider_metadata: None,
         })
     }
 

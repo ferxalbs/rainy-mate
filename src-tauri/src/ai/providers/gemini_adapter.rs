@@ -727,6 +727,7 @@ impl AIProvider for GeminiProviderAdapter {
                 total_tokens,
             },
             finish_reason,
+            provider_metadata: None,
         })
     }
 

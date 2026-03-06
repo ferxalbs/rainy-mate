@@ -1,19 +1,26 @@
 use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
 use crate::ai::provider_types::{
-    AIError, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
-    FunctionCall, ProviderCapabilities, ProviderConfig, ProviderHealth, ProviderId, ProviderResult,
-    ProviderType, StreamingCallback, ToolCall,
+    AIError, ChatCompletionRequest, ChatCompletionResponse, ContentPart, EmbeddingRequest,
+    EmbeddingResponse, FunctionCall, MessageContent, ProviderCapabilities, ProviderConfig,
+    ProviderHealth, ProviderId, ProviderResult, ProviderType, StreamingCallback, ToolCall,
 };
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use rainy_sdk::models::{
     CapabilityFlag, FunctionDefinition, OpenAIChatCompletionRequest, OpenAIChatMessage,
-    OpenAIContentPart, OpenAIFunctionCall, OpenAIMessageContent, OpenAIMessageRole,
-    OpenAIToolCall, OpenAIImageUrl, ThinkingConfig, ThinkingLevel, Tool, ToolChoice, ToolFunction,
-    ToolType,
+    OpenAIContentPart, OpenAIFunctionCall, OpenAIImageUrl, OpenAIMessageContent,
+    OpenAIMessageRole, OpenAIToolCall, ResponsesApiResponse, ResponsesRequest, ThinkingConfig,
+    ThinkingLevel, Tool, ToolChoice, ToolFunction, ToolType,
 };
 use rainy_sdk::RainyClient;
+use serde_json::{json, Value};
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RainyTransport {
+    ChatCompletions,
+    Responses,
+}
 
 pub struct RainySDKProvider {
     config: ProviderConfig,
@@ -86,30 +93,37 @@ impl RainySDKProvider {
         }
     }
 
-    fn map_content(content: &crate::ai::provider_types::MessageContent) -> OpenAIMessageContent {
+    fn resolve_transport(model_id: &str) -> RainyTransport {
+        let normalized = crate::ai::model_catalog::normalize_model_slug(model_id);
+        if normalized.starts_with("gpt-5")
+            || normalized == "o3"
+            || normalized.starts_with("o4")
+            || normalized.starts_with("openai/gpt-5")
+            || normalized.starts_with("openai/o3")
+            || normalized.starts_with("openai/o4")
+        {
+            RainyTransport::Responses
+        } else {
+            RainyTransport::ChatCompletions
+        }
+    }
+
+    fn map_content(content: &MessageContent) -> OpenAIMessageContent {
         match content {
-            crate::ai::provider_types::MessageContent::Text(text) => {
-                OpenAIMessageContent::Text(text.clone())
-            }
-            crate::ai::provider_types::MessageContent::Parts(parts) => {
-                OpenAIMessageContent::Parts(
-                    parts.iter()
-                        .map(|part| match part {
-                            crate::ai::provider_types::ContentPart::Text { text } => {
-                                OpenAIContentPart::Text { text: text.clone() }
-                            }
-                            crate::ai::provider_types::ContentPart::ImageUrl { image_url } => {
-                                OpenAIContentPart::ImageUrl {
-                                    image_url: OpenAIImageUrl {
-                                        url: image_url.url.clone(),
-                                        detail: image_url.detail.clone(),
-                                    },
-                                }
-                            }
-                        })
-                        .collect(),
-                )
-            }
+            MessageContent::Text(text) => OpenAIMessageContent::Text(text.clone()),
+            MessageContent::Parts(parts) => OpenAIMessageContent::Parts(
+                parts.iter()
+                    .map(|part| match part {
+                        ContentPart::Text { text } => OpenAIContentPart::Text { text: text.clone() },
+                        ContentPart::ImageUrl { image_url } => OpenAIContentPart::ImageUrl {
+                            image_url: OpenAIImageUrl {
+                                url: image_url.url.clone(),
+                                detail: image_url.detail.clone(),
+                            },
+                        },
+                    })
+                    .collect(),
+            ),
         }
     }
 
@@ -124,7 +138,7 @@ impl RainySDKProvider {
         OpenAIChatMessage {
             role,
             content: match (&message.content, &message.tool_calls) {
-                (crate::ai::provider_types::MessageContent::Text(text), Some(tool_calls))
+                (MessageContent::Text(text), Some(tool_calls))
                     if text.is_empty() && !tool_calls.is_empty() =>
                 {
                     None
@@ -149,9 +163,7 @@ impl RainySDKProvider {
         }
     }
 
-    fn map_tools(
-        tools: Option<&[crate::ai::provider_types::Tool]>,
-    ) -> Option<Vec<Tool>> {
+    fn map_tools(tools: Option<&[crate::ai::provider_types::Tool]>) -> Option<Vec<Tool>> {
         tools.map(|tools| {
             tools
                 .iter()
@@ -222,6 +234,242 @@ impl RainySDKProvider {
         sdk_request
     }
 
+    fn map_response_content_parts(parts: &[ContentPart]) -> Value {
+        Value::Array(
+            parts.iter()
+                .map(|part| match part {
+                    ContentPart::Text { text } => json!({
+                        "type": "input_text",
+                        "text": text,
+                    }),
+                    ContentPart::ImageUrl { image_url } => {
+                        let mut item = json!({
+                            "type": "input_image",
+                            "image_url": image_url.url,
+                        });
+                        if let Some(detail) = image_url.detail.as_ref() {
+                            item["detail"] = Value::String(detail.clone());
+                        }
+                        item
+                    }
+                })
+                .collect(),
+        )
+    }
+
+    fn parse_json_or_string(raw: &str) -> Value {
+        serde_json::from_str(raw).unwrap_or_else(|_| Value::String(raw.to_string()))
+    }
+
+    fn map_responses_input_items(request: &ChatCompletionRequest) -> Vec<Value> {
+        let mut items = Vec::new();
+
+        for message in &request.messages {
+            if let Some(tool_calls) = message.tool_calls.as_ref() {
+                if !message.text().trim().is_empty() {
+                    items.push(json!({
+                        "role": "assistant",
+                        "content": message.text(),
+                    }));
+                }
+
+                for call in tool_calls {
+                    items.push(json!({
+                        "type": "function_call",
+                        "call_id": call.id,
+                        "name": call.function.name,
+                        "arguments": call.function.arguments,
+                    }));
+                }
+                continue;
+            }
+
+            if message.role == "tool" {
+                items.push(json!({
+                    "type": "function_call_output",
+                    "call_id": message.tool_call_id.clone().unwrap_or_default(),
+                    "output": Self::parse_json_or_string(&message.text()),
+                }));
+                continue;
+            }
+
+            let content = match &message.content {
+                MessageContent::Text(text) => Value::String(text.clone()),
+                MessageContent::Parts(parts) => Self::map_response_content_parts(parts),
+            };
+
+            items.push(json!({
+                "role": message.role,
+                "content": content,
+            }));
+        }
+
+        items
+    }
+
+    fn map_responses_tool_choice(
+        tool_choice: Option<&crate::ai::provider_types::ToolChoice>,
+    ) -> Option<Value> {
+        match tool_choice {
+            Some(crate::ai::provider_types::ToolChoice::None) => Some(json!("none")),
+            Some(crate::ai::provider_types::ToolChoice::Auto) => Some(json!("auto")),
+            Some(crate::ai::provider_types::ToolChoice::Tool(tool)) => Some(json!({
+                "type": "function",
+                "name": tool.function.name,
+            })),
+            None => None,
+        }
+    }
+
+    fn build_responses_request(request: &ChatCompletionRequest) -> ResponsesRequest {
+        let (model_id, _) = Self::map_model_id(&request.model);
+        let mut sdk_request =
+            ResponsesRequest::new(model_id.clone(), Value::Array(Self::map_responses_input_items(request)));
+
+        sdk_request.stream = Some(request.stream);
+        sdk_request.temperature = request.temperature;
+        sdk_request.top_p = request.top_p;
+        sdk_request.max_output_tokens = request.max_tokens;
+        sdk_request.tool_choice = Self::map_responses_tool_choice(request.tool_choice.as_ref());
+        sdk_request.user = Some("rainy-cowork".to_string());
+
+        if let Some(tools) = request.tools.as_ref() {
+            let mapped_tools = tools
+                .iter()
+                .map(|tool| {
+                    json!({
+                        "type": "function",
+                        "name": tool.function.name,
+                        "description": tool.function.description,
+                        "parameters": tool.function.parameters,
+                    })
+                })
+                .collect();
+            sdk_request.tools = Some(mapped_tools);
+        }
+
+        if model_id.starts_with("gpt-5") || model_id.starts_with("o") {
+            sdk_request.reasoning = Some(json!({ "effort": "medium" }));
+        }
+
+        sdk_request
+    }
+
+    fn extract_text_from_output(output: &[Value]) -> Option<String> {
+        let mut fragments = Vec::new();
+
+        for item in output {
+            if item.get("type").and_then(Value::as_str) == Some("message") {
+                if let Some(content) = item.get("content").and_then(Value::as_array) {
+                    for part in content {
+                        if let Some(text) = part.get("text").and_then(Value::as_str) {
+                            fragments.push(text.to_string());
+                        } else if let Some(text) = part
+                            .get("content")
+                            .and_then(|content| content.get(0))
+                            .and_then(|part| part.get("text"))
+                            .and_then(Value::as_str)
+                        {
+                            fragments.push(text.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        let text = fragments.join("");
+        if text.trim().is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    }
+
+    fn extract_tool_calls_from_output(output: &[Value]) -> Option<Vec<ToolCall>> {
+        let calls: Vec<ToolCall> = output
+            .iter()
+            .filter_map(|item| {
+                let item_type = item.get("type").and_then(Value::as_str)?;
+                if item_type != "function_call" {
+                    return None;
+                }
+
+                let name = item.get("name").and_then(Value::as_str)?.to_string();
+                let arguments = item
+                    .get("arguments")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+                    .or_else(|| item.get("arguments").map(Value::to_string))
+                    .unwrap_or_else(|| "{}".to_string());
+                let id = item
+                    .get("call_id")
+                    .and_then(Value::as_str)
+                    .or_else(|| item.get("id").and_then(Value::as_str))
+                    .unwrap_or("call_missing_id")
+                    .to_string();
+
+                Some(ToolCall {
+                    id,
+                    r#type: "function".to_string(),
+                    extra_content: Some(item.clone()),
+                    function: FunctionCall { name, arguments },
+                })
+            })
+            .collect();
+
+        if calls.is_empty() {
+            None
+        } else {
+            Some(calls)
+        }
+    }
+
+    fn map_responses_response(
+        transport: RainyTransport,
+        response: ResponsesApiResponse,
+    ) -> ProviderResult<ChatCompletionResponse> {
+        let output = response.output.unwrap_or_default();
+        let content = response
+            .output_text
+            .clone()
+            .or_else(|| Self::extract_text_from_output(&output));
+        let tool_calls = Self::extract_tool_calls_from_output(&output);
+        let usage = response.usage.unwrap_or_default();
+        let finish_reason = response
+            .extra
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| {
+                if tool_calls.is_some() {
+                    "tool_calls"
+                } else {
+                    "stop"
+                }
+            })
+            .to_string();
+
+        Ok(ChatCompletionResponse {
+            content,
+            tool_calls,
+            model: response.model.unwrap_or_default(),
+            usage: crate::ai::provider_types::TokenUsage {
+                prompt_tokens: usage.input_tokens.unwrap_or(0),
+                completion_tokens: usage.output_tokens.unwrap_or(0),
+                total_tokens: usage.input_tokens.unwrap_or(0) + usage.output_tokens.unwrap_or(0),
+            },
+            finish_reason,
+            provider_metadata: Some(json!({
+                "transport": match transport {
+                    RainyTransport::ChatCompletions => "chat.completions",
+                    RainyTransport::Responses => "responses",
+                },
+                "response_id": response.id,
+                "object": response.object,
+                "output": output,
+            })),
+        })
+    }
+
     async fn fetch_capabilities(&self) -> ProviderCapabilities {
         match self.client.get_models_catalog().await {
             Ok(models) if !models.is_empty() => {
@@ -249,7 +497,6 @@ impl RainySDKProvider {
                             .and_then(|caps| caps.image_input.as_ref()),
                     )
                 });
-                let web_search = true;
 
                 ProviderCapabilities {
                     chat_completions: true,
@@ -257,7 +504,7 @@ impl RainySDKProvider {
                     streaming: true,
                     function_calling,
                     vision,
-                    web_search,
+                    web_search: true,
                     max_context_tokens,
                     max_output_tokens: 65_536,
                     models: model_ids,
@@ -285,70 +532,27 @@ impl RainySDKProvider {
                     "gpt-4o".to_string(),
                     "gpt-5".to_string(),
                     "gpt-5-pro".to_string(),
+                    "o3".to_string(),
+                    "o4-mini".to_string(),
                     "claude-sonnet-4".to_string(),
                     "claude-opus-4-1".to_string(),
                 ],
             },
         }
     }
-}
 
-#[async_trait]
-impl AIProvider for RainySDKProvider {
-    fn id(&self) -> &ProviderId {
-        &self.config.id
-    }
-
-    fn provider_type(&self) -> ProviderType {
-        ProviderType::RainySDK
-    }
-
-    async fn capabilities(&self) -> ProviderResult<ProviderCapabilities> {
-        {
-            let cache = self.cached_capabilities.read().await;
-            if let Some(caps) = cache.as_ref() {
-                return Ok(caps.clone());
-            }
-        }
-
-        let capabilities = self.fetch_capabilities().await;
-
-        let mut cache = self.cached_capabilities.write().await;
-        *cache = Some(capabilities.clone());
-        Ok(capabilities)
-    }
-
-    async fn health_check(&self) -> ProviderResult<ProviderHealth> {
-        let request = ChatCompletionRequest {
-            messages: vec![crate::ai::provider_types::ChatMessage::user("Hello")],
-            model: self.config.model.clone(),
-            max_tokens: Some(10),
-            ..Default::default()
-        };
-
-        match self.complete(request).await {
-            Ok(_) => Ok(ProviderHealth::Healthy),
-            Err(e) => {
-                if matches!(e, AIError::RateLimit(_)) {
-                    Ok(ProviderHealth::Degraded)
-                } else {
-                    Ok(ProviderHealth::Unhealthy)
-                }
-            }
-        }
-    }
-
-    async fn complete(
+    async fn complete_chat(
         &self,
         request: ChatCompletionRequest,
     ) -> ProviderResult<ChatCompletionResponse> {
         let api_request = Self::build_openai_request(&request);
 
-        let response = self
-            .client
-            .create_openai_chat_completion(api_request)
-            .await
-            .map_err(|e| AIError::APIError(format!("Rainy API request failed: {}", e)))?;
+        let response = self.client.create_openai_chat_completion(api_request).await.map_err(|e| {
+            AIError::APIError(format!(
+                "Rainy chat.completions request failed for model '{}': {}",
+                request.model, e
+            ))
+        })?;
 
         let choice = response
             .choices
@@ -409,7 +613,92 @@ impl AIProvider for RainySDKProvider {
                 }
             },
             finish_reason: choice.finish_reason,
+            provider_metadata: Some(json!({
+                "transport": "chat.completions",
+            })),
         })
+    }
+
+    async fn complete_responses(
+        &self,
+        request: ChatCompletionRequest,
+    ) -> ProviderResult<ChatCompletionResponse> {
+        let api_request = Self::build_responses_request(&request);
+        let (response, metadata) = self.client.create_response(api_request).await.map_err(|e| {
+            AIError::APIError(format!(
+                "Rainy responses request failed for model '{}': {}",
+                request.model, e
+            ))
+        })?;
+
+        let mut mapped = Self::map_responses_response(RainyTransport::Responses, response)?;
+        if let Some(existing) = mapped.provider_metadata.as_mut() {
+            existing["response_mode"] = metadata
+                .response_mode
+                .map(Value::String)
+                .unwrap_or(Value::Null);
+            existing["billing_plan"] = metadata
+                .billing_plan
+                .map(Value::String)
+                .unwrap_or(Value::Null);
+        }
+        Ok(mapped)
+    }
+}
+
+#[async_trait]
+impl AIProvider for RainySDKProvider {
+    fn id(&self) -> &ProviderId {
+        &self.config.id
+    }
+
+    fn provider_type(&self) -> ProviderType {
+        ProviderType::RainySDK
+    }
+
+    async fn capabilities(&self) -> ProviderResult<ProviderCapabilities> {
+        {
+            let cache = self.cached_capabilities.read().await;
+            if let Some(caps) = cache.as_ref() {
+                return Ok(caps.clone());
+            }
+        }
+
+        let capabilities = self.fetch_capabilities().await;
+
+        let mut cache = self.cached_capabilities.write().await;
+        *cache = Some(capabilities.clone());
+        Ok(capabilities)
+    }
+
+    async fn health_check(&self) -> ProviderResult<ProviderHealth> {
+        let request = ChatCompletionRequest {
+            messages: vec![crate::ai::provider_types::ChatMessage::user("Hello")],
+            model: self.config.model.clone(),
+            max_tokens: Some(10),
+            ..Default::default()
+        };
+
+        match self.complete(request).await {
+            Ok(_) => Ok(ProviderHealth::Healthy),
+            Err(e) => {
+                if matches!(e, AIError::RateLimit(_)) {
+                    Ok(ProviderHealth::Degraded)
+                } else {
+                    Ok(ProviderHealth::Unhealthy)
+                }
+            }
+        }
+    }
+
+    async fn complete(
+        &self,
+        request: ChatCompletionRequest,
+    ) -> ProviderResult<ChatCompletionResponse> {
+        match Self::resolve_transport(&request.model) {
+            RainyTransport::ChatCompletions => self.complete_chat(request).await,
+            RainyTransport::Responses => self.complete_responses(request).await,
+        }
     }
 
     async fn complete_stream(
@@ -417,38 +706,60 @@ impl AIProvider for RainySDKProvider {
         request: ChatCompletionRequest,
         callback: StreamingCallback,
     ) -> ProviderResult<()> {
-        let api_request = Self::build_openai_request(&request).with_stream(true);
+        match Self::resolve_transport(&request.model) {
+            RainyTransport::ChatCompletions => {
+                let api_request = Self::build_openai_request(&request).with_stream(true);
 
-        let mut stream = self
-            .client
-            .create_openai_chat_completion_stream(api_request)
-            .await
-            .map_err(|e| AIError::APIError(format!("Stream initialization failed: {}", e)))?;
+                let mut stream = self
+                    .client
+                    .create_openai_chat_completion_stream(api_request)
+                    .await
+                    .map_err(|e| {
+                        AIError::APIError(format!(
+                            "Rainy chat.completions stream failed for model '{}': {}",
+                            request.model, e
+                        ))
+                    })?;
 
-        while let Some(chunk_result) = stream.next().await {
-            match chunk_result {
-                Ok(chunk) => {
-                    if let Some(choice) = chunk.choices.first() {
-                        let content = choice.delta.content.clone().unwrap_or_default();
-                        let thought = choice.delta.thought.clone();
-                        let finish_reason = choice.finish_reason.clone();
-                        let is_final = finish_reason.is_some() || chunk.choices.is_empty();
+                while let Some(chunk_result) = stream.next().await {
+                    match chunk_result {
+                        Ok(chunk) => {
+                            if let Some(choice) = chunk.choices.first() {
+                                let content = choice.delta.content.clone().unwrap_or_default();
+                                let thought = choice.delta.thought.clone();
+                                let finish_reason = choice.finish_reason.clone();
+                                let is_final = finish_reason.is_some() || chunk.choices.is_empty();
 
-                        callback(crate::ai::provider_types::StreamingChunk {
-                            content,
-                            thought,
-                            is_final,
-                            finish_reason,
-                        });
+                                callback(crate::ai::provider_types::StreamingChunk {
+                                    content,
+                                    thought,
+                                    is_final,
+                                    finish_reason,
+                                });
+                            }
+                        }
+                        Err(e) => {
+                            return Err(AIError::APIError(format!(
+                                "Rainy chat.completions stream error for model '{}': {}",
+                                request.model, e
+                            )));
+                        }
                     }
                 }
-                Err(e) => {
-                    return Err(AIError::APIError(format!("Stream error: {}", e)));
-                }
+
+                Ok(())
+            }
+            RainyTransport::Responses => {
+                let response = self.complete_responses(request).await?;
+                callback(crate::ai::provider_types::StreamingChunk {
+                    content: response.content.unwrap_or_default(),
+                    thought: None,
+                    is_final: true,
+                    finish_reason: Some(response.finish_reason),
+                });
+                Ok(())
             }
         }
-
-        Ok(())
     }
 
     async fn embed(&self, _request: EmbeddingRequest) -> ProviderResult<EmbeddingResponse> {
