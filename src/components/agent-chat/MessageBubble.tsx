@@ -41,7 +41,16 @@ interface MessageBubbleProps {
   workspaceId?: string;
 }
 
-export function MessageBubble({
+/**
+ * ⚡ Bolt Performance Optimization
+ *
+ * What: Wrapped MessageBubble in React.memo.
+ * Why: During chat streaming, the parent container renders rapidly. Without memoization,
+ *      older chat messages needlessly re-render on every token update.
+ * Impact: Prevents O(N) re-renders across the message list. Performance scales much better
+ *         with large chat histories, dropping React commit phase time significantly.
+ */
+export const MessageBubble = React.memo(function MessageBubble({
   message,
   onExecute,
   onExecuteToolCalls,
@@ -221,7 +230,7 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});
 
 function SupervisorRail({
   summary,
