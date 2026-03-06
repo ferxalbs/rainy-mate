@@ -58,6 +58,26 @@ pub struct IntelligentRouter {
 }
 
 impl IntelligentRouter {
+    fn pinned_provider_error(model: &str) -> Option<AIError> {
+        if crate::ai::model_catalog::requires_rainy_provider(model) {
+            return Some(AIError::ProviderNotFound(format!(
+                "Rainy provider unavailable for model '{}'. Register 'rainy_api' and ensure a Rainy API key is configured.",
+                model
+            )));
+        }
+
+        if crate::ai::model_catalog::is_explicit_gemini_model(model)
+            || crate::ai::model_catalog::is_unprefixed_gemini_model(model)
+        {
+            return Some(AIError::ProviderNotFound(format!(
+                "Gemini BYOK provider unavailable for model '{}'. Register 'gemini_byok' and ensure a Gemini API key is configured.",
+                model
+            )));
+        }
+
+        None
+    }
+
     /// Create a new intelligent router
     pub fn new(config: RouterConfig) -> Self {
         Self {
@@ -172,7 +192,8 @@ impl IntelligentRouter {
                     }
                 }
             } else {
-                return Err(AIError::Internal("No providers available".to_string()));
+                return Err(Self::pinned_provider_error(&request.model)
+                    .unwrap_or_else(|| AIError::Internal("No providers available".to_string())));
             }
         }
 
@@ -243,7 +264,8 @@ impl IntelligentRouter {
                     }
                 }
             } else {
-                return Err(AIError::Internal("No providers available".to_string()));
+                return Err(Self::pinned_provider_error(&request.model)
+                    .unwrap_or_else(|| AIError::Internal("No providers available".to_string())));
             }
         }
 
@@ -324,8 +346,7 @@ impl IntelligentRouter {
         let all_providers = self.load_balancer.providers();
 
         // Explicit provider prefixes are authoritative and deterministic.
-        let is_rainy_model = model.starts_with("rainy-api/") || model.starts_with("rainy:");
-        if is_rainy_model {
+        if crate::ai::model_catalog::requires_rainy_provider(&model) {
             return all_providers
                 .iter()
                 .find(|p| {
@@ -335,8 +356,7 @@ impl IntelligentRouter {
                 .cloned();
         }
 
-        let is_prefixed_gemini = model.starts_with("gemini:");
-        if is_prefixed_gemini {
+        if crate::ai::model_catalog::is_explicit_gemini_model(&model) {
             return all_providers
                 .iter()
                 .find(|p| {
@@ -346,24 +366,8 @@ impl IntelligentRouter {
                 .cloned();
         }
 
-        // Rainy v3 catalog models use provider-qualified slugs such as
-        // `openai/gpt-5-nano` or `anthropic/claude-sonnet-4.6`.
-        // These must never fall through to Gemini BYOK heuristics.
-        if crate::ai::model_catalog::is_rainy_catalog_slug(&model) {
-            return all_providers
-                .iter()
-                .find(|p| {
-                    let id = p.provider().id().to_string().to_lowercase();
-                    id.contains("rainy")
-                })
-                .cloned();
-        }
-
         // Unprefixed pure-Gemini models default to BYOK when available.
-        let is_pure_gemini_unprefixed =
-            (model.starts_with("gemini-") || model.starts_with("gemini/")) && !model.contains(':');
-
-        if is_pure_gemini_unprefixed {
+        if crate::ai::model_catalog::is_unprefixed_gemini_model(&model) {
             if let Some(p) = all_providers
                 .iter()
                 .find(|p| {

@@ -53,48 +53,11 @@ impl ModeSelector {
     /// 1. Rainy API mode for fast, direct access (preferred)
     /// 2. Cowork mode only for complex, multi-step operations
     pub fn select_mode(
-        api_key: &str,
+        _api_key: &str,
         use_case: UseCase,
-        complexity: TaskComplexity,
+        _complexity: TaskComplexity,
     ) -> ProcessingMode {
-        // Check if Cowork key
-        let is_cowork_key = api_key.starts_with("ra-cowork");
-
-        if is_cowork_key {
-            // Cowork key - can use both modes
-            // Prefer Rainy API for simple tasks, Cowork for complex
-            Self::select_for_cowork_key(use_case, complexity)
-        } else {
-            // Regular Rainy API key - always use fast mode
-            Self::select_for_rainy_api_key(use_case)
-        }
-    }
-
-    /// Select mode for Cowork API key
-    fn select_for_cowork_key(use_case: UseCase, complexity: TaskComplexity) -> ProcessingMode {
-        match (use_case, complexity) {
-            // Streaming always uses streaming mode
-            (UseCase::StreamingResponse, _) => ProcessingMode::Streaming,
-
-            // Complex operations use Deep Processing (Cowork)
-            (UseCase::FileOperation, TaskComplexity::High) => ProcessingMode::DeepProcessing,
-            (UseCase::BatchProcessing, _) => ProcessingMode::DeepProcessing,
-            (UseCase::CodeReview, TaskComplexity::High) => ProcessingMode::DeepProcessing,
-            (UseCase::WebResearch, TaskComplexity::High) => ProcessingMode::DeepProcessing,
-
-            // Simple operations use Fast Chat (Rainy API)
-            (UseCase::QuickQuestion, _) => ProcessingMode::FastChat,
-            (UseCase::FileOperation, TaskComplexity::Low) => ProcessingMode::FastChat,
-            (UseCase::FileOperation, TaskComplexity::Medium) => ProcessingMode::FastChat,
-            (UseCase::CodeReview, TaskComplexity::Low) => ProcessingMode::FastChat,
-            (UseCase::CodeReview, TaskComplexity::Medium) => ProcessingMode::FastChat,
-            (UseCase::WebResearch, TaskComplexity::Low) => ProcessingMode::FastChat,
-            (UseCase::WebResearch, TaskComplexity::Medium) => ProcessingMode::FastChat,
-
-            // Default to Fast Chat
-            #[allow(unreachable_patterns)]
-            _ => ProcessingMode::FastChat,
-        }
+        Self::select_for_rainy_api_key(use_case)
     }
 
     /// Select mode for regular Rainy API key
@@ -106,31 +69,19 @@ impl ModeSelector {
     }
 
     /// Determine if Cowork mode should be used
-    pub fn should_use_cowork(api_key: &str, use_case: UseCase, complexity: TaskComplexity) -> bool {
+    pub fn should_use_cowork(
+        api_key: &str,
+        use_case: UseCase,
+        complexity: TaskComplexity,
+    ) -> bool {
         Self::select_mode(api_key, use_case, complexity) == ProcessingMode::DeepProcessing
     }
 
     /// Get recommended provider source for given context
-    pub fn recommended_provider(api_key: &str, context: ModelContext) -> ProviderSource {
-        let is_cowork_key = api_key.starts_with("ra-cowork");
-
+    pub fn recommended_provider(_api_key: &str, context: ModelContext) -> ProviderSource {
         match context {
-            ModelContext::Chat => {
-                // Chat prefers Rainy API for speed
-                if is_cowork_key {
-                    ProviderSource::RainyApi
-                } else {
-                    ProviderSource::RainyApi
-                }
-            }
-            ModelContext::Processing => {
-                // Processing can use Cowork for complex tasks
-                if is_cowork_key {
-                    ProviderSource::Cowork
-                } else {
-                    ProviderSource::RainyApi
-                }
-            }
+            ModelContext::Chat => ProviderSource::RainyApi,
+            ModelContext::Processing => ProviderSource::RainyApi,
         }
     }
 
@@ -229,9 +180,9 @@ mod tests {
     }
 
     #[test]
-    fn test_select_mode_cowork_key_simple() {
+    fn test_select_mode_current_rainy_key_simple() {
         let mode = ModeSelector::select_mode(
-            "ra-cowork20250125143052Ab3Cd9Ef2Gh5Ik8Lm4Np7Qr",
+            "ra-20250125143052Ab3Cd9Ef2Gh5Ik8Lm4Np7Qr",
             UseCase::QuickQuestion,
             TaskComplexity::Low,
         );
@@ -239,13 +190,13 @@ mod tests {
     }
 
     #[test]
-    fn test_select_mode_cowork_key_complex() {
+    fn test_select_mode_current_rainy_key_complex_request() {
         let mode = ModeSelector::select_mode(
-            "ra-cowork20250125143052Ab3Cd9Ef2Gh5Ik8Lm4Np7Qr",
+            "ra-20250125143052Ab3Cd9Ef2Gh5Ik8Lm4Np7Qr",
             UseCase::BatchProcessing,
             TaskComplexity::High,
         );
-        assert_eq!(mode, ProcessingMode::DeepProcessing);
+        assert_eq!(mode, ProcessingMode::FastChat);
     }
 
     #[test]

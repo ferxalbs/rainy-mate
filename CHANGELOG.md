@@ -5,9 +5,89 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.101] - 2026-03-05 - RAINY SDK MEGA UPDATE + BYOK ISSUE TRACKING
+## [0.5.94] - 2026-03-04 - THE DIRECTOR
 
-## [0.5.102] - 2026-03-05 - RAINY SDK V3 CONNECTOR MIGRATION
+
+### Added
+
+- Added formal BYOK instability issue record with repro, impact, mitigations, and next milestones:
+  - `ISSUES/BYOK_GEMINI_TOOLCALLING_2026-03-05.md`
+- Added model label rendering under agent chat bubbles so each assistant response shows the model used.
+- Added canonical model catalog module in `src-tauri/src/ai/model_catalog.rs` as a single Rust source of truth for:
+  - supported model slugs
+  - provider ownership (`rainy_api` vs `gemini_byok`)
+  - model capabilities and thinking metadata
+- Added strict obsolete-slug guardrails to reject deprecated flash slugs globally (`gemini-2.5-flash`, `gemini-2.5-flash-lite`).
+- Added `GeminiProviderFactory` in `src-tauri/src/ai/providers/gemini_adapter.rs` and wired it into provider exports for first-class provider registration.
+- Added first-pass Fleet Command Center UI module in `src/components/neural/modules/FleetCommandCenter.tsx` with:
+  - node health/status cards
+  - fleet policy push action
+  - fleet kill switch dispatch action
+- Added Fleet tab wiring in neural UI:
+  - `src/components/neural/layout/NeuralSidebar.tsx`
+  - `src/components/neural/NeuralPanel.tsx`
+- Added desktop fleet API command wrappers in:
+  - `src-tauri/src/commands/atm.rs`
+  - `src/services/tauri.ts`
+  - `src-tauri/src/services/atm_client.rs`
+- Added modular fleet runtime services in desktop core:
+  - `src-tauri/src/services/fleet_control.rs`
+  - `src-tauri/src/services/agent_kill_switch.rs`
+  - `src-tauri/src/services/audit_emitter.rs`
+- Added modular Supervisor runtime building blocks in:
+  - `src-tauri/src/ai/agent/events.rs`
+  - `src-tauri/src/ai/agent/protocol.rs`
+  - `src-tauri/src/ai/agent/runtime_registry.rs`
+  - `src-tauri/src/ai/agent/specialist.rs`
+  - `src-tauri/src/ai/agent/supervisor.rs`
+- Added `runtime` configuration to `AgentSpec` in `src-tauri/src/ai/specs/manifest.rs` with `single` and `supervisor` modes, bounded specialist count, and verifier gating.
+- Added first-class specialist roles:
+  - `ResearchAgent`
+  - `ExecutorAgent`
+  - `VerifierAgent`
+- Added Supervisor event emission for real-time plan/status visibility:
+  - `supervisor_plan_created`
+  - `specialist_spawned`
+  - `specialist_status_changed`
+  - `specialist_completed`
+  - `specialist_failed`
+  - `supervisor_summary`
+
+### Fixed
+
+- Fixed deterministic provider routing so explicit model prefixes are authoritative:
+  - `rainy:` / `rainy-api/` now pin to Rainy provider.
+  - `gemini:` now pins to Gemini BYOK provider.
+- Fixed Rainy v3/OpenRouter model ownership so namespaced catalog slugs like `openai/gpt-5-nano`, `anthropic/...`, and `google/...` no longer fall through to Gemini BYOK routing.
+- Fixed native `run_agent_workflow` provider bootstrap in `src-tauri/src/commands/agent.rs` so Rainy-pinned models synchronously register `rainy_api` before the first ThinkStep instead of failing with generic `No providers available`.
+- Fixed Rainy credential resolution in `src-tauri/src/ai/provider.rs` and `src-tauri/src/commands/agent.rs` to ignore residual `ra-cowork` / `cowork_api` legacy paths and accept only current `ra-` Rainy API keys.
+- Fixed Rainy `responses` tool-call failures for GPT-5-family models by routing tool-bearing turns through `chat.completions` while keeping `responses` for non-tool turns:
+  - `src-tauri/src/ai/providers/rainy_sdk.rs`
+  - `rainy-atm/src/services/rainy-runtime.ts`
+- Fixed Rainy `chat.completions` tool-choice serialization in `src-tauri/src/ai/providers/rainy_sdk.rs` by omitting `ToolChoice::Auto` / `ToolChoice::None`, avoiding `null` payloads that Rainy rejected with `400 invalid_union`.
+- Fixed Gemini BYOK multi-turn tool continuity by serializing assistant tool calls and tool results using Gemini-native parts (`function_call` + `function_response`) instead of flattening tool messages into plain text.
+- Fixed empty final-response regressions by adding backend and frontend guardrails when a run ends with empty assistant text.
+- Fixed local `run_agent_workflow` Airlock bypass by injecting the initialized `AirlockService` state into `AgentRuntime` instead of running with `None`.
+- Restored effective permission gating for tool execution in local native agent loops (Airlock checks now execute for local chat runs too).
+- Fixed startup-time `libsql` panic caused by threading initialization race with `sqlx` SQLite pools:
+  - `assertion left == right failed` in `libsql::local::database` with poisoned `Once`.
+- Added deterministic early `libsql` warm-up in app setup before any `sqlx` pool initialization to enforce safe initialization order.
+- Fixed Gemini BYOK request model normalization so Google API receives clean model IDs (for example `gemini-3.1-flash-lite-preview`) instead of prefixed IDs like `gemini:gemini-3.1-flash-lite-preview`.
+- Prevented invalid Gemini URLs like `models/gemini:...` that caused `404 NOT_FOUND` responses in runtime chat.
+- Normalized incoming model IDs at router command boundaries to avoid prefixed model propagation through runtime.
+- Enforced Airlock checks for local tool execution inside agent ActStep before tool dispatch in `src-tauri/src/ai/agent/workflow.rs`.
+- Improved specialist runtime status fidelity:
+  - emits `waiting_on_airlock` when approval gates are active
+  - emits verifier `verifying` phase
+  - files: `src-tauri/src/ai/agent/specialist.rs`, `src-tauri/src/ai/agent/supervisor.rs`
+- Fixed Supervisor terminal semantics so runs with failed specialist lanes are no longer reported as completed in `src-tauri/src/ai/agent/supervisor.rs`.
+- Aligned desktop websocket wake-up handling for both `command_queued` and legacy `new_command` events in `src-tauri/src/lib.rs`.
+- Wired fleet audit queue flush on command completion in `src-tauri/src/services/command_poller.rs` via `AuditEmitter -> ATMClient`.
+- Closed the ATM-hosted Wasm skill installation trust chain by switching desktop remote installs to verify `ed25519` bundle signatures against an ATM-served public key instead of the workspace platform key.
+- Hardened `src-tauri/src/services/neural_service.rs` heartbeat behavior so runtime skill manifests are re-signed and refreshed whenever the manifest hash changes, keeping the node advertisement aligned with installed/enabled third-party skills.
+- Aligned Wasm sandbox resource limits in `src-tauri/src/services/wasm_sandbox/mod.rs` with the production Step 4 profile by reducing the per-instance memory ceiling to `50 MB`.
+- Fixed keychain-dependent Rust tests to run deterministically in the local test environment by adding a test-only in-memory keychain fallback in `src-tauri/src/ai/keychain.rs`.
+- Tightened the built-in tool policy regression in `src-tauri/src/services/skill_executor/registry.rs` so the explicit-policy invariant validates registered built-ins without being polluted by installed third-party skills.
 
 ### Changed
 
@@ -15,6 +95,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `create_openai_chat_completion`
   - `create_openai_chat_completion_stream`
   - native replay of assistant `tool_calls`, `tool` messages, multimodal content, and provider metadata
+- Refactored Rainy transport selection to operate on the full request, not just the model slug:
+  - GPT-5 / O3 / O4 models prefer `responses`
+  - turns that advertise local tools fall back to `chat.completions`
+- Refactored `rainy-atm/src/services/rainy-runtime.ts` to preserve original Rainy/OpenRouter model slugs instead of rewriting or de-prefixing them during execution.
 - Rainy provider capabilities now prefer live v3 catalog metadata from `RainyClient::get_models_catalog()` instead of a fixed hardcoded list.
 - `src-tauri/src/ai/provider.rs`
   - Rainy model discovery now prefers live v3 catalog entries, then falls back to `list_available_models()`, then local static defaults.
@@ -24,56 +108,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src-tauri/src/services/settings.rs`
   - settings model picker now augments static Rainy entries with dynamically discovered Rainy v3 catalog models.
 - Updated `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock` to consume `rainy-sdk 0.6.11`.
-
-### Changed - Versioning
-
-- `package.json` -> `0.5.102`
-- `src-tauri/Cargo.toml` -> `0.5.102`
-- `src-tauri/tauri.conf.json` -> `0.5.102`
-
-### Validation
-
-- `cd src-tauri && cargo check -q` - passes
-- `pnpm exec tsc --noEmit` - passes
-- `cd src-tauri && cargo test -q agent::workflow::tests::test_workflow_execution --lib` - passes
-- `cd src-tauri && cargo test -q router::router::tests --lib` - passes
-
-### Changed
-
 - Updated `rainy-sdk` dependency to latest available stable release:
   - `src-tauri/Cargo.toml`: `rainy-sdk = 0.6.10`
   - `src-tauri/Cargo.lock`: resolved `rainy-sdk 0.6.10`
-
-### Added
-
-- Added formal BYOK instability issue record with repro, impact, mitigations, and next milestones:
-  - `ISSUES/BYOK_GEMINI_TOOLCALLING_2026-03-05.md`
-
-### Changed - Versioning
-
-- `package.json` -> `0.5.101`
-- `src-tauri/Cargo.toml` -> `0.5.101`
-- `src-tauri/tauri.conf.json` -> `0.5.101`
-
-### Validation
-
-- `cd src-tauri && cargo check -q` — passes
-- `pnpm exec tsc --noEmit` — passes
-- `cd src-tauri && cargo test -q agent::workflow::tests::test_workflow_execution --lib` — passes
-- `cd src-tauri && cargo test -q router::router::tests --lib` — passes
-
-## [0.5.100] - 2026-03-05 - GEMINI TOOLCHAIN HARDENING
-
-### Fixed
-
-- Fixed deterministic provider routing so explicit model prefixes are authoritative:
-  - `rainy:` / `rainy-api/` now pin to Rainy provider.
-  - `gemini:` now pins to Gemini BYOK provider.
-- Fixed Gemini BYOK multi-turn tool continuity by serializing assistant tool calls and tool results using Gemini-native parts (`function_call` + `function_response`) instead of flattening tool messages into plain text.
-- Fixed empty final-response regressions by adding backend and frontend guardrails when a run ends with empty assistant text.
-
-### Changed
-
 - `src-tauri/src/commands/agent.rs`
   - runtime now preserves full `model_id` (including provider prefix) instead of stripping it.
   - native agent runtime sets `streaming_enabled: false` by default.
@@ -103,78 +140,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - routing commands now preserve explicit prefixed model IDs.
 - `src-tauri/src/services/command_poller.rs`
   - cloud runtime options now set `streaming_enabled: false` by default.
-
-### Changed - Versioning
-
-- `package.json` -> `0.5.100`
-- `src-tauri/Cargo.toml` -> `0.5.100`
-- `src-tauri/tauri.conf.json` -> `0.5.100`
-
-### Validation
-
-- `cd src-tauri && cargo check -q` — passes
-- `cd src-tauri && cargo test -q agent::workflow::tests::test_workflow_execution --lib` — passes
-- `cd src-tauri && cargo test -q router::router::tests --lib` — passes
-- `pnpm exec tsc --noEmit` — passes
-
-## [0.5.99] - 2026-03-05 - AIRLOCK ENFORCEMENT + MODEL LABEL
-
-### Fixed
-
-- Fixed local `run_agent_workflow` Airlock bypass by injecting the initialized `AirlockService` state into `AgentRuntime` instead of running with `None`.
-- Restored effective permission gating for tool execution in local native agent loops (Airlock checks now execute for local chat runs too).
-
-### Added
-
-- Added model label rendering under agent chat bubbles so each assistant response shows the model used.
-
-### Changed
-
 - `src-tauri/src/commands/agent.rs`
   - `run_agent_workflow` now receives `AirlockServiceState`.
   - runtime construction now passes the real shared Airlock service instance.
 - `src/components/agent-chat/MessageBubble.tsx`
   - shows `message.modelUsed.name` below non-user bubbles alongside timestamp.
-
-### Validation
-
-- `cd src-tauri && cargo check -q` — passes
-- `pnpm exec tsc --noEmit` — passes
-
-## [0.5.98] - 2026-03-05 - SQLITE STARTUP GUARD
-
-### Fixed
-
-- Fixed startup-time `libsql` panic caused by threading initialization race with `sqlx` SQLite pools:
-  - `assertion left == right failed` in `libsql::local::database` with poisoned `Once`.
-- Added deterministic early `libsql` warm-up in app setup before any `sqlx` pool initialization to enforce safe initialization order.
-
-### Changed
-
 - `src-tauri/src/lib.rs`
   - setup now performs `libsql::Builder::new_local(\":memory:\").build().await` before DB and service initialization that may touch SQLite from `sqlx`.
-
-### Changed - Versioning
-
-- `package.json` -> `0.5.98`
-- `src-tauri/Cargo.toml` -> `0.5.98`
-- `src-tauri/tauri.conf.json` -> `0.5.98`
-
-### Validation
-
-- `cd src-tauri && cargo check -q` — passes
-- `pnpm exec tsc --noEmit` — passes
-
-## [0.5.97] - 2026-03-05 - PHASE 2 STABILIZATION (PROVIDER NORMALIZATION)
-
-### Fixed
-
-- Fixed Gemini BYOK request model normalization so Google API receives clean model IDs (for example `gemini-3.1-flash-lite-preview`) instead of prefixed IDs like `gemini:gemini-3.1-flash-lite-preview`.
-- Prevented invalid Gemini URLs like `models/gemini:...` that caused `404 NOT_FOUND` responses in runtime chat.
-- Normalized incoming model IDs at router command boundaries to avoid prefixed model propagation through runtime.
-
-### Changed
-
 - `src-tauri/src/ai/providers/gemini_adapter.rs`
   - `resolve_model_id` now strips provider prefixes before URL construction.
 - `src-tauri/src/ai/gemini.rs`
@@ -185,25 +157,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - runtime options now use normalized model IDs for agent execution.
 - `src-tauri/src/ai/router/router.rs`
   - provider pinning recognizes `gemini:` prefixed model IDs as Gemini BYOK candidates.
-
-### Validation
-
-- `cd src-tauri && cargo check -q` — passes
-- `pnpm exec tsc --noEmit` — passes
-
-## [0.5.96] - 2026-03-05 - MODEL CORE UNIFICATION
-
-### Added
-
-- Added canonical model catalog module in `src-tauri/src/ai/model_catalog.rs` as a single Rust source of truth for:
-  - supported model slugs
-  - provider ownership (`rainy_api` vs `gemini_byok`)
-  - model capabilities and thinking metadata
-- Added strict obsolete-slug guardrails to reject deprecated flash slugs globally (`gemini-2.5-flash`, `gemini-2.5-flash-lite`).
-- Added `GeminiProviderFactory` in `src-tauri/src/ai/providers/gemini_adapter.rs` and wired it into provider exports for first-class provider registration.
-
-### Changed
-
 - Replaced duplicated static model lists in `src-tauri/src/commands/unified_models.rs` with catalog-backed generation.
 - Reworked `src-tauri/src/services/settings.rs` model listing to derive from the new Rust catalog.
 - Updated default selected model in settings to `gemini-3-flash-preview`.
@@ -220,96 +173,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/src/ai/providers/gemini_adapter.rs`
   - `src-tauri/src/ai/gemini.rs`
   - `src-tauri/src/ai/providers/rainy_sdk.rs`
-
-### Validation
-
-- `cd src-tauri && cargo check -q` — passes
-- `pnpm exec tsc --noEmit` — passes
-- `cd src-tauri && cargo test -q test_streaming_event_serialization --lib` — passes
-
-## [0.5.95] - 2026-03-05 - NERVE CENTER (FLEET COMMAND CENTER)
-
-### Added - STEP 6 Fleet Foundations
-
-- Added first-pass Fleet Command Center UI module in `src/components/neural/modules/FleetCommandCenter.tsx` with:
-  - node health/status cards
-  - fleet policy push action
-  - fleet kill switch dispatch action
-- Added Fleet tab wiring in neural UI:
-  - `src/components/neural/layout/NeuralSidebar.tsx`
-  - `src/components/neural/NeuralPanel.tsx`
-- Added desktop fleet API command wrappers in:
-  - `src-tauri/src/commands/atm.rs`
-  - `src/services/tauri.ts`
-  - `src-tauri/src/services/atm_client.rs`
-- Added modular fleet runtime services in desktop core:
-  - `src-tauri/src/services/fleet_control.rs`
-  - `src-tauri/src/services/agent_kill_switch.rs`
-  - `src-tauri/src/services/audit_emitter.rs`
-
-### Fixed - Step 5 Production Closure Hardening
-
-- Enforced Airlock checks for local tool execution inside agent ActStep before tool dispatch in `src-tauri/src/ai/agent/workflow.rs`.
-- Improved specialist runtime status fidelity:
-  - emits `waiting_on_airlock` when approval gates are active
-  - emits verifier `verifying` phase
-  - files: `src-tauri/src/ai/agent/specialist.rs`, `src-tauri/src/ai/agent/supervisor.rs`
-- Fixed Supervisor terminal semantics so runs with failed specialist lanes are no longer reported as completed in `src-tauri/src/ai/agent/supervisor.rs`.
-- Aligned desktop websocket wake-up handling for both `command_queued` and legacy `new_command` events in `src-tauri/src/lib.rs`.
-- Wired fleet audit queue flush on command completion in `src-tauri/src/services/command_poller.rs` via `AuditEmitter -> ATMClient`.
-
-### Changed - Versioning
-
-- `package.json` -> `0.5.95`
-- `src-tauri/Cargo.toml` -> `0.5.95`
-- `src-tauri/tauri.conf.json` -> `0.5.95`
-
-### Changed - AI Model Slugs
-
 - Updated `gemini-2.5-flash` to `gemini-3-flash-preview` across the Rust engine and frontend hooks/types.
 - Updated `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite-preview` across the Rust engine and frontend hooks/types.
 - Updated model registry metadata, frontend selection logic, and thinking capability flags for the new preview series.
-
-### Validation
-
-- `cd src-tauri && cargo check -q` — passes
-- `cd src-tauri && cargo test -q` — passes (116/116)
-- `pnpm exec tsc --noEmit` — passes
-- `pnpm run build` — passes
-
-## [0.5.94] - 2026-03-04 - THE DIRECTOR
-
-### Fixed - Step 4 Production Closure
-
-- Closed the ATM-hosted Wasm skill installation trust chain by switching desktop remote installs to verify `ed25519` bundle signatures against an ATM-served public key instead of the workspace platform key.
-- Hardened `src-tauri/src/services/neural_service.rs` heartbeat behavior so runtime skill manifests are re-signed and refreshed whenever the manifest hash changes, keeping the node advertisement aligned with installed/enabled third-party skills.
-- Aligned Wasm sandbox resource limits in `src-tauri/src/services/wasm_sandbox/mod.rs` with the production Step 4 profile by reducing the per-instance memory ceiling to `50 MB`.
-- Fixed keychain-dependent Rust tests to run deterministically in the local test environment by adding a test-only in-memory keychain fallback in `src-tauri/src/ai/keychain.rs`.
-- Tightened the built-in tool policy regression in `src-tauri/src/services/skill_executor/registry.rs` so the explicit-policy invariant validates registered built-ins without being polluted by installed third-party skills.
-
-### Added - Supervisor Agent Layer
-
-- Added modular Supervisor runtime building blocks in:
-  - `src-tauri/src/ai/agent/events.rs`
-  - `src-tauri/src/ai/agent/protocol.rs`
-  - `src-tauri/src/ai/agent/runtime_registry.rs`
-  - `src-tauri/src/ai/agent/specialist.rs`
-  - `src-tauri/src/ai/agent/supervisor.rs`
-- Added `runtime` configuration to `AgentSpec` in `src-tauri/src/ai/specs/manifest.rs` with `single` and `supervisor` modes, bounded specialist count, and verifier gating.
-- Added first-class specialist roles:
-  - `ResearchAgent`
-  - `ExecutorAgent`
-  - `VerifierAgent`
-- Added Supervisor event emission for real-time plan/status visibility:
-  - `supervisor_plan_created`
-  - `specialist_spawned`
-  - `specialist_status_changed`
-  - `specialist_completed`
-  - `specialist_failed`
-  - `supervisor_summary`
-
-### Changed - Runtime, UI, and Telemetry
-
 - `src-tauri/src/ai/agent/runtime.rs` now routes to the Supervisor layer when an agent spec declares `runtime.mode = supervisor`; existing agents continue to use the single-agent path by default.
 - `src-tauri/src/commands/agent.rs` and `src-tauri/src/services/command_poller.rs` now inject a shared runtime registry so local and cloud-triggered agent runs can report Supervisor activity consistently.
 - `src-tauri/src/models/neural.rs` and `src-tauri/src/services/neural_service.rs` now include `runtimeStats` in node heartbeats, exposing active supervisor runs, specialist counts, and tool usage by role.
@@ -321,13 +187,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Validation
 
+- `cd src-tauri && cargo check -q` — passes (Rainy v3 routing / credential / transport fixes)
+- `pnpm exec tsc --noEmit` — passes (frontend + ATM type integrity after Rainy v3 changes)
+- `cd rainy-atm && bunx tsc --noEmit` — passes
+- `cd rainy-atm && bun run build` — passes
+- `cd rainy-atm && bun test` — passes (43/43)
+- `cd src-tauri && cargo check -q` - passes
+- `cd src-tauri && cargo check -q` — passes
+- `cd src-tauri && cargo test -q agent::workflow::tests::test_workflow_execution --lib` - passes
+- `cd src-tauri && cargo test -q agent::workflow::tests::test_workflow_execution --lib` — passes
+- `cd src-tauri && cargo test -q router::router::tests --lib` - passes
+- `cd src-tauri && cargo test -q router::router::tests --lib` — passes
+- `cd src-tauri && cargo test -q test_streaming_event_serialization --lib` — passes
+- `cd src-tauri && cargo test -q` — passes (116/116)
+- `pnpm exec tsc --noEmit` - passes
 - `pnpm exec tsc --noEmit` — passes
 - `pnpm run build` — passes
-- `cd src-tauri && cargo check -q` — passes
-- `cd src-tauri && cargo test -q` — passes (116/116)
-- `cd rainy-atm && bun test` — passes (43/43)
-- `cd rainy-atm && bun run build` — passes
-
 ## [0.5.93] - QUARANTINE ZONE (WASM Skill Sandbox) - 2026-02-25
 
 ### Fixed - 0.5.93 Stabilizations

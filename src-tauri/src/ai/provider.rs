@@ -1,4 +1,4 @@
-// Rainy Cowork - AI Provider Trait and Manager
+// Rainy MaTE - AI Provider Trait and Manager
 // Unified abstraction layer using rainy-sdk for premium features
 
 use crate::ai::provider_trait::AIProvider;
@@ -58,9 +58,13 @@ pub struct AIProviderManager {
 }
 
 impl AIProviderManager {
+    fn is_valid_rainy_api_key(api_key: &str) -> bool {
+        api_key.trim_start().starts_with("ra-")
+    }
+
     fn provider_aliases(provider: &str) -> &'static [&'static str] {
         match provider {
-            "rainy_api" => &["rainy_api", "rainyapi", "cowork_api"],
+            "rainy_api" => &["rainy_api", "rainyapi"],
             "gemini" => &["gemini", "gemini_byok"],
             _ => &[],
         }
@@ -68,7 +72,7 @@ impl AIProviderManager {
 
     fn provider_env_keys(provider: &str) -> &'static [&'static str] {
         match provider {
-            "rainy_api" => &["RAINY_API_KEY", "COWORK_API_KEY"],
+            "rainy_api" => &["RAINY_API_KEY"],
             "gemini" => &["GEMINI_API_KEY"],
             _ => &[],
         }
@@ -137,6 +141,13 @@ impl AIProviderManager {
     async fn resolve_api_key(&self, provider: &str) -> Result<Option<String>, String> {
         for alias in Self::provider_aliases(provider) {
             if let Some(key) = self.keychain.get_key(alias)? {
+                if provider == "rainy_api" && !Self::is_valid_rainy_api_key(&key) {
+                    tracing::warn!(
+                        "[AIProviderManager] Ignoring invalid Rainy API key stored under alias '{}'",
+                        alias
+                    );
+                    continue;
+                }
                 return Ok(Some(key));
             }
         }
@@ -144,6 +155,13 @@ impl AIProviderManager {
         for env_key in Self::provider_env_keys(provider) {
             if let Ok(value) = std::env::var(env_key) {
                 if !value.trim().is_empty() {
+                    if provider == "rainy_api" && !Self::is_valid_rainy_api_key(&value) {
+                        tracing::warn!(
+                            "[AIProviderManager] Ignoring invalid Rainy API key from environment '{}'",
+                            env_key
+                        );
+                        continue;
+                    }
                     return Ok(Some(value));
                 }
             }

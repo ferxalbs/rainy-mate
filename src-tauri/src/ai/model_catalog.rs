@@ -34,11 +34,28 @@ pub fn normalize_model_slug(model: &str) -> &str {
         .unwrap_or(model)
 }
 
+pub fn is_explicit_rainy_model(model: &str) -> bool {
+    model.starts_with("rainy:") || model.starts_with("rainy-api/") || model.starts_with("cowork:")
+}
+
+pub fn is_explicit_gemini_model(model: &str) -> bool {
+    model.starts_with("gemini:")
+}
+
 pub fn is_rainy_catalog_slug(model: &str) -> bool {
     let normalized = normalize_model_slug(model);
-    normalized.contains('/')
-        && !normalized.starts_with("gemini:")
-        && !normalized.starts_with("ollama:")
+    normalized.contains('/') && !normalized.starts_with("ollama:")
+}
+
+pub fn requires_rainy_provider(model: &str) -> bool {
+    is_explicit_rainy_model(model) || is_rainy_catalog_slug(model)
+}
+
+pub fn is_unprefixed_gemini_model(model: &str) -> bool {
+    let normalized = normalize_model_slug(model);
+    (normalized.starts_with("gemini-") || normalized.starts_with("gemini/"))
+        && !normalized.contains(':')
+        && !requires_rainy_provider(model)
 }
 
 pub fn ensure_supported_model_slug(model: &str) -> Result<(), String> {

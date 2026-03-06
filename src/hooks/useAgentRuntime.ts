@@ -117,9 +117,9 @@ export function useAgentRuntime() {
       try {
         await invoke("run_agent_workflow", {
           prompt,
-          model_id: modelId,
-          workspace_id: workspaceId,
-          agent_spec_id: agentSpecId,
+          modelId,
+          workspaceId,
+          agentSpecId,
         });
 
         setState((prev) => ({ ...prev, status: "completed" }));

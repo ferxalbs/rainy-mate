@@ -108,6 +108,21 @@ impl RainySDKProvider {
         }
     }
 
+    fn resolve_transport_for_request(request: &ChatCompletionRequest) -> RainyTransport {
+        let preferred = Self::resolve_transport(&request.model);
+        let has_tools = request
+            .tools
+            .as_ref()
+            .map(|tools| !tools.is_empty())
+            .unwrap_or(false);
+
+        if preferred == RainyTransport::Responses && has_tools {
+            return RainyTransport::ChatCompletions;
+        }
+
+        preferred
+    }
+
     fn map_content(content: &MessageContent) -> OpenAIMessageContent {
         match content {
             MessageContent::Text(text) => OpenAIMessageContent::Text(text.clone()),
@@ -183,8 +198,11 @@ impl RainySDKProvider {
         tool_choice: Option<&crate::ai::provider_types::ToolChoice>,
     ) -> Option<ToolChoice> {
         match tool_choice {
-            Some(crate::ai::provider_types::ToolChoice::None) => Some(ToolChoice::None),
-            Some(crate::ai::provider_types::ToolChoice::Auto) => Some(ToolChoice::Auto),
+            // rainy-sdk models ToolChoice as an untagged enum with unit variants for
+            // None/Auto, which serializes to JSON null instead of "none"/"auto".
+            // Omit the field entirely and let the API default to automatic selection.
+            Some(crate::ai::provider_types::ToolChoice::None) => None,
+            Some(crate::ai::provider_types::ToolChoice::Auto) => None,
             Some(crate::ai::provider_types::ToolChoice::Tool(tool)) => Some(ToolChoice::Tool {
                 r#type: ToolType::Function,
                 function: ToolFunction {
@@ -695,7 +713,7 @@ impl AIProvider for RainySDKProvider {
         &self,
         request: ChatCompletionRequest,
     ) -> ProviderResult<ChatCompletionResponse> {
-        match Self::resolve_transport(&request.model) {
+        match Self::resolve_transport_for_request(&request) {
             RainyTransport::ChatCompletions => self.complete_chat(request).await,
             RainyTransport::Responses => self.complete_responses(request).await,
         }
@@ -706,7 +724,7 @@ impl AIProvider for RainySDKProvider {
         request: ChatCompletionRequest,
         callback: StreamingCallback,
     ) -> ProviderResult<()> {
-        match Self::resolve_transport(&request.model) {
+        match Self::resolve_transport_for_request(&request) {
             RainyTransport::ChatCompletions => {
                 let api_request = Self::build_openai_request(&request).with_stream(true);
 

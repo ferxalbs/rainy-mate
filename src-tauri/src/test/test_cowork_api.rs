@@ -14,16 +14,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("================================");
 
     // Get API key from environment or use test key
-    let api_key = env::var("RAINY_API_KEY")
-        .or_else(|_| env::var("COWORK_API_KEY"))
-        .unwrap_or_else(|_| {
-            println!(
-                "❌ No API key found in RAINY_API_KEY or COWORK_API_KEY environment variables"
-            );
-            println!("Please set one of these environment variables to test:");
-            println!("export RAINY_API_KEY=\"your_api_key_here\"");
-            std::process::exit(1);
-        });
+    let api_key = env::var("RAINY_API_KEY").unwrap_or_else(|_| {
+        println!("❌ No API key found in RAINY_API_KEY");
+        println!("Please set the environment variable to test:");
+        println!("export RAINY_API_KEY=\"your_api_key_here\"");
+        std::process::exit(1);
+    });
 
     println!("🔑 Using API key: {}...", &api_key[..8.min(api_key.len())]);
     println!();

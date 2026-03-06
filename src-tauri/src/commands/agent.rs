@@ -1,6 +1,13 @@
 use crate::ai::agent::runtime::{AgentContent, AgentMessage, AgentRuntime, RuntimeOptions};
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::ai::specs::AgentSpec;
+use crate::ai::{
+    keychain::KeychainManager,
+    provider_trait::{AIProviderFactory, ProviderWithStats},
+    provider_types::{ProviderConfig, ProviderId, ProviderType},
+    providers::{GeminiProviderFactory, RainySDKProviderFactory},
+};
+use crate::commands::ai_providers::ProviderRegistryState;
 use crate::commands::airlock::AirlockServiceState;
 use crate::commands::router::IntelligentRouterState;
 use crate::services::SkillExecutor;
@@ -9,6 +16,10 @@ use tauri::{Emitter, Manager, State};
 
 const MAX_HISTORY_MESSAGES: usize = 30;
 const MAX_HISTORY_MESSAGE_CHARS: usize = 4000;
+
+fn is_valid_rainy_api_key(api_key: &str) -> bool {
+    api_key.trim_start().starts_with("ra-")
+}
 
 fn truncate_text(input: &str, max_chars: usize) -> String {
     if input.chars().count() <= max_chars {
@@ -71,6 +82,100 @@ fn default_instructions(workspace_id: &str) -> String {
     )
 }
 
+async fn ensure_provider_ready_for_model(
+    model_id: &str,
+    registry: &ProviderRegistryState,
+    router: &IntelligentRouterState,
+) -> Result<(), String> {
+    let keychain = KeychainManager::new();
+    let normalized_model = crate::ai::model_catalog::normalize_model_slug(model_id).to_string();
+
+    let (provider_id, provider_factory_kind, key_aliases): (
+        &str,
+        &str,
+        &[&str],
+    ) = if crate::ai::model_catalog::requires_rainy_provider(model_id) {
+        ("rainy_api", "rainy", &["rainy_api", "rainyapi"])
+    } else if crate::ai::model_catalog::is_explicit_gemini_model(model_id)
+        || crate::ai::model_catalog::is_unprefixed_gemini_model(model_id)
+    {
+        ("gemini_byok", "gemini", &["gemini"])
+    } else {
+        return Ok(());
+    };
+
+    if registry.0.get(&ProviderId::new(provider_id)).is_err() {
+        let api_key = key_aliases
+            .iter()
+            .find_map(|alias| keychain.get_key(alias).ok().flatten())
+            .filter(|key| {
+                provider_factory_kind != "rainy" || is_valid_rainy_api_key(key)
+            });
+
+        let api_key = api_key.ok_or_else(|| {
+            if provider_factory_kind == "rainy" {
+                format!(
+                    "Rainy API key/provider unavailable for model '{}'. Configure 'rainy_api' with a current 'ra-' key before running this agent.",
+                    model_id
+                )
+            } else {
+                format!(
+                    "Gemini BYOK key/provider unavailable for model '{}'. Configure 'gemini' before running this agent.",
+                    model_id
+                )
+            }
+        })?;
+
+        let config = ProviderConfig {
+            id: ProviderId::new(provider_id),
+            provider_type: if provider_factory_kind == "rainy" {
+                ProviderType::RainySDK
+            } else {
+                ProviderType::Google
+            },
+            api_key: Some(api_key),
+            base_url: None,
+            model: normalized_model,
+            params: std::collections::HashMap::new(),
+            enabled: true,
+            priority: if provider_factory_kind == "rainy" { 10 } else { 20 },
+            rate_limit: None,
+            timeout: 120,
+        };
+
+        let provider = if provider_factory_kind == "rainy" {
+            <RainySDKProviderFactory as AIProviderFactory>::create(config)
+                .await
+                .map_err(|e| format!("Failed to initialize Rainy provider: {}", e))?
+        } else {
+            <GeminiProviderFactory as AIProviderFactory>::create(config)
+                .await
+                .map_err(|e| format!("Failed to initialize Gemini provider: {}", e))?
+        };
+
+        registry
+            .0
+            .register(provider.clone())
+            .map_err(|e| format!("Failed to register provider '{}': {}", provider_id, e))?;
+    }
+
+    let mut router_guard = router.0.write().await;
+    let already_present = router_guard
+        .get_all_providers()
+        .iter()
+        .any(|p| p.provider().id().as_str() == provider_id);
+
+    if !already_present {
+        let provider = registry
+            .0
+            .get(&ProviderId::new(provider_id))
+            .map_err(|e| format!("Provider '{}' not available after registration: {}", provider_id, e))?;
+        router_guard.add_provider(Arc::new(ProviderWithStats::new(provider.provider.clone())));
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn run_agent_workflow(
     app_handle: tauri::AppHandle,
@@ -80,11 +185,13 @@ pub async fn run_agent_workflow(
     agent_spec_id: Option<String>,
     router: State<'_, IntelligentRouterState>,
     airlock_state: State<'_, AirlockServiceState>,
+    provider_registry: State<'_, ProviderRegistryState>,
     skills: State<'_, Arc<SkillExecutor>>,
     agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
     runtime_registry: State<'_, Arc<RuntimeRegistry>>,
 ) -> Result<String, String> {
     crate::ai::model_catalog::ensure_supported_model_slug(&model_id)?;
+    ensure_provider_ready_for_model(&model_id, &provider_registry, &router).await?;
     let selected_model_id = model_id.clone();
 
     // 0. Ensure Chat Session Exists (Persist Metadata)
