@@ -109,4 +109,4 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Tauri Build
-        run: pnpm run tauri build ${{ matrix.args }}
+        run: pnpm run tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
