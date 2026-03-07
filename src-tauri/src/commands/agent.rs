@@ -332,6 +332,7 @@ pub async fn run_agent_workflow(
         skills.inner().clone(),
         memory,
         airlock_service,
+        None,
         Some(runtime_registry.inner().clone()),
     );
 

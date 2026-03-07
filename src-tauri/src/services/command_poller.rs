@@ -268,6 +268,20 @@ impl CommandPoller {
         self.notify.notify_one();
     }
 
+    pub async fn arm_kill_switch(&self, reason: &str) {
+        self.kill_switch.trigger();
+        self.audit_emitter
+            .enqueue(FleetAuditEvent {
+                action_type: "fleet.kill_switch.armed".to_string(),
+                outcome: "success".to_string(),
+                agent_id: None,
+                tool_name: None,
+                airlock_level: Some(2),
+                payload_json: Some(serde_json::json!({ "reason": reason }).to_string()),
+            })
+            .await;
+    }
+
     /// Set the context needed to create AgentRuntime instances
     pub async fn set_agent_context(
         &self,
@@ -455,6 +469,22 @@ impl CommandPoller {
                 "[CommandPoller] Command {} REJECTED by Airlock or User",
                 command.id
             );
+            self.audit_emitter
+                .enqueue(FleetAuditEvent {
+                    action_type: "airlock.decision".to_string(),
+                    outcome: "blocked".to_string(),
+                    agent_id: None,
+                    tool_name: command.payload.method.clone(),
+                    airlock_level: Some(command.airlock_level as u8),
+                    payload_json: Some(
+                        serde_json::json!({
+                            "intent": command.intent,
+                            "reason": "Rejected by Airlock/User"
+                        })
+                        .to_string(),
+                    ),
+                })
+                .await;
             let _ = self
                 .neural_service
                 .complete_command(
@@ -539,7 +569,8 @@ impl CommandPoller {
                     }
                 }
                 "fleet.terminate_all_agents" => {
-                    self.kill_switch.trigger();
+                    self.arm_kill_switch("fleet.terminate_all_agents command")
+                        .await;
                     self.audit_emitter
                         .enqueue(FleetAuditEvent {
                             action_type: "fleet.terminate_all_agents".to_string(),
@@ -802,6 +833,7 @@ GUIDELINES:
                             self.skill_executor.clone(),
                             memory,
                             Arc::new(airlock),
+                            Some(self.kill_switch.clone()),
                             Some(ctx.runtime_registry.clone()),
                         );
 
@@ -850,12 +882,90 @@ GUIDELINES:
 
                         let callback_tx = progress_tx.clone();
                         let callback_dropped_events = dropped_events.clone();
+                        let audit_emitter = self.audit_emitter.clone();
+                        let audit_agent_id = agent_id.clone();
                         match runtime
                             .run(prompt, move |event| {
                                 println!("[Agent Event] {:?}", event);
                                 let (message, data) = map_agent_event(&event);
                                 if callback_tx.try_send((message, data)).is_err() {
                                     callback_dropped_events.fetch_add(1, Ordering::Relaxed);
+                                }
+
+                                match event {
+                                    AgentEvent::ToolCall(ref call) => {
+                                        let audit_emitter = audit_emitter.clone();
+                                        let agent_id = audit_agent_id.clone();
+                                        let tool_name = call.function.name.clone();
+                                        tokio::spawn(async move {
+                                            audit_emitter
+                                                .enqueue(FleetAuditEvent {
+                                                    action_type: "tool.execution".to_string(),
+                                                    outcome: "info".to_string(),
+                                                    agent_id,
+                                                    tool_name: Some(tool_name),
+                                                    airlock_level: None,
+                                                    payload_json: None,
+                                                })
+                                                .await;
+                                        });
+                                    }
+                                    AgentEvent::ToolResult { id: _, result } => {
+                                        let audit_emitter = audit_emitter.clone();
+                                        let agent_id = audit_agent_id.clone();
+                                        let outcome = if result.to_ascii_lowercase().contains("blocked")
+                                            || result.to_ascii_lowercase().contains("airlock")
+                                        {
+                                            "blocked"
+                                        } else if result.to_ascii_lowercase().starts_with("error:") {
+                                            "error"
+                                        } else {
+                                            "success"
+                                        };
+                                        tokio::spawn(async move {
+                                            audit_emitter
+                                                .enqueue(FleetAuditEvent {
+                                                    action_type: "tool.result".to_string(),
+                                                    outcome: outcome.to_string(),
+                                                    agent_id,
+                                                    tool_name: None,
+                                                    airlock_level: None,
+                                                    payload_json: Some(
+                                                        serde_json::json!({
+                                                            "resultPreview": progress_preview(&result),
+                                                        })
+                                                        .to_string(),
+                                                    ),
+                                                })
+                                                .await;
+                                        });
+                                    }
+                                    AgentEvent::Error(ref text) => {
+                                        let lower = text.to_ascii_lowercase();
+                                        if lower.contains("airlock") || lower.contains("blocked") {
+                                            let audit_emitter = audit_emitter.clone();
+                                            let agent_id = audit_agent_id.clone();
+                                            let detail = text.clone();
+                                            tokio::spawn(async move {
+                                                audit_emitter
+                                                    .enqueue(FleetAuditEvent {
+                                                        action_type: "airlock.decision".to_string(),
+                                                        outcome: "blocked".to_string(),
+                                                        agent_id,
+                                                        tool_name: None,
+                                                        airlock_level: None,
+                                                        payload_json: Some(
+                                                            serde_json::json!({
+                                                                "detail": detail,
+                                                            })
+                                                            .to_string(),
+                                                        ),
+                                                    })
+                                                    .await;
+                                            });
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             })
                             .await

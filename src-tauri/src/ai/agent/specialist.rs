@@ -3,7 +3,7 @@ use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::{AgentRuntime, RuntimeOptions};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::{AgentSpec, RuntimeMode};
-use crate::services::{airlock::AirlockService, SkillExecutor};
+use crate::services::{agent_kill_switch::AgentKillSwitch, airlock::AirlockService, SkillExecutor};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, RwLock};
 
@@ -15,6 +15,7 @@ pub struct SpecialistAgent {
     skills: Arc<SkillExecutor>,
     memory: Arc<AgentMemory>,
     airlock_service: Arc<Option<AirlockService>>,
+    kill_switch: Option<AgentKillSwitch>,
 }
 
 impl SpecialistAgent {
@@ -26,6 +27,7 @@ impl SpecialistAgent {
         skills: Arc<SkillExecutor>,
         memory: Arc<AgentMemory>,
         airlock_service: Arc<Option<AirlockService>>,
+        kill_switch: Option<AgentKillSwitch>,
     ) -> Self {
         Self {
             role,
@@ -35,6 +37,7 @@ impl SpecialistAgent {
             skills,
             memory,
             airlock_service,
+            kill_switch,
         }
     }
 
@@ -159,6 +162,7 @@ impl SpecialistAgent {
             self.skills.clone(),
             self.memory.clone(),
             self.airlock_service.clone(),
+            self.kill_switch.clone(),
             None,
         );
 

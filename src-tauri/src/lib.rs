@@ -364,6 +364,16 @@ pub fn run() {
                     while let Ok(msg) = rx.recv().await {
                         if msg.event == "command_queued" || msg.event == "new_command" {
                             tracing::info!("Real-time trigger received: {}", msg.event);
+                            let action = msg
+                                .payload
+                                .get("action")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            if action == "fleet_kill_switch" {
+                                poller_for_ws
+                                    .arm_kill_switch("websocket:fleet_kill_switch")
+                                    .await;
+                            }
                             poller_for_ws.trigger();
                         }
                     }

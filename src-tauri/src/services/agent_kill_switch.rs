@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AgentKillSwitch {
     triggered: Arc<AtomicBool>,
 }

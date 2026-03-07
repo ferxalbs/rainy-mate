@@ -12,7 +12,7 @@ use super::specialist::SpecialistAgent;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::{AgentSpec, RuntimeConfig};
-use crate::services::{airlock::AirlockService, SkillExecutor};
+use crate::services::{agent_kill_switch::AgentKillSwitch, airlock::AirlockService, SkillExecutor};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tokio::task::JoinSet;
@@ -24,6 +24,7 @@ pub struct SupervisorAgent {
     pub skills: Arc<SkillExecutor>,
     pub memory: Arc<AgentMemory>,
     pub airlock_service: Arc<Option<AirlockService>>,
+    pub kill_switch: Option<AgentKillSwitch>,
     pub runtime_registry: Option<Arc<RuntimeRegistry>>,
 }
 
@@ -329,6 +330,7 @@ impl SupervisorAgent {
                 self.skills.clone(),
                 self.memory.clone(),
                 self.airlock_service.clone(),
+                self.kill_switch.clone(),
             );
             let run_id_for_task = run_id.clone();
             let input_for_task = input.to_string();
@@ -409,6 +411,7 @@ impl SupervisorAgent {
                     self.skills.clone(),
                     self.memory.clone(),
                     self.airlock_service.clone(),
+                    self.kill_switch.clone(),
                 );
                 match verifier
                     .run(&run_id, assignment.clone(), input.to_string(), tx.clone())

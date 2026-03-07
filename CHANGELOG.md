@@ -5,6 +5,52 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.95] - 2026-03-06 - NERVE CENTER (FLEET COMMAND CENTER)
+
+### Added
+
+- Added cooperative fleet kill-switch runtime cancellation in:
+  - `src-tauri/src/ai/agent/workflow.rs`
+  - `src-tauri/src/ai/agent/runtime.rs`
+  - `src-tauri/src/ai/agent/specialist.rs`
+  - `src-tauri/src/ai/agent/supervisor.rs`
+- Added immediate websocket kill-signal arming path in `src-tauri/src/lib.rs` so `fleet_kill_switch` broadcasts trigger local cancellation without waiting for command polling order.
+- Added richer fleet runtime audit emission from cloud-triggered agent runs in `src-tauri/src/services/command_poller.rs`:
+  - tool execution events
+  - tool result outcomes
+  - airlock denial/blocked decisions
+- Added fleet status API policy snapshot fields (`mode`, `enabled`, `version`, `hash`) in `rainy-atm/src/routes/admin-fleet.ts`.
+
+### Changed
+
+- Updated ATM fleet dispatch orchestration in `rainy-atm/src/services/fleet-kill-switch.ts`:
+  - added 5-second dispatch acknowledgement tracking
+  - return per-command status summary (`queued/pending/approved/running/completed/failed/rejected/timeout`)
+  - sync `fleet_dispatch_log` to observed command state.
+- Updated node command lifecycle handlers in `rainy-atm/src/routes/nodes.ts` to move `fleet_dispatch_log` through `running` and terminal statuses on `start`/`complete`.
+- Updated desktop `CommandPoller` to expose `arm_kill_switch()` and use it for both direct fleet commands and websocket-triggered kill events.
+
+### Fixed
+
+- Fixed graceful termination semantics for active agent sessions under fleet kill-switch conditions by persisting a termination assistant message and allowing normal history/memory persistence path.
+- Fixed fleet command audit completeness by emitting blocked Airlock decisions when command-level approvals are denied.
+
+### Changed - Versioning
+
+- `package.json` -> `0.5.95`
+- `src-tauri/Cargo.toml` -> `0.5.95`
+- `src-tauri/tauri.conf.json` -> `0.5.95`
+
+### Validation
+
+- `cd src-tauri && cargo check -q` — passes
+- `cd src-tauri && cargo test -q` — passes (116/116)
+- `pnpm exec tsc --noEmit` — passes
+- `pnpm run build` — passes
+- `cd rainy-atm && bunx tsc --noEmit` — passes
+- `cd rainy-atm && bun test` — passes (43/43)
+- `cd rainy-atm && bun run build` — passes
+
 ## [0.5.94] - 2026-03-04 - THE DIRECTOR
 
 

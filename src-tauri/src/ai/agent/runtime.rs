@@ -8,6 +8,7 @@ use crate::ai::agent::supervisor::SupervisorAgent;
 use crate::ai::agent::workflow::{ActStep, AgentState, ThinkStep, Workflow};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::{AgentSpec, RuntimeMode};
+use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::SkillExecutor;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -31,6 +32,7 @@ pub struct AgentRuntime {
     skills: Arc<SkillExecutor>,
     memory: Arc<AgentMemory>,
     airlock_service: Arc<Option<crate::services::airlock::AirlockService>>,
+    kill_switch: Option<AgentKillSwitch>,
     runtime_registry: Option<Arc<RuntimeRegistry>>,
     history: Arc<Mutex<Vec<AgentMessage>>>,
 }
@@ -157,6 +159,7 @@ impl AgentRuntime {
         skills: Arc<SkillExecutor>,
         memory: Arc<AgentMemory>,
         airlock_service: Arc<Option<crate::services::airlock::AirlockService>>,
+        kill_switch: Option<AgentKillSwitch>,
         runtime_registry: Option<Arc<RuntimeRegistry>>,
     ) -> Self {
         Self {
@@ -166,6 +169,7 @@ impl AgentRuntime {
             skills,
             memory,
             airlock_service,
+            kill_switch,
             runtime_registry,
             history: Arc::new(Mutex::new(Vec::new())),
         }
@@ -356,6 +360,7 @@ Rules:
                 skills: self.skills.clone(),
                 memory: self.memory.clone(),
                 airlock_service: self.airlock_service.clone(),
+                kill_switch: self.kill_switch.clone(),
                 runtime_registry: self.runtime_registry.clone(),
             };
             return supervisor.run(input, on_event).await;
@@ -374,6 +379,7 @@ Rules:
             self.memory.clone(),
             Arc::new(self.spec.clone()),
             self.airlock_service.clone(),
+            self.kill_switch.clone(),
         );
 
         // Add System Message to State

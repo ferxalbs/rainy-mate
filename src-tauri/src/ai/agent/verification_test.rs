@@ -104,6 +104,7 @@ mod tests {
             memory,
             Arc::new(None),
             None,
+            None,
         );
 
         assert_eq!(runtime.spec.soul.name, "Test Agent");

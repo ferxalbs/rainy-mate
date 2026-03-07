@@ -8,6 +8,7 @@ use crate::ai::specs::manifest::AgentSpec;
 use crate::models::neural::{
     AirlockLevel, CommandPriority, CommandStatus, QueuedCommand, RainyPayload,
 };
+use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::{get_tool_policy, SkillExecutor};
 use chrono::Utc;
 use schemars::JsonSchema;
@@ -109,6 +110,7 @@ pub struct AgentState {
     #[allow(dead_code)] // Used by steps
     pub spec: Arc<AgentSpec>,
     pub airlock_service: Arc<Option<crate::services::airlock::AirlockService>>,
+    pub kill_switch: Option<AgentKillSwitch>,
 }
 
 impl AgentState {
@@ -118,6 +120,7 @@ impl AgentState {
         memory: Arc<AgentMemory>,
         spec: Arc<AgentSpec>,
         airlock_service: Arc<Option<crate::services::airlock::AirlockService>>,
+        kill_switch: Option<AgentKillSwitch>,
     ) -> Self {
         Self {
             messages: Vec::new(),
@@ -127,6 +130,7 @@ impl AgentState {
             memory,
             spec,
             airlock_service,
+            kill_switch,
         }
     }
 }
@@ -202,6 +206,25 @@ impl Workflow {
             .clamp(4, ABSOLUTE_MAX_STEPS);
 
         while let Some(step_id) = current_step_id {
+            if state
+                .kill_switch
+                .as_ref()
+                .is_some_and(|switch| switch.is_triggered())
+            {
+                on_event(AgentEvent::Status(
+                    "Execution terminated by fleet kill switch".to_string(),
+                ));
+                state.messages.push(AgentMessage {
+                    role: "assistant".to_string(),
+                    content: AgentContent::text(
+                        "Execution was terminated by Fleet Kill Switch. Partial progress has been preserved.",
+                    ),
+                    tool_calls: None,
+                    tool_call_id: None,
+                });
+                return Ok(state);
+            }
+
             if steps_count >= max_steps {
                 on_event(AgentEvent::Status(format!(
                     "Stopping workflow after {} steps to prevent infinite tool loops.",
@@ -620,6 +643,17 @@ impl WorkflowStep for ActStep {
         let mut results = Vec::new();
 
         for call in tool_calls {
+            if state
+                .kill_switch
+                .as_ref()
+                .is_some_and(|switch| switch.is_triggered())
+            {
+                on_event(AgentEvent::Status(
+                    "Execution terminated by fleet kill switch".to_string(),
+                ));
+                break;
+            }
+
             let function_name = call.function.name.clone();
             let arguments_str = call.function.arguments.clone();
 
@@ -999,6 +1033,7 @@ mod tests {
             memory,
             Arc::new(spec.clone()),
             Arc::new(None),
+            None,
         );
 
         match WorkspaceManager::new() {
