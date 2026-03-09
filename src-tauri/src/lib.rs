@@ -78,12 +78,21 @@ pub fn run() {
     // Initialize Browser Controller (Native CDP)
     let browser_controller = Arc::new(BrowserController::new());
 
+    // Initialize MCP Service
+    let mcp_service = Arc::new(crate::services::mcp_service::McpService::new());
+
+    // Initialize MCP HTTP Proxy
+    let mcp_http_proxy = Arc::new(crate::services::mcp_http::McpHttpProxy::new(
+        mcp_service.clone(),
+    ));
+
     // Initialize Skill Executor
     // Note: We removed the legacy web_research service from here
     let skill_executor = Arc::new(SkillExecutor::new(
         workspace_manager.clone(),
         Arc::new(managed_research.clone()),
         browser_controller.clone(),
+        mcp_service.clone(),
     ));
 
     // Initialize Command Poller
@@ -132,6 +141,8 @@ pub fn run() {
         .manage(browser_controller) // Arc<BrowserController>
         .manage(command_poller) // Arc<CommandPoller>
         .manage(skill_executor) // Arc<SkillExecutor>
+        .manage(mcp_service) // Arc<McpService>
+        .manage(mcp_http_proxy) // Arc<McpHttpProxy>
         .manage(runtime_registry.clone()) // Arc<RuntimeRegistry>
         .manage(socket_client) // SocketClient
         .manage(llm_client) // Arc<Mutex<LLMClient>>
@@ -312,8 +323,26 @@ pub fn run() {
             let db = tauri::async_runtime::block_on(async { Database::init(app.handle()).await })
                 .expect("Failed to initialize database");
 
-            let agent_manager = AgentManager::new(db.pool);
+            let agent_manager = AgentManager::new(db.pool.clone());
             app.manage(agent_manager.clone());
+
+            // Initialize Persistent Scheduler
+            let persistent_scheduler = std::sync::Arc::new(
+                crate::services::persistent_scheduler::PersistentScheduler::new(
+                    db.pool.clone(),
+                    (*app.state::<std::sync::Arc<crate::services::task_manager::TaskManager>>())
+                        .clone(),
+                ),
+            );
+            tauri::async_runtime::block_on(async {
+                persistent_scheduler
+                    .init()
+                    .await
+                    .expect("Failed to init scheduler");
+                persistent_scheduler.start_loop();
+            });
+            app.manage(persistent_scheduler);
+
             tracing::info!("Database and AgentManager initialized successfully");
 
             // Start Command Poller
@@ -616,6 +645,12 @@ pub fn run() {
             manager::save_chat_message,
             manager::get_chat_history,
             manager::clear_chat_history,
+            manager::compact_session_cmd,
+            crate::services::mcp_service::connect_mcp_server,
+            crate::services::mcp_http::handle_mcp_request,
+            crate::services::persistent_scheduler::add_scheduled_job,
+            crate::services::persistent_scheduler::list_scheduled_jobs,
+            crate::services::persistent_scheduler::remove_scheduled_job,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,7 +1,7 @@
 {
   "name": "rainy-mate",
   "private": true,
-  "version": "0.5.95",
+  "version": "0.5.94",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,9 +10,9 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@heroui/react": "3.0.0-beta.7",
-    "@heroui/styles": "3.0.0-beta.7",
-    "@rainy-updates/cli": "^0.6.2",
+    "@heroui/react": "3.0.0-beta.8",
+    "@heroui/styles": "3.0.0-beta.8",
+    "@rainy-updates/cli": "^0.6.11",
     "@tailwindcss/vite": "4.2.1",
     "@tauri-apps/api": "2.10.1",
     "@tauri-apps/plugin-dialog": "2.6.0",
@@ -23,7 +23,7 @@
     "@tauri-apps/plugin-updater": "2.10.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "framer-motion": "12.35.0",
+    "framer-motion": "12.35.1",
     "highlight.js": "11.11.1",
     "lucide-react": "0.577.0",
     "react": "19.2.4",
@@ -43,7 +43,7 @@
   "devDependencies": {
     "@tailwindcss/typography": "0.5.19",
     "@tauri-apps/cli": "^2.10.1",
-    "@types/node": "25.3.3",
+    "@types/node": "25.3.5",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.4",

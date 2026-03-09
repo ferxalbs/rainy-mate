@@ -9,17 +9,17 @@ importers:
   .:
     dependencies:
       '@heroui/react':
-        specifier: 3.0.0-beta.7
-        version: 3.0.0-beta.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)
+        specifier: 3.0.0-beta.8
+        version: 3.0.0-beta.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)
       '@heroui/styles':
-        specifier: 3.0.0-beta.7
-        version: 3.0.0-beta.7(tailwind-merge@3.5.0)(tailwindcss@4.2.1)
+        specifier: 3.0.0-beta.8
+        version: 3.0.0-beta.8(tailwind-merge@3.5.0)(tailwindcss@4.2.1)
       '@rainy-updates/cli':
-        specifier: ^0.6.2
-        version: 0.6.2(@types/react@19.2.14)
+        specifier: ^0.6.11
+        version: 0.6.11(@types/react@19.2.14)
       '@tailwindcss/vite':
         specifier: 4.2.1
-        version: 4.2.1(vite@7.3.1(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))
+        version: 4.2.1(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1))
       '@tauri-apps/api':
         specifier: 2.10.1
         version: 2.10.1
@@ -48,8 +48,8 @@ importers:
         specifier: 2.1.1
         version: 2.1.1
       framer-motion:
-        specifier: 12.35.0
-        version: 12.35.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: 12.35.1
+        version: 12.35.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       highlight.js:
         specifier: 11.11.1
         version: 11.11.1
@@ -103,8 +103,8 @@ importers:
         specifier: ^2.10.1
         version: 2.10.1
       '@types/node':
-        specifier: 25.3.3
-        version: 25.3.3
+        specifier: 25.3.5
+        version: 25.3.5
       '@types/react':
         specifier: 19.2.14
         version: 19.2.14
@@ -113,7 +113,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
         specifier: 5.1.4
-        version: 5.1.4(vite@7.3.1(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))
+        version: 5.1.4(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1))
       tw-animate-css:
         specifier: 1.4.0
         version: 1.4.0
@@ -122,7 +122,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: 7.3.1
-        version: 7.3.1(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
+        version: 7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)
 
 packages:
 
@@ -393,15 +393,15 @@ packages:
   '@formatjs/intl-localematcher@0.6.2':
     resolution: {integrity: sha512-XOMO2Hupl0wdd172Y06h6kLpBz6Dv+J4okPLl4LPtzbr8f66WbIoy4ev98EBuZ6ZK4h5ydTN6XneT4QVpD7cdA==}
 
-  '@heroui/react@3.0.0-beta.7':
-    resolution: {integrity: sha512-HIITfTuFW+rzf6hAm1UUZc9ZZ9mbIHo/LuYl0jfUKAi0fEKwRl775RQ2qL9YX3G1osMooS0UIQ6HHs9gKH8HTQ==}
+  '@heroui/react@3.0.0-beta.8':
+    resolution: {integrity: sha512-1wh7N689LKLgXf/FbGg2Y7fMtiwdHcANHdRKDKFly4UWsraxEXdpfJaeL788TE3rpsMmzuKl3FZBOewjBGKKLQ==}
     peerDependencies:
       react: '>=19.0.0'
       react-dom: '>=19.0.0'
       tailwindcss: '>=4.0.0'
 
-  '@heroui/styles@3.0.0-beta.7':
-    resolution: {integrity: sha512-uFV3Q5RPANo67FZwtl1938QrdRGYxEEJV3Wso6OI08U4BXhe1KNvoAqIUOi/XdkB0cDAd9nFJwyK13jMfCqKWw==}
+  '@heroui/styles@3.0.0-beta.8':
+    resolution: {integrity: sha512-QKSMuHiT5VIySweFjw5/ombl58Oqp6vZ9fbRniIlh3k4Jh2lMmSUEPZ53+2vTw2VoGwDgLdvfOyJLxedYQpvIw==}
     peerDependencies:
       tailwindcss: '>=4.0.0'
 
@@ -646,8 +646,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@rainy-updates/cli@0.6.2':
-    resolution: {integrity: sha512-1FZ2TVdKf3PMY8xDesf4AbVSWS6V2Oru+Oz21qi6fb01oRZMpiljGMEP02jUkaO1ovO2rH/Mfi+cYKhZPfMlSQ==}
+  '@rainy-updates/cli@0.6.11':
+    resolution: {integrity: sha512-kl75180E1nMy8UWrzwK2sSqrtR+7fWi/H4qhNyOPtTqH2TImQhyx9MIhBvoWM2AOy5xFlNqfz6F/GytNOrYrTA==}
     engines: {bun: '>=1.3.9', node: '>=20'}
     hasBin: true
 
@@ -1641,8 +1641,8 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
-  '@types/node@25.3.3':
-    resolution: {integrity: sha512-DpzbrH7wIcBaJibpKo9nnSQL0MTRdnWttGyE5haGwK86xgMOkFLp7vEyfQPGLOJh5wNYiJ3V9PmUMDhV9u8kkQ==}
+  '@types/node@25.3.5':
+    resolution: {integrity: sha512-oX8xrhvpiyRCQkG1MFchB09f+cXftgIXb3a7UUa4Y3wpmZPw5tyZGTLWhlESOLq1Rq6oDlc8npVU2/9xiCuXMA==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -1840,8 +1840,8 @@ packages:
       picomatch:
         optional: true
 
-  framer-motion@12.35.0:
-    resolution: {integrity: sha512-w8hghCMQ4oq10j6aZh3U2yeEQv5K69O/seDI/41PK4HtgkLrcBovUNc0ayBC3UyyU7V1mrY2yLzvYdWJX9pGZQ==}
+  framer-motion@12.35.1:
+    resolution: {integrity: sha512-rL8cLrjYZNShZqKV3U0Qj6Y5WDiZXYEM5giiTLfEqsIZxtspzMDCkKmrO5po76jWfvOg04+Vk+sfBvTD0iMmLw==}
     peerDependencies:
       '@emotion/is-prop-valid': '*'
       react: ^18.0.0 || ^19.0.0
@@ -2211,8 +2211,8 @@ packages:
     resolution: {integrity: sha512-OqbOk5oEQeAZ8WXWydlu9HJjz9WVdEIvamMCcXmuqUYjTknH/sqsWvhQ3vgwKFRR1HpjvNBKQ37nbJgYzGqGcg==}
     engines: {node: '>=6'}
 
-  motion-dom@12.35.0:
-    resolution: {integrity: sha512-FFMLEnIejK/zDABn+vqGVAUN4T0+3fw+cVAY8MMT65yR+j5uMuvWdd4npACWhh94OVWQs79CrBBuwOwGRZAQiA==}
+  motion-dom@12.35.1:
+    resolution: {integrity: sha512-7n6r7TtNOsH2UFSAXzTkfzOeO5616v9B178qBIjmu/WgEyJK0uqwytCEhwKBTuM/HJA40ptAw7hLFpxtPAMRZQ==}
 
   motion-utils@12.29.2:
     resolution: {integrity: sha512-G3kc34H2cX2gI63RqU+cZq+zWRRPSsNIOjpdl9TN4AQwC4sgwYPl/Q/Obf/d53nOm569T0fYK+tcoSV50BWx8A==}
@@ -2857,9 +2857,9 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@heroui/react@3.0.0-beta.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)':
+  '@heroui/react@3.0.0-beta.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)':
     dependencies:
-      '@heroui/styles': 3.0.0-beta.7(tailwind-merge@3.4.0)(tailwindcss@4.2.1)
+      '@heroui/styles': 3.0.0-beta.8(tailwind-merge@3.4.0)(tailwindcss@4.2.1)
       '@radix-ui/react-avatar': 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@react-aria/i18n': 3.12.15(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@react-aria/ssr': 3.9.10(react@19.2.4)
@@ -2878,7 +2878,7 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
 
-  '@heroui/styles@3.0.0-beta.7(tailwind-merge@3.4.0)(tailwindcss@4.2.1)':
+  '@heroui/styles@3.0.0-beta.8(tailwind-merge@3.4.0)(tailwindcss@4.2.1)':
     dependencies:
       tailwind-variants: 3.2.2(tailwind-merge@3.4.0)(tailwindcss@4.2.1)
       tailwindcss: 4.2.1
@@ -2886,7 +2886,7 @@ snapshots:
     transitivePeerDependencies:
       - tailwind-merge
 
-  '@heroui/styles@3.0.0-beta.7(tailwind-merge@3.5.0)(tailwindcss@4.2.1)':
+  '@heroui/styles@3.0.0-beta.8(tailwind-merge@3.5.0)(tailwindcss@4.2.1)':
     dependencies:
       tailwind-variants: 3.2.2(tailwind-merge@3.5.0)(tailwindcss@4.2.1)
       tailwindcss: 4.2.1
@@ -3061,7 +3061,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@rainy-updates/cli@0.6.2(@types/react@19.2.14)':
+  '@rainy-updates/cli@0.6.11(@types/react@19.2.14)':
     dependencies:
       ink: 6.8.0(@types/react@19.2.14)(react@19.2.4)
       oxc-parser: 0.116.0
@@ -4302,12 +4302,12 @@ snapshots:
       postcss-selector-parser: 6.0.10
       tailwindcss: 4.2.1
 
-  '@tailwindcss/vite@4.2.1(vite@7.3.1(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))':
+  '@tailwindcss/vite@4.2.1(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1))':
     dependencies:
       '@tailwindcss/node': 4.2.1
       '@tailwindcss/oxide': 4.2.1
       tailwindcss: 4.2.1
-      vite: 7.3.1(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
+      vite: 7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)
 
   '@tauri-apps/api@2.10.1': {}
 
@@ -4428,7 +4428,7 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
-  '@types/node@25.3.3':
+  '@types/node@25.3.5':
     dependencies:
       undici-types: 7.18.2
 
@@ -4446,7 +4446,7 @@ snapshots:
 
   '@ungap/structured-clone@1.3.0': {}
 
-  '@vitejs/plugin-react@5.1.4(vite@7.3.1(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))':
+  '@vitejs/plugin-react@5.1.4(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1))':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
@@ -4454,7 +4454,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-rc.3
       '@types/babel__core': 7.20.5
       react-refresh: 0.18.0
-      vite: 7.3.1(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
+      vite: 7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -4603,9 +4603,9 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.3
 
-  framer-motion@12.35.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  framer-motion@12.35.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
-      motion-dom: 12.35.0
+      motion-dom: 12.35.1
       motion-utils: 12.29.2
       tslib: 2.8.1
     optionalDependencies:
@@ -5212,7 +5212,7 @@ snapshots:
 
   mimic-fn@2.1.0: {}
 
-  motion-dom@12.35.0:
+  motion-dom@12.35.1:
     dependencies:
       motion-utils: 12.29.2
 
@@ -5220,7 +5220,7 @@ snapshots:
 
   motion@12.34.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
-      framer-motion: 12.35.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      framer-motion: 12.35.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       tslib: 2.8.1
     optionalDependencies:
       react: 19.2.4
@@ -5742,7 +5742,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite@7.3.1(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1):
+  vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1):
     dependencies:
       esbuild: 0.27.3
       fdir: 6.5.0(picomatch@4.0.3)
@@ -5751,7 +5751,7 @@ snapshots:
       rollup: 4.57.1
       tinyglobby: 0.2.15
     optionalDependencies:
-      '@types/node': 25.3.3
+      '@types/node': 25.3.5
       fsevents: 2.3.3
       jiti: 2.6.1
       lightningcss: 1.31.1

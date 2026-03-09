@@ -162,7 +162,8 @@ pub fn registered_tool_definitions() -> Vec<Tool> {
 
 impl SkillExecutor {
     /// Get all available tools and their JSON schemas,
-    /// including built-in tools and any installed third-party Wasm skills.
+    /// including built-in tools, installed third-party Wasm skills,
+    /// and connected MCP server tools.
     pub fn get_tool_definitions(&self) -> Vec<Tool> {
         let mut tools = registered_tool_definitions();
 
@@ -171,6 +172,10 @@ impl SkillExecutor {
         if let Ok(dynamic) = self.third_party_registry.dynamic_tool_definitions() {
             tools.extend(dynamic);
         }
+
+        // Merge connected MCP server tools
+        let mcp_tools = tauri::async_runtime::block_on(self.mcp_service.get_tools());
+        tools.extend(mcp_tools);
 
         tools
     }

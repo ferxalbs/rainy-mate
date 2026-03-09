@@ -439,6 +439,21 @@ Rules:
         // Apply sliding context window — trim old messages to stay within token budget
         let pre_trim_len = state.messages.len();
         state.messages = context_window.trim_history(state.messages);
+
+        // Apply robust Context Budget guard specifically for edge-case overflow recovery
+        let (guarded_messages, overflowed) =
+            crate::ai::agent::context_budget::ContextBudget::apply_context_guard(
+                &state.messages,
+                context_window.semantic_context_budget_tokens() * 5, // Full budget approximation
+            );
+        if overflowed {
+            state.messages = crate::ai::agent::context_budget::ContextBudget::recover_from_overflow(
+                &guarded_messages,
+            );
+        } else {
+            state.messages = guarded_messages;
+        }
+
         let trimmed_count = pre_trim_len - state.messages.len();
         let history_len = history_len.saturating_sub(trimmed_count);
 

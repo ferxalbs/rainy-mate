@@ -103,6 +103,53 @@ impl AgentManager {
         Ok(())
     }
 
+    // @TODO: This will be called by context_budget overflow triggered via TaskManager background loop
+    pub async fn compact_session(
+        &self,
+        chat_id: &str,
+        summary_content: &str,
+        keep_recent_count: usize,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.db.begin().await?;
+
+        let messages = sqlx::query_as::<_, (String,)>(
+            "SELECT id FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
+        )
+        .bind(chat_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        if messages.len() <= keep_recent_count {
+            return Ok(());
+        }
+
+        let delete_count = messages.len() - keep_recent_count;
+        let to_delete: Vec<String> = messages
+            .into_iter()
+            .take(delete_count)
+            .map(|(id,)| id)
+            .collect();
+
+        for id in to_delete {
+            sqlx::query("DELETE FROM messages WHERE id = ?")
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        let summary_id = uuid::Uuid::new_v4().to_string();
+        sqlx::query("INSERT INTO messages (id, chat_id, role, content) VALUES (?, ?, 'system', ?)")
+            .bind(summary_id)
+            .bind(chat_id)
+            .bind(format!("SESSION COMPACTION SUMMARY:\n{}", summary_content))
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
     pub async fn ensure_chat_session(
         &self,
         chat_id: &str,
@@ -254,6 +301,19 @@ pub async fn clear_chat_history(
 ) -> Result<(), String> {
     state
         .clear_history(&chat_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn compact_session_cmd(
+    state: State<'_, AgentManager>,
+    chat_id: String,
+    summary_content: String,
+    keep_recent_count: usize,
+) -> Result<(), String> {
+    state
+        .compact_session(&chat_id, &summary_content, keep_recent_count)
         .await
         .map_err(|e| e.to_string())
 }

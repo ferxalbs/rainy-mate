@@ -1,30 +1,33 @@
 // Rainy Cowork - Services Module
 // Business logic layer
 
-pub mod airlock;
 pub mod agent_kill_switch;
-pub mod audit_emitter;
+pub mod airlock;
 pub mod atm_client;
+pub mod audit_emitter;
 pub mod browser_controller;
 pub mod cloud_bridge;
 pub mod command_poller;
 pub mod document;
 pub mod embedder;
 pub mod file_manager;
-pub mod fleet_control;
 pub mod file_operations;
+pub mod fleet_control;
 pub mod folder_manager;
 pub mod image;
 pub mod llm_client;
 pub mod managed_research; // Phase 3 AI Research
 pub mod manifest_signing;
+pub mod mcp_http;
+pub mod mcp_service;
 pub mod memory;
 pub mod memory_vault;
 pub mod neural_service;
+pub mod persistent_scheduler;
 pub mod security;
 pub mod settings;
-pub mod skill_installer;
 pub mod skill_executor;
+pub mod skill_installer;
 pub mod socket_client;
 pub mod task_manager;
 pub mod third_party_skill_registry;

@@ -8,7 +8,9 @@ mod web;
 use crate::models::neural::{CommandResult, QueuedCommand, ToolAccessPolicy};
 use crate::services::browser_controller::BrowserController;
 use crate::services::settings::SettingsManager;
-use crate::services::third_party_skill_registry::{InstalledThirdPartySkill, ThirdPartySkillRegistry};
+use crate::services::third_party_skill_registry::{
+    InstalledThirdPartySkill, ThirdPartySkillRegistry,
+};
 use crate::services::wasm_sandbox::{WasmExecutionRequest, WasmSandboxService};
 use crate::services::workspace::WorkspaceManager;
 use crate::services::ManagedResearchService;
@@ -45,6 +47,7 @@ pub struct SkillExecutor {
     memory_manager: Arc<RwLock<Option<Arc<MemoryManager>>>>,
     third_party_registry: Arc<ThirdPartySkillRegistry>,
     wasm_sandbox: Arc<WasmSandboxService>,
+    mcp_service: Arc<crate::services::mcp_service::McpService>,
 }
 
 impl SkillExecutor {
@@ -100,6 +103,7 @@ impl SkillExecutor {
         workspace_manager: Arc<WorkspaceManager>,
         managed_research: Arc<ManagedResearchService>,
         browser: Arc<BrowserController>,
+        mcp_service: Arc<crate::services::mcp_service::McpService>,
     ) -> Self {
         let third_party_registry =
             Arc::new(ThirdPartySkillRegistry::new().expect("Failed to init third-party registry"));
@@ -110,6 +114,7 @@ impl SkillExecutor {
             memory_manager: Arc::new(RwLock::new(None)),
             third_party_registry,
             wasm_sandbox: Arc::new(WasmSandboxService::new()),
+            mcp_service,
         }
     }
 
@@ -136,6 +141,7 @@ impl SkillExecutor {
                 ThirdPartySkillRegistry::new().expect("mock third-party registry"),
             ),
             wasm_sandbox: Arc::new(WasmSandboxService::new()),
+            mcp_service: Arc::new(crate::services::mcp_service::McpService::new()),
         }
     }
 
@@ -185,6 +191,34 @@ impl SkillExecutor {
                 "Tool '{}' is blocked by workspace tool policy",
                 method
             ));
+        }
+
+        if let Some(server_name) =
+            crate::services::mcp_service::McpService::extract_mcp_server(method)
+        {
+            let params = payload
+                .params
+                .clone()
+                .unwrap_or_else(|| serde_json::json!({}));
+            let result = self
+                .mcp_service
+                .call_mcp_tool(&server_name, method, params)
+                .await;
+            return CommandResult {
+                success: result.is_ok(),
+                output: Some(result.unwrap_or_else(|e| format!("MCP Error: {}", e))),
+                error: None,
+                exit_code: Some(0), // we map all to output in rainy architecture generally unless explicitly errored
+            };
+        } else if crate::services::mcp_service::McpService::is_mcp_tool(method) {
+            return CommandResult {
+                success: false,
+                output: Some(
+                    "Invalid MCP tool name format. Expected mcp_{server}_{tool}".to_string(),
+                ),
+                error: None,
+                exit_code: Some(1),
+            };
         }
 
         match skill {
@@ -378,7 +412,11 @@ impl SkillExecutor {
         let resolved = match self.third_party_registry.resolve_method(skill, method) {
             Ok(Some(r)) => r,
             Ok(None) => return None,
-            Err(e) => return Some(self.error(&format!("Failed to load third-party skill registry: {}", e))),
+            Err(e) => {
+                return Some(
+                    self.error(&format!("Failed to load third-party skill registry: {}", e)),
+                )
+            }
         };
 
         let (skill_def, method_def) = resolved;

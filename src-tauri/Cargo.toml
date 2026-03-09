@@ -1,6 +1,6 @@
 [package]
 name = "rainy-cowork"
-version = "0.5.95"
+version = "0.5.94"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -76,6 +76,7 @@ wasmtime = "41.0.3"
 wasmtime-wasi = "41.0.3"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 anyhow = "1.0.102"
+cron = "0.12.0"
 
 [dev-dependencies]
 serial_test = "3.4.0"

@@ -51,29 +51,46 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [availableModels, setAvailableModels] = useState<tauri.UnifiedModel[]>(
-    [],
-  );
-  const [loadingModels, setLoadingModels] = useState(false);
+  const [availableModels] = useState<tauri.UnifiedModel[]>([
+    {
+      id: "gpt-5-nano",
+      name: "GPT-5 Nano (Basic)",
+      provider: "OpenRouter",
+      capabilities: {
+        chat: true,
+        streaming: true,
+        function_calling: true,
+        vision: false,
+        web_search: false,
+        max_context: 400000,
+        max_output: 50000,
+      },
+      enabled: true,
+      processing_mode: "rainy_api",
+    },
+    {
+      id: "inception/mercury-2",
+      name: "Mercury 2 (Advanced)",
+      provider: "OpenRouter",
+      capabilities: {
+        chat: true,
+        streaming: true,
+        function_calling: true,
+        vision: false,
+        web_search: false,
+        max_context: 128000,
+        max_output: 50000,
+      },
+      enabled: true,
+      processing_mode: "rainy_api",
+    },
+  ]);
 
   useEffect(() => {
-    const fetchModels = async () => {
-      setLoadingModels(true);
-      try {
-        const models = await tauri.getUnifiedModels();
-        setAvailableModels(models || []);
-        // Auto-select first model if none selected and models exist
-        if (models && models.length > 0 && !model) {
-          setModel(models[0].id);
-        }
-      } catch (e) {
-        console.error("Failed to load models", e);
-      } finally {
-        setLoadingModels(false);
-      }
-    };
-    fetchModels();
-  }, []);
+    if (!model && availableModels.length > 0) {
+      setModel(availableModels[0].id);
+    }
+  }, [model, availableModels]);
 
   const config = {
     systemPrompt: prompt,
@@ -181,7 +198,6 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
         className="w-full group"
         selectedKey={model}
         onSelectionChange={(key) => setModel(key as string)}
-        isDisabled={loadingModels}
       >
         <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1.5 ml-1 group-focus-within:text-primary transition-colors">
           Model

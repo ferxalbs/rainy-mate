@@ -5,6 +5,20 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.96] - 2026-03-06 - ATM MODELS UPDATE
+
+### Changed
+
+- Updated ATM models to exclusively use `gpt-5-nano` (basic) and `inception/mercury-2` (advanced) via OpenRouter/Rainy-SDK.
+- Restricted the ATM agent creation form (`CreateAgentForm.tsx`) to only display and use these models.
+- Documented these new backend capabilities in types configuration.
+
+### Changed - Versioning
+
+- `package.json` -> `0.5.96`
+- `src-tauri/Cargo.toml` -> `0.5.96`
+- `src-tauri/tauri.conf.json` -> `0.5.96`
+
 ## [0.5.95] - 2026-03-06 - NERVE CENTER (FLEET COMMAND CENTER)
 
 ### Added
@@ -52,7 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cd rainy-atm && bun run build` — passes
 
 ## [0.5.94] - 2026-03-04 - THE DIRECTOR
-
 
 ### Added
 
@@ -249,6 +262,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pnpm exec tsc --noEmit` - passes
 - `pnpm exec tsc --noEmit` — passes
 - `pnpm run build` — passes
+
 ## [0.5.93] - QUARANTINE ZONE (WASM Skill Sandbox) - 2026-02-25
 
 ### Fixed - 0.5.93 Stabilizations
