@@ -42,6 +42,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install dependencies (macos only)
+        if: runner.os == 'macOS'
+        run: |
+          brew install sqlite3
+          echo "PKG_CONFIG_PATH=$(brew --prefix sqlite3)/lib/pkgconfig" >> $GITHUB_ENV
+
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -85,6 +91,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Install dependencies (macos only)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          brew install sqlite3
+          echo "PKG_CONFIG_PATH=$(brew --prefix sqlite3)/lib/pkgconfig" >> $GITHUB_ENV
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -109,4 +121,5 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Tauri Build
+        shell: bash
         run: pnpm run tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
