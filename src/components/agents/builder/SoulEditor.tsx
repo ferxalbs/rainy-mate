@@ -25,7 +25,7 @@ const Field = ({
 );
 
 const controlClass =
-  "w-full bg-default-100/80 dark:bg-white/[0.08] border-default-300/70 dark:border-white/15 data-[hover=true]:bg-default-100 dark:data-[hover=true]:bg-white/[0.12] shadow-sm";
+  "w-full bg-background/85 dark:bg-background/20 border-default-300/70 dark:border-white/15 data-[hover=true]:bg-background/90 dark:data-[hover=true]:bg-background/35 shadow-sm";
 
 export function SoulEditor({ soul, onChange }: SoulEditorProps) {
   const handleChange = (field: keyof AgentSoul, value: string) => {
@@ -112,7 +112,7 @@ export function SoulEditor({ soul, onChange }: SoulEditorProps) {
 
         <div className="pt-6 border-t border-border/10">
           <Field label="Soul Content (System Prompt)" className="w-full">
-            <div className="w-full h-[500px] bg-default-100/60 dark:bg-white/[0.06] rounded-xl border border-default-300/60 dark:border-white/15 group-hover:border-primary/50 transition-all shadow-sm focus-within:ring-1 focus-within:ring-primary flex flex-col relative overflow-hidden backdrop-blur-md">
+            <div className="w-full h-[500px] bg-background/85 dark:bg-background/20 rounded-xl border border-default-300/60 dark:border-white/15 group-hover:border-primary/50 transition-all shadow-sm focus-within:ring-1 focus-within:ring-primary flex flex-col relative overflow-hidden backdrop-blur-md">
               <div className="h-8 shrink-0 border-b border-border/10 bg-black/20 flex items-center px-3 gap-2">
                 <div className="flex gap-1.5">
                   <div className="size-2.5 rounded-full bg-red-500/20" />

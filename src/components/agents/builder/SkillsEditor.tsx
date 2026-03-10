@@ -22,9 +22,11 @@ interface SkillsEditorProps {
 const sectionTitleClass =
   "text-[10px] font-bold uppercase tracking-widest text-muted-foreground";
 const controlClass =
-  "w-full bg-default-100/80 dark:bg-white/[0.08] border-default-300/70 dark:border-white/15 data-[hover=true]:bg-default-100 dark:data-[hover=true]:bg-white/[0.12] shadow-sm";
+  "w-full bg-background/85 dark:bg-background/20 border-default-300/70 dark:border-white/15 data-[hover=true]:bg-background/90 dark:data-[hover=true]:bg-background/35 shadow-sm";
 const softButtonClass =
-  "bg-default-100/85 dark:bg-white/[0.08] border border-default-300/70 dark:border-white/15 text-foreground data-[hover=true]:bg-default-100 dark:data-[hover=true]:bg-white/[0.12]";
+  "bg-background/85 dark:bg-background/35 border border-default-300/70 dark:border-white/15 text-foreground data-[hover=true]:bg-background/90 dark:data-[hover=true]:bg-background/45";
+const selectTriggerClass =
+  "h-11 bg-background/85 dark:bg-background/20 border border-default-300/70 dark:border-white/15 rounded-xl text-foreground";
 
 const selectionToValue = (selection: unknown): string | null => {
   if (typeof selection === "string") return selection;
@@ -270,11 +272,11 @@ export function SkillsEditor({ skills, onChange }: SkillsEditorProps) {
                 );
               }}
             >
-              <Select.Trigger>
-                <Select.Value />
+              <Select.Trigger className={selectTriggerClass}>
+                <Select.Value className="text-foreground" />
                 <Select.Indicator />
               </Select.Trigger>
-              <Select.Popover className="bg-content1/95 dark:bg-content1/80 border border-default-200/70 dark:border-white/15 backdrop-blur-xl">
+              <Select.Popover className="bg-background/95 dark:bg-background/35 border border-default-200/70 dark:border-white/15 backdrop-blur-xl">
                 <ListBox className="bg-transparent">
                   <ListBox.Item id="prefer" textValue="Prefer">
                     Prefer
