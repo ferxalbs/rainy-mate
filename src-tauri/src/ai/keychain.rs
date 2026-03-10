@@ -10,6 +10,7 @@ use std::collections::HashMap;
 #[cfg(test)]
 use std::sync::{Mutex, OnceLock};
 
+#[cfg(target_os = "macos")]
 #[cfg(not(test))]
 const SERVICE_NAME: &str = "com.enosislabs.rainycowork";
 
@@ -29,6 +30,7 @@ impl KeychainManager {
 
     /// Store an API key in the Keychain
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
+        #[cfg(any(test, target_os = "macos"))]
         let account = format!("api_key_{}", provider);
 
         #[cfg(test)]
@@ -50,12 +52,15 @@ impl KeychainManager {
         }
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
+            let _ = provider;
+            let _ = api_key;
             Err("Keychain storage is only supported on macOS".to_string())
         }
     }
 
     /// Retrieve an API key from the Keychain
     pub fn get_key(&self, provider: &str) -> Result<Option<String>, String> {
+        #[cfg(any(test, target_os = "macos"))]
         let account = format!("api_key_{}", provider);
 
         #[cfg(test)]
@@ -90,12 +95,14 @@ impl KeychainManager {
         }
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
+            let _ = provider;
             Err("Keychain retrieval is only supported on macOS".to_string())
         }
     }
 
     /// Delete an API key from the Keychain
     pub fn delete_key(&self, provider: &str) -> Result<(), String> {
+        #[cfg(any(test, target_os = "macos"))]
         let account = format!("api_key_{}", provider);
 
         #[cfg(test)]
@@ -127,6 +134,7 @@ impl KeychainManager {
         }
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
+            let _ = provider;
             Err("Keychain deletion is only supported on macOS".to_string())
         }
     }
