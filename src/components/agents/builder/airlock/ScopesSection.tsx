@@ -1,4 +1,5 @@
 import type { AirlockConfig, AirlockScopes } from "../../../../types/airlock";
+import { TextArea } from "@heroui/react";
 import { inputClass, sectionTitleClass } from "./constants";
 import { joinList, parseList } from "./utils";
 
@@ -18,7 +19,7 @@ function ScopeField({ title, rows, value, onChange }: ScopeFieldProps) {
   return (
     <div className="space-y-2">
       <h4 className={sectionTitleClass}>{title}</h4>
-      <textarea
+      <TextArea
         className={`${inputClass} resize-none`}
         rows={rows}
         value={joinList(value)}

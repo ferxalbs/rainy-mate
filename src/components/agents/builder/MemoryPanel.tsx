@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { Button, Input, ListBox, Select, Slider, Switch } from "@heroui/react";
 import { toast } from "sonner";
 import { Brain } from "lucide-react";
 import type { MemoryConfig, KnowledgeFile } from "../../../types/memory";
@@ -13,8 +14,19 @@ interface MemoryPanelProps {
 
 const sectionTitleClass =
   "text-[10px] font-bold uppercase tracking-widest text-muted-foreground";
-const inputClass =
-  "w-full bg-card/40 hover:bg-card/60 backdrop-blur-md rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 leading-relaxed border border-border/20 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all shadow-sm";
+const controlClass =
+  "w-full bg-default-100/80 dark:bg-white/[0.08] border-default-300/70 dark:border-white/15 data-[hover=true]:bg-default-100 dark:data-[hover=true]:bg-white/[0.12] shadow-sm";
+const softButtonClass =
+  "bg-default-100/85 dark:bg-white/[0.08] border border-default-300/70 dark:border-white/15 text-foreground data-[hover=true]:bg-default-100 dark:data-[hover=true]:bg-white/[0.12]";
+
+const selectionToValue = (selection: unknown): string | null => {
+  if (typeof selection === "string") return selection;
+  if (selection instanceof Set) {
+    const first = selection.values().next().value;
+    return typeof first === "string" ? first : null;
+  }
+  return null;
+};
 
 function upsertKnowledgeFile(
   files: KnowledgeFile[],
@@ -134,20 +146,39 @@ export function MemoryPanel({ agentId, memoryConfig, onChange }: MemoryPanelProp
       <section className="grid grid-cols-1 md:grid-cols-2 gap-8 rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5">
         <div className="space-y-3">
           <label className={sectionTitleClass}>Retrieval Strategy</label>
-          <select
-            value={memoryConfig.strategy}
-            onChange={(e) =>
+          <Select
+            className={`${controlClass} h-12`}
+            selectedKey={memoryConfig.strategy}
+            onSelectionChange={(selection) => {
+              const value = selectionToValue(selection);
+              if (!value) return;
               onChange({
                 ...memoryConfig,
-                strategy: e.target.value as "vector" | "simple_buffer" | "hybrid",
-              })
-            }
-            className={`${inputClass} h-12`}
+                strategy: value as "vector" | "simple_buffer" | "hybrid",
+              });
+            }}
           >
-            <option value="hybrid">Hybrid</option>
-            <option value="vector">Vector</option>
-            <option value="simple_buffer">Simple Buffer</option>
-          </select>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover className="bg-content1/95 dark:bg-content1/80 border border-default-200/70 dark:border-white/15 backdrop-blur-xl">
+              <ListBox className="bg-transparent">
+                <ListBox.Item id="hybrid" textValue="Hybrid">
+                  Hybrid
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="vector" textValue="Vector">
+                  Vector
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="simple_buffer" textValue="Simple Buffer">
+                  Simple Buffer
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </div>
 
         <div className="space-y-6">
@@ -158,18 +189,26 @@ export function MemoryPanel({ agentId, memoryConfig, onChange }: MemoryPanelProp
                 {memoryConfig.retrieval.retention_days} days
               </span>
             </div>
-            <input
-              type="range"
-              min={1}
-              max={90}
+            <Slider
+              minValue={1}
+              maxValue={90}
+              step={1}
               value={memoryConfig.retrieval.retention_days}
-              onChange={(e) =>
+              onChange={(value) =>
                 updateRetrieval({
-                  retention_days: Math.max(1, Number.parseInt(e.target.value || "1", 10)),
+                  retention_days: Math.max(
+                    1,
+                    Array.isArray(value) ? Number(value[0] ?? 1) : Number(value),
+                  ),
                 })
               }
-              className="w-full accent-primary h-1 bg-foreground/10 rounded-lg appearance-none cursor-pointer"
-            />
+              className="max-w-full"
+            >
+              <Slider.Track className="h-1.5 bg-default-200 dark:bg-white/10 rounded-full">
+                <Slider.Fill className="bg-primary h-full rounded-full" />
+                <Slider.Thumb className="size-4 bg-background border-2 border-primary rounded-full shadow-md" />
+              </Slider.Track>
+            </Slider>
           </div>
 
           <div className="space-y-2">
@@ -179,19 +218,26 @@ export function MemoryPanel({ agentId, memoryConfig, onChange }: MemoryPanelProp
                 {memoryConfig.retrieval.max_tokens} tokens
               </span>
             </div>
-            <input
-              type="range"
-              min={512}
-              max={32000}
+            <Slider
+              minValue={512}
+              maxValue={32000}
               step={512}
               value={memoryConfig.retrieval.max_tokens}
-              onChange={(e) =>
+              onChange={(value) =>
                 updateRetrieval({
-                  max_tokens: Math.max(512, Number.parseInt(e.target.value || "512", 10)),
+                  max_tokens: Math.max(
+                    512,
+                    Array.isArray(value) ? Number(value[0] ?? 512) : Number(value),
+                  ),
                 })
               }
-              className="w-full accent-primary h-1 bg-foreground/10 rounded-lg appearance-none cursor-pointer"
-            />
+              className="max-w-full"
+            >
+              <Slider.Track className="h-1.5 bg-default-200 dark:bg-white/10 rounded-full">
+                <Slider.Fill className="bg-primary h-full rounded-full" />
+                <Slider.Thumb className="size-4 bg-background border-2 border-primary rounded-full shadow-md" />
+              </Slider.Track>
+            </Slider>
           </div>
         </div>
       </section>
@@ -199,72 +245,92 @@ export function MemoryPanel({ agentId, memoryConfig, onChange }: MemoryPanelProp
       <section className="space-y-4 rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5">
         <h4 className={sectionTitleClass}>Persistence</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <label className="text-sm text-foreground flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={memoryConfig.persistence.cross_session}
-              onChange={(e) => updatePersistence({ cross_session: e.target.checked })}
-              className="accent-primary"
-            />
-            Cross-session
-          </label>
-          <label className="text-sm text-foreground flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={memoryConfig.persistence.per_connector_isolation}
-              onChange={(e) =>
-                updatePersistence({ per_connector_isolation: e.target.checked })
-              }
-              className="accent-primary"
-            />
-            Per-connector isolation
-          </label>
-          <select
-            value={memoryConfig.persistence.session_scope}
-            onChange={(e) =>
-              updatePersistence({
-                session_scope: e.target.value as "per_user" | "per_channel" | "global",
-              })
-            }
-            className={inputClass}
+          <Switch
+            isSelected={memoryConfig.persistence.cross_session}
+            onChange={(cross_session) => updatePersistence({ cross_session })}
           >
-            <option value="per_user">Per User</option>
-            <option value="per_channel">Per Channel</option>
-            <option value="global">Global</option>
-          </select>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            Cross-session
+          </Switch>
+          <Switch
+            isSelected={memoryConfig.persistence.per_connector_isolation}
+            onChange={(per_connector_isolation) =>
+              updatePersistence({ per_connector_isolation })
+            }
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            Per-connector isolation
+          </Switch>
+          <Select
+            className={controlClass}
+            selectedKey={memoryConfig.persistence.session_scope}
+            onSelectionChange={(selection) => {
+              const value = selectionToValue(selection);
+              if (!value) return;
+              updatePersistence({
+                session_scope: value as "per_user" | "per_channel" | "global",
+              });
+            }}
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover className="bg-content1/95 dark:bg-content1/80 border border-default-200/70 dark:border-white/15 backdrop-blur-xl">
+              <ListBox className="bg-transparent">
+                <ListBox.Item id="per_user" textValue="Per User">
+                  Per User
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="per_channel" textValue="Per Channel">
+                  Per Channel
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="global" textValue="Global">
+                  Global
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </div>
       </section>
 
       <section className="space-y-4 rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5">
         <div className="flex items-center justify-between">
           <h4 className={sectionTitleClass}>Knowledge Files</h4>
-          <button
-            type="button"
-            onClick={handleIndexFile}
-            disabled={isIndexing}
-            className="px-3 py-1.5 text-xs rounded-lg border border-border/30 text-foreground hover:border-primary/40 hover:text-primary transition-colors disabled:opacity-60"
+          <Button
+            size="sm"
+            variant="secondary"
+            className={softButtonClass}
+            onPress={handleIndexFile}
+            isDisabled={isIndexing}
           >
             {isIndexing ? "Indexing..." : "+ Add knowledge file"}
-          </button>
+          </Button>
         </div>
 
-        <label className="text-sm text-foreground flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={memoryConfig.knowledge.enabled}
-            onChange={(e) =>
-              onChange({
-                ...memoryConfig,
-                knowledge: {
-                  ...memoryConfig.knowledge,
-                  enabled: e.target.checked,
-                },
-              })
-            }
-            className="accent-primary"
-          />
+        <Switch
+          isSelected={memoryConfig.knowledge.enabled}
+          onChange={(enabled) =>
+            onChange({
+              ...memoryConfig,
+              knowledge: {
+                ...memoryConfig.knowledge,
+                enabled,
+              },
+            })
+          }
+        >
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
           Enable knowledge injection ({indexedCount} indexed)
-        </label>
+        </Switch>
 
         {indexedCount === 0 ? (
           <div className="p-4 rounded-xl border border-dashed border-border/30 text-sm text-muted-foreground bg-card/20">
@@ -293,21 +359,20 @@ export function MemoryPanel({ agentId, memoryConfig, onChange }: MemoryPanelProp
       <section className="space-y-3 rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5">
         <h4 className={sectionTitleClass}>Query Preview</h4>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-          <input
-            type="text"
+          <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ask memory to retrieve relevant context"
-            className={inputClass}
+            className={controlClass}
           />
-          <button
-            type="button"
-            onClick={handleQuery}
-            disabled={isQuerying || !query.trim()}
-            className="px-4 py-2 text-sm rounded-xl border border-border/30 text-foreground hover:border-primary/40 hover:text-primary transition-colors disabled:opacity-60"
+          <Button
+            variant="secondary"
+            className={softButtonClass}
+            onPress={handleQuery}
+            isDisabled={isQuerying || !query.trim()}
           >
             {isQuerying ? "Searching..." : "Search"}
-          </button>
+          </Button>
         </div>
 
         {results.length > 0 && (

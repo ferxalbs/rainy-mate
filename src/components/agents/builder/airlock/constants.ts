@@ -4,7 +4,7 @@ export const sectionTitleClass =
   "text-[10px] font-bold uppercase tracking-widest text-muted-foreground";
 
 export const inputClass =
-  "w-full bg-card/40 hover:bg-card/60 backdrop-blur-md rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 leading-relaxed border border-border/20 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all shadow-sm";
+  "w-full bg-default-100/80 dark:bg-white/[0.08] border-default-300/70 dark:border-white/15 data-[hover=true]:bg-default-100 dark:data-[hover=true]:bg-white/[0.12] rounded-xl shadow-sm";
 
 export const LEVELS: Array<{
   level: AirlockLevel;

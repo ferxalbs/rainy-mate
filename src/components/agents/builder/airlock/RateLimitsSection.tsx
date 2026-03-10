@@ -1,4 +1,5 @@
 import type { AirlockConfig, AirlockRateLimits } from "../../../../types/airlock";
+import { Input } from "@heroui/react";
 import { inputClass, sectionTitleClass } from "./constants";
 
 interface RateLimitsSectionProps {
@@ -16,7 +17,7 @@ function RateLimitField({ title, value, onChange }: RateLimitFieldProps) {
   return (
     <div className="space-y-2">
       <h4 className={sectionTitleClass}>{title}</h4>
-      <input
+      <Input
         type="number"
         min={1}
         value={value}
