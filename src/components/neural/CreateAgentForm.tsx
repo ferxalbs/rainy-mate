@@ -50,41 +50,47 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
   const [maxTokens, setMaxTokens] = useState(8192);
   const [showPreview, setShowPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableModels, setAvailableModels] = useState<tauri.UnifiedModel[]>([]);
 
-  const [availableModels] = useState<tauri.UnifiedModel[]>([
-    {
-      id: "gpt-5-nano",
-      name: "GPT-5 Nano (Basic)",
-      provider: "OpenRouter",
-      capabilities: {
-        chat: true,
-        streaming: true,
-        function_calling: true,
-        vision: false,
-        web_search: false,
-        max_context: 400000,
-        max_output: 50000,
-      },
-      enabled: true,
-      processing_mode: "rainy_api",
-    },
-    {
-      id: "inception/mercury-2",
-      name: "Mercury 2 (Advanced)",
-      provider: "OpenRouter",
-      capabilities: {
-        chat: true,
-        streaming: true,
-        function_calling: true,
-        vision: false,
-        web_search: false,
-        max_context: 128000,
-        max_output: 50000,
-      },
-      enabled: true,
-      processing_mode: "rainy_api",
-    },
-  ]);
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadModels = async () => {
+      try {
+        const [models, selectedModel] = await Promise.all([
+          tauri.getUnifiedModels(),
+          tauri.getSelectedModel().catch(() => ""),
+        ]);
+
+        if (cancelled) return;
+
+        const atmModels = models.filter(
+          (entry) => entry.processing_mode === "rainy_api",
+        );
+        setAvailableModels(atmModels);
+
+        if (
+          selectedModel &&
+          atmModels.some((entry) => entry.id === selectedModel)
+        ) {
+          setModel(selectedModel);
+        } else if (atmModels.length > 0) {
+          setModel(atmModels[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to load ATM models:", error);
+        if (!cancelled) {
+          setAvailableModels([]);
+        }
+      }
+    };
+
+    loadModels();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!model && availableModels.length > 0) {
@@ -103,6 +109,10 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
   const handleSubmit = async () => {
     if (!name.trim() || !prompt.trim()) {
       toast.danger("Name and System Prompt are required");
+      return;
+    }
+    if (!model) {
+      toast.danger("Select a Rainy API model for this agent");
       return;
     }
 
@@ -209,7 +219,7 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
           </Select.Indicator>
         </Select.Trigger>
         <Description className="text-[10px] mt-1.5 text-muted-foreground ml-1 font-medium">
-          Select any available model from your providers
+          Select the explicit Rainy API v3 model this ATM agent will use
         </Description>
         <Select.Popover className="bg-background/60 dark:bg-background/20 backdrop-blur-sm dark:border-white/10 rounded-xl">
           <ListBox

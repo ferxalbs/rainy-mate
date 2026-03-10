@@ -1,4 +1,5 @@
 use crate::ai::keychain::KeychainManager;
+use crate::services::atm_auth::{clear_owner_auth_bundle, load_owner_auth_bundle, ATMOwnerAuthBundle};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -11,6 +12,7 @@ pub struct ATMClientState {
     pub base_url: String,
     pub api_key: Option<String>,
     pub platform_key: Option<String>,
+    pub user_api_key: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -359,6 +361,7 @@ impl ATMClient {
                 base_url,
                 api_key,
                 platform_key: None,
+                user_api_key: None,
             })),
         }
     }
@@ -376,14 +379,38 @@ impl ATMClient {
         }
     }
 
+    pub async fn set_owner_auth_context(
+        &self,
+        platform_key: String,
+        user_api_key: String,
+        workspace_id: String,
+    ) -> Result<(), String> {
+        {
+            let mut state = self.state.lock().await;
+            state.platform_key = Some(platform_key.clone());
+            state.user_api_key = Some(user_api_key.clone());
+        }
+
+        let bundle = ATMOwnerAuthBundle {
+            platform_key,
+            user_api_key,
+            workspace_id,
+        };
+
+        crate::services::atm_auth::save_owner_auth_bundle(&bundle)
+    }
+
     pub async fn load_credentials_from_keychain(&self) -> Result<bool, String> {
         let keychain = KeychainManager::new();
         let stored = keychain.get_key(ATM_ADMIN_KEYCHAIN_ID)?;
         if let Some(api_key) = stored {
             self.set_credentials(api_key).await;
 
-            // Also load platform_key from Neural keychain for node linkage
-            if let Ok(Some(pk)) = keychain.get_key("neural_platform_key") {
+            if let Some(bundle) = load_owner_auth_bundle()? {
+                let mut state = self.state.lock().await;
+                state.platform_key = Some(bundle.platform_key);
+                state.user_api_key = Some(bundle.user_api_key);
+            } else if let Ok(Some(pk)) = keychain.get_key("neural_platform_key") {
                 let mut state = self.state.lock().await;
                 state.platform_key = Some(pk);
             }
@@ -398,9 +425,11 @@ impl ATMClient {
         let mut state = self.state.lock().await;
         state.api_key = None;
         state.platform_key = None;
+        state.user_api_key = None;
 
         let keychain = KeychainManager::new();
         let _ = keychain.delete_key(ATM_ADMIN_KEYCHAIN_ID);
+        let _ = clear_owner_auth_bundle();
         Ok(())
     }
 
@@ -532,6 +561,9 @@ impl ATMClient {
         if let Some(pk) = state.platform_key.as_ref() {
             req = req.header("x-rainy-platform-key", pk);
         }
+        if let Some(user_api_key) = state.user_api_key.as_ref() {
+            req = req.header("x-rainy-api-key", user_api_key);
+        }
 
         let res = req.json(&params).send().await.map_err(|e| e.to_string())?;
 
@@ -560,6 +592,9 @@ impl ATMClient {
 
         if let Some(pk) = state.platform_key.as_ref() {
             req = req.header("x-rainy-platform-key", pk);
+        }
+        if let Some(user_api_key) = state.user_api_key.as_ref() {
+            req = req.header("x-rainy-api-key", user_api_key);
         }
 
         let res = req.send().await.map_err(|e| e.to_string())?;
@@ -1279,8 +1314,8 @@ impl ATMClient {
             .http
             .post(&url)
             .header("Authorization", format!("Bearer {}", api_key))
-            .header("x-platform-key", platform_key)
-            .header("x-user-api-key", user_api_key)
+            .header("x-rainy-platform-key", platform_key)
+            .header("x-rainy-api-key", user_api_key)
             .json(&serde_json::json!({ "toolAccessPolicy": tool_access_policy }))
             .send()
             .await
@@ -1310,8 +1345,8 @@ impl ATMClient {
             .http
             .post(&url)
             .header("Authorization", format!("Bearer {}", api_key))
-            .header("x-platform-key", platform_key)
-            .header("x-user-api-key", user_api_key)
+            .header("x-rainy-platform-key", platform_key)
+            .header("x-rainy-api-key", user_api_key)
             .json(&serde_json::json!({}))
             .send()
             .await

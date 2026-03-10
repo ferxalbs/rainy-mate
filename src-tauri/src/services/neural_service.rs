@@ -2,6 +2,9 @@ use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::models::neural::{
     CommandResult, DesktopNodeStatus, QueuedCommand, RuntimeStats, SkillManifest,
 };
+use crate::services::atm_auth::{
+    clear_owner_auth_bundle, load_owner_auth_bundle, save_owner_auth_bundle, ATMOwnerAuthBundle,
+};
 use crate::services::manifest_signing::sign_skills_manifest;
 use crate::services::security::NodeAuthenticator;
 use crate::services::tool_manifest::build_skill_manifest_from_runtime;
@@ -144,6 +147,20 @@ impl NeuralService {
         if let Err(e) = keychain.store_key("neural_workspace_id", &metadata.workspace_id) {
             eprintln!("Failed to persist neural workspace id: {}", e);
         }
+
+        if let (Some(platform_key), Some(user_api_key)) = (
+            metadata.platform_key.clone(),
+            metadata.user_api_key.clone(),
+        ) {
+            let bundle = ATMOwnerAuthBundle {
+                platform_key,
+                user_api_key,
+                workspace_id: metadata.workspace_id.clone(),
+            };
+            if let Err(e) = save_owner_auth_bundle(&bundle) {
+                eprintln!("Failed to persist ATM owner auth bundle: {}", e);
+            }
+        }
     }
 
     /// Set authentication credentials (Platform Key + User API Key)
@@ -159,10 +176,17 @@ impl NeuralService {
         metadata.user_api_key = Some(user_api_key.clone());
         metadata.node_id = None; // Force re-registration with new credentials
 
+        let workspace_id = metadata.workspace_id.clone();
+
         // Persist to Keychain
         let keychain = crate::ai::keychain::KeychainManager::new();
         keychain.store_key("neural_platform_key", &platform_key)?;
         keychain.store_key("neural_user_api_key", &user_api_key)?;
+        save_owner_auth_bundle(&ATMOwnerAuthBundle {
+            platform_key,
+            user_api_key,
+            workspace_id,
+        })?;
 
         Ok(())
     }
@@ -181,6 +205,7 @@ impl NeuralService {
         let _ = keychain.delete_key("neural_platform_key");
         let _ = keychain.delete_key("neural_user_api_key");
         let _ = keychain.delete_key("neural_workspace_id");
+        let _ = clear_owner_auth_bundle();
 
         Ok(())
     }
@@ -189,20 +214,39 @@ impl NeuralService {
     pub async fn load_credentials_from_keychain(&self) -> Result<bool, String> {
         let keychain = crate::ai::keychain::KeychainManager::new();
 
-        let platform_key = keychain.get_key("neural_platform_key")?;
-        let user_api_key = keychain.get_key("neural_user_api_key")?;
-        let workspace_id = keychain.get_key("neural_workspace_id")?;
-
-        if let (Some(pk), Some(uk)) = (platform_key, user_api_key) {
+        if let Some(bundle) = load_owner_auth_bundle()? {
             let mut metadata = self.metadata.lock().await;
-            metadata.platform_key = Some(pk);
-            metadata.user_api_key = Some(uk);
-            if let Some(ws) = workspace_id {
-                metadata.workspace_id = ws;
+            metadata.platform_key = Some(bundle.platform_key);
+            metadata.user_api_key = Some(bundle.user_api_key);
+            if !bundle.workspace_id.trim().is_empty() {
+                metadata.workspace_id = bundle.workspace_id;
             }
             Ok(true)
         } else {
-            Ok(false)
+            let platform_key = keychain.get_key("neural_platform_key")?;
+            let user_api_key = keychain.get_key("neural_user_api_key")?;
+            let workspace_id = keychain.get_key("neural_workspace_id")?;
+
+            if let (Some(pk), Some(uk)) = (platform_key, user_api_key) {
+                let mut metadata = self.metadata.lock().await;
+                metadata.platform_key = Some(pk.clone());
+                metadata.user_api_key = Some(uk.clone());
+                if let Some(ws) = workspace_id {
+                    metadata.workspace_id = ws.clone();
+                }
+
+                let bundle = ATMOwnerAuthBundle {
+                    platform_key: pk,
+                    user_api_key: uk,
+                    workspace_id: metadata.workspace_id.clone(),
+                };
+                if let Err(e) = save_owner_auth_bundle(&bundle) {
+                    eprintln!("Failed to migrate legacy neural auth bundle: {}", e);
+                }
+                Ok(true)
+            } else {
+                Ok(false)
+            }
         }
     }
 

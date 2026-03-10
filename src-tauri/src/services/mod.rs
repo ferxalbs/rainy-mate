@@ -3,6 +3,7 @@
 
 pub mod agent_kill_switch;
 pub mod airlock;
+pub mod atm_auth;
 pub mod atm_client;
 pub mod audit_emitter;
 pub mod browser_controller;
