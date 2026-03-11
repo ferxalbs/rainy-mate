@@ -2,9 +2,12 @@ use crate::ai::agent::runtime::{AgentContent, AgentMessage, AgentRuntime, Runtim
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::ai::specs::AgentSpec;
 use crate::ai::{
+    agent::context_window::ContextWindow,
+    agent::events::AgentEvent,
+    agent::manager::ChatCompactionStateDto,
     keychain::KeychainManager,
     provider_trait::{AIProviderFactory, ProviderWithStats},
-    provider_types::{ProviderConfig, ProviderId, ProviderType},
+    provider_types::{ChatCompletionRequest, ChatMessage, ProviderConfig, ProviderId, ProviderType},
     providers::{GeminiProviderFactory, RainySDKProviderFactory},
 };
 use crate::commands::ai_providers::ProviderRegistryState;
@@ -15,8 +18,11 @@ use crate::services::SkillExecutor;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
 
-const MAX_HISTORY_MESSAGES: usize = 30;
-const MAX_HISTORY_MESSAGE_CHARS: usize = 4000;
+const MAX_HISTORY_MESSAGE_CHARS: usize = 12_000;
+const AUTO_COMPACTION_TRIGGER_TOKENS: usize = 80_000;
+const AUTO_COMPACTION_KEEP_RECENT_MESSAGES: usize = 24;
+const MAX_COMPACTION_TRANSCRIPT_CHARS: usize = 160_000;
+const MAX_COMPACTION_SUMMARY_CHARS: usize = 12_000;
 
 fn is_valid_rainy_api_key(api_key: &str) -> bool {
     api_key.trim_start().starts_with("ra-")
@@ -31,10 +37,10 @@ fn truncate_text(input: &str, max_chars: usize) -> String {
 }
 
 fn build_runtime_history(rows: Vec<(String, String, String)>) -> Vec<AgentMessage> {
-    let mut selected: Vec<AgentMessage> = rows
+    rows
         .into_iter()
         .filter_map(|(_, role, content)| {
-            if role != "user" && role != "assistant" {
+            if role != "user" && role != "assistant" && role != "system" {
                 return None;
             }
             Some(AgentMessage {
@@ -44,14 +50,171 @@ fn build_runtime_history(rows: Vec<(String, String, String)>) -> Vec<AgentMessag
                 tool_call_id: None,
             })
         })
-        .collect();
+        .collect()
+}
 
-    if selected.len() > MAX_HISTORY_MESSAGES {
-        let skip = selected.len() - MAX_HISTORY_MESSAGES;
-        selected = selected.into_iter().skip(skip).collect();
+fn estimate_history_tokens(rows: &[(String, String, String)], prompt: &str) -> usize {
+    let mut messages = build_runtime_history(rows.to_vec());
+    messages.push(AgentMessage {
+        role: "user".to_string(),
+        content: AgentContent::text(prompt),
+        tool_calls: None,
+        tool_call_id: None,
+    });
+    ContextWindow::estimate_total_tokens(&messages)
+}
+
+fn build_compaction_transcript(
+    rows: &[(String, String, String)],
+    keep_recent_count: usize,
+) -> Option<(String, usize)> {
+    if rows.len() <= keep_recent_count + 2 {
+        return None;
+    }
+    let split_index = rows.len().saturating_sub(keep_recent_count);
+    if split_index == 0 {
+        return None;
     }
 
-    selected
+    let to_summarize = &rows[..split_index];
+    let mut transcript = String::new();
+
+    for (_, role, content) in to_summarize {
+        if role == "system" && content.starts_with("SESSION COMPACTION SUMMARY:") {
+            continue;
+        }
+        let role_label = match role.as_str() {
+            "user" => "USER",
+            "assistant" => "ASSISTANT",
+            _ => "SYSTEM",
+        };
+        let line = format!("{}: {}\n", role_label, truncate_text(content, 1200));
+        if transcript.len() + line.len() > MAX_COMPACTION_TRANSCRIPT_CHARS {
+            break;
+        }
+        transcript.push_str(&line);
+    }
+
+    if transcript.trim().is_empty() {
+        None
+    } else {
+        Some((transcript, to_summarize.len()))
+    }
+}
+
+fn fallback_compaction_summary(rows_to_summarize: usize, prompt: &str) -> String {
+    format!(
+        "Auto-compaction fallback summary.\n\
+         - Summarized prior turns: {}\n\
+         - Current user objective: {}\n\
+         - Preserve unresolved tasks, constraints, and file-specific context from recent turns.",
+        rows_to_summarize,
+        truncate_text(prompt, 800)
+    )
+}
+
+async fn generate_compaction_summary(
+    router: &IntelligentRouterState,
+    model_id: &str,
+    transcript: &str,
+    prompt: &str,
+) -> Result<String, String> {
+    let instruction = "You are a context compaction engine for long-running agent chats.
+Return a concise, structured rolling summary to preserve continuity after compression.
+Include only durable context needed for future turns.
+
+Output sections exactly:
+1) User Intent
+2) Completed Work
+3) Decisions and Constraints
+4) Active Work
+5) Pending Tasks
+6) Critical Artifacts (paths, ids, commands, settings)";
+
+    let payload = format!(
+        "Current user message:\n{}\n\nConversation excerpt to compact:\n{}",
+        truncate_text(prompt, 1200),
+        transcript
+    );
+
+    let request = ChatCompletionRequest {
+        messages: vec![
+            ChatMessage::system(instruction.to_string()),
+            ChatMessage::user(payload),
+        ],
+        model: model_id.to_string(),
+        temperature: Some(0.1),
+        max_tokens: Some(1800),
+        top_p: Some(1.0),
+        frequency_penalty: Some(0.0),
+        presence_penalty: Some(0.0),
+        stop: None,
+        stream: false,
+        tools: None,
+        tool_choice: None,
+        json_mode: false,
+    };
+
+    let response = router
+        .0
+        .read()
+        .await
+        .complete(request)
+        .await
+        .map_err(|e| format!("Compaction summary request failed: {}", e))?;
+
+    let summary = response
+        .content
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if summary.is_empty() {
+        return Err("Compaction summary returned empty content".to_string());
+    }
+    Ok(truncate_text(&summary, MAX_COMPACTION_SUMMARY_CHARS))
+}
+
+async fn maybe_compact_chat_history(
+    agent_manager: &crate::ai::agent::manager::AgentManager,
+    router: &IntelligentRouterState,
+    chat_id: &str,
+    model_id: &str,
+    prompt: &str,
+) -> Result<Option<ChatCompactionStateDto>, String> {
+    let history_rows = agent_manager
+        .get_history(chat_id)
+        .await
+        .map_err(|e| format!("Failed to load chat history for compaction: {}", e))?;
+
+    let estimated_tokens = estimate_history_tokens(&history_rows, prompt);
+    if estimated_tokens < AUTO_COMPACTION_TRIGGER_TOKENS {
+        return Ok(None);
+    }
+
+    let Some((transcript, rows_to_summarize)) =
+        build_compaction_transcript(&history_rows, AUTO_COMPACTION_KEEP_RECENT_MESSAGES)
+    else {
+        return Ok(None);
+    };
+
+    let summary = match generate_compaction_summary(router, model_id, &transcript, prompt).await {
+        Ok(text) => text,
+        Err(e) => {
+            eprintln!("[AgentWorkflow] Compaction summary model request failed: {}", e);
+            fallback_compaction_summary(rows_to_summarize, prompt)
+        }
+    };
+
+    agent_manager
+        .compact_session_with_rolling_summary(
+            chat_id,
+            &summary,
+            AUTO_COMPACTION_KEEP_RECENT_MESSAGES,
+            estimated_tokens,
+            model_id,
+        )
+        .await
+        .map_err(|e| format!("Failed to compact session: {}", e))
 }
 
 fn default_instructions(workspace_id: &str) -> String {
@@ -345,6 +508,34 @@ pub async fn run_agent_workflow(
 
     // Load persisted conversation history into runtime so local Native Runtime
     // preserves context across turns.
+    let compaction_state = maybe_compact_chat_history(
+        &agent_manager,
+        &router,
+        &chat_id,
+        &model_id,
+        &prompt,
+    )
+    .await?;
+
+    if let Some(compaction) = compaction_state {
+        let _ = app_handle.emit(
+            "agent://event",
+            AgentEvent::Status(format!(
+                "CONTEXT_COMPACTION:{}",
+                serde_json::json!({
+                    "applied": true,
+                    "trigger_tokens": AUTO_COMPACTION_TRIGGER_TOKENS,
+                    "source_estimated_tokens": compaction.source_estimated_tokens,
+                    "source_message_count": compaction.source_message_count,
+                    "kept_recent_count": compaction.kept_recent_count,
+                    "compression_model": compaction.compression_model,
+                    "best_practice": "rolling_summary_context_compaction",
+                })
+                .to_string()
+            )),
+        );
+    }
+
     let history_rows = agent_manager
         .get_history(&chat_id)
         .await
@@ -354,7 +545,18 @@ pub async fn run_agent_workflow(
         .await;
 
     // 2. Run Workflow with Persistence
+    let _ = agent_manager
+        .upsert_chat_runtime_telemetry(
+            &chat_id,
+            "persisted_long_chat",
+            "unavailable",
+            crate::services::memory_vault::types::EMBEDDING_MODEL,
+        )
+        .await;
+
     let app_handle_clone = app_handle.clone();
+    let agent_manager_clone = agent_manager.inner().clone();
+    let chat_id_for_events = chat_id.clone();
 
     // Persist Initial User Prompt
     let _ = agent_manager
@@ -366,6 +568,41 @@ pub async fn run_agent_workflow(
         .run(&prompt, move |event| {
             // Emit to frontend
             let _ = app_handle_clone.emit("agent://event", event.clone());
+            if let AgentEvent::Status(text) = event {
+                if text.starts_with("RAG_TELEMETRY:") {
+                    if let Ok(value) =
+                        serde_json::from_str::<serde_json::Value>(&text["RAG_TELEMETRY:".len()..])
+                    {
+                        let history_source = value
+                            .get("history_source")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("persisted_long_chat")
+                            .to_string();
+                        let retrieval_mode = value
+                            .get("retrieval_mode")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unavailable")
+                            .to_string();
+                        let embedding_profile = value
+                            .get("embedding_profile")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(crate::services::memory_vault::types::EMBEDDING_MODEL)
+                            .to_string();
+                        let manager = agent_manager_clone.clone();
+                        let chat_id = chat_id_for_events.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = manager
+                                .upsert_chat_runtime_telemetry(
+                                    &chat_id,
+                                    &history_source,
+                                    &retrieval_mode,
+                                    &embedding_profile,
+                                )
+                                .await;
+                        });
+                    }
+                }
+            }
         })
         .await?;
 

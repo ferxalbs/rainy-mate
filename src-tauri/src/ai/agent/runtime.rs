@@ -398,39 +398,32 @@ Rules:
         // Since we don't have direct access to memory_manager here, we use AgentMemory wrapped methods.
         // We'll add the semantic results as an invisible "system" state message or inject into the system prompt.
         let mut appended_context = String::new();
-        on_event(AgentEvent::Status(format!(
-            "RAG_TELEMETRY:{}",
-            serde_json::json!({
-                "history_source": "persisted_long_chat",
-                "retrieval_mode": "unavailable",
-                "embedding_profile": crate::services::memory_vault::types::EMBEDDING_MODEL,
-            })
-            .to_string()
-        )));
+        let mut retrieval_mode = "unavailable".to_string();
         if let Some(mm) = self.memory.manager() {
             if let Ok(result) = mm
                 .search_semantic_detailed(&self.options.workspace_id, input, 5)
                 .await
             {
-                let retrieval_mode = match result.mode {
+                retrieval_mode = match result.mode {
                     crate::services::memory::SemanticRetrievalMode::Ann => "ann",
                     crate::services::memory::SemanticRetrievalMode::Exact => "exact",
                     crate::services::memory::SemanticRetrievalMode::LexicalFallback => {
                         "lexical_fallback"
                     }
-                };
-                on_event(AgentEvent::Status(format!(
-                    "RAG_TELEMETRY:{}",
-                    serde_json::json!({
-                        "history_source": "persisted_long_chat",
-                        "retrieval_mode": retrieval_mode,
-                        "embedding_profile": crate::services::memory_vault::types::EMBEDDING_MODEL,
-                    })
-                    .to_string()
-                )));
+                }
+                .to_string();
                 appended_context = self.build_semantic_context_block(&context_window, &result);
             }
         }
+        on_event(AgentEvent::Status(format!(
+            "RAG_TELEMETRY:{}",
+            serde_json::json!({
+                "history_source": "persisted_long_chat",
+                "retrieval_mode": retrieval_mode,
+                "embedding_profile": crate::services::memory_vault::types::EMBEDDING_MODEL,
+            })
+            .to_string()
+        )));
 
         if !appended_context.is_empty() {
             if let AgentContent::Text(ref mut sys_text) = state.messages[0].content {

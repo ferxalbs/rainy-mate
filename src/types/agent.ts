@@ -158,6 +158,8 @@ export interface AgentMessage {
     historySource?: string;
     retrievalMode?: string;
     embeddingProfile?: string;
+    compressionApplied?: boolean;
+    compressionTriggerTokens?: number;
   };
 }
 

@@ -326,11 +326,17 @@ export function AgentChatPanel({
                   History: {latestTelemetry?.historySource || "persisted_long_chat"}
                 </span>
                 <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
-                  Retrieval: {latestTelemetry?.retrievalMode || "unknown"}
+                  Retrieval: {latestTelemetry?.retrievalMode || "unavailable"}
                 </span>
                 <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
                   Embedding: {latestTelemetry?.embeddingProfile || "gemini-embedding-2-preview"}
                 </span>
+                {latestTelemetry?.compressionApplied && (
+                  <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
+                    Compression: auto @
+                    {latestTelemetry.compressionTriggerTokens || 80000} (best-practice)
+                  </span>
+                )}
               </div>
               {hasMoreHistory && (
                 <div className="flex justify-center">

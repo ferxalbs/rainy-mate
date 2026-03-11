@@ -40,6 +40,28 @@ pub struct ChatHistoryWindowDto {
     pub next_cursor_rowid: Option<i64>,
 }
 
+#[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ChatCompactionStateDto {
+    pub chat_id: String,
+    pub summary_content: String,
+    pub source_message_count: i64,
+    pub source_estimated_tokens: i64,
+    pub kept_recent_count: i64,
+    pub compression_model: String,
+    pub compaction_count: i64,
+    pub compressed_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ChatRuntimeTelemetryDto {
+    pub chat_id: String,
+    pub history_source: String,
+    pub retrieval_mode: String,
+    pub embedding_profile: String,
+    pub updated_at: String,
+}
+
 impl AgentManager {
     pub fn new(pool: Pool<Sqlite>) -> Self {
         Self { db: Arc::new(pool) }
@@ -187,6 +209,16 @@ impl AgentManager {
             .execute(&*self.db)
             .await?;
 
+        sqlx::query("DELETE FROM chat_compaction_state WHERE chat_id = ?")
+            .bind(chat_id)
+            .execute(&*self.db)
+            .await?;
+
+        sqlx::query("DELETE FROM chat_runtime_telemetry WHERE chat_id = ?")
+            .bind(chat_id)
+            .execute(&*self.db)
+            .await?;
+
         Ok(())
     }
 
@@ -197,24 +229,46 @@ impl AgentManager {
         summary_content: &str,
         keep_recent_count: usize,
     ) -> Result<(), sqlx::Error> {
+        let _ = self
+            .compact_session_with_rolling_summary(
+                chat_id,
+                summary_content,
+                keep_recent_count,
+                0,
+                "legacy_compactor",
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn compact_session_with_rolling_summary(
+        &self,
+        chat_id: &str,
+        summary_content: &str,
+        keep_recent_count: usize,
+        source_estimated_tokens: usize,
+        compression_model: &str,
+    ) -> Result<Option<ChatCompactionStateDto>, sqlx::Error> {
         let mut tx = self.db.begin().await?;
 
-        let messages = sqlx::query_as::<_, (String,)>(
-            "SELECT id FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
+        let messages = sqlx::query_as::<_, (i64, String)>(
+            "SELECT rowid, id FROM messages WHERE chat_id = ? ORDER BY rowid ASC",
         )
         .bind(chat_id)
         .fetch_all(&mut *tx)
         .await?;
 
         if messages.len() <= keep_recent_count {
-            return Ok(());
+            tx.rollback().await?;
+            return Ok(None);
         }
 
-        let delete_count = messages.len() - keep_recent_count;
+        let source_message_count = messages.len();
+        let delete_count = source_message_count - keep_recent_count;
         let to_delete: Vec<String> = messages
-            .into_iter()
+            .iter()
             .take(delete_count)
-            .map(|(id,)| id)
+            .map(|(_, id)| id.clone())
             .collect();
 
         for id in to_delete {
@@ -225,16 +279,117 @@ impl AgentManager {
         }
 
         let summary_id = uuid::Uuid::new_v4().to_string();
-        sqlx::query("INSERT INTO messages (id, chat_id, role, content) VALUES (?, ?, 'system', ?)")
+        sqlx::query(
+            "INSERT INTO messages (id, chat_id, role, content) VALUES (?, ?, 'system', ?)",
+        )
             .bind(summary_id)
             .bind(chat_id)
             .bind(format!("SESSION COMPACTION SUMMARY:\n{}", summary_content))
             .execute(&mut *tx)
             .await?;
 
+        sqlx::query(
+            "INSERT INTO chat_compaction_state (
+                chat_id,
+                summary_content,
+                source_message_count,
+                source_estimated_tokens,
+                kept_recent_count,
+                compression_model,
+                compaction_count,
+                compressed_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                summary_content = excluded.summary_content,
+                source_message_count = excluded.source_message_count,
+                source_estimated_tokens = excluded.source_estimated_tokens,
+                kept_recent_count = excluded.kept_recent_count,
+                compression_model = excluded.compression_model,
+                compaction_count = chat_compaction_state.compaction_count + 1,
+                compressed_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(chat_id)
+        .bind(summary_content)
+        .bind(source_message_count as i64)
+        .bind(source_estimated_tokens as i64)
+        .bind(keep_recent_count as i64)
+        .bind(compression_model)
+        .execute(&mut *tx)
+        .await?;
+
         tx.commit().await?;
 
+        self.get_latest_chat_compaction(chat_id).await
+    }
+
+    pub async fn get_latest_chat_compaction(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<ChatCompactionStateDto>, sqlx::Error> {
+        sqlx::query_as::<_, ChatCompactionStateDto>(
+            "SELECT
+                chat_id,
+                summary_content,
+                source_message_count,
+                source_estimated_tokens,
+                kept_recent_count,
+                compression_model,
+                compaction_count,
+                compressed_at,
+                updated_at
+             FROM chat_compaction_state
+             WHERE chat_id = ?",
+        )
+        .bind(chat_id)
+        .fetch_optional(&*self.db)
+        .await
+    }
+
+    pub async fn upsert_chat_runtime_telemetry(
+        &self,
+        chat_id: &str,
+        history_source: &str,
+        retrieval_mode: &str,
+        embedding_profile: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO chat_runtime_telemetry
+                (chat_id, history_source, retrieval_mode, embedding_profile, updated_at)
+             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(chat_id) DO UPDATE SET
+                history_source = excluded.history_source,
+                retrieval_mode = excluded.retrieval_mode,
+                embedding_profile = excluded.embedding_profile,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(chat_id)
+        .bind(history_source)
+        .bind(retrieval_mode)
+        .bind(embedding_profile)
+        .execute(&*self.db)
+        .await?;
         Ok(())
+    }
+
+    pub async fn get_chat_runtime_telemetry(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<ChatRuntimeTelemetryDto>, sqlx::Error> {
+        sqlx::query_as::<_, ChatRuntimeTelemetryDto>(
+            "SELECT
+                chat_id,
+                history_source,
+                retrieval_mode,
+                embedding_profile,
+                updated_at
+             FROM chat_runtime_telemetry
+             WHERE chat_id = ?",
+        )
+        .bind(chat_id)
+        .fetch_optional(&*self.db)
+        .await
     }
 
     pub async fn ensure_chat_session(
@@ -401,6 +556,28 @@ pub async fn compact_session_cmd(
 ) -> Result<(), String> {
     state
         .compact_session(&chat_id, &summary_content, keep_recent_count)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_chat_compaction_state(
+    state: State<'_, AgentManager>,
+    chat_scope_id: String,
+) -> Result<Option<ChatCompactionStateDto>, String> {
+    state
+        .get_latest_chat_compaction(&chat_scope_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_chat_runtime_telemetry(
+    state: State<'_, AgentManager>,
+    chat_scope_id: String,
+) -> Result<Option<ChatRuntimeTelemetryDto>, String> {
+    state
+        .get_chat_runtime_telemetry(&chat_scope_id)
         .await
         .map_err(|e| e.to_string())
 }

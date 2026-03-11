@@ -42,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `src/hooks/useAgentChat.ts`
     - `src/components/agent-chat/AgentChatPanel.tsx`
     - `src-tauri/src/ai/agent/runtime.rs`
+- Added persistent rolling compaction state for long-chat continuity:
+  - `chat_compaction_state` table + index
+  - new command: `get_chat_compaction_state`
+  - files:
+    - `src-tauri/migrations/20260311113000_add_chat_compaction_state.sql`
+    - `src-tauri/src/ai/agent/manager.rs`
+    - `src-tauri/src/lib.rs`
+    - `src/services/tauri.ts`
 
 ### Changed
 
@@ -58,6 +66,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/src/services/memory/memory_manager.rs`
   - `src-tauri/src/ai/agent/memory.rs`
   - `src-tauri/src/services/settings.rs`
+- Updated agent workflow with automatic long-context compression at `80k` estimated tokens:
+  - model-generated rolling summary persisted per `chat_scope_id`
+  - keeps recent turns uncompressed and injects durable session summary in history
+  - emits `CONTEXT_COMPACTION:{...}` status event for UI visibility
+  - files:
+    - `src-tauri/src/commands/agent.rs`
+    - `src-tauri/src/ai/agent/manager.rs`
+- Updated polling cadence to reduce server load:
+  - active loop: `2s`
+  - idle loop: `10s`
+  - files:
+    - `src-tauri/src/services/command_poller.rs`
 
 ### Fixed
 
@@ -68,6 +88,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed noisy heartbeat failure reporting for temporary upstream gateway errors by sanitizing HTML response bodies and classifying 502/503/504 retries as transient:
   - `src-tauri/src/services/neural_service.rs`
   - `src-tauri/src/services/command_poller.rs`
+- Fixed status event chatter by consolidating RAG telemetry emission to a single per-run snapshot instead of repeated updates:
+  - `src-tauri/src/ai/agent/runtime.rs`
+  - `src/hooks/useAgentChat.ts`
+- Fixed chat UX visibility gap for context compression by surfacing a best-practice auto-compression indicator in Agent Chat:
+  - `src/components/agent-chat/AgentChatPanel.tsx`
+  - `src/types/agent.ts`
+- Fixed ambiguous `RETRIEVAL: UNKNOWN` chip states by normalizing retrieval fallback to `unavailable` and persisting chat-scoped runtime telemetry for hydration:
+  - `src-tauri/migrations/20260311130000_add_chat_runtime_telemetry.sql`
+  - `src-tauri/src/ai/agent/manager.rs`
+  - `src-tauri/src/commands/agent.rs`
+  - `src/hooks/useAgentChat.ts`
+  - `src/components/agent-chat/AgentChatPanel.tsx`
 
 ### Validation
 

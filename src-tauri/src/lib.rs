@@ -650,6 +650,8 @@ pub fn run() {
             manager::get_chat_history,
             manager::get_chat_history_window,
             manager::get_default_chat_scope,
+            manager::get_chat_compaction_state,
+            manager::get_chat_runtime_telemetry,
             manager::clear_chat_history,
             manager::compact_session_cmd,
             crate::services::mcp_http::handle_mcp_request,

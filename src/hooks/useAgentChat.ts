@@ -28,6 +28,11 @@ export function useAgentChat() {
 
   const { streamWithRouting } = useStreaming();
   const { createTask } = useTauriTask();
+  const defaultRagTelemetry = {
+    historySource: "persisted_long_chat",
+    retrievalMode: "unavailable",
+    embeddingProfile: "gemini-embedding-2-preview",
+  } as const;
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -70,7 +75,31 @@ export function useAgentChat() {
         type: mapPersistedRoleToUiType(msg.role),
         content: msg.content,
         timestamp: new Date(msg.created_at),
+        ragTelemetry:
+          msg.role === "assistant"
+            ? { ...defaultRagTelemetry }
+            : undefined,
       }));
+      const runtimeTelemetry = await tauri.getChatRuntimeTelemetry(scope);
+      if (runtimeTelemetry) {
+        for (let i = hydratedMessages.length - 1; i >= 0; i -= 1) {
+          if (hydratedMessages[i].type === "agent") {
+            hydratedMessages[i] = {
+              ...hydratedMessages[i],
+              ragTelemetry: {
+                ...hydratedMessages[i].ragTelemetry,
+                historySource: runtimeTelemetry.history_source || defaultRagTelemetry.historySource,
+                retrievalMode:
+                  runtimeTelemetry.retrieval_mode || defaultRagTelemetry.retrievalMode,
+                embeddingProfile:
+                  runtimeTelemetry.embedding_profile ||
+                  defaultRagTelemetry.embeddingProfile,
+              },
+            };
+            break;
+          }
+        }
+      }
       setMessages(hydratedMessages);
       setHistoryCursorRowid(window.next_cursor_rowid ?? null);
       setHasMoreHistory(window.has_more);
@@ -102,6 +131,10 @@ export function useAgentChat() {
         type: mapPersistedRoleToUiType(msg.role),
         content: msg.content,
         timestamp: new Date(msg.created_at),
+        ragTelemetry:
+          msg.role === "assistant"
+            ? { ...defaultRagTelemetry }
+            : undefined,
       }));
       setMessages((prev) => [...olderMessages, ...prev]);
       setHistoryCursorRowid(window.next_cursor_rowid ?? null);
@@ -630,6 +663,7 @@ export function useAgentChat() {
         neuralState: "thinking",
         ragTelemetry: {
           historySource: "persisted_long_chat",
+          retrievalMode: "unavailable",
           embeddingProfile: "gemini-embedding-2-preview",
         },
       };
@@ -777,16 +811,57 @@ export function useAgentChat() {
                         retrieval_mode?: string;
                         embedding_profile?: string;
                       };
+                      const nextTelemetry = {
+                        historySource:
+                          parsed.history_source ||
+                          m.ragTelemetry?.historySource ||
+                          defaultRagTelemetry.historySource,
+                        retrievalMode:
+                          parsed.retrieval_mode ||
+                          m.ragTelemetry?.retrievalMode ||
+                          defaultRagTelemetry.retrievalMode,
+                        embeddingProfile:
+                          parsed.embedding_profile ||
+                          m.ragTelemetry?.embeddingProfile ||
+                          defaultRagTelemetry.embeddingProfile,
+                        compressionApplied: m.ragTelemetry?.compressionApplied,
+                        compressionTriggerTokens:
+                          m.ragTelemetry?.compressionTriggerTokens,
+                      };
+                      if (
+                        m.ragTelemetry?.historySource ===
+                          nextTelemetry.historySource &&
+                        m.ragTelemetry?.retrievalMode ===
+                          nextTelemetry.retrievalMode &&
+                        m.ragTelemetry?.embeddingProfile ===
+                          nextTelemetry.embeddingProfile
+                      ) {
+                        return m;
+                      }
+                      return {
+                        ...m,
+                        ragTelemetry: nextTelemetry,
+                      };
+                    } catch {
+                      return m;
+                    }
+                  }
+                  if (statusText.startsWith("CONTEXT_COMPACTION:")) {
+                    try {
+                      const raw = statusText.slice("CONTEXT_COMPACTION:".length);
+                      const parsed = JSON.parse(raw) as {
+                        applied?: boolean;
+                        trigger_tokens?: number;
+                      };
                       return {
                         ...m,
                         ragTelemetry: {
-                          historySource:
-                            parsed.history_source || m.ragTelemetry?.historySource,
-                          retrievalMode:
-                            parsed.retrieval_mode || m.ragTelemetry?.retrievalMode,
-                          embeddingProfile:
-                            parsed.embedding_profile ||
-                            m.ragTelemetry?.embeddingProfile,
+                          ...m.ragTelemetry,
+                          compressionApplied:
+                            parsed.applied ?? m.ragTelemetry?.compressionApplied,
+                          compressionTriggerTokens:
+                            parsed.trigger_tokens ||
+                            m.ragTelemetry?.compressionTriggerTokens,
                         },
                       };
                     } catch {

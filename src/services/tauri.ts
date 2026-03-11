@@ -2008,8 +2008,44 @@ export interface ChatHistoryWindow {
   next_cursor_rowid: number | null;
 }
 
+export interface ChatCompactionState {
+  chat_id: string;
+  summary_content: string;
+  source_message_count: number;
+  source_estimated_tokens: number;
+  kept_recent_count: number;
+  compression_model: string;
+  compaction_count: number;
+  compressed_at: string;
+  updated_at: string;
+}
+
+export interface ChatRuntimeTelemetry {
+  chat_id: string;
+  history_source: string;
+  retrieval_mode: string;
+  embedding_profile: string;
+  updated_at: string;
+}
+
 export async function getDefaultChatScope(): Promise<string> {
   return invoke<string>("get_default_chat_scope");
+}
+
+export async function getChatCompactionState(
+  chatScopeId: string,
+): Promise<ChatCompactionState | null> {
+  return invoke<ChatCompactionState | null>("get_chat_compaction_state", {
+    chatScopeId,
+  });
+}
+
+export async function getChatRuntimeTelemetry(
+  chatScopeId: string,
+): Promise<ChatRuntimeTelemetry | null> {
+  return invoke<ChatRuntimeTelemetry | null>("get_chat_runtime_telemetry", {
+    chatScopeId,
+  });
 }
 
 export async function getChatHistoryWindow(

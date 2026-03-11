@@ -21,7 +21,8 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 use tokio::time::sleep;
 
-const POLL_INTERVAL: Duration = Duration::from_secs(2);
+const ACTIVE_POLL_INTERVAL: Duration = Duration::from_secs(2);
+const IDLE_POLL_INTERVAL: Duration = Duration::from_secs(10);
 const MAX_PROGRESS_PREVIEW_CHARS: usize = 300;
 const AGENT_PROGRESS_CHANNEL_CAPACITY: usize = 128;
 const AGENT_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(250);
@@ -327,19 +328,24 @@ impl CommandPoller {
 
             while *poller.is_running.lock().await {
                 let sleep_duration = match poller.poll_and_execute().await {
-                    Ok(_) => {
+                    Ok(processed_count) => {
                         // Reset backoff on success
                         if backoff_failures > 0 {
                             println!("[CommandPoller] Connection restored.");
                             backoff_failures = 0;
                         }
-                        POLL_INTERVAL
+                        if processed_count > 0 {
+                            ACTIVE_POLL_INTERVAL
+                        } else {
+                            IDLE_POLL_INTERVAL
+                        }
                     }
                     Err(e) => {
                         let error_text = e.to_string();
                         backoff_failures += 1;
                         let backoff_secs = std::cmp::min(
-                            POLL_INTERVAL.as_secs() * (2u64.pow(backoff_failures.min(6) as u32)),
+                            ACTIVE_POLL_INTERVAL.as_secs()
+                                * (2u64.pow(backoff_failures.min(6) as u32)),
                             MAX_BACKOFF_SECS,
                         );
                         let sleep_with_jitter = with_jitter(Duration::from_secs(backoff_secs));
@@ -382,16 +388,16 @@ impl CommandPoller {
         *running = false;
     }
 
-    async fn poll_and_execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn poll_and_execute(&self) -> Result<usize, Box<dyn std::error::Error>> {
         // 1. Send heartbeat and get commands via NeuralService
         if !self.neural_service.has_credentials().await {
-            return Ok(()); // Silently skip if not authenticated
+            return Ok(0); // Silently skip if not authenticated
         }
 
         // Check if node is registered (has node_id)
         if !self.neural_service.is_registered().await {
             if !self.neural_service.can_attempt_registration().await {
-                return Ok(());
+                return Ok(0);
             }
 
             if let Err(e) = self.neural_service.sync_workspace_id_with_auth_context().await {
@@ -407,7 +413,7 @@ impl CommandPoller {
                         "[CommandPoller] Failed to build runtime skill manifest for registration: {}",
                         e
                     );
-                    return Ok(());
+                    return Ok(0);
                 }
             };
             match self.neural_service.register(manifests, Vec::new()).await {
@@ -433,10 +439,11 @@ impl CommandPoller {
                 // For now, we return Ok(()) which is signal for success
 
                 // 2. Process commands if any
+                let command_count = commands.len();
                 for command in commands {
                     self.process_command(command).await?;
                 }
-                Ok(())
+                Ok(command_count)
             }
             Err(e) => {
                 // Only log if it's not a "Node not registered" error (already handled above)
@@ -444,7 +451,7 @@ impl CommandPoller {
                     eprintln!("[CommandPoller] Heartbeat error: {}", e);
                     Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)))
                 } else {
-                    Ok(())
+                    Ok(0)
                 }
             }
         }
