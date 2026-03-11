@@ -48,6 +48,68 @@ pub async fn list_atm_agents(client: State<'_, ATMClient>) -> Result<serde_json:
 }
 
 #[command]
+pub async fn list_atm_workspace_shared_agents(
+    client: State<'_, ATMClient>,
+    limit: Option<usize>,
+) -> Result<crate::services::atm_client::WorkspaceSharedAgentsResponse, String> {
+    client.list_workspace_shared_agents(limit).await
+}
+
+#[command]
+pub async fn import_atm_workspace_shared_agent(
+    app_handle: tauri::AppHandle,
+    client: State<'_, ATMClient>,
+    agent_id: String,
+) -> Result<crate::services::atm_client::WorkspaceSharedAgentSpecResponse, String> {
+    let imported = client.get_workspace_shared_agent_spec(agent_id).await?;
+    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone()).await?;
+    Ok(imported)
+}
+
+#[command]
+pub async fn list_atm_marketplace_agents(
+    client: State<'_, ATMClient>,
+    limit: Option<usize>,
+) -> Result<crate::services::atm_client::MarketplaceAgentsResponse, String> {
+    client.list_marketplace_agents(limit).await
+}
+
+#[command]
+pub async fn publish_atm_marketplace_agent(
+    client: State<'_, ATMClient>,
+    source_agent_id: String,
+    name: Option<String>,
+    description: Option<String>,
+    tags: Option<Vec<String>>,
+    author_label: Option<String>,
+    visibility: Option<String>,
+) -> Result<crate::services::atm_client::PublishMarketplaceAgentResponse, String> {
+    client
+        .publish_marketplace_agent(
+            crate::services::atm_client::PublishMarketplaceAgentRequest {
+                source_agent_id,
+                name,
+                description,
+                tags,
+                author_label,
+                visibility,
+            },
+        )
+        .await
+}
+
+#[command]
+pub async fn import_atm_marketplace_agent(
+    app_handle: tauri::AppHandle,
+    client: State<'_, ATMClient>,
+    marketplace_id: String,
+) -> Result<crate::services::atm_client::MarketplaceAgentSpecResponse, String> {
+    let imported = client.get_marketplace_agent_spec(marketplace_id).await?;
+    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone()).await?;
+    Ok(imported)
+}
+
+#[command]
 pub async fn list_atm_commands(
     client: State<'_, ATMClient>,
     limit: Option<usize>,

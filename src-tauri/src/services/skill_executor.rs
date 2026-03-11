@@ -149,12 +149,21 @@ impl SkillExecutor {
         let payload = &command.payload;
         let skill = payload.skill.as_deref().unwrap_or("unknown");
         let method = payload.method.as_deref().unwrap_or("unknown");
-        let tool_policy = payload.tool_access_policy.as_ref();
 
         let workspace_id = match &command.workspace_id {
             Some(id) => id.clone(),
             None => return self.error("Missing workspace ID in command"),
         };
+        let fallback_tool_policy = if payload.tool_access_policy.is_none() {
+            let settings = SettingsManager::new();
+            settings.get_workspace_tool_policy(&workspace_id)
+        } else {
+            None
+        };
+        let tool_policy = payload
+            .tool_access_policy
+            .as_ref()
+            .or(fallback_tool_policy.as_ref());
 
         let allowed_paths = &payload.allowed_paths;
         let blocked_paths = &payload.blocked_paths;

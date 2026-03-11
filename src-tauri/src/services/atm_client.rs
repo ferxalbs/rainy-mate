@@ -326,6 +326,8 @@ pub struct ToolAccessPolicyResponse {
 #[serde(rename_all = "camelCase")]
 pub struct FleetStatusResponse {
     pub workspace_id: String,
+    #[serde(default)]
+    pub current_airlock_policy: Option<serde_json::Value>,
     pub nodes: Vec<serde_json::Value>,
 }
 
@@ -334,6 +336,90 @@ pub struct FleetStatusResponse {
 pub struct FleetDispatchResponse {
     pub success: bool,
     pub dispatch: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSharedAgentSummary {
+    pub id: String,
+    pub name: String,
+    pub r#type: String,
+    pub status: String,
+    pub logical_spec_id: Option<String>,
+    pub updated_at: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSharedAgentsResponse {
+    pub workspace_id: String,
+    pub agents: Vec<WorkspaceSharedAgentSummary>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSharedAgentSpecResponse {
+    pub workspace_id: String,
+    pub agent_id: String,
+    pub name: String,
+    pub logical_spec_id: Option<String>,
+    pub updated_at: i64,
+    pub spec: crate::ai::specs::AgentSpec,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceAgentSummary {
+    pub id: String,
+    pub source_agent_id: String,
+    pub name: String,
+    pub description: String,
+    pub tags: Vec<String>,
+    pub installs: i64,
+    pub author_label: String,
+    pub visibility: String,
+    pub status: String,
+    pub updated_at: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceAgentsResponse {
+    pub workspace_id: String,
+    pub agents: Vec<MarketplaceAgentSummary>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishMarketplaceAgentRequest {
+    pub source_agent_id: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub author_label: Option<String>,
+    pub visibility: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishMarketplaceAgentResponse {
+    pub action: String,
+    pub id: String,
+    pub source_agent_id: String,
+    pub name: String,
+    pub visibility: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceAgentSpecResponse {
+    pub workspace_id: String,
+    pub marketplace_id: String,
+    pub source_agent_id: String,
+    pub name: String,
+    pub installs: i64,
+    pub updated_at: i64,
+    pub spec: crate::ai::specs::AgentSpec,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1357,6 +1443,172 @@ impl ATMClient {
             let err_text = res.text().await.unwrap_or_default();
             return Err(format!(
                 "Fleet kill switch failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn list_workspace_shared_agents(
+        &self,
+        limit: Option<usize>,
+    ) -> Result<WorkspaceSharedAgentsResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!(
+            "{}/v1/workspace/agents?limit={}",
+            state.base_url,
+            limit.unwrap_or(100)
+        );
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "List workspace shared agents failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn get_workspace_shared_agent_spec(
+        &self,
+        agent_id: String,
+    ) -> Result<WorkspaceSharedAgentSpecResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/v1/workspace/agents/{}/spec", state.base_url, agent_id);
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Get workspace shared agent spec failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn list_marketplace_agents(
+        &self,
+        limit: Option<usize>,
+    ) -> Result<MarketplaceAgentsResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!(
+            "{}/v1/marketplace/agents?limit={}",
+            state.base_url,
+            limit.unwrap_or(100)
+        );
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "List marketplace agents failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn publish_marketplace_agent(
+        &self,
+        payload: PublishMarketplaceAgentRequest,
+    ) -> Result<PublishMarketplaceAgentResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let platform_key = state.platform_key.clone().ok_or("Missing platform key")?;
+        let user_api_key = state.user_api_key.clone().ok_or("Missing owner API key")?;
+        let url = format!("{}/v1/marketplace/agents", state.base_url);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("x-rainy-platform-key", platform_key)
+            .header("x-rainy-api-key", user_api_key)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Publish marketplace agent failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn get_marketplace_agent_spec(
+        &self,
+        marketplace_id: String,
+    ) -> Result<MarketplaceAgentSpecResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!(
+            "{}/v1/marketplace/agents/{}/spec",
+            state.base_url, marketplace_id
+        );
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Get marketplace agent spec failed: {} - {}",
                 status, err_text
             ));
         }

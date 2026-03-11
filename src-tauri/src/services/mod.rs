@@ -3,6 +3,7 @@
 
 pub mod agent_kill_switch;
 pub mod airlock;
+pub mod agent_library;
 pub mod atm_auth;
 pub mod atm_client;
 pub mod audit_emitter;
@@ -37,8 +38,10 @@ pub mod tool_policy;
 pub mod wasm_sandbox;
 
 pub mod workspace;
+pub mod workflow_recorder;
 
 pub use airlock::AirlockService;
+pub use agent_library::AgentLibraryService;
 pub use atm_client::ATMClient;
 pub use browser_controller::BrowserController;
 pub use command_poller::CommandPoller;
@@ -66,3 +69,4 @@ pub use workspace::{
     ConfigFormat, PermissionOverride, Workspace, WorkspaceAnalytics, WorkspaceManager,
     WorkspacePermissions, WorkspaceTemplate,
 };
+pub use workflow_recorder::WorkflowRecorderService;

@@ -5,6 +5,7 @@ use crate::ai::model_catalog::{
     ensure_supported_model_slug, find_catalog_model, ModelProvider,
 };
 use crate::ai::provider::AIProviderManager;
+use crate::models::neural::ToolAccessPolicy;
 use crate::services::mcp_service::{McpPermissionMode, PersistedMcpServerConfig};
 use rainy_sdk::models::{CapabilityFlag, ModelCatalogItem};
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,8 @@ pub struct UserSettings {
     pub profile: UserProfile,
     pub auto_reconnect_cloud: bool,
     pub tool_policy_version_floor: HashMap<String, u64>,
+    #[serde(default)]
+    pub workspace_tool_access_policies: HashMap<String, WorkspaceToolPolicyState>,
     pub embedder_provider: String,
     pub embedder_model: String,
     #[serde(default)]
@@ -55,6 +58,14 @@ pub struct UserProfile {
     pub role: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceToolPolicyState {
+    pub tool_access_policy: ToolAccessPolicy,
+    pub tool_access_policy_version: u64,
+    pub tool_access_policy_hash: String,
+}
+
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
@@ -64,6 +75,7 @@ impl Default for UserSettings {
             profile: UserProfile::default(),
             auto_reconnect_cloud: true,
             tool_policy_version_floor: HashMap::new(),
+            workspace_tool_access_policies: HashMap::new(),
             embedder_provider: "gemini".to_string(),
             embedder_model: crate::services::memory_vault::types::EMBEDDING_MODEL.to_string(),
             mcp_permission_mode: McpPermissionMode::Ask,
@@ -230,6 +242,32 @@ impl SettingsManager {
         self.settings
             .tool_policy_version_floor
             .insert(workspace_id.to_string(), version);
+        self.save_to_disk()
+    }
+
+    pub fn get_workspace_tool_policy_state(
+        &self,
+        workspace_id: &str,
+    ) -> Option<WorkspaceToolPolicyState> {
+        self.settings
+            .workspace_tool_access_policies
+            .get(workspace_id)
+            .cloned()
+    }
+
+    pub fn get_workspace_tool_policy(&self, workspace_id: &str) -> Option<ToolAccessPolicy> {
+        self.get_workspace_tool_policy_state(workspace_id)
+            .map(|state| state.tool_access_policy)
+    }
+
+    pub fn set_workspace_tool_policy_state(
+        &mut self,
+        workspace_id: &str,
+        state: WorkspaceToolPolicyState,
+    ) -> Result<(), String> {
+        self.settings
+            .workspace_tool_access_policies
+            .insert(workspace_id.to_string(), state);
         self.save_to_disk()
     }
 

@@ -1646,6 +1646,13 @@ export interface AtmFleetNodeHealth {
   memoryPenalty: number;
 }
 
+export interface AtmFleetCurrentPolicy {
+  mode: "all" | "allowlist" | string;
+  enabled: boolean;
+  version: number;
+  hash: string | null;
+}
+
 export interface AtmFleetNodeStatus {
   id: string;
   hostname: string;
@@ -1660,7 +1667,67 @@ export interface AtmFleetNodeStatus {
 
 export interface AtmFleetStatusResponse {
   workspaceId: string;
+  currentAirlockPolicy?: AtmFleetCurrentPolicy;
   nodes: AtmFleetNodeStatus[];
+}
+
+export interface AtmWorkspaceSharedAgentSummary {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  logicalSpecId?: string | null;
+  updatedAt: number;
+}
+
+export interface AtmWorkspaceSharedAgentsResponse {
+  workspaceId: string;
+  agents: AtmWorkspaceSharedAgentSummary[];
+}
+
+export interface AtmWorkspaceSharedAgentSpecResponse {
+  workspaceId: string;
+  agentId: string;
+  name: string;
+  logicalSpecId?: string | null;
+  updatedAt: number;
+  spec: any;
+}
+
+export interface AtmMarketplaceAgentSummary {
+  id: string;
+  sourceAgentId: string;
+  name: string;
+  description: string;
+  tags: string[];
+  installs: number;
+  authorLabel: string;
+  visibility: string;
+  status: string;
+  updatedAt: number;
+}
+
+export interface AtmMarketplaceAgentsResponse {
+  workspaceId: string;
+  agents: AtmMarketplaceAgentSummary[];
+}
+
+export interface AtmPublishMarketplaceAgentResponse {
+  action: string;
+  id: string;
+  sourceAgentId: string;
+  name: string;
+  visibility: string;
+}
+
+export interface AtmMarketplaceAgentSpecResponse {
+  workspaceId: string;
+  marketplaceId: string;
+  sourceAgentId: string;
+  name: string;
+  installs: number;
+  updatedAt: number;
+  spec: any;
 }
 
 export async function createAtmAgent(
@@ -1669,6 +1736,48 @@ export async function createAtmAgent(
   config: any,
 ): Promise<any> {
   return invoke("create_atm_agent", { name, agentType: type, config });
+}
+
+export async function listAtmWorkspaceSharedAgents(
+  limit = 100,
+): Promise<AtmWorkspaceSharedAgentsResponse> {
+  return invoke("list_atm_workspace_shared_agents", { limit });
+}
+
+export async function importAtmWorkspaceSharedAgent(
+  agentId: string,
+): Promise<AtmWorkspaceSharedAgentSpecResponse> {
+  return invoke("import_atm_workspace_shared_agent", { agentId });
+}
+
+export async function listAtmMarketplaceAgents(
+  limit = 100,
+): Promise<AtmMarketplaceAgentsResponse> {
+  return invoke("list_atm_marketplace_agents", { limit });
+}
+
+export async function publishAtmMarketplaceAgent(params: {
+  sourceAgentId: string;
+  name?: string;
+  description?: string;
+  tags?: string[];
+  authorLabel?: string;
+  visibility?: "private" | "workspace";
+}): Promise<AtmPublishMarketplaceAgentResponse> {
+  return invoke("publish_atm_marketplace_agent", {
+    sourceAgentId: params.sourceAgentId,
+    name: params.name,
+    description: params.description,
+    tags: params.tags,
+    authorLabel: params.authorLabel,
+    visibility: params.visibility,
+  });
+}
+
+export async function importAtmMarketplaceAgent(
+  marketplaceId: string,
+): Promise<AtmMarketplaceAgentSpecResponse> {
+  return invoke("import_atm_marketplace_agent", { marketplaceId });
 }
 
 export async function listAtmCommands(
@@ -1786,6 +1895,82 @@ export async function triggerAtmFleetKillSwitch(input: {
   userApiKey: string;
 }): Promise<any> {
   return invoke("trigger_atm_fleet_kill_switch", input);
+}
+
+export interface WorkflowRecordedStep {
+  id: string;
+  kind: string;
+  label: string;
+  payload?: any;
+  timestampMs: number;
+}
+
+export interface RecordedWorkflow {
+  id: string;
+  title: string;
+  startedAtMs: number;
+  stoppedAtMs?: number | null;
+  stepCount: number;
+  steps: WorkflowRecordedStep[];
+}
+
+export interface ForgeGenerateResponse {
+  recording: RecordedWorkflow;
+  generatedSpec: any;
+}
+
+export interface AgentLibraryEntry {
+  id: string;
+  name: string;
+  path: string;
+  updatedAtMs: number;
+}
+
+export async function startWorkflowRecording(input?: {
+  title?: string;
+}): Promise<RecordedWorkflow> {
+  return invoke("start_workflow_recording", { input });
+}
+
+export async function recordWorkflowStep(input: {
+  kind: string;
+  label: string;
+  payload?: any;
+}): Promise<WorkflowRecordedStep> {
+  return invoke("record_workflow_step", { input });
+}
+
+export async function stopWorkflowRecording(): Promise<RecordedWorkflow> {
+  return invoke("stop_workflow_recording");
+}
+
+export async function getWorkflowRecording(
+  recordingId: string,
+): Promise<RecordedWorkflow | null> {
+  return invoke("get_workflow_recording", { recordingId });
+}
+
+export async function getActiveWorkflowRecording(): Promise<RecordedWorkflow | null> {
+  return invoke("get_active_workflow_recording");
+}
+
+export async function generateAgentSpecFromRecording(input: {
+  recordingId: string;
+  agentName?: string;
+}): Promise<ForgeGenerateResponse> {
+  return invoke("generate_agent_spec_from_recording", { input });
+}
+
+export async function saveGeneratedAgent(spec: any): Promise<AgentLibraryEntry> {
+  return invoke("save_generated_agent", { spec });
+}
+
+export async function listGeneratedAgents(): Promise<AgentLibraryEntry[]> {
+  return invoke("list_generated_agents");
+}
+
+export async function loadGeneratedAgent(agentId: string): Promise<any> {
+  return invoke("load_generated_agent", { agentId });
 }
 
 // ============ ATM Bootstrap Commands ============

@@ -291,6 +291,16 @@ impl CommandPoller {
             .await;
     }
 
+    async fn active_runtime_counts(&self) -> (usize, usize) {
+        let context_lock = self.agent_context.read().await;
+        if let Some(ctx) = context_lock.as_ref() {
+            let snapshot = ctx.runtime_registry.snapshot().await;
+            (snapshot.active_supervisor_runs, snapshot.active_specialists)
+        } else {
+            (0, 0)
+        }
+    }
+
     /// Set the context needed to create AgentRuntime instances
     pub async fn set_agent_context(
         &self,
@@ -547,15 +557,46 @@ impl CommandPoller {
             )
             .await;
 
+        let mut command_for_execution = command.clone();
+        if !command_for_execution.intent.starts_with("fleet.")
+            && command_for_execution.payload.tool_access_policy.is_none()
+        {
+            let workspace_id = command_for_execution
+                .workspace_id
+                .clone()
+                .unwrap_or_else(|| "default".to_string());
+            let settings = SettingsManager::new();
+            if let Some(state) = settings.get_workspace_tool_policy_state(&workspace_id) {
+                command_for_execution.payload.tool_access_policy =
+                    Some(state.tool_access_policy.clone());
+                command_for_execution.payload.tool_access_policy_version =
+                    Some(state.tool_access_policy_version);
+                command_for_execution.payload.tool_access_policy_hash =
+                    Some(state.tool_access_policy_hash.clone());
+                let _ = self
+                    .neural_service
+                    .report_command_progress(
+                        &command.id,
+                        "info",
+                        "Applied persisted fleet policy to command execution",
+                        Some(serde_json::json!({
+                            "toolAccessPolicyVersion": state.tool_access_policy_version,
+                            "toolAccessPolicyHash": state.tool_access_policy_hash,
+                        })),
+                    )
+                    .await;
+            }
+        }
+
         // Execute - check if this is an agent.run command for full workflow
-        let result = if command.intent.starts_with("fleet.") {
-            match command.intent.as_str() {
+        let result = if command_for_execution.intent.starts_with("fleet.") {
+            match command_for_execution.intent.as_str() {
                 "fleet.apply_policy" => {
-                    let workspace_id = command
+                    let workspace_id = command_for_execution
                         .workspace_id
                         .clone()
                         .unwrap_or_else(|| "default".to_string());
-                    let parsed = command
+                    let parsed = command_for_execution
                         .payload
                         .params
                         .clone()
@@ -576,8 +617,13 @@ impl CommandPoller {
                                     outcome: "success".to_string(),
                                     agent_id: None,
                                     tool_name: None,
-                                    airlock_level: Some(command.airlock_level as u8),
-                                    payload_json: None,
+                                    airlock_level: Some(command_for_execution.airlock_level as u8),
+                                    payload_json: Some(
+                                        serde_json::json!({
+                                            "workspaceId": workspace_id,
+                                        })
+                                        .to_string(),
+                                    ),
                                 })
                                 .await;
                             CommandResult {
@@ -596,35 +642,86 @@ impl CommandPoller {
                     }
                 }
                 "fleet.terminate_all_agents" => {
+                    let (before_supervisor_runs, before_specialists) =
+                        self.active_runtime_counts().await;
+                    let started_at = Instant::now();
                     self.arm_kill_switch("fleet.terminate_all_agents command")
                         .await;
+                    let deadline = Instant::now() + Duration::from_secs(5);
+                    let mut after_supervisor_runs = before_supervisor_runs;
+                    let mut after_specialists = before_specialists;
+                    while Instant::now() < deadline {
+                        let (runs, specialists) = self.active_runtime_counts().await;
+                        after_supervisor_runs = runs;
+                        after_specialists = specialists;
+                        if runs == 0 && specialists == 0 {
+                            break;
+                        }
+                        sleep(Duration::from_millis(100)).await;
+                    }
+
+                    let elapsed_ms = started_at.elapsed().as_millis() as u64;
+                    let settled_within_sla = after_supervisor_runs == 0 && after_specialists == 0;
+                    let ack_payload = serde_json::json!({
+                        "before": {
+                            "activeSupervisorRuns": before_supervisor_runs,
+                            "activeSpecialists": before_specialists
+                        },
+                        "after": {
+                            "activeSupervisorRuns": after_supervisor_runs,
+                            "activeSpecialists": after_specialists
+                        },
+                        "elapsedMs": elapsed_ms,
+                        "withinSla5s": settled_within_sla
+                    });
+
                     self.audit_emitter
                         .enqueue(FleetAuditEvent {
                             action_type: "fleet.terminate_all_agents".to_string(),
-                            outcome: "success".to_string(),
+                            outcome: if settled_within_sla {
+                                "success".to_string()
+                            } else {
+                                "error".to_string()
+                            },
                             agent_id: None,
                             tool_name: None,
-                            airlock_level: Some(command.airlock_level as u8),
-                            payload_json: command.payload.params.clone().map(|v| v.to_string()),
+                            airlock_level: Some(command_for_execution.airlock_level as u8),
+                            payload_json: Some(ack_payload.to_string()),
                         })
                         .await;
-                    CommandResult {
-                        success: true,
-                        output: Some("Kill switch armed; new agent runs will be blocked".to_string()),
-                        error: None,
-                        exit_code: Some(0),
+
+                    if settled_within_sla {
+                        CommandResult {
+                            success: true,
+                            output: Some(ack_payload.to_string()),
+                            error: None,
+                            exit_code: Some(0),
+                        }
+                    } else {
+                        CommandResult {
+                            success: false,
+                            output: Some(ack_payload.to_string()),
+                            error: Some(
+                                "Kill switch armed but active runs remained after 5 seconds"
+                                    .to_string(),
+                            ),
+                            exit_code: Some(1),
+                        }
                     }
                 }
                 _ => CommandResult {
                     success: false,
                     output: None,
-                    error: Some(format!("Unknown fleet intent: {}", command.intent)),
+                    error: Some(format!(
+                        "Unknown fleet intent: {}",
+                        command_for_execution.intent
+                    )),
                     exit_code: Some(1),
                 },
             }
-        } else if command.intent.starts_with("agent.") {
+        } else if command_for_execution.intent.starts_with("agent.") {
             // Route to AgentRuntime for full ReAct workflow
-            match command.intent.as_str() {
+            match command_for_execution.intent.as_str() {
                 "agent.run" => {
                     if self.kill_switch.is_triggered() {
                         CommandResult {
@@ -638,7 +735,7 @@ impl CommandPoller {
                         }
                     } else {
                     // Extract prompt from params
-                    let prompt = command
+                    let prompt = command_for_execution
                         .payload
                         .params
                         .as_ref()
@@ -647,13 +744,13 @@ impl CommandPoller {
                         .unwrap_or("Hello, what can you help me with?");
 
                     // Get workspace_id for this command
-                    let workspace_id = command
+                    let workspace_id = command_for_execution
                         .workspace_id
                         .clone()
                         .unwrap_or_else(|| "default".to_string());
 
                     // Extract model from params (Cloud command) or use user's selected model (Local AgentChat)
-                    let model = command
+                    let model = command_for_execution
                         .payload
                         .params
                         .as_ref()
@@ -666,7 +763,7 @@ impl CommandPoller {
                             settings.get_selected_model().to_string()
                         });
 
-                    let max_steps = command
+                    let max_steps = command_for_execution
                         .payload
                         .params
                         .as_ref()
@@ -677,7 +774,7 @@ impl CommandPoller {
                         .clamp(MIN_REMOTE_AGENT_MAX_STEPS, MAX_REMOTE_AGENT_MAX_STEPS);
 
                     // Optional agent ID to load persisted spec
-                    let agent_id = command
+                    let agent_id = command_for_execution
                         .payload
                         .params
                         .as_ref()
@@ -687,7 +784,7 @@ impl CommandPoller {
 
                     // Optional agent identity/profile provided by Rainy-ATM.
                     // If present, this becomes the primary runtime instruction set.
-                    let agent_name = command
+                    let agent_name = command_for_execution
                         .payload
                         .params
                         .as_ref()
@@ -697,7 +794,7 @@ impl CommandPoller {
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "Rainy Agent".to_string());
 
-                    let agent_system_prompt = command
+                    let agent_system_prompt = command_for_execution
                         .payload
                         .params
                         .as_ref()
@@ -767,7 +864,7 @@ impl CommandPoller {
                             max_steps: Some(max_steps),
                             // Resolve allowed_paths: payload > spec airlock > None
                             allowed_paths: if !command.payload.allowed_paths.is_empty() {
-                                Some(command.payload.allowed_paths.clone())
+                                Some(command_for_execution.payload.allowed_paths.clone())
                             } else {
                                 None // will be resolved after spec is loaded
                             },
@@ -1046,13 +1143,16 @@ GUIDELINES:
                 _ => CommandResult {
                     success: false,
                     output: None,
-                    error: Some(format!("Unknown agent skill: {}", command.intent)),
+                    error: Some(format!(
+                        "Unknown agent skill: {}",
+                        command_for_execution.intent
+                    )),
                     exit_code: Some(1),
                 },
             }
         } else {
             // Standard skill execution
-            self.skill_executor.execute(&command).await
+            self.skill_executor.execute(&command_for_execution).await
         };
 
         if result.success {

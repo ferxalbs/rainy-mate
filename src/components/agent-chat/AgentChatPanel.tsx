@@ -14,10 +14,14 @@ import {
   Trash2,
   Zap,
   Sparkles,
+  Circle,
+  Square,
+  Wrench,
 } from "lucide-react";
 import { useAgentChat } from "../../hooks/useAgentChat";
 import { useTheme } from "../../hooks/useTheme";
 import { MacOSToggle } from "../layout/MacOSToggle";
+import { toast } from "sonner";
 
 import { UnifiedModelSelector } from "../ai/UnifiedModelSelector";
 import { AgentSelector } from "./AgentSelector";
@@ -41,6 +45,11 @@ export function AgentChatPanel({
   const [currentModelId, setCurrentModelId] = useState<string>("");
   const [agentSpecs, setAgentSpecs] = useState<AgentSpec[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [forgeRecordingId, setForgeRecordingId] = useState<string | null>(null);
+  const [isForgeRecording, setIsForgeRecording] = useState(false);
+  const [isForgeBusy, setIsForgeBusy] = useState(false);
+  const [pendingForgeSpec, setPendingForgeSpec] = useState<any | null>(null);
+  const [forgeStatusText, setForgeStatusText] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize with default model if none selected
@@ -57,19 +66,35 @@ export function AgentChatPanel({
     initModel();
   }, []);
 
+  const loadSpecs = async () => {
+    try {
+      const specs = (await tauri.listAgentSpecs()) as AgentSpec[];
+      setAgentSpecs(specs);
+      if (specs.length > 0) {
+        setSelectedAgentId((prev) => prev || specs[0].id);
+      }
+    } catch (e) {
+      console.error("Failed to load saved agents", e);
+    }
+  };
+
   useEffect(() => {
-    const loadSpecs = async () => {
+    loadSpecs();
+  }, []);
+
+  useEffect(() => {
+    const hydrateForgeState = async () => {
       try {
-        const specs = (await tauri.listAgentSpecs()) as AgentSpec[];
-        setAgentSpecs(specs);
-        if (specs.length > 0) {
-          setSelectedAgentId((prev) => prev || specs[0].id);
+        const active = await tauri.getActiveWorkflowRecording();
+        if (active) {
+          setForgeRecordingId(active.id);
+          setIsForgeRecording(true);
         }
       } catch (e) {
-        console.error("Failed to load saved agents", e);
+        console.error("Failed to hydrate forge recording state", e);
       }
     };
-    loadSpecs();
+    hydrateForgeState();
   }, []);
 
   const handleModelSelect = async (modelId: string) => {
@@ -116,6 +141,22 @@ export function AgentChatPanel({
     const instruction = input.trim();
     setInput("");
 
+    if (isForgeRecording && forgeRecordingId) {
+      try {
+        await tauri.recordWorkflowStep({
+          kind: "user_instruction",
+          label: instruction,
+          payload: {
+            modelId: currentModelId,
+            workspacePath,
+            selectedAgentId: selectedAgentId || null,
+          },
+        });
+      } catch (e) {
+        console.error("Failed to record forge step", e);
+      }
+    }
+
     // Always use Native Agent
     await runNativeAgent(
       instruction,
@@ -123,6 +164,88 @@ export function AgentChatPanel({
       workspacePath,
       selectedAgentId || undefined,
     );
+
+    if (isForgeRecording && forgeRecordingId) {
+      try {
+        await tauri.recordWorkflowStep({
+          kind: "agent_run",
+          label: "run_agent_workflow",
+          payload: {
+            selectedAgentId: selectedAgentId || null,
+            modelId: currentModelId,
+          },
+        });
+      } catch (e) {
+        console.error("Failed to record forge run step", e);
+      }
+    }
+  };
+
+  const handleStartForgeRecording = async () => {
+    if (isForgeBusy || isForgeRecording) return;
+    setIsForgeBusy(true);
+    try {
+      const rec = await tauri.startWorkflowRecording({
+        title: `Forge Session ${new Date().toLocaleString()}`,
+      });
+      setForgeRecordingId(rec.id);
+      setIsForgeRecording(true);
+      setForgeStatusText("Recording in progress.");
+      toast.success("Workflow recording started");
+    } catch (e: any) {
+      console.error("Failed to start workflow recording", e);
+      toast.error(e?.message ?? "Failed to start workflow recording");
+    } finally {
+      setIsForgeBusy(false);
+    }
+  };
+
+  const handleStopAndGenerateForgeAgent = async () => {
+    if (isForgeBusy || !isForgeRecording || !forgeRecordingId) return;
+    setIsForgeBusy(true);
+    try {
+      const recording = await tauri.stopWorkflowRecording();
+      const generated = await tauri.generateAgentSpecFromRecording({
+        recordingId: recording.id,
+        agentName: `Forge Agent ${new Date().toLocaleTimeString()}`,
+      });
+      setForgeRecordingId(null);
+      setIsForgeRecording(false);
+      setPendingForgeSpec(generated.generatedSpec);
+      setForgeStatusText(
+        `Generated draft from recording (${recording.stepCount} steps). Review before saving.`,
+      );
+      toast.success("Forge draft generated");
+    } catch (e: any) {
+      console.error("Failed to stop/generate forge agent", e);
+      toast.error(e?.message ?? "Failed to generate Forge agent");
+    } finally {
+      setIsForgeBusy(false);
+    }
+  };
+
+  const handleSaveForgeDraft = async () => {
+    if (!pendingForgeSpec || isForgeBusy) return;
+    setIsForgeBusy(true);
+    try {
+      const saved = await tauri.saveGeneratedAgent(pendingForgeSpec);
+      await tauri.saveAgentSpec(pendingForgeSpec);
+      setSelectedAgentId(pendingForgeSpec.id);
+      setPendingForgeSpec(null);
+      setForgeStatusText(`Generated agent "${saved.name}" saved and activated.`);
+      toast.success(`Generated "${saved.name}"`);
+      await loadSpecs();
+    } catch (e: any) {
+      console.error("Failed to save Forge draft", e);
+      toast.error(e?.message ?? "Failed to save Forge draft");
+    } finally {
+      setIsForgeBusy(false);
+    }
+  };
+
+  const handleDiscardForgeDraft = () => {
+    setPendingForgeSpec(null);
+    setForgeStatusText("Forge draft discarded.");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -158,6 +281,44 @@ export function AgentChatPanel({
         {/* Input Footer Controls */}
         <div className="flex items-center justify-between px-3 pb-3 mt-2">
           <div className="flex items-center gap-2">
+            <Tooltip delay={0}>
+              <TooltipTrigger>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  onPress={handleStartForgeRecording}
+                  isDisabled={isForgeBusy || isForgeRecording}
+                  className="rounded-full w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-400/10"
+                >
+                  <Circle className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span className="text-xs">Start Forge recording</span>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delay={0}>
+              <TooltipTrigger>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  onPress={handleStopAndGenerateForgeAgent}
+                  isDisabled={isForgeBusy || !isForgeRecording}
+                  className="rounded-full w-8 h-8 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-400/10"
+                >
+                  {isForgeBusy ? (
+                    <Wrench className="size-3.5 animate-spin" />
+                  ) : (
+                    <Square className="size-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span className="text-xs">Stop & generate Forge agent</span>
+              </TooltipContent>
+            </Tooltip>
             <Tooltip delay={0}>
               <TooltipTrigger>
                 <Button
@@ -287,6 +448,71 @@ export function AgentChatPanel({
         </div>
       </div>
 
+      {pendingForgeSpec && (
+        <div className="absolute left-1/2 -translate-x-1/2 top-24 z-40 w-[min(960px,92vw)] rounded-2xl border border-border/20 bg-background/85 backdrop-blur-xl p-4 shadow-xl">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold">Forge Draft Review</h4>
+            <span className="text-xs text-muted-foreground">
+              {pendingForgeSpec.id}
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              value={pendingForgeSpec?.soul?.name ?? ""}
+              onChange={(event) =>
+                setPendingForgeSpec((prev: any) => ({
+                  ...prev,
+                  soul: { ...prev.soul, name: event.target.value },
+                }))
+              }
+              className="h-10 rounded-lg border border-border bg-background/40 px-3 text-sm"
+              placeholder="Agent name"
+            />
+            <input
+              value={pendingForgeSpec?.soul?.description ?? ""}
+              onChange={(event) =>
+                setPendingForgeSpec((prev: any) => ({
+                  ...prev,
+                  soul: { ...prev.soul, description: event.target.value },
+                }))
+              }
+              className="h-10 rounded-lg border border-border bg-background/40 px-3 text-sm"
+              placeholder="Agent description"
+            />
+          </div>
+          <TextArea
+            value={pendingForgeSpec?.soul?.soul_content ?? ""}
+            onChange={(event) =>
+              setPendingForgeSpec((prev: any) => ({
+                ...prev,
+                soul: { ...prev.soul, soul_content: event.target.value },
+              }))
+            }
+            rows={6}
+            className="mt-3"
+            placeholder="System prompt"
+          />
+          <div className="mt-3 flex items-center gap-2">
+            <Button
+              size="sm"
+              onPress={handleSaveForgeDraft}
+              isDisabled={isForgeBusy}
+              className="bg-emerald-600 text-white"
+            >
+              Save & Activate
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={handleDiscardForgeDraft}
+              isDisabled={isForgeBusy}
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Scrollable Content Area - Absolute Inset - Z-10 */}
       <div className="absolute inset-0 overflow-y-auto w-full h-full scrollbar-none z-10">
         {/* Padding to clear top bar and bottom input */}
@@ -297,6 +523,12 @@ export function AgentChatPanel({
               : "min-h-full pt-32 pb-40"
           }`}
         >
+          {forgeStatusText && (
+            <div className="mb-4 text-xs text-muted-foreground text-center">
+              {forgeStatusText}
+            </div>
+          )}
+
           {messages.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center">
               <div className="mb-8 relative group">

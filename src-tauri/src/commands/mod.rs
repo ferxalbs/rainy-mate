@@ -25,6 +25,7 @@ pub mod task;
 pub mod unified_models;
 pub mod web;
 pub mod workspace;
+pub mod workflow_factory;
 
 pub use agent_builder::*;
 pub use ai::*;
@@ -49,5 +50,6 @@ pub use task::*;
 pub use unified_models::*;
 pub use web::*;
 pub use workspace::*;
+pub use workflow_factory::*;
 
 pub mod skills;

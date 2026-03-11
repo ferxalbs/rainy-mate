@@ -5,9 +5,49 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-11 - END OF LOCAL MCP ERA (FOUNDATION FOR 0.5.96)
+## [0.5.96] - 2026-03-11 - THE FORGE (AGENT FACTORY PRODUCTION)
+
 
 ### Added
+
+- Added THE FORGE foundation command surface and services for local workflow-to-agent generation:
+  - `start_workflow_recording`
+  - `record_workflow_step`
+  - `stop_workflow_recording`
+  - `get_workflow_recording`
+  - `get_active_workflow_recording`
+  - `generate_agent_spec_from_recording`
+  - `save_generated_agent`
+  - `list_generated_agents`
+  - `load_generated_agent`
+  - files:
+    - `src-tauri/src/services/workflow_recorder.rs`
+    - `src-tauri/src/services/agent_library.rs`
+    - `src-tauri/src/commands/workflow_factory.rs`
+    - `src-tauri/src/lib.rs`
+    - `src/services/tauri.ts`
+- Added Forge synthesis and persistence regression tests for deterministic allowlist derivation, summary truncation, and local agent-library roundtrip:
+  - `src-tauri/src/commands/workflow_factory.rs`
+  - `src-tauri/src/services/agent_library.rs`
+- Added Forge auto-capture integration for native runtime tool events during active recording sessions:
+  - `src/hooks/useAgentChat.ts`
+- Added desktop ATM workspace-sharing command surface for private agent import loops:
+  - `list_atm_workspace_shared_agents`
+  - `import_atm_workspace_shared_agent`
+  - files:
+    - `src-tauri/src/commands/atm.rs`
+    - `src-tauri/src/services/atm_client.rs`
+    - `src-tauri/src/lib.rs`
+    - `src/services/tauri.ts`
+- Added desktop ATM marketplace command surface to complete Forge publish/import loops:
+  - `list_atm_marketplace_agents`
+  - `publish_atm_marketplace_agent`
+  - `import_atm_marketplace_agent`
+  - files:
+    - `src-tauri/src/commands/atm.rs`
+    - `src-tauri/src/services/atm_client.rs`
+    - `src-tauri/src/lib.rs`
+    - `src/services/tauri.ts`
 
 - Added default user-editable MCP JSON lifecycle commands and runtime import flow:
   - `get_or_create_default_mcp_json_config`
@@ -63,6 +103,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Changed fleet policy application semantics to persist full workspace policy state on desktop (not only policy version floor), enabling deterministic policy reuse across command executions:
+  - `src-tauri/src/services/fleet_control.rs`
+  - `src-tauri/src/services/settings.rs`
+- Changed command execution path to inject persisted fleet policy into non-fleet commands when command payload does not include a policy envelope:
+  - `src-tauri/src/services/command_poller.rs`
+  - `src-tauri/src/services/skill_executor.rs`
+- Changed Fleet Command Center UI to expose `currentAirlockPolicy` state and show dispatch acknowledgement summaries for policy push / kill switch:
+  - `src/components/neural/modules/FleetCommandCenter.tsx`
+  - `src/services/tauri.ts`
+  - `src-tauri/src/services/atm_client.rs`
+- Changed Agent Chat UI to integrate Forge recording controls (`start`, `stop & generate`) and local generated-agent activation path:
+  - `src/components/agent-chat/AgentChatPanel.tsx`
+  - `src/services/tauri.ts`
+- Changed Forge generation flow to draft-review-before-save with inline editable fields (`name`, `description`, `soul_content`) and explicit save/discard actions:
+  - `src/components/agent-chat/AgentChatPanel.tsx`
+- Changed Rainy ATM route wiring to mount private workspace-agent sharing APIs:
+  - `rainy-atm/src/index.ts`
+  - `rainy-atm/src/routes/workspace-agents.ts`
+- Changed Rainy ATM root metadata version and marketplace response guards to keep Step 7 routes resilient under malformed persisted payloads:
+  - `rainy-atm/src/index.ts`
+  - `rainy-atm/src/routes/marketplace.ts`
+- Changed Rainy ATM bridge integration surface with modular AgentBridge dispatch primitives for external channel adapters:
+  - `rainy-atm/src/integrations/agent-bridge.ts`
+- Changed release readiness posture for YC W26 / Standard Capital cycle with production gate verification completed before application window close (application deadline from invite: March 12, 2026 at 9:00 PM PT):
+  - `CHANGELOG.md` (release status + validation record)
+- Changed versioning for THE FORGE release:
+  - `package.json` -> `0.5.96`
+  - `src-tauri/Cargo.toml` -> `0.5.96`
+  - `src-tauri/tauri.conf.json` -> `0.5.96`
+
 - Switched MCP transport support to `stdio + http` and retained compatibility for legacy persisted `"sse"` tags via serde alias mapping:
   - `src-tauri/src/services/mcp_service.rs`
 - Reworked MCP Neural panel to JSON-first management (visual JSON editor + validate/save/run), removing manual server-creation dependence:
@@ -104,6 +174,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed fleet kill-switch command completion semantics to return SLA-aware acknowledgement payloads based on active runtime counts within a 5-second budget, instead of unconditional success:
+  - `src-tauri/src/services/command_poller.rs`
+- Fixed workflow recorder robustness by adding malformed-step validation (allowed kinds, non-empty labels), payload-size limits, step limits, and bounded history retention:
+  - `src-tauri/src/services/workflow_recorder.rs`
+
 - Fixed MCP runtime removal lifecycle to consistently detach live connections using sanitized server keys.
 - Fixed MCP disconnection/removal lifecycle to explicitly terminate spawned stdio subprocesses (including replacement on reconnect with same key), preventing orphan process leaks and hidden active tools.
   - file:
@@ -134,20 +209,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/src/services/memory_vault/service.rs`
 - Fixed incomplete context reset so `memory_vault_embedding_vectors` is also cleared with workspace history reset.
   - `src-tauri/src/ai/agent/manager.rs`
+- Fixed full-history reset consistency so workspace memory is cleared through the active `MemoryManager`/vault path (same DB used by runtime writes), avoiding stale RAG context after reset.
+  - `src-tauri/src/commands/agent.rs`
+  - `src-tauri/src/services/memory/memory_manager.rs`
+  - `src-tauri/src/services/memory_vault/service.rs`
+  - `src-tauri/src/services/memory_vault/repository.rs`
+  - `src-tauri/src/ai/agent/manager.rs`
+- Fixed model-specific embedding metadata drift by removing silent fallback from model-bound batch embedding and using strict per-model embedding in backfill paths.
+  - `src-tauri/src/services/embedder.rs`
+  - `src-tauri/src/services/memory/memory_manager.rs`
+- Fixed confidential-memory access-control bypass in semantic retrieval injection by reapplying L2 Airlock filtering before system-prompt memory injection.
+  - `src-tauri/src/ai/agent/runtime.rs`
+  - `src-tauri/src/services/memory/memory_manager.rs`
+  - `src-tauri/src/services/memory/types.rs`
 - Fixed dead-code/warning regressions introduced by memory refactor by removing unused methods/constants and cfg-sensitive unused imports.
   - `src-tauri/src/services/embedder.rs`
   - `src-tauri/src/ai/agent/workflow.rs`
   - `src-tauri/src/services/memory_vault/repository.rs`
+- Fixed Forge agent-library path traversal risk by enforcing strict slug validation for `AgentSpec.id` before save/load path joins (blocks `../` and any non `[a-zA-Z0-9_-]` filename components):
+  - `src-tauri/src/services/agent_library.rs`
 
 ### Validation
 
 - `cd src-tauri && cargo check -q` — passes
 - `pnpm exec tsc --noEmit` — passes
+- `cd src-tauri && cargo test -q airlock --lib` — passes
+- `cd src-tauri && cargo test -q agent --lib` — passes
+- `cd src-tauri && cargo test -q manifest_covers_every_registered_tool --lib` — passes
+- `cd src-tauri && cargo test -q every_registered_tool_has_explicit_policy_entry --lib` — passes
+- `cd src-tauri && cargo test -q workflow_recorder --lib` — passes
+- `cd src-tauri && cargo test -q workflow_factory --lib` — passes
+- `cd src-tauri && cargo test -q agent_library --lib` — passes
+- `cd src-tauri && cargo test -q workflow_recorder --lib` — passes (post recorder guardrails)
+- `cd src-tauri && cargo test -q workflow_factory --lib` — passes (post generated-spec helper + tests)
+- `cd src-tauri && cargo test -q agent_library --lib` — passes (post persistence roundtrip tests)
+- `cd rainy-atm && bunx tsc --noEmit` — passes
+- `cd rainy-atm && bun test` — passes (45/45)
+- `cd rainy-atm && bun run build` — passes
+- `cd src-tauri && cargo check -q` — passes (post workspace-agent import commands)
+- `pnpm exec tsc --noEmit` — passes (post workspace-agent import wrappers)
+- `cd src-tauri && cargo test -q agent --lib` — passes (post workspace-agent import commands)
+- `cd src-tauri && cargo test -q airlock --lib` — passes (post workspace-agent import commands)
 - `cd src-tauri && cargo test -q workflow --lib` — passes
 - `cd src-tauri && cargo test -q agent --lib` — passes
 - `cd src-tauri && cargo test -q memory_vault --lib` — passes
 - `cd src-tauri && cargo test -q agent --lib` — passes (post hybrid/batch/Turso memory updates)
 - `cd src-tauri && cargo test -q memory_vault --lib` — passes (post hybrid/batch/Turso memory updates)
+- `cd src-tauri && cargo test -q memory_vault --lib` — passes (post audit memory reset alignment fix)
+- `cd src-tauri && cargo test -q agent --lib` — passes (post audit retrieval injection hardening)
+- `cd src-tauri && cargo test -q airlock --lib` — passes (post audit confidential-memory L2 gating fix)
+- `cd src-tauri && cargo check -q` — passes (post ATM marketplace desktop command surface)
+- `pnpm exec tsc --noEmit` — passes (post ATM marketplace desktop command wrappers)
+- `cd rainy-atm && bunx tsc --noEmit` — passes (post marketplace API hardening)
+- `cd rainy-atm && bun test` — passes (45/45) (post marketplace API hardening)
+- `cd rainy-atm && bun run build` — passes (post marketplace API hardening)
+- `cd rainy-atm && bunx tsc --noEmit` — passes (post AgentBridge module)
+- `cd rainy-atm && bun test` — passes (47/47) (post AgentBridge module)
+- `cd rainy-atm && bun run build` — passes (post AgentBridge module)
+- `cd src-tauri && cargo test -q agent_library --lib` — passes (4/4) (post path-traversal fix)
+- `cd src-tauri && cargo check -q` — passes (release readiness revalidation)
+- `pnpm exec tsc --noEmit` — passes (release readiness revalidation)
+- `cd rainy-atm && bunx tsc --noEmit` — passes (release readiness revalidation)
+- `cd rainy-atm && bun test` — passes (47/47) (release readiness revalidation)
+- `cd rainy-atm && bun run build` — passes (release readiness revalidation)
+- `pnpm run build` — passes (release readiness revalidation; non-blocking bundle-size warning from Vite reporter)
+- `cd src-tauri && cargo test -q agent_library --lib` — passes (4/4) (release readiness revalidation)
 
 ## [0.5.95] - 2026-03-10 - NERVE CENTER STEP 6 STABILITY PATCH
 

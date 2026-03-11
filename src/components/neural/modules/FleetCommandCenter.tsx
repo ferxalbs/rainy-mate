@@ -6,6 +6,7 @@ import {
   getAtmFleetStatus,
   pushAtmFleetPolicy,
   triggerAtmFleetKillSwitch,
+  type AtmFleetCurrentPolicy,
   type AtmFleetNodeStatus,
 } from "../../../services/tauri";
 
@@ -19,6 +20,10 @@ export function FleetCommandCenter({
   userApiKey,
 }: FleetCommandCenterProps) {
   const [nodes, setNodes] = useState<AtmFleetNodeStatus[]>([]);
+  const [currentPolicy, setCurrentPolicy] = useState<AtmFleetCurrentPolicy | null>(
+    null,
+  );
+  const [lastDispatch, setLastDispatch] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [allowlist, setAllowlist] = useState("read_file,list_files,search_files");
 
@@ -27,6 +32,7 @@ export function FleetCommandCenter({
     try {
       const res = await getAtmFleetStatus();
       setNodes(res.nodes || []);
+      setCurrentPolicy(res.currentAirlockPolicy ?? null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to load fleet status");
@@ -46,7 +52,7 @@ export function FleetCommandCenter({
       .filter(Boolean);
 
     try {
-      await pushAtmFleetPolicy({
+      const res: any = await pushAtmFleetPolicy({
         toolAccessPolicy: {
           enabled: true,
           mode: "allowlist",
@@ -56,6 +62,12 @@ export function FleetCommandCenter({
         platformKey,
         userApiKey,
       });
+      const ack = res?.dispatch?.ack?.within5s;
+      if (ack) {
+        setLastDispatch(
+          `Policy push ack: running/completed=${ack.runningOrCompleted}, completed=${ack.completed}, failed=${ack.failed}, pending=${ack.pending}`,
+        );
+      }
       toast.success("Fleet policy pushed");
       await load();
     } catch (error) {
@@ -71,7 +83,13 @@ export function FleetCommandCenter({
     if (!confirmKill) return;
 
     try {
-      await triggerAtmFleetKillSwitch({ platformKey, userApiKey });
+      const res: any = await triggerAtmFleetKillSwitch({ platformKey, userApiKey });
+      const ack = res?.dispatch?.ack?.within5s;
+      if (ack) {
+        setLastDispatch(
+          `Kill switch ack: running/completed=${ack.runningOrCompleted}, completed=${ack.completed}, failed=${ack.failed}, pending=${ack.pending}`,
+        );
+      }
       toast.success("Fleet kill switch dispatched");
       await load();
     } catch (error) {
@@ -117,6 +135,17 @@ export function FleetCommandCenter({
             <ShieldOff className="size-4 mr-2" />
             Kill Switch
           </Button>
+        </div>
+        <div className="mt-3 text-xs text-muted-foreground space-y-1">
+          {currentPolicy ? (
+            <p>
+              Current policy: mode={currentPolicy.mode}, enabled=
+              {String(currentPolicy.enabled)}, version={currentPolicy.version}
+            </p>
+          ) : (
+            <p>Current policy: unavailable</p>
+          )}
+          {lastDispatch ? <p>{lastDispatch}</p> : null}
         </div>
       </Card>
 

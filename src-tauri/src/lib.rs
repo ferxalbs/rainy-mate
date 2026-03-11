@@ -13,9 +13,10 @@ use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::db::Database;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
-    ATMClient, BrowserController, CommandPoller, DocumentService, FileManager, FileOperationEngine,
-    FolderManager, ImageService, LLMClient, ManagedResearchService, MemoryManager, NeuralService,
-    NodeAuthenticator, SettingsManager, SkillExecutor, SocketClient, WorkspaceManager,
+    ATMClient, AgentLibraryService, BrowserController, CommandPoller, DocumentService, FileManager,
+    FileOperationEngine, FolderManager, ImageService, LLMClient, ManagedResearchService,
+    MemoryManager, NeuralService, NodeAuthenticator, SettingsManager, SkillExecutor, SocketClient,
+    WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -109,6 +110,10 @@ pub fn run() {
     // Initialize LLM Client (Brain)
     // API Key will be loaded/set via commands later
     let llm_client = Arc::new(Mutex::new(LLMClient::new("".to_string())));
+    let workflow_recorder = Arc::new(WorkflowRecorderService::new());
+    let agent_library = Arc::new(
+        AgentLibraryService::new_default().expect("Failed to initialize agent library service"),
+    );
 
     // Initialize folder manager (requires app handle for data dir)
     // We'll initialize it in setup since we need the app handle
@@ -146,6 +151,8 @@ pub fn run() {
         .manage(runtime_registry.clone()) // Arc<RuntimeRegistry>
         .manage(socket_client) // SocketClient
         .manage(llm_client) // Arc<Mutex<LLMClient>>
+        .manage(workflow_recorder) // Arc<WorkflowRecorderService>
+        .manage(agent_library) // Arc<AgentLibraryService>
         .manage(commands::airlock::AirlockServiceState(Arc::new(
             Mutex::new(None),
         ))) // Placeholder, initialized in setup
@@ -587,6 +594,11 @@ pub fn run() {
             commands::bootstrap_atm,
             commands::create_atm_agent,
             commands::list_atm_agents,
+            commands::list_atm_workspace_shared_agents,
+            commands::import_atm_workspace_shared_agent,
+            commands::list_atm_marketplace_agents,
+            commands::publish_atm_marketplace_agent,
+            commands::import_atm_marketplace_agent,
             commands::list_atm_commands,
             commands::get_atm_command_details,
             commands::get_atm_command_progress,
@@ -639,6 +651,16 @@ pub fn run() {
             commands::remove_installed_skill,
             // Agent Workflow (Native Rust)
             commands::agent::run_agent_workflow,
+            // Workflow Factory (THE FORGE foundation)
+            commands::start_workflow_recording,
+            commands::record_workflow_step,
+            commands::stop_workflow_recording,
+            commands::get_workflow_recording,
+            commands::get_active_workflow_recording,
+            commands::generate_agent_spec_from_recording,
+            commands::save_generated_agent,
+            commands::list_generated_agents,
+            commands::load_generated_agent,
             // Deployment (Phase 1)
             commands::deploy_agent,
             commands::save_agent_spec,

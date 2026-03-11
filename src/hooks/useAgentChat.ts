@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useStreaming } from "./useStreaming";
 import { useTauriTask } from "./useTauriTask";
 import type {
@@ -25,6 +25,7 @@ export function useAgentChat() {
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isHydratingHistory, setIsHydratingHistory] = useState(false);
   const [hasHydratedHistory, setHasHydratedHistory] = useState(false);
+  const forgeRecordingIdRef = useRef<string | null>(null);
 
   const { streamWithRouting } = useStreaming();
   const { createTask } = useTauriTask();
@@ -33,6 +34,26 @@ export function useAgentChat() {
     retrievalMode: "unavailable",
     embeddingProfile: "gemini-embedding-2-preview",
   } as const;
+
+  const captureForgeStep = useCallback(
+    async (kind: string, label: string, payload?: Record<string, unknown>) => {
+      try {
+        if (!forgeRecordingIdRef.current) {
+          const active = await tauri.getActiveWorkflowRecording();
+          forgeRecordingIdRef.current = active?.id ?? null;
+        }
+        if (!forgeRecordingIdRef.current) return;
+        await tauri.recordWorkflowStep({
+          kind,
+          label,
+          payload: payload ?? {},
+        });
+      } catch (error) {
+        console.error("Forge auto-capture failed:", error);
+      }
+    },
+    [],
+  );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -674,6 +695,11 @@ export function useAgentChat() {
       // Listen to real-time agent events from Rust backend
       let unlisten: (() => void) | null = null;
       try {
+        void captureForgeStep("agent_run_requested", "run_agent_workflow", {
+          workspaceId,
+          modelId,
+          agentSpecId: agentSpecId || null,
+        });
         const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen<{
           type: string;
@@ -772,6 +798,10 @@ export function useAgentChat() {
                 case "tool_call": {
                   // payload.data is a ToolCall: { id, type, function: { name, arguments } }
                   const functionName = payload.data?.function?.name || "";
+                  void captureForgeStep("tool_call", functionName || "tool_call", {
+                    toolCallId: payload.data?.id ?? null,
+                    arguments: payload.data?.function?.arguments ?? null,
+                  });
                   return {
                     ...m,
                     neuralState: resolveNeuralState(functionName),
@@ -779,6 +809,14 @@ export function useAgentChat() {
                   };
                 }
                 case "tool_result": {
+                  void captureForgeStep(
+                    "tool_result",
+                    payload.data?.toolCallId || "tool_result",
+                    {
+                      toolCallId: payload.data?.toolCallId ?? null,
+                      resultPreview: payload.data?.resultPreview ?? null,
+                    },
+                  );
                   // Tool finished, back to thinking for next iteration
                   return {
                     ...m,
@@ -930,11 +968,12 @@ export function useAgentChat() {
           ),
         );
       } finally {
+        forgeRecordingIdRef.current = null;
         setIsExecuting(false);
         if (unlisten) unlisten();
       }
     },
-    [ensureChatScope],
+    [captureForgeStep, ensureChatScope],
   );
 
   return {
