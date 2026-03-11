@@ -1,4 +1,5 @@
 use crate::ai::specs::manifest::AgentSpec;
+use crate::commands::memory::MemoryManagerState;
 use crate::db::Database;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
@@ -193,18 +194,6 @@ impl AgentManager {
     pub async fn clear_history(&self, chat_id: &str) -> Result<(), sqlx::Error> {
         // Clear chat messages (per session)
         sqlx::query("DELETE FROM messages WHERE chat_id = ?")
-            .bind(chat_id)
-            .execute(&*self.db)
-            .await?;
-
-        // Also clear semantic memories and entities (scoped by workspace_id, which corresponds to chat_id)
-        // This supports "Full Context Reset" requested by user.
-        sqlx::query("DELETE FROM memory_vault_entries WHERE workspace_id = ?")
-            .bind(chat_id)
-            .execute(&*self.db)
-            .await?;
-
-        sqlx::query("DELETE FROM memory_vault_embedding_vectors WHERE workspace_id = ?")
             .bind(chat_id)
             .execute(&*self.db)
             .await?;
@@ -544,8 +533,14 @@ pub async fn get_chat_history(
 #[tauri::command]
 pub async fn clear_chat_history(
     state: State<'_, AgentManager>,
+    memory_manager: State<'_, MemoryManagerState>,
     chat_id: String,
 ) -> Result<(), String> {
+    memory_manager
+        .0
+        .clear_workspace_memory(&chat_id)
+        .await
+        .map_err(|e| e.to_string())?;
     state
         .clear_history(&chat_id)
         .await

@@ -123,6 +123,21 @@ impl EmbedderService {
         }
     }
 
+    pub async fn embed_text_for_model_with_task_strict(
+        &self,
+        text: &str,
+        model: &str,
+        task_type: EmbeddingTaskType,
+    ) -> Result<Vec<f32>, String> {
+        if self.api_key.is_empty() {
+            return Err(format!(
+                "Missing embedding API key for provider: {}",
+                self.provider
+            ));
+        }
+        self.embed_gemini(text, model, task_type).await
+    }
+
     pub async fn embed_texts_for_model_with_task(
         &self,
         texts: &[String],
@@ -138,24 +153,7 @@ impl EmbedderService {
                 self.provider
             ));
         }
-
-        match self.embed_gemini_batch(texts, model, task_type).await {
-            Ok(v) => Ok(v),
-            Err(primary_error) => {
-                if model == FALLBACK_EMBEDDING_PROFILE.model {
-                    return Err(primary_error);
-                }
-
-                self.embed_gemini_batch(texts, FALLBACK_EMBEDDING_PROFILE.model, task_type)
-                    .await
-                    .map_err(|fallback_error| {
-                        format!(
-                            "Batch embedding failed for '{}' and fallback '{}': {} | {}",
-                            model, FALLBACK_EMBEDDING_PROFILE.model, primary_error, fallback_error
-                        )
-                    })
-            }
-        }
+        self.embed_gemini_batch(texts, model, task_type).await
     }
 
     async fn embed_gemini(

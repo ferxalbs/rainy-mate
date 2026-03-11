@@ -400,10 +400,61 @@ Rules:
         let mut appended_context = String::new();
         let mut retrieval_mode = "unavailable".to_string();
         let mm = self.memory.manager();
-        if let Ok(result) = mm
+        if let Ok(mut result) = mm
             .search_semantic_detailed(&self.options.workspace_id, input, 5)
             .await
         {
+            if !result.confidential_entry_ids.is_empty() {
+                let allowed = if let Some(airlock) = self.airlock_service.as_ref() {
+                    let cmd = crate::models::neural::QueuedCommand {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        intent: "memory_vault.read_confidential".to_string(),
+                        payload: crate::models::neural::RainyPayload {
+                            skill: Some("memory_vault".to_string()),
+                            method: Some("read_confidential".to_string()),
+                            params: None,
+                            content: None,
+                            allowed_paths: self.options.allowed_paths.clone().unwrap_or_default(),
+                            blocked_paths: self.spec.airlock.scopes.blocked_paths.clone(),
+                            allowed_domains: self.spec.airlock.scopes.allowed_domains.clone(),
+                            blocked_domains: self.spec.airlock.scopes.blocked_domains.clone(),
+                            tool_access_policy: None,
+                            tool_access_policy_version: None,
+                            tool_access_policy_hash: None,
+                        },
+                        status: crate::models::neural::CommandStatus::Pending,
+                        priority: crate::models::neural::CommandPriority::Normal,
+                        airlock_level: crate::models::neural::AirlockLevel::Dangerous,
+                        created_at: Some(chrono::Utc::now().timestamp()),
+                        started_at: None,
+                        completed_at: None,
+                        result: None,
+                        workspace_id: Some(self.options.workspace_id.clone()),
+                        desktop_node_id: None,
+                        approved_by: None,
+                    };
+
+                    match airlock.check_permission(&cmd).await {
+                        Ok(v) => v,
+                        Err(_) => false,
+                    }
+                } else {
+                    true
+                };
+
+                if !allowed {
+                    let confidential_ids = result
+                        .confidential_entry_ids
+                        .iter()
+                        .cloned()
+                        .collect::<std::collections::HashSet<_>>();
+                    result
+                        .entries
+                        .retain(|entry| !confidential_ids.contains(&entry.id));
+                    result.reason = Some("Confidential memory filtered by Airlock".to_string());
+                }
+            }
+
             retrieval_mode = match result.mode {
                 crate::services::memory::SemanticRetrievalMode::Ann => "ann",
                 crate::services::memory::SemanticRetrievalMode::Exact => "exact",

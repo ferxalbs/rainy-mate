@@ -332,6 +332,10 @@ impl MemoryVaultService {
         self.repository.delete_by_id(id).await
     }
 
+    pub async fn delete_workspace(&self, workspace_id: &str) -> Result<(), String> {
+        self.repository.delete_workspace(workspace_id).await
+    }
+
     pub async fn stats(&self, workspace_id: Option<&str>) -> Result<MemoryVaultStats, String> {
         let (total_entries, workspace_entries) = self.repository.counts(workspace_id).await?;
         Ok(MemoryVaultStats {
@@ -610,7 +614,11 @@ impl MemoryVaultService {
                     batched.get(idx).cloned()
                 } else {
                     embedder
-                        .embed_text_with_task(&entry.content, EmbeddingTaskType::RetrievalDocument)
+                        .embed_text_for_model_with_task_strict(
+                            &entry.content,
+                            super::types::EMBEDDING_MODEL,
+                            EmbeddingTaskType::RetrievalDocument,
+                        )
                         .await
                         .ok()
                 };

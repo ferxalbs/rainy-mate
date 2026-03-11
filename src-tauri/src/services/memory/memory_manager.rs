@@ -181,6 +181,14 @@ impl MemoryManager {
         vault.delete_by_id(id).await.map_err(MemoryError::Other)
     }
 
+    pub async fn clear_workspace_memory(&self, workspace_id: &str) -> Result<(), MemoryError> {
+        let vault = self.ensure_vault().await?;
+        vault
+            .delete_workspace(workspace_id)
+            .await
+            .map_err(MemoryError::Other)
+    }
+
     pub async fn short_term_size(&self) -> usize {
         let stm = self.short_term.read().await;
         stm.len()
@@ -230,6 +238,7 @@ impl MemoryManager {
                     entries,
                     mode: SemanticRetrievalMode::LexicalFallback,
                     reason: Some("Missing Gemini embedding API key".to_string()),
+                    confidential_entry_ids: Vec::new(),
                 });
             }
             Err(reason) => {
@@ -240,6 +249,7 @@ impl MemoryManager {
                     entries,
                     mode: SemanticRetrievalMode::LexicalFallback,
                     reason: Some(reason),
+                    confidential_entry_ids: Vec::new(),
                 });
             }
         };
@@ -257,6 +267,7 @@ impl MemoryManager {
                     entries,
                     mode: SemanticRetrievalMode::LexicalFallback,
                     reason: Some(format!("Gemini embedding request failed: {}", e)),
+                    confidential_entry_ids: Vec::new(),
                 });
             }
         };
@@ -312,6 +323,13 @@ impl MemoryManager {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
+        let mut confidential_entry_ids = Vec::new();
+        for (_score, entry) in ranked.iter().take(limit.max(1)) {
+            if matches!(entry.sensitivity, MemorySensitivity::Confidential) {
+                confidential_entry_ids.push(entry.id.clone());
+            }
+        }
+
         Ok(SemanticSearchResult {
             entries: ranked
                 .into_iter()
@@ -327,6 +345,7 @@ impl MemoryManager {
                 .collect(),
             mode,
             reason: None,
+            confidential_entry_ids,
         })
     }
 

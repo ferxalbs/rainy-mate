@@ -388,6 +388,48 @@ impl MemoryVaultRepository {
         Ok(())
     }
 
+    pub async fn delete_workspace(&self, workspace_id: &str) -> Result<(), String> {
+        self.conn
+            .execute("BEGIN IMMEDIATE TRANSACTION", ())
+            .await
+            .map_err(|e| format!("Failed to begin workspace delete transaction: {}", e))?;
+
+        let result = async {
+            self.conn
+                .execute(
+                    "DELETE FROM memory_vault_entries WHERE workspace_id = ?1",
+                    params![workspace_id.to_string()],
+                )
+                .await
+                .map_err(|e| format!("Failed to delete vault entries by workspace: {}", e))?;
+
+            self.conn
+                .execute(
+                    "DELETE FROM memory_vault_embedding_vectors WHERE workspace_id = ?1",
+                    params![workspace_id.to_string()],
+                )
+                .await
+                .map_err(|e| format!("Failed to delete vault vectors by workspace: {}", e))?;
+
+            Ok::<(), String>(())
+        }
+        .await;
+
+        match result {
+            Ok(()) => {
+                self.conn
+                    .execute("COMMIT", ())
+                    .await
+                    .map_err(|e| format!("Failed to commit workspace delete transaction: {}", e))?;
+                Ok(())
+            }
+            Err(err) => {
+                let _ = self.conn.execute("ROLLBACK", ()).await;
+                Err(err)
+            }
+        }
+    }
+
     pub async fn search_workspace_vector_ann_for_model(
         &self,
         workspace_id: &str,

@@ -29,6 +29,8 @@ pub struct SemanticSearchResult {
     pub entries: Vec<MemoryEntry>,
     pub mode: SemanticRetrievalMode,
     pub reason: Option<String>,
+    #[serde(default)]
+    pub confidential_entry_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
