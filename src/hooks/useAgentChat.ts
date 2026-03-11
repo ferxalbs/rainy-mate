@@ -18,6 +18,13 @@ export function useAgentChat() {
   const [isPlanning, setIsPlanning] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<TaskPlan | null>(null);
+  const [chatScopeId, setChatScopeId] = useState<string | null>(null);
+  const [historyCursorRowid, setHistoryCursorRowid] = useState<number | null>(
+    null,
+  );
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const [isHydratingHistory, setIsHydratingHistory] = useState(false);
+  const [hasHydratedHistory, setHasHydratedHistory] = useState(false);
 
   const { streamWithRouting } = useStreaming();
   const { createTask } = useTauriTask();
@@ -28,10 +35,89 @@ export function useAgentChat() {
   }, []);
 
   const clearMessagesAndContext = useCallback(async (chatId: string) => {
-    await tauri.clearChatHistory(chatId);
+    await tauri.clearChatHistory(chatScopeId || chatId);
     setMessages([]);
     setCurrentPlan(null);
-  }, []);
+    setHistoryCursorRowid(null);
+    setHasMoreHistory(false);
+    setHasHydratedHistory(true);
+  }, [chatScopeId]);
+
+  const mapPersistedRoleToUiType = useCallback(
+    (role: "user" | "assistant" | "system"): AgentMessage["type"] => {
+      if (role === "assistant") return "agent";
+      if (role === "system") return "system";
+      return "user";
+    },
+    [],
+  );
+
+  const ensureChatScope = useCallback(async () => {
+    if (chatScopeId) return chatScopeId;
+    const scope = await tauri.getDefaultChatScope();
+    setChatScopeId(scope);
+    return scope;
+  }, [chatScopeId]);
+
+  const hydrateLongChatHistory = useCallback(async () => {
+    if (isHydratingHistory || hasHydratedHistory) return;
+    setIsHydratingHistory(true);
+    try {
+      const scope = await ensureChatScope();
+      const window = await tauri.getChatHistoryWindow(scope, undefined, 100);
+      const hydratedMessages: AgentMessage[] = window.messages.map((msg) => ({
+        id: msg.id,
+        type: mapPersistedRoleToUiType(msg.role),
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+      }));
+      setMessages(hydratedMessages);
+      setHistoryCursorRowid(window.next_cursor_rowid ?? null);
+      setHasMoreHistory(window.has_more);
+      setHasHydratedHistory(true);
+    } catch (error) {
+      console.error("Failed to hydrate long chat history:", error);
+    } finally {
+      setIsHydratingHistory(false);
+    }
+  }, [
+    ensureChatScope,
+    hasHydratedHistory,
+    isHydratingHistory,
+    mapPersistedRoleToUiType,
+  ]);
+
+  const loadOlderHistory = useCallback(async () => {
+    if (!hasMoreHistory || historyCursorRowid == null || isHydratingHistory) return;
+    setIsHydratingHistory(true);
+    try {
+      const scope = await ensureChatScope();
+      const window = await tauri.getChatHistoryWindow(
+        scope,
+        historyCursorRowid,
+        100,
+      );
+      const olderMessages: AgentMessage[] = window.messages.map((msg) => ({
+        id: msg.id,
+        type: mapPersistedRoleToUiType(msg.role),
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+      }));
+      setMessages((prev) => [...olderMessages, ...prev]);
+      setHistoryCursorRowid(window.next_cursor_rowid ?? null);
+      setHasMoreHistory(window.has_more);
+    } catch (error) {
+      console.error("Failed to load older chat history:", error);
+    } finally {
+      setIsHydratingHistory(false);
+    }
+  }, [
+    ensureChatScope,
+    hasMoreHistory,
+    historyCursorRowid,
+    isHydratingHistory,
+    mapPersistedRoleToUiType,
+  ]);
 
   // Helper to parse tool calls from content
   const parseToolCalls = useCallback((content: string) => {
@@ -521,6 +607,10 @@ export function useAgentChat() {
       workspaceId: string,
       agentSpecId?: string,
     ) => {
+      const resolvedChatScopeId = await ensureChatScope().catch((error) => {
+        console.error("Failed to resolve chat scope, using fallback:", error);
+        return "global:long_chat:v1";
+      });
       const userMsg: AgentMessage = {
         id: crypto.randomUUID(),
         type: "user",
@@ -538,6 +628,10 @@ export function useAgentChat() {
         timestamp: new Date(),
         modelUsed: { name: modelId, thinkingEnabled: true },
         neuralState: "thinking",
+        ragTelemetry: {
+          historySource: "persisted_long_chat",
+          embeddingProfile: "gemini-embedding-2-preview",
+        },
       };
       setMessages((prev) => [...prev, initialAgentMsg]);
 
@@ -675,6 +769,30 @@ export function useAgentChat() {
                 }
                 case "status": {
                   const statusText = String(payload.data || "");
+                  if (statusText.startsWith("RAG_TELEMETRY:")) {
+                    try {
+                      const raw = statusText.slice("RAG_TELEMETRY:".length);
+                      const parsed = JSON.parse(raw) as {
+                        history_source?: string;
+                        retrieval_mode?: string;
+                        embedding_profile?: string;
+                      };
+                      return {
+                        ...m,
+                        ragTelemetry: {
+                          historySource:
+                            parsed.history_source || m.ragTelemetry?.historySource,
+                          retrievalMode:
+                            parsed.retrieval_mode || m.ragTelemetry?.retrievalMode,
+                          embeddingProfile:
+                            parsed.embedding_profile ||
+                            m.ragTelemetry?.embeddingProfile,
+                        },
+                      };
+                    } catch {
+                      return m;
+                    }
+                  }
                   const waitingOnMcpApproval =
                     statusText.toLowerCase().includes("approval") &&
                     statusText.toLowerCase().includes("mcp");
@@ -698,6 +816,7 @@ export function useAgentChat() {
           modelId,
           workspaceId,
           agentSpecId,
+          resolvedChatScopeId,
         );
 
         setMessages((prev) =>
@@ -740,7 +859,7 @@ export function useAgentChat() {
         if (unlisten) unlisten();
       }
     },
-    [],
+    [ensureChatScope],
   );
 
   return {
@@ -758,5 +877,9 @@ export function useAgentChat() {
     clearMessages,
     clearMessagesAndContext,
     runNativeAgent,
+    hydrateLongChatHistory,
+    loadOlderHistory,
+    hasMoreHistory,
+    isHydratingHistory,
   };
 }

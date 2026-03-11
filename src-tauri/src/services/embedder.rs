@@ -1,3 +1,4 @@
+use crate::services::memory_vault::profiles::FALLBACK_EMBEDDING_PROFILE;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize)]
@@ -42,16 +43,17 @@ impl EmbedderService {
             _ => "gemini".to_string(),
         };
 
-        let default_model = "gemini-embedding-001".to_string();
+        let default_model = crate::services::memory_vault::types::EMBEDDING_MODEL.to_string();
 
         let selected_model = model.unwrap_or(default_model);
-        let normalized_model = match selected_model.as_str() {
+        let normalized_model = match selected_model.trim() {
+            "gemini-embedding-2-preview" | "gemini-embedding-001" => selected_model,
             "text-embedding-004"
             | "embedding-001"
             | "embedding-gecko-001"
             | "gemini-embedding-exp"
             | "gemini-embedding-exp-03-07" => "gemini-embedding-001".to_string(),
-            _ => "gemini-embedding-001".to_string(),
+            _ => crate::services::memory_vault::types::EMBEDDING_MODEL.to_string(),
         };
 
         Self {
@@ -70,12 +72,42 @@ impl EmbedderService {
             ));
         }
 
-        self.embed_gemini(text).await
+        match self.embed_gemini(text, &self.model).await {
+            Ok(v) => Ok(v),
+            Err(primary_error) => {
+                if self.model == FALLBACK_EMBEDDING_PROFILE.model {
+                    return Err(primary_error);
+                }
+
+                self.embed_gemini(text, FALLBACK_EMBEDDING_PROFILE.model)
+                    .await
+                    .map_err(|fallback_error| {
+                        format!(
+                            "Embedding failed for '{}' and fallback '{}': {} | {}",
+                            self.model, FALLBACK_EMBEDDING_PROFILE.model, primary_error, fallback_error
+                        )
+                    })
+            }
+        }
     }
 
-    async fn embed_gemini(&self, text: &str) -> Result<Vec<f32>, String> {
+    pub async fn embed_text_for_model(&self, text: &str, model: &str) -> Result<Vec<f32>, String> {
+        if self.api_key.is_empty() {
+            return Err(format!(
+                "Missing embedding API key for provider: {}",
+                self.provider
+            ));
+        }
+        self.embed_gemini(text, model).await
+    }
+
+    pub fn provider_name(&self) -> &str {
+        &self.provider
+    }
+
+    async fn embed_gemini(&self, text: &str, model: &str) -> Result<Vec<f32>, String> {
         let req_body = GeminiEmbeddingRequest {
-            model: format!("models/{}", self.model),
+            model: format!("models/{}", model),
             content: GeminiContent {
                 parts: vec![GeminiPart {
                     text: text.to_string(),
@@ -85,7 +117,7 @@ impl EmbedderService {
 
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:embedContent?key={}",
-            self.model, self.api_key
+            model, self.api_key
         );
 
         let res = self

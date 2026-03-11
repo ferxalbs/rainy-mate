@@ -91,14 +91,25 @@ export function AgentChatPanel({
     runNativeAgent,
     clearMessages,
     clearMessagesAndContext,
+    hydrateLongChatHistory,
+    loadOlderHistory,
+    hasMoreHistory,
+    isHydratingHistory,
   } = useAgentChat();
 
   const isProcessing = isPlanning || isExecuting;
+  const latestTelemetry = [...messages]
+    .reverse()
+    .find((m) => m.type === "agent" && m.ragTelemetry)?.ragTelemetry;
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    hydrateLongChatHistory();
+  }, [hydrateLongChatHistory]);
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
@@ -310,6 +321,30 @@ export function AgentChatPanel({
             </div>
           ) : (
             <div className="space-y-8">
+              <div className="flex flex-wrap items-center gap-2 justify-center">
+                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
+                  History: {latestTelemetry?.historySource || "persisted_long_chat"}
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
+                  Retrieval: {latestTelemetry?.retrievalMode || "unknown"}
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
+                  Embedding: {latestTelemetry?.embeddingProfile || "gemini-embedding-2-preview"}
+                </span>
+              </div>
+              {hasMoreHistory && (
+                <div className="flex justify-center">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onPress={loadOlderHistory}
+                    isDisabled={isHydratingHistory}
+                    className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                  >
+                    {isHydratingHistory ? "Loading..." : "Load older messages"}
+                  </Button>
+                </div>
+              )}
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}

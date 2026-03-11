@@ -2,6 +2,7 @@ use libsql::{params, Builder, Connection};
 use std::path::PathBuf;
 
 const MEMORY_VAULT_VECTOR_INDEX: &str = "idx_memory_vault_embedding_gemini_3072";
+const MEMORY_VAULT_VECTORS_TABLE_INDEX: &str = "idx_memory_vault_vectors_embedding_gemini_3072";
 
 #[derive(Debug, Clone)]
 pub struct VaultRow {
@@ -115,6 +116,40 @@ impl MemoryVaultRepository {
         .await
         .map_err(|e| format!("Failed to create vault migration table: {}", e))?;
 
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS memory_vault_embedding_vectors (
+                entry_id TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
+                embedding_model TEXT NOT NULL,
+                embedding_provider TEXT NOT NULL,
+                embedding_dim INTEGER NOT NULL,
+                embedding F32_BLOB(3072) NOT NULL,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY(entry_id, embedding_model)
+            )",
+            (),
+        )
+        .await
+        .map_err(|e| format!("Failed to create embedding vectors table: {}", e))?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memory_vault_vectors_workspace_model
+             ON memory_vault_embedding_vectors(workspace_id, embedding_model, embedding_dim)",
+            (),
+        )
+        .await
+        .map_err(|e| format!("Failed to create vectors lookup index: {}", e))?;
+
+        let _ = conn
+            .execute(
+                &format!(
+                    "CREATE INDEX IF NOT EXISTS {} ON memory_vault_embedding_vectors(libsql_vector_idx(embedding))",
+                    MEMORY_VAULT_VECTORS_TABLE_INDEX
+                ),
+                (),
+            )
+            .await;
+
         Ok(Self { conn })
     }
 
@@ -198,80 +233,6 @@ impl MemoryVaultRepository {
         Ok(results)
     }
 
-    pub async fn search_workspace_vector_ann(
-        &self,
-        workspace_id: &str,
-        query_embedding: &[f32],
-        limit: usize,
-    ) -> Result<Vec<(VaultRow, f32)>, String> {
-        let mut bytes = Vec::with_capacity(query_embedding.len() * 4);
-        for f in query_embedding {
-            bytes.extend_from_slice(&f.to_le_bytes());
-        }
-
-        let mut rows = self
-            .conn
-            .query(
-                &format!(
-                    "SELECT m.id, m.workspace_id, m.source, m.sensitivity, m.created_at, m.last_accessed, m.access_count,
-                            m.content_ciphertext, m.content_nonce, m.tags_ciphertext, m.tags_nonce, m.metadata_ciphertext, m.metadata_nonce, m.embedding, m.embedding_model, m.embedding_provider, m.embedding_dim,
-                            vector_distance_cos(m.embedding, ?1) as distance
-                     FROM vector_top_k('{}', ?1, ?3) nn
-                     JOIN memory_vault_entries m ON m.rowid = nn.id
-                     WHERE m.workspace_id = ?2
-                       AND m.embedding IS NOT NULL
-                       AND m.embedding_dim = 3072
-                       AND m.embedding_model = 'gemini-embedding-001'
-                     ORDER BY distance ASC",
-                    MEMORY_VAULT_VECTOR_INDEX
-                ),
-                params![bytes, workspace_id.to_string(), limit as i64],
-            )
-            .await
-            .map_err(|e| format!("Failed to search ANN vector vault entries: {}", e))?;
-
-        let mut results = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
-            let distance: f64 = row.get(17).unwrap_or(0.0);
-            results.push((row_to_vault(&row)?, distance as f32));
-        }
-
-        Ok(results)
-    }
-
-    pub async fn search_workspace_vector_exact(
-        &self,
-        workspace_id: &str,
-        query_embedding: &[f32],
-        limit: usize,
-    ) -> Result<Vec<(VaultRow, f32)>, String> {
-        let mut bytes = Vec::with_capacity(query_embedding.len() * 4);
-        for f in query_embedding {
-            bytes.extend_from_slice(&f.to_le_bytes());
-        }
-
-        let mut rows = self.conn.query(
-            "SELECT id, workspace_id, source, sensitivity, created_at, last_accessed, access_count,
-                    content_ciphertext, content_nonce, tags_ciphertext, tags_nonce, metadata_ciphertext, metadata_nonce, embedding, embedding_model, embedding_provider, embedding_dim,
-                    vector_distance_cos(embedding, ?1) as distance
-             FROM memory_vault_entries
-             WHERE workspace_id = ?2 AND embedding IS NOT NULL AND embedding_dim = 3072 AND embedding_model = 'gemini-embedding-001'
-             ORDER BY distance ASC
-             LIMIT ?3",
-            params![bytes, workspace_id.to_string(), limit as i64]
-        )
-        .await
-        .map_err(|e| format!("Failed to search exact vector vault entries: {}", e))?;
-
-        let mut results = Vec::new();
-        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
-            let distance: f64 = row.get(17).unwrap_or(0.0);
-            results.push((row_to_vault(&row)?, distance as f32));
-        }
-
-        Ok(results)
-    }
-
     pub async fn get_by_id(&self, id: &str) -> Result<Option<VaultRow>, String> {
         let mut rows = self.conn.query(
             "SELECT id, workspace_id, source, sensitivity, created_at, last_accessed, access_count,
@@ -297,7 +258,131 @@ impl MemoryVaultRepository {
             )
             .await
             .map_err(|e| format!("Failed to delete vault entry: {}", e))?;
+        let _ = self
+            .conn
+            .execute(
+                "DELETE FROM memory_vault_embedding_vectors WHERE entry_id = ?1",
+                params![id.to_string()],
+            )
+            .await;
         Ok(())
+    }
+
+    pub async fn upsert_embedding_vector(
+        &self,
+        entry_id: &str,
+        workspace_id: &str,
+        embedding_model: &str,
+        embedding_provider: &str,
+        embedding_dim: usize,
+        embedding_bytes: Vec<u8>,
+        created_at: i64,
+    ) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT INTO memory_vault_embedding_vectors
+                 (entry_id, workspace_id, embedding_model, embedding_provider, embedding_dim, embedding, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(entry_id, embedding_model) DO UPDATE SET
+                    workspace_id = excluded.workspace_id,
+                    embedding_provider = excluded.embedding_provider,
+                    embedding_dim = excluded.embedding_dim,
+                    embedding = excluded.embedding,
+                    created_at = excluded.created_at",
+                params![
+                    entry_id.to_string(),
+                    workspace_id.to_string(),
+                    embedding_model.to_string(),
+                    embedding_provider.to_string(),
+                    embedding_dim as i64,
+                    embedding_bytes,
+                    created_at
+                ],
+            )
+            .await
+            .map_err(|e| format!("Failed to upsert embedding vector: {}", e))?;
+        Ok(())
+    }
+
+    pub async fn search_workspace_vector_ann_for_model(
+        &self,
+        workspace_id: &str,
+        query_embedding: &[f32],
+        limit: usize,
+        model: &str,
+        dim: usize,
+    ) -> Result<Vec<(VaultRow, f32)>, String> {
+        let mut bytes = Vec::with_capacity(query_embedding.len() * 4);
+        for f in query_embedding {
+            bytes.extend_from_slice(&f.to_le_bytes());
+        }
+
+        let mut rows = self
+            .conn
+            .query(
+                &format!(
+                    "SELECT m.id, m.workspace_id, m.source, m.sensitivity, m.created_at, m.last_accessed, m.access_count,
+                            m.content_ciphertext, m.content_nonce, m.tags_ciphertext, m.tags_nonce, m.metadata_ciphertext, m.metadata_nonce, m.embedding, m.embedding_model, m.embedding_provider, m.embedding_dim,
+                            vector_distance_cos(v.embedding, ?1) as distance
+                     FROM vector_top_k('{}', ?1, ?3) nn
+                     JOIN memory_vault_embedding_vectors v ON v.rowid = nn.id
+                     JOIN memory_vault_entries m ON m.id = v.entry_id
+                     WHERE v.workspace_id = ?2
+                       AND v.embedding_dim = ?4
+                       AND v.embedding_model = ?5
+                     ORDER BY distance ASC",
+                    MEMORY_VAULT_VECTORS_TABLE_INDEX
+                ),
+                params![bytes, workspace_id.to_string(), limit as i64, dim as i64, model.to_string()],
+            )
+            .await
+            .map_err(|e| format!("Failed ANN vector search for model '{}': {}", model, e))?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+            let distance: f64 = row.get(17).unwrap_or(0.0);
+            results.push((row_to_vault(&row)?, distance as f32));
+        }
+        Ok(results)
+    }
+
+    pub async fn search_workspace_vector_exact_for_model(
+        &self,
+        workspace_id: &str,
+        query_embedding: &[f32],
+        limit: usize,
+        model: &str,
+        dim: usize,
+    ) -> Result<Vec<(VaultRow, f32)>, String> {
+        let mut bytes = Vec::with_capacity(query_embedding.len() * 4);
+        for f in query_embedding {
+            bytes.extend_from_slice(&f.to_le_bytes());
+        }
+
+        let mut rows = self
+            .conn
+            .query(
+                "SELECT m.id, m.workspace_id, m.source, m.sensitivity, m.created_at, m.last_accessed, m.access_count,
+                        m.content_ciphertext, m.content_nonce, m.tags_ciphertext, m.tags_nonce, m.metadata_ciphertext, m.metadata_nonce, m.embedding, m.embedding_model, m.embedding_provider, m.embedding_dim,
+                        vector_distance_cos(v.embedding, ?1) as distance
+                 FROM memory_vault_embedding_vectors v
+                 JOIN memory_vault_entries m ON m.id = v.entry_id
+                 WHERE v.workspace_id = ?2
+                   AND v.embedding_dim = ?4
+                   AND v.embedding_model = ?5
+                 ORDER BY distance ASC
+                 LIMIT ?3",
+                params![bytes, workspace_id.to_string(), limit as i64, dim as i64, model.to_string()],
+            )
+            .await
+            .map_err(|e| format!("Failed exact vector search for model '{}': {}", model, e))?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+            let distance: f64 = row.get(17).unwrap_or(0.0);
+            results.push((row_to_vault(&row)?, distance as f32));
+        }
+        Ok(results)
     }
 
     pub async fn touch_access(

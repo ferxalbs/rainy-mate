@@ -9,6 +9,7 @@ use crate::ai::{
 };
 use crate::commands::ai_providers::ProviderRegistryState;
 use crate::commands::airlock::AirlockServiceState;
+use crate::commands::memory::MemoryManagerState;
 use crate::commands::router::IntelligentRouterState;
 use crate::services::SkillExecutor;
 use std::sync::Arc;
@@ -183,9 +184,11 @@ pub async fn run_agent_workflow(
     model_id: String,
     workspace_id: String,
     agent_spec_id: Option<String>,
+    chat_scope_id: Option<String>,
     router: State<'_, IntelligentRouterState>,
     airlock_state: State<'_, AirlockServiceState>,
     provider_registry: State<'_, ProviderRegistryState>,
+    memory_manager: State<'_, MemoryManagerState>,
     skills: State<'_, Arc<SkillExecutor>>,
     agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
     runtime_registry: State<'_, Arc<RuntimeRegistry>>,
@@ -194,9 +197,12 @@ pub async fn run_agent_workflow(
     ensure_provider_ready_for_model(&model_id, &provider_registry, &router).await?;
     let selected_model_id = model_id.clone();
 
+    let workspace_path = workspace_id.clone();
+    let chat_id = chat_scope_id.unwrap_or_else(|| {
+        crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string()
+    });
+
     // 0. Ensure Chat Session Exists (Persist Metadata)
-    // We use workspace_id as the chat_id for this simple implementation
-    let chat_id = workspace_id.clone();
     let _ = agent_manager
         .ensure_chat_session(&chat_id, "Rainy Agent")
         .await
@@ -249,7 +255,7 @@ pub async fn run_agent_workflow(
                         soul: AgentSoul {
                             name: "Rainy Agent".to_string(),
                             description: "Default fallback agent".to_string(),
-                            soul_content: default_instructions(&workspace_id),
+                            soul_content: default_instructions(&workspace_path),
                             ..Default::default()
                         },
                         skills: AgentSkills::default(),
@@ -272,7 +278,7 @@ pub async fn run_agent_workflow(
             soul: AgentSoul {
                 name: "Rainy Agent".to_string(),
                 description: "Default agent".to_string(),
-                soul_content: default_instructions(&workspace_id),
+                soul_content: default_instructions(&workspace_path),
                 ..Default::default()
             },
             skills: AgentSkills::default(),
@@ -290,7 +296,7 @@ pub async fn run_agent_workflow(
     // out in ThinkStep, which leads to "simulated" responses instead of real tool calls.
     let mut derived_allowed_paths = spec.airlock.scopes.allowed_paths.clone();
     if derived_allowed_paths.is_empty() {
-        let ws = workspace_id.trim();
+        let ws = workspace_path.trim();
         let is_unix_abs = ws.starts_with('/');
         let is_windows_abs = ws.len() > 2 && ws.as_bytes()[1] == b':' && ws.as_bytes()[2] == b'\\';
         if is_unix_abs || is_windows_abs {
@@ -300,7 +306,7 @@ pub async fn run_agent_workflow(
 
     let options = RuntimeOptions {
         model: Some(selected_model_id),
-        workspace_id: workspace_id.clone(),
+        workspace_id: chat_id.clone(),
         max_steps: None,
         allowed_paths: if derived_allowed_paths.is_empty() {
             None
@@ -317,8 +323,9 @@ pub async fn run_agent_workflow(
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
-    let memory =
-        Arc::new(crate::ai::agent::memory::AgentMemory::new(&workspace_id, app_data_dir).await);
+    let mut memory_obj = crate::ai::agent::memory::AgentMemory::new(&chat_id, app_data_dir).await;
+    memory_obj.set_manager(memory_manager.0.clone());
+    let memory = Arc::new(memory_obj);
 
     let airlock_service = {
         let guard = airlock_state.0.lock().await;

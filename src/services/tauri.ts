@@ -1993,12 +1993,44 @@ export async function clearChatHistory(chatId: string): Promise<void> {
   return invoke<void>("clear_chat_history", { chatId });
 }
 
+export interface PersistedChatMessage {
+  id: string;
+  chat_scope_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: string;
+  cursor_rowid: number;
+}
+
+export interface ChatHistoryWindow {
+  messages: PersistedChatMessage[];
+  has_more: boolean;
+  next_cursor_rowid: number | null;
+}
+
+export async function getDefaultChatScope(): Promise<string> {
+  return invoke<string>("get_default_chat_scope");
+}
+
+export async function getChatHistoryWindow(
+  chatScopeId: string,
+  cursorRowid?: number,
+  limit?: number,
+): Promise<ChatHistoryWindow> {
+  return invoke<ChatHistoryWindow>("get_chat_history_window", {
+    chatScopeId,
+    cursorRowid,
+    limit,
+  });
+}
+
 // Agent Command
 export const runAgentWorkflow = async (
   prompt: string,
   modelId: string,
   workspaceId: string,
   agentSpecId?: string,
+  chatScopeId?: string,
 ): Promise<string> => {
   try {
     return await invoke<string>("run_agent_workflow", {
@@ -2006,6 +2038,7 @@ export const runAgentWorkflow = async (
       modelId,
       workspaceId,
       agentSpecId,
+      chatScopeId,
     });
   } catch (e) {
     console.error("Agent workflow failed:", e);

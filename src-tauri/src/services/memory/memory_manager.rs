@@ -86,6 +86,10 @@ impl MemoryManager {
                 metadata,
                 created_at: now,
                 embedding: None,
+                embedding_model: Some(EMBEDDING_MODEL.to_string()),
+                embedding_provider: Some(EMBEDDING_PROVIDER.to_string()),
+                embedding_dim: Some(crate::services::memory_vault::EMBEDDING_DIM),
+                additional_embeddings: Vec::new(),
             })
             .await
             .map_err(MemoryError::Other)?;
@@ -316,11 +320,41 @@ impl MemoryManager {
 
         let chunk_count = chunks.len();
         for (idx, chunk) in chunks.iter().enumerate() {
-            let embedding = if let Some(ref e) = embedder {
-                e.embed_text(chunk).await.ok()
-            } else {
-                None
-            };
+            let mut embedding = None;
+            let mut embedding_model = EMBEDDING_MODEL.to_string();
+            let mut additional_embeddings = Vec::new();
+            if let Some(ref e) = embedder {
+                let active_model = crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.model;
+                let fallback_model =
+                    crate::services::memory_vault::profiles::FALLBACK_EMBEDDING_PROFILE.model;
+                match e.embed_text_for_model(chunk, active_model).await {
+                    Ok(vec) => {
+                        embedding = Some(vec);
+                        if fallback_model != active_model {
+                            if let Ok(fallback_vec) =
+                                e.embed_text_for_model(chunk, fallback_model).await
+                            {
+                                additional_embeddings.push(
+                                    crate::services::memory_vault::AdditionalEmbeddingInput {
+                                        embedding: fallback_vec,
+                                        embedding_model: fallback_model.to_string(),
+                                        embedding_provider: EMBEDDING_PROVIDER.to_string(),
+                                        embedding_dim: crate::services::memory_vault::EMBEDDING_DIM,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        if fallback_model != active_model {
+                            if let Ok(vec) = e.embed_text_for_model(chunk, fallback_model).await {
+                                embedding = Some(vec);
+                                embedding_model = fallback_model.to_string();
+                            }
+                        }
+                    }
+                }
+            }
             if embedding.is_some() {
                 embedded_count += 1;
             }
@@ -344,6 +378,10 @@ impl MemoryManager {
                     metadata,
                     created_at: now,
                     embedding,
+                    embedding_model: Some(embedding_model),
+                    embedding_provider: Some(EMBEDDING_PROVIDER.to_string()),
+                    embedding_dim: Some(crate::services::memory_vault::EMBEDDING_DIM),
+                    additional_embeddings,
                 })
                 .await
                 .map_err(MemoryError::Other)?;

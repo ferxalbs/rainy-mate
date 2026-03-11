@@ -65,7 +65,7 @@ impl Default for UserSettings {
             auto_reconnect_cloud: true,
             tool_policy_version_floor: HashMap::new(),
             embedder_provider: "gemini".to_string(),
-            embedder_model: "gemini-embedding-001".to_string(),
+            embedder_model: crate::services::memory_vault::types::EMBEDDING_MODEL.to_string(),
             mcp_permission_mode: McpPermissionMode::Ask,
             mcp_servers: Vec::new(),
         }
@@ -121,6 +121,7 @@ impl SettingsManager {
                 if let Ok(mut settings) = serde_json::from_str::<UserSettings>(&contents) {
                     if settings.embedder_provider == "gemini" {
                         match settings.embedder_model.as_str() {
+                            "gemini-embedding-2-preview" | "gemini-embedding-001" => {}
                             "text-embedding-004"
                             | "embedding-001"
                             | "embedding-gecko-001"
@@ -128,7 +129,11 @@ impl SettingsManager {
                             | "gemini-embedding-exp-03-07" => {
                                 settings.embedder_model = "gemini-embedding-001".to_string();
                             }
-                            _ => {}
+                            _ => {
+                                settings.embedder_model =
+                                    crate::services::memory_vault::types::EMBEDDING_MODEL
+                                        .to_string();
+                            }
                         }
                     }
                     return settings;

@@ -2,8 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub const EMBEDDING_PROVIDER: &str = "gemini";
-pub const EMBEDDING_MODEL: &str = "gemini-embedding-001";
-pub const EMBEDDING_DIM: usize = 3072;
+pub const EMBEDDING_MODEL: &str =
+    crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.model;
+pub const EMBEDDING_DIM: usize = crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.dim;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -32,6 +33,14 @@ impl MemorySensitivity {
 }
 
 #[derive(Debug, Clone)]
+pub struct AdditionalEmbeddingInput {
+    pub embedding: Vec<f32>,
+    pub embedding_model: String,
+    pub embedding_provider: String,
+    pub embedding_dim: usize,
+}
+
+#[derive(Debug, Clone)]
 pub struct StoreMemoryInput {
     pub id: String,
     pub workspace_id: String,
@@ -42,6 +51,10 @@ pub struct StoreMemoryInput {
     pub metadata: HashMap<String, String>,
     pub created_at: i64,
     pub embedding: Option<Vec<f32>>,
+    pub embedding_model: Option<String>,
+    pub embedding_provider: Option<String>,
+    pub embedding_dim: Option<usize>,
+    pub additional_embeddings: Vec<AdditionalEmbeddingInput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

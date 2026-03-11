@@ -5,6 +5,8 @@ use sqlx::{Pool, Sqlite};
 use std::sync::Arc;
 use tauri::State;
 
+pub const DEFAULT_LONG_CHAT_SCOPE_ID: &str = "global:long_chat:v1";
+
 #[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AgentEntity {
     pub id: String,
@@ -19,6 +21,23 @@ pub struct AgentEntity {
 #[derive(Clone)]
 pub struct AgentManager {
     db: Arc<Pool<Sqlite>>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ChatHistoryMessageDto {
+    pub id: String,
+    pub chat_scope_id: String,
+    pub role: String,
+    pub content: String,
+    pub created_at: String,
+    pub cursor_rowid: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ChatHistoryWindowDto {
+    pub messages: Vec<ChatHistoryMessageDto>,
+    pub has_more: bool,
+    pub next_cursor_rowid: Option<i64>,
 }
 
 impl AgentManager {
@@ -79,6 +98,74 @@ impl AgentManager {
         .fetch_all(&*self.db)
         .await?;
         Ok(messages)
+    }
+
+    pub async fn get_history_window(
+        &self,
+        chat_scope_id: &str,
+        cursor_rowid: Option<i64>,
+        limit: usize,
+    ) -> Result<ChatHistoryWindowDto, sqlx::Error> {
+        let safe_limit = limit.clamp(1, 200) as i64;
+        let rows = if let Some(cursor) = cursor_rowid {
+            sqlx::query_as::<_, (i64, String, String, String, String, String)>(
+                "SELECT rowid, id, chat_id, role, content, created_at
+                 FROM messages
+                 WHERE chat_id = ? AND rowid < ?
+                 ORDER BY rowid DESC
+                 LIMIT ?",
+            )
+            .bind(chat_scope_id)
+            .bind(cursor)
+            .bind(safe_limit)
+            .fetch_all(&*self.db)
+            .await?
+        } else {
+            sqlx::query_as::<_, (i64, String, String, String, String, String)>(
+                "SELECT rowid, id, chat_id, role, content, created_at
+                 FROM messages
+                 WHERE chat_id = ?
+                 ORDER BY rowid DESC
+                 LIMIT ?",
+            )
+            .bind(chat_scope_id)
+            .bind(safe_limit)
+            .fetch_all(&*self.db)
+            .await?
+        };
+
+        let oldest_cursor = rows.last().map(|row| row.0);
+        let has_more = if let Some(oldest) = oldest_cursor {
+            let (count,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(1) as count FROM messages WHERE chat_id = ? AND rowid < ?",
+            )
+            .bind(chat_scope_id)
+            .bind(oldest)
+            .fetch_one(&*self.db)
+            .await?;
+            count > 0
+        } else {
+            false
+        };
+
+        let mut messages: Vec<ChatHistoryMessageDto> = rows
+            .into_iter()
+            .map(|(cursor_rowid, id, chat_id, role, content, created_at)| ChatHistoryMessageDto {
+                id,
+                chat_scope_id: chat_id,
+                role,
+                content,
+                created_at,
+                cursor_rowid,
+            })
+            .collect();
+        messages.reverse();
+
+        Ok(ChatHistoryWindowDto {
+            messages,
+            has_more,
+            next_cursor_rowid: oldest_cursor,
+        })
     }
 
     pub async fn clear_history(&self, chat_id: &str) -> Result<(), sqlx::Error> {
@@ -314,6 +401,24 @@ pub async fn compact_session_cmd(
 ) -> Result<(), String> {
     state
         .compact_session(&chat_id, &summary_content, keep_recent_count)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_default_chat_scope() -> Result<String, String> {
+    Ok(DEFAULT_LONG_CHAT_SCOPE_ID.to_string())
+}
+
+#[tauri::command]
+pub async fn get_chat_history_window(
+    state: State<'_, AgentManager>,
+    chat_scope_id: String,
+    cursor_rowid: Option<i64>,
+    limit: Option<usize>,
+) -> Result<ChatHistoryWindowDto, String> {
+    state
+        .get_history_window(&chat_scope_id, cursor_rowid, limit.unwrap_or(100))
         .await
         .map_err(|e| e.to_string())
 }

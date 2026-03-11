@@ -71,12 +71,22 @@ impl MemoryVaultService {
             &metadata_json,
         )?;
 
+        let embedding_dim = input.embedding_dim.unwrap_or(super::types::EMBEDDING_DIM);
+        let embedding_model = input
+            .embedding_model
+            .clone()
+            .unwrap_or_else(|| super::types::EMBEDDING_MODEL.to_string());
+        let embedding_provider = input
+            .embedding_provider
+            .clone()
+            .unwrap_or_else(|| super::types::EMBEDDING_PROVIDER.to_string());
+
         let valid_embedding = if let Some(emb) = input.embedding {
-            if emb.len() != super::types::EMBEDDING_DIM {
+            if emb.len() != embedding_dim {
                 println!(
                     "Warning: Invalid embedding dimension {} (expected {}) for vault entry {}. Storing without embedding.",
                     emb.len(),
-                    super::types::EMBEDDING_DIM,
+                    embedding_dim,
                     input.id
                 );
                 None
@@ -110,12 +120,57 @@ impl MemoryVaultService {
             metadata_ciphertext: Some(metadata.ciphertext),
             metadata_nonce: Some(metadata.nonce),
             embedding: embedding_bytes,
-            embedding_model: Some(super::types::EMBEDDING_MODEL.to_string()),
-            embedding_provider: Some(super::types::EMBEDDING_PROVIDER.to_string()),
-            embedding_dim: Some(super::types::EMBEDDING_DIM),
+            embedding_model: Some(embedding_model),
+            embedding_provider: Some(embedding_provider),
+            embedding_dim: Some(embedding_dim),
         };
 
-        self.repository.upsert_encrypted(&row, 1).await
+        self.repository.upsert_encrypted(&row, 1).await?;
+
+        if let Some(primary_emb) = valid_embedding {
+            let mut bytes = Vec::with_capacity(primary_emb.len() * 4);
+            for f in primary_emb {
+                bytes.extend_from_slice(&f.to_le_bytes());
+            }
+            let _ = self
+                .repository
+                .upsert_embedding_vector(
+                    &row.id,
+                    &row.workspace_id,
+                    row.embedding_model.as_deref().unwrap_or(super::types::EMBEDDING_MODEL),
+                    row.embedding_provider
+                        .as_deref()
+                        .unwrap_or(super::types::EMBEDDING_PROVIDER),
+                    row.embedding_dim.unwrap_or(super::types::EMBEDDING_DIM),
+                    bytes,
+                    row.created_at,
+                )
+                .await;
+        }
+
+        for extra in input.additional_embeddings {
+            if extra.embedding.len() != extra.embedding_dim {
+                continue;
+            }
+            let mut bytes = Vec::with_capacity(extra.embedding.len() * 4);
+            for f in extra.embedding {
+                bytes.extend_from_slice(&f.to_le_bytes());
+            }
+            let _ = self
+                .repository
+                .upsert_embedding_vector(
+                    &row.id,
+                    &row.workspace_id,
+                    &extra.embedding_model,
+                    &extra.embedding_provider,
+                    extra.embedding_dim,
+                    bytes,
+                    row.created_at,
+                )
+                .await;
+        }
+
+        Ok(())
     }
 
     pub async fn search_workspace(
@@ -170,18 +225,61 @@ impl MemoryVaultService {
         query_embedding: &[f32],
         limit: usize,
     ) -> Result<(Vec<(DecryptedMemoryEntry, f32)>, VectorSearchMode), String> {
+        let primary_model = crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.model;
+        let fallback_model =
+            crate::services::memory_vault::profiles::FALLBACK_EMBEDDING_PROFILE.model;
+        let embedding_dim = super::types::EMBEDDING_DIM;
+
         let (rows, mode) = match self
             .repository
-            .search_workspace_vector_ann(workspace_id, query_embedding, limit)
+            .search_workspace_vector_ann_for_model(
+                workspace_id,
+                query_embedding,
+                limit,
+                primary_model,
+                embedding_dim,
+            )
             .await
         {
-            Ok(rows) => (rows, VectorSearchMode::Ann),
-            Err(_) => (
-                self.repository
-                    .search_workspace_vector_exact(workspace_id, query_embedding, limit)
-                    .await?,
-                VectorSearchMode::Exact,
-            ),
+            Ok(rows) if !rows.is_empty() => (rows, VectorSearchMode::Ann),
+            _ => match self
+                .repository
+                .search_workspace_vector_ann_for_model(
+                    workspace_id,
+                    query_embedding,
+                    limit,
+                    fallback_model,
+                    embedding_dim,
+                )
+                .await
+            {
+                Ok(rows) if !rows.is_empty() => (rows, VectorSearchMode::Ann),
+                _ => match self
+                    .repository
+                    .search_workspace_vector_exact_for_model(
+                        workspace_id,
+                        query_embedding,
+                        limit,
+                        primary_model,
+                        embedding_dim,
+                    )
+                    .await
+                {
+                    Ok(rows) if !rows.is_empty() => (rows, VectorSearchMode::Exact),
+                    _ => (
+                        self.repository
+                            .search_workspace_vector_exact_for_model(
+                                workspace_id,
+                                query_embedding,
+                                limit,
+                                fallback_model,
+                                embedding_dim,
+                            )
+                            .await?,
+                        VectorSearchMode::Exact,
+                    ),
+                },
+            },
         };
         let mut results = Vec::new();
 
@@ -348,6 +446,10 @@ impl MemoryVaultService {
                 metadata,
                 created_at: timestamp,
                 embedding: None,
+                embedding_model: None,
+                embedding_provider: None,
+                embedding_dim: None,
+                additional_embeddings: Vec::new(),
             })
             .await?;
         }
@@ -364,7 +466,7 @@ impl MemoryVaultService {
     }
 
     async fn run_reembed_backfill(&self) -> Result<(), String> {
-        let migration_key = "migrate_memory_reembed_3072_v1";
+        let migration_key = "migrate_memory_reembed_active_profile_v2";
         if self.repository.migration_completed(migration_key).await? {
             return Ok(());
         }
@@ -376,8 +478,18 @@ impl MemoryVaultService {
             .repository
             .conn()
             .query(
-                "SELECT id FROM memory_vault_entries WHERE embedding IS NULL OR embedding_dim != 3072",
-                (),
+                "SELECT e.id
+                 FROM memory_vault_entries e
+                 LEFT JOIN memory_vault_embedding_vectors v
+                   ON v.entry_id = e.id AND v.embedding_model = ?2
+                 WHERE e.embedding IS NULL
+                    OR e.embedding_dim != ?1
+                    OR e.embedding_model != ?2
+                    OR v.entry_id IS NULL",
+                (
+                    super::types::EMBEDDING_DIM as i64,
+                    super::types::EMBEDDING_MODEL.to_string(),
+                ),
             )
             .await
             .map_err(|e| format!("Failed to query rows for backfill: {}", e))?;
@@ -396,8 +508,10 @@ impl MemoryVaultService {
         }
 
         println!(
-            "Found {} rows needing 3072 dimension re-embedding.",
-            ids_to_reembed.len()
+            "Found {} rows needing '{}' re-embedding (dim {}).",
+            ids_to_reembed.len(),
+            super::types::EMBEDDING_MODEL,
+            super::types::EMBEDDING_DIM
         );
 
         // In a real production system, this should be done in a background task queue.
@@ -440,7 +554,9 @@ impl MemoryVaultService {
         for id in ids_to_reembed {
             if let Ok(Some(entry)) = self.get_by_id(&id).await {
                 // If the entry already has the right dimensions (e.g. was processed in another thread/session), skip.
-                if entry.embedding_dim == Some(3072) {
+                if entry.embedding_dim == Some(super::types::EMBEDDING_DIM)
+                    && entry.embedding_model.as_deref() == Some(super::types::EMBEDDING_MODEL)
+                {
                     continue;
                 }
                 match embedder.embed_text(&entry.content).await {
@@ -456,6 +572,10 @@ impl MemoryVaultService {
                                 metadata: entry.metadata,
                                 created_at: entry.created_at,
                                 embedding: Some(new_embedding),
+                                embedding_model: Some(super::types::EMBEDDING_MODEL.to_string()),
+                                embedding_provider: Some(super::types::EMBEDDING_PROVIDER.to_string()),
+                                embedding_dim: Some(super::types::EMBEDDING_DIM),
+                                additional_embeddings: Vec::new(),
                             })
                             .await;
                     }

@@ -134,14 +134,58 @@ impl AgentMemory {
             tags.push(format!("tool:{}", tool));
         }
 
-        let embed_res = self.embedder.embed_text(&content).await;
-        let embedding = match embed_res {
-            Ok(vec) => Some(vec),
-            Err(e) => {
-                println!("Failed to embed memory: {}", e);
-                None
+        let active_model = crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.model;
+        let fallback_model =
+            crate::services::memory_vault::profiles::FALLBACK_EMBEDDING_PROFILE.model;
+        let provider = self.embedder.provider_name().to_string();
+
+        let mut embedding_model = active_model.to_string();
+        let mut embedding = None;
+        let mut additional_embeddings = Vec::new();
+
+        match self.embedder.embed_text_for_model(&content, active_model).await {
+            Ok(vec) => {
+                embedding = Some(vec);
+                if fallback_model != active_model {
+                    if let Ok(fallback_vec) = self
+                        .embedder
+                        .embed_text_for_model(&content, fallback_model)
+                        .await
+                    {
+                        additional_embeddings.push(
+                            crate::services::memory_vault::AdditionalEmbeddingInput {
+                                embedding: fallback_vec,
+                                embedding_model: fallback_model.to_string(),
+                                embedding_provider: provider.clone(),
+                                embedding_dim: crate::services::memory_vault::EMBEDDING_DIM,
+                            },
+                        );
+                    }
+                }
             }
-        };
+            Err(active_err) => {
+                if fallback_model != active_model {
+                    match self
+                        .embedder
+                        .embed_text_for_model(&content, fallback_model)
+                        .await
+                    {
+                        Ok(vec) => {
+                            embedding_model = fallback_model.to_string();
+                            embedding = Some(vec);
+                        }
+                        Err(fallback_err) => {
+                            println!(
+                                "Failed to embed memory with active '{}' and fallback '{}': {} | {}",
+                                active_model, fallback_model, active_err, fallback_err
+                            );
+                        }
+                    }
+                } else {
+                    println!("Failed to embed memory: {}", active_err);
+                }
+            }
+        }
 
         let _ = self
             .vault
@@ -155,6 +199,10 @@ impl AgentMemory {
                 metadata: metadata.clone(),
                 created_at: timestamp,
                 embedding,
+                embedding_model: Some(embedding_model),
+                embedding_provider: Some(provider),
+                embedding_dim: Some(crate::services::memory_vault::EMBEDDING_DIM),
+                additional_embeddings,
             })
             .await;
 
@@ -332,6 +380,14 @@ impl AgentMemory {
                     metadata: entry.metadata,
                     created_at: entry.timestamp,
                     embedding: None,
+                    embedding_model: Some(
+                        crate::services::memory_vault::EMBEDDING_MODEL.to_string(),
+                    ),
+                    embedding_provider: Some(
+                        crate::services::memory_vault::EMBEDDING_PROVIDER.to_string(),
+                    ),
+                    embedding_dim: Some(crate::services::memory_vault::EMBEDDING_DIM),
+                    additional_embeddings: Vec::new(),
                 })
                 .await;
         }

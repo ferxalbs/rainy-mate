@@ -154,6 +154,11 @@ export interface AgentMessage {
     verificationRequired?: boolean;
   };
   specialists?: SpecialistRunState[];
+  ragTelemetry?: {
+    historySource?: string;
+    retrievalMode?: string;
+    embeddingProfile?: string;
+  };
 }
 
 export interface SpecialistRunState {

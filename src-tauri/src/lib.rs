@@ -648,6 +648,8 @@ pub fn run() {
             manager::load_agents_from_db,
             manager::save_chat_message,
             manager::get_chat_history,
+            manager::get_chat_history_window,
+            manager::get_default_chat_scope,
             manager::clear_chat_history,
             manager::compact_session_cmd,
             crate::services::mcp_http::handle_mcp_request,
