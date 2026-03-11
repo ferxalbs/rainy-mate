@@ -3,16 +3,74 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeHighlight from "rehype-highlight";
 import { Copy, Check } from "lucide-react";
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@heroui/react";
 import "highlight.js/styles/github-dark.css";
+import type { Components } from "react-markdown";
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
 }
 
-export function MarkdownRenderer({
+const remarkPlugins = [remarkGfm];
+const rehypePlugins = [rehypeSanitize, rehypeHighlight];
+
+// Hoist remarkPlugins, rehypePlugins, and components outside the component body
+// This ensures their references remain stable across re-renders.
+// Without this, passing inline arrays/objects to ReactMarkdown causes
+// referential inequality on every render, triggering expensive AST re-parsing.
+const components: Components = {
+  // Custom Code Block with Copy Button
+  pre: ({ node, children, ...props }) => {
+    return (
+      <div className="relative group my-4 rounded-xl overflow-hidden border border-border/50 bg-neutral-900/90 shadow-sm">
+        <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/5">
+          <div className="flex gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500/20" />
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/20" />
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500/20" />
+          </div>
+          <CodeCopyBtn>{children}</CodeCopyBtn>
+        </div>
+        <pre
+          {...props}
+          className="p-4 overflow-x-auto text-[13px] leading-relaxed font-mono custom-scrollbar"
+        >
+          {children}
+        </pre>
+      </div>
+    );
+  }, // Styling other elements
+  table: ({ node, ...props }) => (
+    <div className="overflow-x-auto my-4 rounded-lg border border-border/50">
+      <table className="w-full text-left text-sm" {...props} />
+    </div>
+  ),
+  thead: ({ node, ...props }) => (
+    <thead
+      className="bg-muted/50 text-muted-foreground font-medium"
+      {...props}
+    />
+  ),
+  th: ({ node, ...props }) => (
+    <th className="px-4 py-2 font-medium" {...props} />
+  ),
+  td: ({ node, ...props }) => (
+    <td className="px-4 py-2 border-t border-border/50" {...props} />
+  ),
+  blockquote: ({ node, ...props }) => (
+    <blockquote
+      className="border-l-4 border-primary/50 pl-4 py-1 italic bg-primary/5 rounded-r-lg my-4"
+      {...props}
+    />
+  ),
+};
+
+// Wrap the component in React.memo to prevent unnecessary re-renders
+// when the parent component updates (e.g., during chat streaming updates),
+// unless the 'content' or 'className' props change.
+export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   content,
   className = "",
 }: MarkdownRendererProps) {
@@ -26,60 +84,15 @@ export function MarkdownRenderer({
         ${className}`}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeSanitize, rehypeHighlight]}
-        components={{
-          // Custom Code Block with Copy Button
-          pre: ({ node, children, ...props }) => {
-            return (
-              <div className="relative group my-4 rounded-xl overflow-hidden border border-border/50 bg-neutral-900/90 shadow-sm">
-                <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/5">
-                  <div className="flex gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-500/20" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/20" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500/20" />
-                  </div>
-                  <CodeCopyBtn>{children}</CodeCopyBtn>
-                </div>
-                <pre
-                  {...props}
-                  className="p-4 overflow-x-auto text-[13px] leading-relaxed font-mono custom-scrollbar"
-                >
-                  {children}
-                </pre>
-              </div>
-            );
-          }, // Styling other elements
-          table: ({ node, ...props }) => (
-            <div className="overflow-x-auto my-4 rounded-lg border border-border/50">
-              <table className="w-full text-left text-sm" {...props} />
-            </div>
-          ),
-          thead: ({ node, ...props }) => (
-            <thead
-              className="bg-muted/50 text-muted-foreground font-medium"
-              {...props}
-            />
-          ),
-          th: ({ node, ...props }) => (
-            <th className="px-4 py-2 font-medium" {...props} />
-          ),
-          td: ({ node, ...props }) => (
-            <td className="px-4 py-2 border-t border-border/50" {...props} />
-          ),
-          blockquote: ({ node, ...props }) => (
-            <blockquote
-              className="border-l-4 border-primary/50 pl-4 py-1 italic bg-primary/5 rounded-r-lg my-4"
-              {...props}
-            />
-          ),
-        }}
+        remarkPlugins={remarkPlugins as any}
+        rehypePlugins={rehypePlugins as any}
+        components={components as any}
       >
         {content}
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 
 
