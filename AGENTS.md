@@ -719,4 +719,80 @@ The CHANGELOG entry for a breaking change must include:
 
 ---
 
+## 20. Design System Rules (Mandatory)
+
+Before implementing ANY UI component or visual design, you MUST follow these rules:
+
+### 20.1 Component Library Selection
+
+**Always ask the user** which component library to use before starting any UI work:
+
+| Library | When to Use | MCP Server |
+|---------|-------------|------------|
+| **shadcn/ui** | Default choice for modern, accessible components | Use `shadcn` MCP server |
+| **HeroUI v3** | When compound components or specific HeroUI features are needed | Use HeroUI MCP server |
+
+> **IMPORTANT**: Never assume which library to use. Ask the user explicitly: "Should I use shadcn/ui or HeroUI v3 for this component?"
+
+### 20.2 Background Opacity Standards
+
+Apply background opacity based on the theme mode and component context:
+
+| Context | Light Mode | Dark Mode |
+|---------|-------------|------------|
+| **Overlay/Modal** | `bg-background/85` | `bg-background/20` |
+| **Cards/Panels** | `bg-background/80` | `bg-background/30` |
+| **Floating Elements** | `bg-background/90` | `bg-background/20` |
+| **Sidebar/Navigation** | `bg-background/95` | `bg-background/10` |
+
+### 20.3 Backdrop Blur Standards
+
+Use backdrop blur to create depth and separation between layers:
+
+| Blur Level | Use Case | Tailwind Class |
+|------------|----------|----------------|
+| **Medium (Default)** | Cards, modals, dropdowns | `backdrop-blur-md` |
+| **Extra Large** | Full-screen overlays, hero sections | `backdrop-blur-2xl` |
+| **Subtle** | Navigation bars, sticky headers | `backdrop-blur-sm` |
+
+### 20.4 Complete Design Pattern
+
+**Standard glass morphism card:**
+```tsx
+// Light mode
+<div className="backdrop-blur-md bg-background/80 border border-white/20 rounded-xl shadow-lg">
+
+// Dark mode
+<div className="backdrop-blur-md bg-background/30 border border-gray-700/50 rounded-xl shadow-lg">
+```
+
+**Modal overlay:**
+```tsx
+// Light mode
+<div className="fixed inset-0 backdrop-blur-md bg-black/40 flex items-center justify-center">
+  <div className="backdrop-blur-md bg-background/85 rounded-2xl shadow-2xl p-8">
+
+// Dark mode  
+<div className="fixed inset-0 backdrop-blur-md bg-black/60 flex items-center justify-center">
+  <div className="backdrop-blur-md bg-background/20 rounded-2xl shadow-2xl p-8">
+```
+
+**Sticky navigation:**
+```tsx
+// Light mode
+<nav className="sticky top-0 z-50 backdrop-blur-md bg-background/90 border-b border-gray-200/50>
+
+// Dark mode
+<nav className="sticky top-0 z-50 backdrop-blur-md bg-background/20 border-b border-gray-700/50>
+```
+
+### 20.5 Accessibility Considerations
+
+- Always ensure sufficient contrast ratios (WCAG 2.1 AA standard)
+- Test text readability against blurred backgrounds
+- Consider users with motion sensitivity
+- Provide alternative high-contrast mode when needed
+
+---
+
 **End of AGENTS.md**
