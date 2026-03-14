@@ -599,6 +599,7 @@ impl AIProvider for GeminiProviderAdapter {
             .or_else(|| self.config.params.get("thinking_level"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
+            .or_else(|| request.reasoning_effort.clone())
             .or_else(|| extract_thinking_level(&request.model));
         let tool_config = build_tool_config(request.tools.as_deref(), request.tool_choice.as_ref());
 
@@ -743,6 +744,7 @@ impl AIProvider for GeminiProviderAdapter {
             .or_else(|| self.config.params.get("thinking_level"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
+            .or_else(|| request.reasoning_effort.clone())
             .or_else(|| extract_thinking_level(&request.model));
         let tool_config = build_tool_config(request.tools.as_deref(), request.tool_choice.as_ref());
 

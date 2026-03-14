@@ -375,6 +375,8 @@ pub struct ChatCompletionRequest {
     pub tool_choice: Option<ToolChoice>,
     /// Whether to enforce JSON mode
     pub json_mode: bool,
+    /// Optional reasoning effort / thinking level for compatible models
+    pub reasoning_effort: Option<String>,
 }
 
 impl Default for ChatCompletionRequest {
@@ -392,6 +394,7 @@ impl Default for ChatCompletionRequest {
             tools: None,
             tool_choice: None,
             json_mode: false,
+            reasoning_effort: None,
         }
     }
 }

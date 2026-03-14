@@ -679,6 +679,7 @@ export function useAgentChat() {
       modelId: string,
       workspaceId: string,
       agentSpecId?: string,
+      reasoningEffort?: string,
     ) => {
       const resolvedChatScopeId = await ensureChatScope().catch((error) => {
         console.error("Failed to resolve chat scope, using fallback:", error);
@@ -707,6 +708,7 @@ export function useAgentChat() {
           runId: clientRunId,
           prompt: instruction,
           modelId,
+          reasoningEffort,
           workspaceId,
           agentSpecId,
           chatScopeId: resolvedChatScopeId,
@@ -731,6 +733,7 @@ export function useAgentChat() {
         void captureForgeStep("agent_run_requested", "run_agent_workflow", {
           workspaceId,
           modelId,
+          reasoningEffort: reasoningEffort || null,
           agentSpecId: agentSpecId || null,
         });
         const { listen } = await import("@tauri-apps/api/event");
@@ -1079,6 +1082,7 @@ export function useAgentChat() {
           agentSpecId,
           resolvedChatScopeId,
           clientRunId,
+          reasoningEffort,
         );
 
         setMessages((prev) =>
@@ -1194,6 +1198,7 @@ export function useAgentChat() {
       target.requestContext.modelId || "rainy:gpt-5",
       target.requestContext.workspaceId || ".",
       target.requestContext.agentSpecId,
+      target.requestContext.reasoningEffort,
     );
   }, [messages, runNativeAgent]);
 

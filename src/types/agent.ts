@@ -166,6 +166,7 @@ export interface AgentMessage {
     runId?: string;
     prompt?: string;
     modelId?: string;
+    reasoningEffort?: string;
     workspaceId?: string;
     agentSpecId?: string;
     chatScopeId?: string;

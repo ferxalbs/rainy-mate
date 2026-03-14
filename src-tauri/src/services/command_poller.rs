@@ -870,6 +870,7 @@ impl CommandPoller {
                             },
                             // Use the agentSystemPrompt from payload if available.
                             // This ensures the Cloud's "Soul" (instructions, personality) is respected
+                            reasoning_effort: None,
                             // even if we load a local (potentially stale) spec.
                             custom_system_prompt: agent_system_prompt.clone(),
                             streaming_enabled: Some(false),

@@ -40,11 +40,7 @@ export function AgentSelector({
       <PopoverTrigger>
         <Button
           variant="ghost"
-          className={`h-auto py-1.5 px-3 gap-2 font-normal rounded-full transition-all duration-300
-            bg-white/50 dark:bg-black/20 
-            border border-black/5 dark:border-white/5
-            hover:bg-black/5 dark:hover:bg-white/5
-            backdrop-blur-md
+          className={`h-9 min-w-[10rem] justify-between gap-2 rounded-lg border border-white/8 bg-background/70 px-3 py-2 font-normal shadow-none backdrop-blur-sm backdrop-saturate-150 transition-all hover:bg-background/85 dark:bg-background/10 dark:hover:bg-background/16
             ${className}`}
         >
           {selectedAgent ? (
@@ -72,7 +68,7 @@ export function AgentSelector({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-80 p-0 bg-background/60 backdrop-blur-2xl dark:bg-background/20 border border-white/10 rounded-lg overflow-hidden">
+      <PopoverContent align="start" className="w-80 overflow-hidden rounded-lg border border-white/10 bg-background/90 p-0 shadow-[0_16px_48px_rgba(0,0,0,0.16)] backdrop-blur-xl backdrop-saturate-150 dark:bg-background/20">
         <div className="flex flex-col">
           {/* Search */}
           <div className="p-3 border-b border-border/10">
@@ -82,7 +78,7 @@ export function AgentSelector({
                 placeholder="Search agents..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-background/30 w-full pl-9 h-9 rounded-lg border-transparent focus:border-primary/20 transition-all text-white/50 dark:text-white/50"
+                className="h-9 w-full rounded-lg border-white/8 bg-background/70 pl-9 backdrop-blur-sm dark:bg-background/20"
               />
             </div>
           </div>
@@ -98,8 +94,8 @@ export function AgentSelector({
                 }}
                 className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left transition-all duration-200 group ${
                   !selectedAgentId
-                    ? "bg-secondary/80 text-foreground ring-1 ring-border/50 shadow-sm"
-                    : "hover:bg-muted/50 text-foreground/80 hover:text-foreground"
+                    ? "border border-primary/20 bg-primary/10 text-foreground"
+                    : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground"
                 }`}
               >
                 <div className="flex items-center justify-center shrink-0 w-5 h-5">
@@ -137,8 +133,8 @@ export function AgentSelector({
                     }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left transition-all duration-200 group ${
                       selectedAgentId === agent.id
-                        ? "bg-secondary/80 text-foreground ring-1 ring-border/50 shadow-sm"
-                        : "hover:bg-muted/50 text-foreground/80 hover:text-foreground"
+                        ? "border border-primary/20 bg-primary/10 text-foreground"
+                        : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground"
                     }`}
                   >
                     <div className="flex items-center justify-center shrink-0 w-5 h-5">

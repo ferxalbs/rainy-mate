@@ -1,30 +1,32 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  TooltipProvider
-} from "../ui/tooltip";
-import { ScrollArea } from "../ui/scroll-area";
-import * as tauri from "../../services/tauri";
-import {
-  Paperclip,
   ArrowUp,
+  Brain,
+  ChevronDown,
+  Compass,
   Eraser,
-  Trash2,
-  Zap,
+  FileText,
+  Gamepad2,
+  Mic,
+  Paperclip,
+  PenTool,
   Sparkles,
-  Circle,
-  Square,
-  Wrench,
-  ChevronDown
+  Trash2,
 } from "lucide-react";
-import { useAgentChat } from "../../hooks/useAgentChat";
+
+import * as tauri from "../../services/tauri";
+import { cn } from "../../lib/utils";
 import { useTheme } from "../../hooks/useTheme";
+import { useAgentChat } from "../../hooks/useAgentChat";
+import type { AgentSpec } from "../../types/agent-spec";
+import type { UnifiedModel } from "../ai/UnifiedModelSelector";
+import { UnifiedModelSelector, getReasoningOptions } from "../ai/UnifiedModelSelector";
+import { MessageBubble } from "./MessageBubble";
+import { AgentSelector } from "./AgentSelector";
 import { MacOSToggle } from "../layout/MacOSToggle";
-import { toast } from "sonner";
+import { Badge } from "../ui/badge";
+import { Button, buttonVariants } from "../ui/button";
+import { ScrollArea } from "../ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -32,16 +34,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-
-import { UnifiedModelSelector } from "../ai/UnifiedModelSelector";
-import { AgentSelector } from "./AgentSelector";
-import { MessageBubble } from "./MessageBubble";
-import type { AgentSpec } from "../../types/agent-spec";
-import type {
-  ForgeRecordingMetrics,
-  ForgeValidationResult,
-  RecordedWorkflow,
-} from "../../services/tauri";
+import { Textarea } from "../ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
 
 interface AgentChatPanelProps {
   workspacePath: string;
@@ -50,157 +49,58 @@ interface AgentChatPanelProps {
   className?: string;
 }
 
+const PROMPTS = [
+  {
+    icon: Gamepad2,
+    title: "Build a classic Snake game in this repo.",
+    prompt: "Build a classic Snake game in this repo.",
+    accent: "text-sky-500",
+  },
+  {
+    icon: FileText,
+    title: "Create a one-page PDF that summarizes this app.",
+    prompt: "Create a one-page pdf that summarizes this app.",
+    accent: "text-rose-500",
+  },
+  {
+    icon: PenTool,
+    title: "Create a plan to modernize the current workflow.",
+    prompt: "Create a plan to modernize the current workflow.",
+    accent: "text-amber-500",
+  },
+];
+
+function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function useAutoResizeTextarea(
+  ref: React.RefObject<HTMLTextAreaElement | null>,
+  value: string,
+  maxHeight: number,
+) {
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    element.style.height = "0px";
+    element.style.height = `${Math.min(element.scrollHeight, maxHeight)}px`;
+  }, [maxHeight, ref, value]);
+}
+
 export function AgentChatPanel({
   workspacePath,
   onClose,
-  // onOpenSettings,
+  className,
 }: AgentChatPanelProps) {
   const { mode, setMode } = useTheme();
   const [input, setInput] = useState("");
-  const [currentModelId, setCurrentModelId] = useState<string>("");
+  const [currentModelId, setCurrentModelId] = useState("");
+  const [selectedModel, setSelectedModel] = useState<UnifiedModel | null>(null);
+  const [reasoningEffort, setReasoningEffort] = useState<string | undefined>(undefined);
   const [agentSpecs, setAgentSpecs] = useState<AgentSpec[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
-  const [forgeRecordingId, setForgeRecordingId] = useState<string | null>(null);
-  const [isForgeRecording, setIsForgeRecording] = useState(false);
-  const [isForgeBusy, setIsForgeBusy] = useState(false);
-  const [isForgeValidating, setIsForgeValidating] = useState(false);
-  const [pendingForgeSpec, setPendingForgeSpec] = useState<any | null>(null);
-  const [pendingForgeRecordingId, setPendingForgeRecordingId] =
-    useState<string | null>(null);
-  const [stoppedForgeRecordingId, setStoppedForgeRecordingId] = useState<
-    string | null
-  >(null);
-  const [forgeMetrics, setForgeMetrics] = useState<ForgeRecordingMetrics | null>(
-    null,
-  );
-  const [forgeValidation, setForgeValidation] =
-    useState<ForgeValidationResult | null>(null);
-  const [forgeStatusText, setForgeStatusText] = useState<string>("");
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const computeForgeMetrics = (
-    recording: RecordedWorkflow,
-  ): ForgeRecordingMetrics => {
-    const usefulKinds = new Set([
-      "user_instruction",
-      "agent_run",
-      "agent_run_requested",
-      "tool_call",
-      "tool_result",
-      "decision",
-      "error",
-      "retry",
-    ]);
-    const totalSteps = recording.steps.length;
-    const usefulSteps = recording.steps.filter((step) =>
-      usefulKinds.has(step.kind),
-    ).length;
-    const toolCallsCount = recording.steps.filter(
-      (step) => step.kind === "tool_call",
-    ).length;
-    const decisionPointsCount = recording.steps.filter(
-      (step) => step.kind === "decision",
-    ).length;
-    const errorsCount = recording.steps.filter(
-      (step) => step.kind === "error",
-    ).length;
-    const retriesCount = recording.steps.filter(
-      (step) => step.kind === "retry",
-    ).length;
-
-    const missingRequirements: string[] = [];
-    if (usefulSteps < 3) {
-      missingRequirements.push(
-        `Need at least 3 useful steps (currently ${usefulSteps})`,
-      );
-    }
-    if (toolCallsCount < 1) {
-      missingRequirements.push(
-        `Need at least 1 tool call (currently ${toolCallsCount})`,
-      );
-    }
-
-    return {
-      totalSteps,
-      usefulSteps,
-      toolCallsCount,
-      decisionPointsCount,
-      errorsCount,
-      retriesCount,
-      readyToGenerate: missingRequirements.length === 0,
-      missingRequirements,
-    };
-  };
-
-  // Initialize with default model if none selected
-  useEffect(() => {
-    const initModel = async () => {
-      try {
-        const model = await tauri.getSelectedModel();
-        if (model) setCurrentModelId(model);
-      } catch (e) {
-        console.error("Failed to load selected model", e);
-      }
-    };
-    initModel();
-  }, []);
-
-  const loadSpecs = async () => {
-    try {
-      const specs = (await tauri.listAgentSpecs()) as AgentSpec[];
-      setAgentSpecs(specs);
-      if (specs.length > 0) {
-        setSelectedAgentId((prev) => prev || specs[0].id);
-      }
-    } catch (e) {
-      console.error("Failed to load saved agents", e);
-    }
-  };
-
-  useEffect(() => {
-    loadSpecs();
-  }, []);
-
-  useEffect(() => {
-    const hydrateForgeState = async () => {
-      try {
-        const active = await tauri.getActiveWorkflowRecording();
-        if (active) {
-          setForgeRecordingId(active.id);
-          setIsForgeRecording(true);
-          setForgeMetrics(computeForgeMetrics(active));
-        }
-      } catch (e) {
-        console.error("Failed to hydrate forge recording state", e);
-      }
-    };
-    hydrateForgeState();
-  }, []);
-
-  useEffect(() => {
-    if (!isForgeRecording) return;
-    const timer = setInterval(async () => {
-      try {
-        const active = await tauri.getActiveWorkflowRecording();
-        if (active?.id) {
-          setForgeMetrics(computeForgeMetrics(active));
-        }
-      } catch {
-        // ignore transient polling errors
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isForgeRecording]);
-
-  const handleModelSelect = async (modelId: string) => {
-    setCurrentModelId(modelId);
-    try {
-      await tauri.setSelectedModel(modelId);
-    } catch (e) {
-      console.error("Failed to persist model selection", e);
-    }
-  };
 
   const {
     messages,
@@ -221,353 +121,250 @@ export function AgentChatPanel({
   } = useAgentChat();
 
   const isProcessing = isPlanning || isExecuting;
+  const reasoningOptions = useMemo(() => getReasoningOptions(selectedModel), [selectedModel]);
+  const workspaceName = useMemo(
+    () => workspacePath.split("/").filter(Boolean).pop() || "workspace",
+    [workspacePath],
+  );
   const latestTelemetry = [...messages]
     .reverse()
-    .find((m) => m.type === "agent" && m.ragTelemetry)?.ragTelemetry;
+    .find((message) => message.type === "agent" && message.ragTelemetry)?.ragTelemetry;
 
-  // Auto-scroll to bottom
+  useAutoResizeTextarea(textareaRef, input, messages.length === 0 ? 280 : 220);
+
+  useEffect(() => {
+    const initModel = async () => {
+      try {
+        const model = await tauri.getSelectedModel();
+        if (model) setCurrentModelId(model);
+      } catch (error) {
+        console.error("Failed to load selected model", error);
+      }
+    };
+
+    void initModel();
+  }, []);
+
+  useEffect(() => {
+    const loadSpecs = async () => {
+      try {
+        const specs = (await tauri.listAgentSpecs()) as AgentSpec[];
+        setAgentSpecs(specs);
+        if (specs.length > 0) {
+          setSelectedAgentId((previous) => previous || specs[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to load saved agents", error);
+      }
+    };
+
+    void loadSpecs();
+  }, []);
+
+  useEffect(() => {
+    void hydrateLongChatHistory();
+  }, [hydrateLongChatHistory]);
+
+  useEffect(() => {
+    if (!reasoningOptions.length) {
+      setReasoningEffort(undefined);
+      return;
+    }
+
+    setReasoningEffort((current) => {
+      if (current && reasoningOptions.includes(current)) return current;
+      return reasoningOptions.includes("medium") ? "medium" : reasoningOptions[0];
+    });
+  }, [reasoningOptions]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    hydrateLongChatHistory();
-  }, [hydrateLongChatHistory]);
+  const handleModelSelect = async (modelId: string) => {
+    setCurrentModelId(modelId);
+    try {
+      await tauri.setSelectedModel(modelId);
+    } catch (error) {
+      console.error("Failed to persist model selection", error);
+    }
+  };
+
+  const focusComposer = () => {
+    textareaRef.current?.focus();
+  };
+
+  const applyPrompt = (prompt: string) => {
+    setInput(prompt);
+    window.requestAnimationFrame(focusComposer);
+  };
 
   const handleSubmit = async () => {
-    if (!input.trim() || isProcessing) return;
     const instruction = input.trim();
+    if (!instruction || isProcessing) return;
+
     setInput("");
-
-    if (isForgeRecording && forgeRecordingId) {
-      try {
-        await tauri.recordWorkflowStep({
-          kind: "user_instruction",
-          label: instruction,
-          payload: {
-            modelId: currentModelId,
-            workspacePath,
-            selectedAgentId: selectedAgentId || null,
-          },
-        });
-      } catch (e) {
-        console.error("Failed to record forge step", e);
-      }
-    }
-
     await runNativeAgent(
       instruction,
       currentModelId,
       workspacePath,
       selectedAgentId || undefined,
+      reasoningOptions.length ? reasoningEffort : undefined,
     );
+  };
 
-    if (isForgeRecording && forgeRecordingId) {
-      try {
-        await tauri.recordWorkflowStep({
-          kind: "agent_run",
-          label: "run_agent_workflow",
-          payload: {
-            selectedAgentId: selectedAgentId || null,
-            modelId: currentModelId,
-          },
-        });
-      } catch (e) {
-        console.error("Failed to record forge run step", e);
-      }
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void handleSubmit();
     }
   };
 
-  const handleStartForgeRecording = async () => {
-    if (isForgeBusy || isForgeRecording) return;
-    setIsForgeBusy(true);
-    try {
-      const rec = await tauri.startWorkflowRecording({
-        title: `Forge Session ${new Date().toLocaleString()}`,
-      });
-      setForgeRecordingId(rec.id);
-      setStoppedForgeRecordingId(null);
-      setIsForgeRecording(true);
-      setForgeMetrics(computeForgeMetrics(rec));
-      setForgeValidation(null);
-      setForgeStatusText("Recording in progress.");
-      toast.success("Workflow recording started");
-    } catch (e: any) {
-      console.error("Failed to start workflow recording", e);
-      toast.error(e?.message ?? "Failed to start workflow recording");
-    } finally {
-      setIsForgeBusy(false);
-    }
-  };
+  const glassShell =
+    "border border-white/10 bg-background/90 shadow-[0_12px_40px_rgba(0,0,0,0.12)] backdrop-blur-md backdrop-saturate-150 dark:bg-background/20";
 
-  const handleStopForgeRecording = async () => {
-    if (isForgeBusy || !isForgeRecording || !forgeRecordingId) return;
-    setIsForgeBusy(true);
-    try {
-      const recording = await tauri.stopWorkflowRecording();
-      setForgeRecordingId(null);
-      setStoppedForgeRecordingId(recording.id);
-      setIsForgeRecording(false);
-      const metrics = computeForgeMetrics(recording);
-      setForgeMetrics(metrics);
-      if (metrics.readyToGenerate) {
-        setForgeStatusText(
-          `Recording stopped (${recording.stepCount} steps). Ready to generate specialist draft.`,
-        );
-      } else {
-        setForgeStatusText(
-          `Recording stopped (${recording.stepCount} steps). ${metrics.missingRequirements.join(" · ")}`,
-        );
-      }
-      toast.success("Workflow recording stopped");
-    } catch (e: any) {
-      console.error("Failed to stop workflow recording", e);
-      toast.error(e?.message ?? "Failed to stop workflow recording");
-    } finally {
-      setIsForgeBusy(false);
-    }
-  };
-
-  const handleGenerateForgeAgent = async () => {
-    if (isForgeBusy) return;
-    if (isForgeRecording) {
-      toast.error("Stop recording before generating the specialist draft.");
-      return;
-    }
-    if (!stoppedForgeRecordingId) {
-      toast.error("No stopped recording available to generate from.");
-      return;
-    }
-    if (forgeMetrics && !forgeMetrics.readyToGenerate) {
-      toast.error(forgeMetrics.missingRequirements.join(" · "));
-      return;
-    }
-    setIsForgeBusy(true);
-    try {
-      const generated = await tauri.generateAgentSpecFromRecording({
-        recordingId: stoppedForgeRecordingId,
-        agentName: `Forge Agent ${new Date().toLocaleTimeString()}`,
-      });
-      setPendingForgeSpec(generated.generatedSpec);
-      setPendingForgeRecordingId(generated.recording.id);
-      setForgeMetrics(generated.recordingMetrics);
-      setForgeValidation(null);
-      setForgeStatusText(
-        `Generated specialist draft from recording (${generated.recording.stepCount} steps). Run Test Draft before Save & Activate.`,
-      );
-      toast.success("Forge draft generated");
-    } catch (e: any) {
-      console.error("Failed to generate forge agent", e);
-      toast.error(e?.message ?? "Failed to generate Forge agent");
-    } finally {
-      setIsForgeBusy(false);
-    }
-  };
-
-  const handleValidateForgeDraft = async () => {
-    if (!pendingForgeSpec || isForgeValidating) return;
-    setIsForgeValidating(true);
-    try {
-      const result = await tauri.validateGeneratedAgent({
-        spec: pendingForgeSpec,
-        recordingId: pendingForgeRecordingId || undefined,
-      });
-      setForgeValidation(result);
-      if (result.passed) {
-        toast.success(`Validation passed (score ${result.totalScore})`);
-      } else {
-        toast.error(`Validation failed (score ${result.totalScore})`);
-      }
-    } catch (e: any) {
-      console.error("Failed to validate Forge draft", e);
-      toast.error(e?.message ?? "Failed to validate Forge draft");
-    } finally {
-      setIsForgeValidating(false);
-    }
-  };
-
-  const handleSaveForgeDraft = async () => {
-    if (!pendingForgeSpec || isForgeBusy) return;
-    if (!forgeValidation?.passed) {
-      toast.error("Run Test Draft and pass validation before Save & Activate.");
-      return;
-    }
-    setIsForgeBusy(true);
-    try {
-      const saved = await tauri.saveGeneratedAgent(pendingForgeSpec);
-      await tauri.saveAgentSpec(pendingForgeSpec);
-      setSelectedAgentId(pendingForgeSpec.id);
-      setPendingForgeSpec(null);
-      setPendingForgeRecordingId(null);
-      setForgeValidation(null);
-      setForgeStatusText(`Generated specialist "${saved.name}" saved and activated.`);
-      toast.success(`Generated "${saved.name}"`);
-      await loadSpecs();
-    } catch (e: any) {
-      console.error("Failed to save Forge draft", e);
-      toast.error(e?.message ?? "Failed to save Forge draft");
-    } finally {
-      setIsForgeBusy(false);
-    }
-  };
-
-  const handleDiscardForgeDraft = () => {
-    setPendingForgeSpec(null);
-    setPendingForgeRecordingId(null);
-    setForgeValidation(null);
-    setForgeStatusText("Forge draft discarded.");
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  const renderInputArea = (centered: boolean) => (
-    <div
-      className={`w-full max-w-2xl lg:max-w-3xl mx-auto transition-all duration-500 ${
-        centered ? "scale-100 opacity-100" : "scale-100 opacity-100"
-      }`}
-    >
-      <div
-        className={`relative group rounded-[28px] border transition-all duration-300 bg-background/40 backdrop-blur-xl border-white/10 shadow-lg`}
-      >
-        <Textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = 'auto';
-            target.style.height = `${Math.min(target.scrollHeight, 400)}px`;
-          }}
-          placeholder="Message Agent..."
-          rows={centered ? 2 : 1}
-          className={`w-full bg-transparent border-none shadow-none text-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 px-5 py-4 resize-none transition-all ${
-            centered
-              ? "text-lg tracking-tight min-h-[90px] max-h-[400px]"
-              : "text-base min-h-[50px] max-h-[400px]"
-          }`}
-          disabled={isProcessing}
-        />
-
-        <div className="flex items-center justify-between px-3 pb-3 mt-2">
-          <div className="flex items-center gap-2">
-            <TooltipProvider delay={0}>
-              <Tooltip>
-                <TooltipTrigger>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleStartForgeRecording}
-                  disabled={isForgeBusy || isForgeRecording}
-                  className="rounded-full w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-400/10"
-                >
-                  <Circle className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <span className="text-xs">Start Forge recording</span>
-              </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleStopForgeRecording}
-                  disabled={isForgeBusy || !isForgeRecording}
-                  className="rounded-full w-8 h-8 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-400/10"
-                >
-                  {isForgeBusy ? (
-                    <Wrench className="size-3.5 animate-spin" />
-                  ) : (
-                    <Square className="size-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <span className="text-xs">Stop Forge recording</span>
-              </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleGenerateForgeAgent}
-                  disabled={
-                    isForgeBusy ||
-                    isForgeRecording ||
-                    !stoppedForgeRecordingId ||
-                    (forgeMetrics ? !forgeMetrics.readyToGenerate : true)
-                  }
-                  className="rounded-full w-8 h-8 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-400/10"
-                >
-                  <Sparkles className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <span className="text-xs">Generate Forge specialist</span>
-              </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="text-muted-foreground/50 hover:text-foreground hover:bg-muted/50 rounded-full w-8 h-8"
-                >
-                  <Paperclip className="size-4" />
-                </Button>
-                </TooltipTrigger>
-              <TooltipContent>
-                <span className="text-xs">Attach files</span>
-              </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            <div className="w-px h-4 bg-border/20 mx-1" />
-
-            <AgentSelector
-              selectedAgentId={selectedAgentId}
-              onSelect={setSelectedAgentId}
-              agentSpecs={agentSpecs}
+  const renderComposer = (centered: boolean) => (
+    <div className={cn("mx-auto w-full transition-all duration-300", centered ? "max-w-3xl" : "max-w-2xl")}>
+      <div className={cn("relative overflow-hidden rounded-lg", glassShell)}>
+        <div className="relative z-10 flex flex-col gap-3 p-3">
+          <div className="rounded-lg border border-white/8 bg-background/70 px-3 py-2 backdrop-blur-sm dark:bg-background/10">
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask Codex anything, @ to add files, / for commands"
+              className={cn(
+                "min-h-[64px] w-full resize-none border-none bg-transparent px-0 py-0 text-sm text-foreground shadow-none outline-none ring-0 focus-visible:border-none focus-visible:ring-0",
+                centered ? "leading-6" : "min-h-[56px] leading-5",
+              )}
+              disabled={isProcessing}
             />
-
-            <UnifiedModelSelector
-              selectedModelId={currentModelId}
-              onSelect={handleModelSelect}
-            />
-
-            <Select defaultValue="auto">
-              <SelectTrigger className="h-8 border-none bg-muted/30 hover:bg-muted/50 rounded-full px-3 text-xs font-medium w-auto gap-1.5 focus:ring-0 shadow-none">
-                <Sparkles className="size-3 text-muted-foreground" />
-                <SelectValue placeholder="Reasoning" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="low">Low Effort</SelectItem>
-                <SelectItem value="auto">Auto</SelectItem>
-                <SelectItem value="high">High Effort</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
-          <div className="flex items-center gap-2 pr-2">
-            <Button
-              size="icon"
-              onClick={handleSubmit}
-              disabled={!input.trim() || isProcessing}
-              className={`rounded-full transition-all duration-300 shadow-sm ${
-                input.trim()
-                  ? "bg-foreground text-background scale-100 opacity-100 translate-y-0 hover:bg-foreground/90"
-                  : "bg-muted text-muted-foreground scale-90 opacity-0 translate-y-2 pointer-events-none"
-              }`}
-            >
-              {!isProcessing && <ArrowUp className="size-4" />}
-            </Button>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <TooltipProvider delay={0}>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        className={cn(
+                          buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                          "rounded-lg border border-white/8 bg-background/70 backdrop-blur-sm backdrop-saturate-150 hover:bg-background/85 dark:bg-background/10 dark:hover:bg-background/16",
+                        )}
+                      />
+                    }
+                  >
+                    <Sparkles className="size-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>Refine prompt</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        className={cn(
+                          buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                          "rounded-lg border border-white/8 bg-background/70 backdrop-blur-sm backdrop-saturate-150 hover:bg-background/85 dark:bg-background/10 dark:hover:bg-background/16",
+                        )}
+                      />
+                    }
+                  >
+                    <Paperclip className="size-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>Attach files</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <div className="h-5 w-px bg-border/60" />
+
+              <AgentSelector
+                selectedAgentId={selectedAgentId}
+                onSelect={setSelectedAgentId}
+                agentSpecs={agentSpecs}
+                className="min-w-[10rem]"
+              />
+
+              <UnifiedModelSelector
+                selectedModelId={currentModelId}
+                onSelect={handleModelSelect}
+                onModelResolved={setSelectedModel}
+              />
+
+              {reasoningOptions.length > 0 && (
+                <Select
+                  value={reasoningEffort}
+                  onValueChange={(value) => setReasoningEffort(value ?? undefined)}
+                >
+                  <SelectTrigger className="h-9 min-w-[9.5rem] rounded-lg border-white/8 bg-background/70 px-3 text-sm shadow-none backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10">
+                    <Brain className="size-4 text-amber-500" />
+                    <SelectValue placeholder="Thought effort" />
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    sideOffset={8}
+                    className="rounded-lg border-white/10 bg-background/90 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.16)] backdrop-blur-xl backdrop-saturate-150 dark:bg-background/20"
+                  >
+                    {reasoningOptions.map((option) => (
+                      <SelectItem key={option} value={option} className="rounded-md px-3 py-2">
+                        <span className="flex items-center gap-2">
+                          <span className="inline-flex rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">
+                            {titleCase(option)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {option === "minimal"
+                              ? "Lean, quick thinking"
+                              : option === "low"
+                                ? "Fast reasoning"
+                                : option === "medium"
+                                  ? "Balanced depth"
+                                  : "Maximum deliberation"}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 lg:justify-end">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="rounded-md border-white/8 bg-background/70 px-2 py-1 text-[10px] uppercase tracking-[0.16em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10">
+                  Local
+                </Badge>
+                {reasoningOptions.length > 0 && reasoningEffort && (
+                  <Badge className="rounded-md bg-amber-500/12 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-amber-800 dark:text-amber-200">
+                    {titleCase(reasoningEffort)} thought
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 rounded-lg border border-white/8 bg-background/70 backdrop-blur-sm backdrop-saturate-150 hover:bg-background/85 dark:bg-background/10 dark:hover:bg-background/16"
+                >
+                  <Mic className="size-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  onClick={() => void handleSubmit()}
+                  disabled={!input.trim() || isProcessing}
+                  className={cn(
+                    "size-9 rounded-lg bg-foreground text-background shadow-none transition-all hover:bg-foreground/90",
+                    (!input.trim() || isProcessing) && "scale-95 opacity-50",
+                  )}
+                >
+                  <ArrowUp className="size-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -575,272 +372,143 @@ export function AgentChatPanel({
   );
 
   return (
-    <div className="h-full w-full relative bg-transparent overflow-hidden text-foreground">
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background/50 to-background/80 pointer-events-none z-0" />
+    <div className={cn("relative h-full w-full overflow-hidden bg-transparent text-foreground", className)}>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_35%),linear-gradient(180deg,rgba(0,0,0,0.02),transparent_24%,rgba(0,0,0,0.08))] dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0),transparent_24%,rgba(0,0,0,0.22))]" />
 
-      <div className="absolute top-0 left-0 right-0 z-50 flex justify-end pt-6 pr-6 pointer-events-none">
-        <div
-          data-tauri-drag-region
-          className="absolute inset-x-0 top-0 h-20 pointer-events-auto z-0"
-        />
+      <div className="pointer-events-none absolute left-0 right-0 top-0 z-40 px-4 pt-5 md:px-6">
+        <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-24" />
 
-        <div className="relative z-10 flex items-center gap-1 p-1.5 rounded-full bg-background/60 backdrop-blur-2xl border border-white/10 shadow-lg pointer-events-auto transition-all hover:bg-background/80">
-          <MacOSToggle
-            isDark={mode === "dark"}
-            onToggle={(checked) => setMode(checked ? "dark" : "light")}
-          />
+        <div className="pointer-events-auto mx-auto flex w-full max-w-5xl items-center justify-between gap-3 rounded-lg border border-white/10 bg-background/95 px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.1)] backdrop-blur-md backdrop-saturate-150 dark:bg-background/20">
+          <div className="flex min-w-0 items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-2 rounded-lg border border-white/8 bg-background/75 px-3 py-2 backdrop-blur-sm dark:bg-background/10">
+              <Compass className="size-4 text-primary" />
+              <span className="text-sm font-medium tracking-[-0.02em]">New thread</span>
+            </div>
+            <button
+              type="button"
+              className="flex min-w-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+            >
+              <span className="truncate">{workspaceName}</span>
+              <ChevronDown className="size-4" />
+            </button>
+          </div>
 
-          <div className="w-px h-4 bg-border/20 mx-1" />
-
-          <div className="flex items-center gap-1 pr-1">
+          <div className="flex items-center gap-1.5">
+            <MacOSToggle
+              isDark={mode === "dark"}
+              onToggle={(checked) => setMode(checked ? "dark" : "light")}
+            />
+            <div className="mx-1 hidden h-4 w-px bg-border/50 sm:block" />
             <TooltipProvider delay={0}>
               <Tooltip>
-                <TooltipTrigger>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={clearMessages}
-                    className="rounded-full w-8 h-8 text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                  >
-                    <Eraser className="size-3.5" />
-                  </Button>
+                <TooltipTrigger
+                  onClick={clearMessages}
+                  render={
+                    <button
+                      type="button"
+                      className={cn(
+                        buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "rounded-lg hover:bg-foreground/6",
+                      )}
+                    />
+                  }
+                >
+                  <Eraser className="size-4" />
                 </TooltipTrigger>
-                <TooltipContent>
-                  <span className="text-xs">Clear UI only</span>
-              </TooltipContent>
+                <TooltipContent>Clear UI only</TooltipContent>
               </Tooltip>
               <Tooltip>
-                <TooltipTrigger>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={async () => {
-                      try {
-                        await clearMessagesAndContext(workspacePath);
-                      } catch (e) {
-                        console.error(
-                          "Failed to clear persisted chat context:",
-                          e,
-                        );
-                      }
-                    }}
-                    className="rounded-full w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-400/10"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                <TooltipTrigger
+                  onClick={() => void clearMessagesAndContext(workspacePath)}
+                  render={
+                    <button
+                      type="button"
+                      className={cn(
+                        buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                        "rounded-lg hover:bg-destructive/10 hover:text-destructive",
+                      )}
+                    />
+                  }
+                >
+                  <Trash2 className="size-4" />
                 </TooltipTrigger>
-                <TooltipContent>
-                  <span className="text-xs">Delete context (memory)</span>
-              </TooltipContent>
+                <TooltipContent>Delete persisted context</TooltipContent>
               </Tooltip>
             </TooltipProvider>
             {onClose && (
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onClose}
-                className="rounded-full w-8 h-8 text-muted-foreground hover:text-foreground"
-              >
-                <Zap className="size-3.5" />
-              </Button>
+              <Button variant="ghost" size="icon-sm" onClick={onClose} className="rounded-full" />
             )}
           </div>
         </div>
       </div>
 
-      {pendingForgeSpec && (
-        <div className="absolute left-1/2 -translate-x-1/2 top-24 z-40 w-[min(960px,92vw)] rounded-2xl border border-border/20 bg-background/85 backdrop-blur-xl p-4 shadow-xl">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-semibold">Forge Specialist Draft Review</h4>
-            <span className="text-xs text-muted-foreground">{pendingForgeSpec.id}</span>
-          </div>
-
-          <div className="mb-3 text-xs text-muted-foreground">
-            This is a task specialist generated by Forge. It complements your base agent.
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <input
-              value={pendingForgeSpec?.soul?.name ?? ""}
-              onChange={(event) =>
-                setPendingForgeSpec((prev: any) => ({
-                  ...prev,
-                  soul: { ...prev.soul, name: event.target.value },
-                }))
-              }
-              className="h-10 rounded-lg border border-border bg-background/40 px-3 text-sm"
-              placeholder="Agent name"
-            />
-            <input
-              value={pendingForgeSpec?.soul?.description ?? ""}
-              onChange={(event) =>
-                setPendingForgeSpec((prev: any) => ({
-                  ...prev,
-                  soul: { ...prev.soul, description: event.target.value },
-                }))
-              }
-              className="h-10 rounded-lg border border-border bg-background/40 px-3 text-sm"
-              placeholder="Agent description"
-            />
-          </div>
-
-          <Textarea
-            value={pendingForgeSpec?.soul?.soul_content ?? ""}
-            onChange={(event) =>
-              setPendingForgeSpec((prev: any) => ({
-                ...prev,
-                soul: { ...prev.soul, soul_content: event.target.value },
-              }))
-            }
-            rows={6}
-            className="mt-3 bg-background/40 border-border/40 focus-visible:ring-1"
-            placeholder="System prompt"
-          />
-
-          <div className="mt-3 flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleValidateForgeDraft}
-              disabled={isForgeValidating || isForgeBusy}
-            >
-              {isForgeValidating ? "Testing..." : "Test Draft"}
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSaveForgeDraft}
-              disabled={isForgeBusy || !forgeValidation?.passed}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              Save & Activate
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleDiscardForgeDraft}
-              disabled={isForgeBusy}
-            >
-              Discard
-            </Button>
-          </div>
-
-          {forgeValidation && (
-            <div className="mt-3 rounded-lg border border-border/40 bg-muted/20 p-3 text-xs space-y-1">
-              <div className="font-medium">
-                Validation: {forgeValidation.passed ? "PASS" : "FAIL"} · Score{" "}
-                {forgeValidation.totalScore}
-              </div>
-              <div>
-                Coverage {forgeValidation.coverageScore} · Determinism{" "}
-                {forgeValidation.determinismScore} · Safety {forgeValidation.safetyScore}
-              </div>
-              <div className="text-muted-foreground">
-                {forgeValidation.reasons.join(" · ")}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <ScrollArea className="absolute inset-0 w-full h-full z-10">
+      <ScrollArea className="absolute inset-0 z-10 h-full w-full">
         <div
-          className={`flex flex-col px-4 md:px-8 w-full md:max-w-3xl lg:max-w-4xl mx-auto transition-all duration-300 ${
-            messages.length === 0
-              ? "h-full justify-center pb-10"
-              : "min-h-full pt-32 pb-40"
-          }`}
+          className={cn(
+            "mx-auto flex w-full max-w-6xl flex-col px-4 transition-all duration-300 md:px-6",
+            messages.length === 0 ? "min-h-full justify-center pb-12 pt-24" : "min-h-full pb-44 pt-28",
+          )}
         >
-          {forgeStatusText && (
-            <div className="mb-4 text-xs text-muted-foreground text-center">
-              {forgeStatusText}
-            </div>
-          )}
-
-          {isForgeRecording && forgeMetrics && (
-            <>
-              <div className="mb-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
-                <span className="px-2 py-1 rounded-full border border-border/40 bg-muted/30">
-                  Steps: {forgeMetrics.totalSteps}
-                </span>
-                <span className="px-2 py-1 rounded-full border border-border/40 bg-muted/30">
-                  Useful: {forgeMetrics.usefulSteps}
-                </span>
-                <span className="px-2 py-1 rounded-full border border-border/40 bg-muted/30">
-                  Tools: {forgeMetrics.toolCallsCount}
-                </span>
-                <span className="px-2 py-1 rounded-full border border-border/40 bg-muted/30">
-                  Decisions: {forgeMetrics.decisionPointsCount}
-                </span>
-                <span className="px-2 py-1 rounded-full border border-border/40 bg-muted/30">
-                  Errors: {forgeMetrics.errorsCount}
-                </span>
-              </div>
-              {!forgeMetrics.readyToGenerate && (
-                <div className="mb-4 text-xs text-amber-400 text-center">
-                  {forgeMetrics.missingRequirements.join(" · ")}
-                </div>
-              )}
-            </>
-          )}
-
           {messages.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center pt-8">
-              <div className="mb-4 relative group">
-                <Sparkles className="size-10 text-foreground/40 relative z-10" />
+            <div className="flex flex-1 flex-col items-center justify-center">
+              <div className="mb-5 flex size-16 items-center justify-center rounded-lg border border-white/10 bg-background/85 shadow-[0_10px_30px_rgba(0,0,0,0.12)] backdrop-blur-md backdrop-saturate-150 dark:bg-background/20">
+                <Sparkles className="size-8 text-primary" />
               </div>
 
-              <h1 className="text-3xl font-semibold text-foreground tracking-tight text-center mb-1">
-                Let's build
-              </h1>
-              <div className="flex items-center gap-1 mb-10 text-muted-foreground hover:bg-muted/50 px-2 py-1 rounded-md cursor-pointer transition-colors">
-                <span className="text-lg">{workspacePath.split('/').pop() || 'workspace'}</span>
-                <ChevronDown className="size-4 opacity-50" />
+              <div className="mb-9 text-center">
+                <h1 className="text-4xl font-semibold tracking-[-0.05em] md:text-5xl">Let&apos;s build</h1>
+                <p className="mt-3 text-sm text-muted-foreground md:text-base">
+                  Faster controls, cleaner chat, and a workspace-first command surface.
+                </p>
               </div>
 
-              <div className="flex flex-wrap items-stretch justify-center gap-3 mb-8 w-full max-w-3xl px-4">
-                <div 
-                  className="flex flex-col flex-1 min-w-[200px] p-4 rounded-2xl bg-muted/20 hover:bg-muted/40 border border-border/30 cursor-pointer transition-colors text-left"
-                  onClick={() => setInput("Build a classic Snake game in this repo.")}
-                >
-                  <span className="text-xl mb-2">🎮</span>
-                  <span className="text-sm font-medium text-foreground/90">Build a classic Snake game in this repo.</span>
-                </div>
-                <div 
-                  className="flex flex-col flex-1 min-w-[200px] p-4 rounded-2xl bg-muted/20 hover:bg-muted/40 border border-border/30 cursor-pointer transition-colors text-left"
-                  onClick={() => setInput("Create a one-page pdf that summarizes this app.")}
-                >
-                  <span className="text-xl mb-2">📄</span>
-                  <span className="text-sm font-medium text-foreground/90">Create a one-page pdf that summarizes this app.</span>
-                </div>
-                <div 
-                  className="flex flex-col flex-1 min-w-[200px] p-4 rounded-2xl bg-muted/20 hover:bg-muted/40 border border-border/30 cursor-pointer transition-colors text-left"
-                  onClick={() => { setInput("Create a plan to "); document.querySelector('textarea')?.focus(); }}
-                >
-                  <span className="text-xl mb-2">✏️</span>
-                  <span className="text-sm font-medium text-foreground/90">Create a plan to...</span>
-                </div>
+              <div className="mb-8 grid w-full max-w-4xl gap-3 md:grid-cols-3">
+                {PROMPTS.map(({ accent, icon: Icon, prompt, title }) => (
+                  <button
+                    key={title}
+                    type="button"
+                    onClick={() => applyPrompt(prompt)}
+                    className="group relative overflow-hidden rounded-lg border border-white/10 bg-background/85 p-4 text-left shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-md backdrop-saturate-150 transition-all hover:bg-background/95 dark:bg-background/20 dark:hover:bg-background/28"
+                  >
+                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_45%)] opacity-80" />
+                    <div className="relative z-10 flex items-start justify-between gap-4">
+                      <div>
+                        <div className={cn("mb-3 flex size-10 items-center justify-center rounded-lg bg-foreground/5 dark:bg-white/10", accent)}>
+                          <Icon className="size-4.5" />
+                        </div>
+                        <p className="max-w-[18rem] text-sm font-medium leading-6 tracking-[-0.02em] text-foreground/90">
+                          {title}
+                        </p>
+                      </div>
+                      <span className="rounded-md border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Explore
+                      </span>
+                    </div>
+                  </button>
+                ))}
               </div>
 
-              {renderInputArea(true)}
+              {renderComposer(true)}
             </div>
           ) : (
             <div className="space-y-8">
-              <div className="flex flex-wrap items-center gap-2 justify-center">
-                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Badge variant="outline" className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10">
                   History: {latestTelemetry?.historySource || "persisted_long_chat"}
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
+                </Badge>
+                <Badge variant="outline" className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10">
                   Retrieval: {latestTelemetry?.retrievalMode || "unavailable"}
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
+                </Badge>
+                <Badge variant="outline" className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10">
                   Embedding: {latestTelemetry?.embeddingProfile || "gemini-embedding-2-preview"}
-                </span>
+                </Badge>
                 {latestTelemetry?.compressionApplied && (
-                  <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide bg-muted/40 border border-border/40 text-muted-foreground">
-                    Compression: auto @{latestTelemetry.compressionTriggerTokens || 80000} (best-practice)
-                  </span>
+                  <Badge variant="outline" className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10">
+                    Compression @{latestTelemetry.compressionTriggerTokens || 80000}
+                  </Badge>
                 )}
               </div>
+
               {hasMoreHistory && (
                 <div className="flex justify-center">
                   <Button
@@ -848,12 +516,13 @@ export function AgentChatPanel({
                     variant="ghost"
                     onClick={loadOlderHistory}
                     disabled={isHydratingHistory}
-                    className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    className="rounded-lg border border-white/10 bg-background/80 px-4 backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
                   >
                     {isHydratingHistory ? "Loading..." : "Load older messages"}
                   </Button>
                 </div>
               )}
+
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}
@@ -874,10 +543,8 @@ export function AgentChatPanel({
       </ScrollArea>
 
       {messages.length > 0 && (
-        <div className="absolute bottom-6 left-0 right-0 z-40 px-4 pointer-events-none flex justify-center">
-          <div className="w-full max-w-2xl lg:max-w-3xl pointer-events-auto">
-            {renderInputArea(false)}
-          </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 px-4 md:px-6">
+          <div className="pointer-events-auto mx-auto w-full max-w-6xl">{renderComposer(false)}</div>
         </div>
       )}
     </div>

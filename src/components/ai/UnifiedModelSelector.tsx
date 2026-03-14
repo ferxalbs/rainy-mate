@@ -1,458 +1,311 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Button,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  Input,
-} from "@heroui/react";
-import {
+  Brain,
   Check,
   ChevronDown,
+  Cpu,
+  Filter,
+  Globe,
   Search,
   Sparkles,
   Zap,
-  Globe,
-  Brain,
-  Filter,
-  Cpu,
 } from "lucide-react";
-import * as tauri from "../../services/tauri";
 
-// Define UnifiedModel interface based on backend struct
-export interface UnifiedModel {
-  id: string;
-  name: string;
-  provider: string; // rainy, cowork, openai, anthropic, xai, openrouter, local
-  capabilities: {
-    chat: boolean;
-    streaming: boolean;
-    function_calling: boolean;
-    vision: boolean;
-    web_search: boolean;
-    max_context: number;
-    thinking?: boolean; // Supports reasoning/thinking
-  };
-  enabled: boolean;
-  processing_mode: "rainy_api" | "cowork" | "direct";
-  thinkingLevel?: "minimal" | "low" | "medium" | "high"; // Available thinking levels
-}
+import * as tauri from "../../services/tauri";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { cn } from "../../lib/utils";
+
+export type UnifiedModel = tauri.UnifiedModel;
 
 interface UnifiedModelSelectorProps {
   selectedModelId: string;
   onSelect: (modelId: string) => void;
+  onModelResolved?: (model: UnifiedModel | null) => void;
   className?: string;
   filter?: "all" | "chat" | "processing";
 }
 
-// Helper for tinted SVG icons
-const RenderTintedIcon = ({
-  src,
-  colorClass,
-  className,
-}: {
-  src: string;
-  colorClass: string;
-  className?: string;
-}) => (
-  <div
-    className={`${className || ""} ${colorClass}`}
-    style={{
-      maskImage: `url(${src})`,
-      WebkitMaskImage: `url(${src})`,
-      maskSize: "contain",
-      WebkitMaskSize: "contain",
-      maskRepeat: "no-repeat",
-      WebkitMaskRepeat: "no-repeat",
-      maskPosition: "center",
-      WebkitMaskPosition: "center",
-      backgroundColor: "currentColor",
-    }}
-  />
-);
+const REASONING_LEVELS = ["minimal", "low", "medium", "high"] as const;
+
+function getDisplayModelName(modelName: string): string {
+  const name = modelName.trim();
+  if (!/[-_]/.test(name)) return name;
+
+  const suffixes = new Set(["minimal", "low", "medium", "high", "preview", "latest"]);
+  const tokens = name
+    .split(/[-_]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  if (!tokens.length) return name;
+
+  let suffix: string | null = null;
+  const lastToken = tokens[tokens.length - 1]?.toLowerCase();
+  if (lastToken && suffixes.has(lastToken) && tokens.length > 1) {
+    suffix = tokens.pop() || null;
+  }
+
+  const formattedBase = tokens
+    .map((token) => {
+      if (/^\d+(\.\d+)?$/.test(token)) return token;
+      return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+    })
+    .join(" ");
+
+  if (!formattedBase) return name;
+  if (!suffix) return formattedBase;
+
+  return `${formattedBase} (${suffix.charAt(0).toUpperCase()}${suffix.slice(1).toLowerCase()})`;
+}
+
+function formatContextWindow(maxContext: number): string {
+  if (maxContext >= 1_000_000) {
+    const value = maxContext / 1_000_000;
+    return Number.isInteger(value) ? `${value}M` : `${value.toFixed(1)}M`;
+  }
+
+  const value = maxContext / 1_000;
+  return Number.isInteger(value) ? `${value}k` : `${value.toFixed(1)}k`;
+}
+
+export function getReasoningOptions(model: UnifiedModel | null): string[] {
+  if (!model?.capabilities.reasoning) return [];
+
+  const normalizedId = model.id.toLowerCase();
+  if (normalizedId.includes("gemini-3-pro")) {
+    return ["low", "high"];
+  }
+
+  if (normalizedId.includes("gpt-5") || /(^|:)o[134]/.test(normalizedId)) {
+    return ["low", "medium", "high"];
+  }
+
+  if (normalizedId.includes("gemini-3")) {
+    return [...REASONING_LEVELS];
+  }
+
+  return model.reasoning_level === "dynamic"
+    ? ["low", "medium", "high"]
+    : [...REASONING_LEVELS];
+}
+
+function getRecommendedReasoning(model: UnifiedModel | null): string | undefined {
+  const options = getReasoningOptions(model);
+  if (!options.length) return undefined;
+  if (model?.reasoning_level && options.includes(model.reasoning_level)) {
+    return model.reasoning_level;
+  }
+  return options.includes("medium") ? "medium" : options[0];
+}
+
+function getProviderIcon(model: UnifiedModel, className = "size-4") {
+  const provider = model.provider.toLowerCase();
+  const id = model.id.toLowerCase();
+
+  if (provider.includes("google") || id.includes("gemini")) {
+    return <Sparkles className={cn(className, "text-sky-500")} />;
+  }
+  if (provider.includes("openai") || id.includes("gpt") || /(^|:)o[134]/.test(id)) {
+    return <Brain className={cn(className, "text-emerald-500")} />;
+  }
+  if (provider.includes("rainy")) {
+    return <Zap className={cn(className, "text-amber-500")} />;
+  }
+  if (provider.includes("xai") || id.includes("grok")) {
+    return <Globe className={cn(className, "text-cyan-500")} />;
+  }
+  return <Cpu className={cn(className, "text-muted-foreground")} />;
+}
 
 export function UnifiedModelSelector({
   selectedModelId,
   onSelect,
+  onModelResolved,
   className,
   filter = "all",
 }: UnifiedModelSelectorProps) {
-  // const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [models, setModels] = useState<UnifiedModel[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [open, setOpen] = useState(false);
 
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-
-  // Fetch models on mount
   useEffect(() => {
-    loadModels();
+    void loadModels();
   }, []);
 
   useEffect(() => {
-    if (isPopoverOpen) {
-      loadModels();
+    if (open) {
+      void loadModels();
     }
-  }, [isPopoverOpen]);
+  }, [open]);
 
   const loadModels = async () => {
-    // setLoading(true); // Removed
     try {
-      // Use the new unified command
-      // @ts-ignore - Command might not be in types yet
-      // const fetchedModels =
-      //   await tauri.invoke<UnifiedModel[]>("get_unified_models");
-      // setModels(fetchedModels || []);
-      // Fetch unified models and preferences
-      const [fetchedModels, userPrefs] = await Promise.all([
-        tauri.getUnifiedModels(),
-        tauri.getUserPreferences(),
-      ]);
+      const fetchedModels = await tauri.getUnifiedModels();
       setModels(fetchedModels || []);
-      // setPreferences(userPrefs);
-    } catch (err) {
-      console.error("Failed to load unified models:", err);
-      // Fallback/Mock for development if backend fails
+    } catch (error) {
+      console.error("Failed to load unified models:", error);
       setModels([]);
-    } finally {
-      // setLoading(false); // Removed
     }
   };
 
   const selectedModel = useMemo(
-    () => models.find((m) => m.id === selectedModelId),
+    () => models.find((model) => model.id === selectedModelId) ?? null,
     [models, selectedModelId],
   );
+
+  useEffect(() => {
+    onModelResolved?.(selectedModel);
+  }, [onModelResolved, selectedModel]);
 
   const filteredModels = useMemo(() => {
     return models.filter((model) => {
       const displayName = getDisplayModelName(model.name).toLowerCase();
-      // Hide OpenAI, Claude, and Astronomer models as requested
-      // Variables previously used for filtering removed
+      const matchesSearch =
+        !searchQuery ||
+        model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        displayName.includes(searchQuery.toLowerCase()) ||
+        model.provider.toLowerCase().includes(searchQuery.toLowerCase());
 
-      // Filter logic removed to allow all available providers
-
-      // Search filter
-      if (
-        searchQuery &&
-        !model.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !displayName.includes(searchQuery.toLowerCase()) &&
-        !model.provider.toLowerCase().includes(searchQuery.toLowerCase())
-      ) {
-        return false;
-      }
-
-      // Type filter
-      if (filter === "chat") {
-        return model.processing_mode === "rainy_api";
-      } else if (filter === "processing") {
-        return model.processing_mode === "cowork";
-      }
-
+      if (!matchesSearch) return false;
+      if (filter === "chat") return model.processing_mode === "rainy_api";
+      if (filter === "processing") return model.processing_mode === "cowork";
       return true;
     });
-  }, [models, searchQuery, filter]);
+  }, [filter, models, searchQuery]);
 
   const groupedModels = useMemo(() => {
-    const groups: Record<string, UnifiedModel[]> = {};
-    filteredModels.forEach((model) => {
-      const key = model.provider;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(model);
-    });
-    return groups;
+    const groups = new Map<string, UnifiedModel[]>();
+    for (const model of filteredModels) {
+      const group = groups.get(model.provider) || [];
+      group.push(model);
+      groups.set(model.provider, group);
+    }
+    return Array.from(groups.entries());
   }, [filteredModels]);
 
-  const getProviderIcon = (model: UnifiedModel, className = "size-3.5") => {
-    const normalizedProvider = model.provider.toLowerCase();
-    const normalizedId = model.id.toLowerCase();
-
-    if (normalizedProvider.includes("openai") || normalizedId.includes("gpt")) {
-      return (
-        <RenderTintedIcon
-          src="/openai.svg"
-          colorClass="text-[#10a37f] dark:text-[#10a37f]"
-          className={className}
-        />
-      );
-    }
-
-    if (
-      normalizedProvider.includes("anthropic") ||
-      normalizedId.includes("claude")
-    ) {
-      return (
-        <RenderTintedIcon
-          src="/antro.svg"
-          colorClass="text-[#d97757] dark:text-[#cc785c]"
-          className={className}
-        />
-      );
-    }
-
-    if (
-      normalizedProvider.includes("google") ||
-      normalizedProvider.includes("gemini")
-    ) {
-      return (
-        <RenderTintedIcon
-          src="/google.svg"
-          colorClass="text-[#4285F4] dark:text-[#4285F4]"
-          className={className}
-        />
-      );
-    }
-
-    if (
-      normalizedProvider.includes("moonshot") ||
-      normalizedId.includes("kimi")
-    ) {
-      return (
-        <RenderTintedIcon
-          src="/moonshot.svg"
-          colorClass="text-foreground dark:text-foreground"
-          className={className}
-        />
-      );
-    }
-
-    if (normalizedProvider.includes("meta") || normalizedId.includes("llama")) {
-      return (
-        <RenderTintedIcon
-          src="/meta.svg"
-          colorClass="text-[#0668E1] dark:text-[#0668E1]"
-          className={className}
-        />
-      );
-    }
-
-    if (normalizedProvider.includes("mistral")) {
-      return <Sparkles className={`${className} text-orange-500`} />;
-    }
-
-    if (normalizedProvider.includes("perplexity")) {
-      return <Search className={`${className} text-teal-500`} />;
-    }
-
-    if (normalizedProvider.includes("nvidia")) {
-      return <Cpu className={`${className} text-green-500`} />;
-    }
-
-    if (normalizedProvider.includes("cerebras")) {
-      return <Zap className={`${className} text-blue-600`} />;
-    }
-
-    if (normalizedProvider.includes("openrouter")) {
-      return <Sparkles className={`${className} text-primary`} />;
-    }
-
-    if (
-      normalizedProvider.includes("rainy") ||
-      normalizedProvider === "rainy_api"
-    ) {
-      return <Zap className={`${className} text-yellow-500`} />;
-    }
-
-    if (normalizedProvider.includes("cowork")) {
-      return <Brain className={`${className} text-purple-500`} />;
-    }
-
-    if (normalizedProvider.includes("xai") || normalizedId.includes("grok")) {
-      return <Globe className={`${className} text-blue-500`} />;
-    }
-
-    // Generic fallback based on name hash/char to give some variety or just generic icon
-    return <Zap className={`${className} text-muted-foreground`} />;
-  };
-
-  // Helper to check if model supports thinking/reasoning
-  const supportsThinking = (modelId: string): boolean => {
-    return modelId.includes("gemini-3");
-  };
-
-  // Get thinking level for a model
-  const getThinkingLevel = (modelId: string): string | null => {
-    if (modelId.includes("gemini-3-pro")) return "high";
-    if (modelId.includes("gemini-3-flash")) return "medium";
-    if (modelId.includes("gemini-3.1-flash-lite")) return null;
-    return null;
-  };
-
-  // Normalize slug-like model names for display (e.g. gemini-3-pro-high -> Gemini 3 Pro (High))
-  function getDisplayModelName(modelName: string): string {
-    const name = modelName.trim();
-    if (!/[-_]/.test(name)) return name;
-
-    const suffixes = new Set([
-      "minimal",
-      "low",
-      "medium",
-      "high",
-      "preview",
-      "latest",
-    ]);
-    const tokens = name
-      .split(/[-_]+/)
-      .map((token) => token.trim())
-      .filter(Boolean);
-
-    if (!tokens.length) return name;
-
-    let suffix: string | null = null;
-    const lastToken = tokens[tokens.length - 1]?.toLowerCase();
-    if (lastToken && suffixes.has(lastToken) && tokens.length > 1) {
-      suffix = tokens.pop() || null;
-    }
-
-    const formattedBase = tokens
-      .map((token) => {
-        if (/^\d+(\.\d+)?$/.test(token)) return token;
-        return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
-      })
-      .join(" ");
-
-    if (!formattedBase) return name;
-
-    if (!suffix) return formattedBase;
-    return `${formattedBase} (${suffix.charAt(0).toUpperCase()}${suffix.slice(1).toLowerCase()})`;
-  }
-
-  function formatContextWindow(maxContext: number): string {
-    if (maxContext >= 1000000) {
-      const inMillions = maxContext / 1000000;
-      return Number.isInteger(inMillions)
-        ? `${inMillions}M`
-        : `${inMillions.toFixed(1)}M`;
-    }
-
-    const inThousands = maxContext / 1000;
-    return Number.isInteger(inThousands)
-      ? `${inThousands}k`
-      : `${inThousands.toFixed(1)}k`;
-  }
+  const triggerLabel = selectedModel ? getDisplayModelName(selectedModel.name) : "Select model";
+  const triggerHint = selectedModel
+    ? `${formatContextWindow(selectedModel.capabilities.max_context)} context`
+    : "Runtime model";
 
   return (
-    <Popover isOpen={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger>
         <Button
           variant="ghost"
-          className={`h-auto py-1.5 px-3 gap-2 font-normal rounded-full transition-all duration-300
-            bg-white/50 dark:bg-black/20 
-            border border-black/5 dark:border-white/5
-            hover:bg-black/5 dark:hover:bg-white/5
-            backdrop-blur-md
-            ${className}`}
-        >
-          {selectedModel ? (
-            <>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center justify-center">
-                  {getProviderIcon(selectedModel, "size-4")}
-                </div>
-                <div className="flex flex-col items-start">
-                  <span className="text-xs font-medium leading-tight text-foreground/90">
-                    {getDisplayModelName(selectedModel.name)}
-                  </span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <span className="text-muted-foreground text-xs">
-              Select model...
-            </span>
+          className={cn(
+            "h-9 min-w-[10.75rem] justify-between rounded-lg border border-white/8 bg-background/70 px-3 py-2 text-left shadow-none backdrop-blur-sm backdrop-saturate-150 transition-all hover:bg-background/85 dark:bg-background/10 dark:hover:bg-background/16",
+            className,
           )}
-          <ChevronDown className="size-3 text-muted-foreground/70" />
+        >
+          <span className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-7 items-center justify-center rounded-md bg-foreground/6 text-foreground dark:bg-white/10">
+              {selectedModel ? getProviderIcon(selectedModel) : <Sparkles className="size-4 text-muted-foreground" />}
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-sm font-medium text-foreground">{triggerLabel}</span>
+              <span className="truncate text-[10px] text-muted-foreground">{triggerHint}</span>
+            </span>
+          </span>
+          <ChevronDown className="size-3.5 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-80 mt-2 p-0 bg-background/60 backdrop-blur-2xl dark:bg-background/20 border border-white/10 rounded-lg overflow-hidden">
-        <div className="flex flex-col">
-          {/* Search */}
-          <div className="p-3 border-b border-border/10">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4" />
-              <Input
-                placeholder="Search models..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-background/30 w-full pl-9 h-9 rounded-lg border-transparent focus:border-primary/20 transition-all text-white/50 dark:text-white/50"
-              />
+      <PopoverContent
+        align="start"
+        sideOffset={8}
+        className="w-[21rem] gap-0 overflow-hidden rounded-lg border border-white/10 bg-background/90 p-0 shadow-[0_16px_48px_rgba(0,0,0,0.16)] backdrop-blur-xl backdrop-saturate-150 dark:bg-background/20"
+      >
+        <div className="border-b border-border/30 px-3 py-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search models"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="h-9 rounded-lg border-white/8 bg-background/70 pl-10 backdrop-blur-sm dark:bg-background/20"
+            />
+          </div>
+        </div>
+
+        <div className="max-h-[22rem] overflow-y-auto px-2 py-2">
+          {groupedModels.map(([provider, providerModels]) => (
+            <div key={provider} className="mb-3 last:mb-0">
+              <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+                {provider}
+              </div>
+              <div className="space-y-1">
+                {providerModels.map((model) => {
+                  const active = selectedModelId === model.id;
+                  const reasoningOptions = getReasoningOptions(model);
+                  const recommendedReasoning = getRecommendedReasoning(model);
+
+                  return (
+                    <button
+                      key={model.id}
+                      type="button"
+                      onClick={() => {
+                        onSelect(model.id);
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-all",
+                        active
+                          ? "border-primary/20 bg-primary/10"
+                          : "border-transparent hover:border-white/10 hover:bg-foreground/4",
+                      )}
+                    >
+                      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-background/90 dark:bg-background/20">
+                        {getProviderIcon(model, "size-4")}
+                      </span>
+
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-3">
+                          <span className="truncate text-sm font-medium text-foreground">
+                            {getDisplayModelName(model.name)}
+                          </span>
+                          {active && <Check className="size-4 shrink-0 text-primary" />}
+                        </span>
+
+                        <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <Badge variant="outline" className="rounded-md border-white/10 bg-background/70 px-2 py-0.5 text-[10px] backdrop-blur-sm dark:bg-background/20">
+                            {formatContextWindow(model.capabilities.max_context)} context
+                          </Badge>
+                          {model.capabilities.web_search && (
+                            <Badge variant="outline" className="rounded-md border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-600 dark:text-sky-300">
+                              <Globe className="size-3" />
+                              web
+                            </Badge>
+                          )}
+                          {model.capabilities.reasoning && (
+                            <Badge variant="outline" className="rounded-md border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">
+                              <Brain className="size-3" />
+                              {recommendedReasoning || "reasoning"}
+                            </Badge>
+                          )}
+                        </span>
+
+                        <span className="mt-1.5 block text-[11px] text-muted-foreground">
+                          {model.provider}
+                          {reasoningOptions.length > 0 && ` · ${reasoningOptions.join(" / ")}`}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ))}
 
-          {/* Model List */}
-          <div className="max-h-[300px] overflow-y-auto py-2 custom-scrollbar">
-            {Object.entries(groupedModels).map(([provider, providerModels]) => (
-              <div key={provider} className="px-2 py-1">
-                <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider">
-                  {provider}
-                </div>
-                {providerModels.map((model) => (
-                  <button
-                    key={model.id}
-                    onClick={() => {
-                      onSelect(model.id);
-                      setIsPopoverOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left transition-all duration-200 group ${
-                      selectedModelId === model.id
-                        ? "bg-secondary/80 text-foreground ring-1 ring-border/50 shadow-sm"
-                        : "hover:bg-muted/50 text-foreground/80 hover:text-foreground"
-                    }`}
-                  >
-                    <div className="flex items-center justify-center shrink-0 w-5 h-5">
-                      {getProviderIcon(model, "size-4")}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium truncate">
-                          {getDisplayModelName(model.name)}
-                        </span>
-                        {model.processing_mode === "cowork" && (
-                          <Sparkles className="size-3 text-purple-500" />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground/80 truncate font-medium">
-                          {formatContextWindow(model.capabilities.max_context)}{" "}
-                          context
-                        </span>
-                        {model.capabilities.web_search && (
-                          <span className="flex items-center gap-0.5 text-[10px] text-blue-500 bg-blue-500/10 px-1.5 py-px rounded-md font-medium">
-                            <Globe className="size-2.5" /> web
-                          </span>
-                        )}
-                        {supportsThinking(model.id) && (
-                          <span className="flex items-center gap-0.5 text-[10px] text-amber-500 bg-amber-500/10 px-1.5 py-px rounded-md font-medium">
-                            <Brain className="size-2.5" />{" "}
-                            {getThinkingLevel(model.id)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {selectedModelId === model.id && (
-                      <Check className="size-3.5 shrink-0 text-primary" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            ))}
-
-            {filteredModels.length === 0 && (
-              <div className="py-8 text-center text-muted-foreground">
-                <Filter className="size-8 mx-auto opacity-20 mb-2" />
-                <p className="text-xs">No models found</p>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="p-2 border-t border-border/10 bg-muted/10 text-[10px] text-center text-muted-foreground">
-            {filter === "chat"
-              ? "Showing fast chat models only"
-              : filter === "processing"
-                ? "Showing deep processing models only"
-                : "Showing all available models"}
-          </div>
+          {filteredModels.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center text-muted-foreground">
+              <Filter className="size-7 opacity-35" />
+              <p className="text-sm">No models matched this search.</p>
+            </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>

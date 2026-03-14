@@ -22,6 +22,7 @@ pub struct RuntimeOptions {
     pub allowed_paths: Option<Vec<String>>,
     pub custom_system_prompt: Option<String>,
     pub streaming_enabled: Option<bool>,
+    pub reasoning_effort: Option<String>,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
@@ -542,6 +543,7 @@ Rules:
                 .clone()
                 .unwrap_or("gemini-2.0-flash".to_string()),
             allow_streaming: self.options.streaming_enabled.unwrap_or(false),
+            reasoning_effort: self.options.reasoning_effort.clone(),
         });
         workflow.add_step(think_step);
 

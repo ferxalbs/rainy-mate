@@ -7,7 +7,6 @@ import { NeuralPanel, AirlockEvents, McpApprovalEvents } from "./components/neur
 import { AgentBuilder } from "./components/agents/builder/AgentBuilder";
 import { AgentStorePage } from "./components/agents/store/AgentStorePage";
 import { WasmSkillsPage } from "./components/wasm-skills/WasmSkillsPage";
-import { Button, Card } from "@heroui/react";
 import { Toaster } from "sonner";
 import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
@@ -15,6 +14,7 @@ import type { Folder } from "./types";
 import type { AgentSpec } from "./types/agent-spec";
 import * as tauri from "./services/tauri";
 import { useCloudEvents } from "./hooks/useCloudEvents";
+import { Button } from "./components/ui/button";
 
 function App() {
   const { refreshProviders } = useAIProvider();
@@ -131,7 +131,7 @@ function App() {
                   variant="secondary"
                   size="sm"
                   className="ml-auto"
-                  onPress={() => {
+                  onClick={() => {
                     setSubmitError(null);
                   }}
                 >
@@ -240,7 +240,7 @@ function App() {
  */
 function NoFolderGate({ onAddFolder }: { onAddFolder: () => void }) {
   return (
-    <Card className="p-12 text-center animate-appear bg-sidebar/30 backdrop-blur-2xl border-white/5 shadow-2xl max-w-lg mx-auto">
+    <div className="mx-auto max-w-lg animate-appear rounded-[32px] border border-white/10 bg-background/80 p-12 text-center shadow-[0_24px_90px_rgba(0,0,0,0.14)] backdrop-blur-2xl backdrop-saturate-150 dark:bg-background/20">
       <div className="space-y-4">
         <div className="size-16 mx-auto bg-primary/10 rounded-2xl flex items-center justify-center">
           <FolderPlus className="size-8 text-primary" />
@@ -255,16 +255,15 @@ function NoFolderGate({ onAddFolder }: { onAddFolder: () => void }) {
           </p>
         </div>
         <Button
-          variant="primary"
-          size="md"
-          onPress={onAddFolder}
-          className="mt-2 font-medium"
+          size="lg"
+          onClick={onAddFolder}
+          className="mt-2 rounded-full px-5 font-medium"
         >
           <FolderPlus className="size-4" />
           Add Folder
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }
 

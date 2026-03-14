@@ -3,11 +3,12 @@ import type { ReactNode } from "react";
 import { BackgroundManager } from "../backgrounds/BackgroundManager";
 import { AppSidebar } from "./AppSidebar";
 import { MacOSToggle } from "./MacOSToggle";
-import { Button, Chip } from "@heroui/react";
 import { Maximize2, Minus, X, FolderOpen, Cloud, CloudOff } from "lucide-react";
 import type { Folder } from "../../types";
 import { useTheme } from "../../hooks/useTheme";
 import { useCloudBridgeStatus } from "../../hooks/useCloudBridgeStatus";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 
 interface TahoeLayoutProps {
   children: ReactNode;
@@ -79,7 +80,7 @@ export function TahoeLayout({
         {/* Universal Header - Glass Effect with Mode Specifics */}
         {!shouldBeImmersive && (
           <header
-            className={`flex items-center justify-between h-14 px-6 shrink-0 border-b border-border/10 backdrop-blur-2xl transition-colors duration-300 ${isDark ? "bg-background/30" : "bg-background/60"}`}
+            className={`flex items-center justify-between h-16 px-6 shrink-0 border-b border-border/10 backdrop-blur-2xl backdrop-saturate-150 transition-colors duration-300 ${isDark ? "bg-background/30" : "bg-background/60"}`}
           >
             {/* Drag region */}
             <div
@@ -90,7 +91,7 @@ export function TahoeLayout({
             {/* Left Side: Workspace Info */}
             <div className="window-no-drag flex items-center gap-3 min-w-0">
               {workspacePath && (
-                <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 animate-appear shadow-sm">
+                <div className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-background/80 px-3 py-2 shadow-sm backdrop-blur-md backdrop-saturate-150 dark:bg-background/20">
                   <FolderOpen className="size-4 text-primary shrink-0" />
                   <div className="flex flex-col min-w-0">
                     <span
@@ -102,14 +103,13 @@ export function TahoeLayout({
                   </div>
                 </div>
               )}
-              <Chip
-                size="sm"
-                variant="soft"
+              <Badge
+                variant="outline"
                 title={cloudStatus.message}
                 className={
                   cloudStatus.connected
-                    ? "bg-green-500/10 text-green-500 border border-green-500/20"
-                    : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                    ? "rounded-full border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-700 dark:text-emerald-300"
+                    : "rounded-full border-amber-500/20 bg-amber-500/10 px-3 py-1 text-amber-700 dark:text-amber-300"
                 }
               >
                 <span className="flex items-center gap-1.5">
@@ -120,7 +120,7 @@ export function TahoeLayout({
                   )}
                   {cloudStatus.connected ? "Bridge Online" : "Bridge Offline"}
                 </span>
-              </Chip>
+              </Badge>
             </div>
 
             {/* Right Side: Global Controls */}
@@ -136,24 +136,21 @@ export function TahoeLayout({
                 <div className="windows-controls flex items-center gap-1">
                   <Button
                     variant="ghost"
-                    size="sm"
-                    isIconOnly
+                    size="icon-sm"
                     aria-label="Minimize"
                   >
                     <Minus className="size-4" />
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    isIconOnly
+                    size="icon-sm"
                     aria-label="Maximize"
                   >
                     <Maximize2 className="size-4" />
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    isIconOnly
+                    size="icon-sm"
                     aria-label="Close"
                     className="hover:bg-red-500 hover:text-white"
                   >

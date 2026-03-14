@@ -180,6 +180,7 @@ Output sections exactly:
         tools: None,
         tool_choice: None,
         json_mode: false,
+        reasoning_effort: None,
     };
 
     let response = router
@@ -376,6 +377,7 @@ pub async fn run_agent_workflow(
     agent_spec_id: Option<String>,
     chat_scope_id: Option<String>,
     run_id: Option<String>,
+    reasoning_effort: Option<String>,
     router: State<'_, IntelligentRouterState>,
     airlock_state: State<'_, AirlockServiceState>,
     provider_registry: State<'_, ProviderRegistryState>,
@@ -508,6 +510,7 @@ pub async fn run_agent_workflow(
         },
         custom_system_prompt: None,
         streaming_enabled: Some(false),
+        reasoning_effort,
     };
 
     // Initialize Persistent Memory

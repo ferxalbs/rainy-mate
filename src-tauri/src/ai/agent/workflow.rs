@@ -295,6 +295,7 @@ pub struct ThinkStep {
     pub router: Arc<RwLock<IntelligentRouter>>,
     pub model: String,
     pub allow_streaming: bool,
+    pub reasoning_effort: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -401,6 +402,7 @@ impl WorkflowStep for ThinkStep {
             frequency_penalty: None,
             presence_penalty: None,
             stop: None,
+            reasoning_effort: self.reasoning_effort.clone(),
         };
 
         // 3. Call Router — streaming when no tools, blocking otherwise

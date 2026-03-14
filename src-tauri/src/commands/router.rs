@@ -214,6 +214,7 @@ pub async fn complete_with_routing(
         tools: None,
         tool_choice: None,
         json_mode: false,
+        reasoning_effort: None,
     };
 
     // Execute with intelligent routing
@@ -256,6 +257,7 @@ pub async fn stream_with_routing(
         tools: None,
         tool_choice: None,
         json_mode: false,
+        reasoning_effort: None,
     };
 
     // Send started event (we'll get the actual provider from the router)

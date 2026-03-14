@@ -367,7 +367,13 @@ impl RainySDKProvider {
         }
 
         if model_id.starts_with("gpt-5") || model_id.starts_with("o") {
-            sdk_request.reasoning = Some(json!({ "effort": "medium" }));
+            sdk_request.reasoning = Some(json!({
+                "effort": request
+                    .reasoning_effort
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("medium")
+            }));
         }
 
         sdk_request

@@ -804,9 +804,11 @@ export interface UnifiedModel {
     web_search: boolean;
     max_context: number;
     max_output: number;
+    reasoning?: boolean;
   };
   enabled: boolean;
   processing_mode: "rainy_api" | "cowork" | "direct";
+  reasoning_level?: string | null;
 }
 
 export interface ChatMessage {
@@ -2302,6 +2304,7 @@ export const runAgentWorkflow = async (
   agentSpecId?: string,
   chatScopeId?: string,
   runId?: string,
+  reasoningEffort?: string,
 ): Promise<RunAgentWorkflowResponse> => {
   try {
     return await invoke<RunAgentWorkflowResponse>("run_agent_workflow", {
@@ -2311,6 +2314,7 @@ export const runAgentWorkflow = async (
       agentSpecId,
       chatScopeId,
       runId,
+      reasoningEffort,
     });
   } catch (e) {
     console.error("Agent workflow failed:", e);

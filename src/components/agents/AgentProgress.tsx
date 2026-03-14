@@ -1,7 +1,7 @@
 // src/components/agents/AgentProgress.tsx
 // Agent Progress Component
 // Displays AI agent task progress with HeroUI v3
-// Part of Phase 3 - Rainy Cowork
+// Part of Phase 3 - Rainy MaTe
 
 import { Card, Button, Spinner, Chip } from '@heroui/react';
 import { CheckCircle, XCircle, Clock, Zap } from 'lucide-react';

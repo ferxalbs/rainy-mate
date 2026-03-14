@@ -5,6 +5,15 @@ All notable changes to Rainy Cowork will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-13 - CHAT UI REFACTOR
+
+### Changed
+
+- Refactored `AgentChatPanel.tsx` for stability, fixing syntax errors and duplicate declarations.
+- Aligned Chat UI with reference design: added growing dynamic input area, redesigned "Let's build" suggestion cards, and improved adaptive blurs (`backdrop-blur-2xl`).
+- Replaced nested `Button` components in `TooltipTrigger` with `render` props and `buttonVariants` to resolve Base UI `asChild` TypeScript errors.
+- Cleaned up the chat footer row for local model and reasoning effort selection.
+
 ## [0.5.96] - 2026-03-11 - THE FORGE (AGENT FACTORY PRODUCTION)
 
 

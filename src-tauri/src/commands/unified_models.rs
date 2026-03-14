@@ -20,6 +20,7 @@ pub struct UnifiedModel {
     pub capabilities: ModelCapabilities,
     pub enabled: bool,
     pub processing_mode: String,
+    pub reasoning_level: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +30,7 @@ pub struct ModelCapabilities {
     pub function_calling: bool,
     pub vision: bool,
     pub web_search: bool,
+    pub reasoning: bool,
     pub max_context: usize,
     pub max_output: usize,
 }
@@ -66,11 +68,13 @@ fn to_unified_model(entry: &CatalogModel) -> UnifiedModel {
             function_calling: entry.function_calling,
             vision: entry.vision,
             web_search: entry.web_search,
+            reasoning: entry.thinking_level.is_some(),
             max_context: entry.max_context,
             max_output: entry.max_output,
         },
         enabled: true,
         processing_mode: processing_mode.to_string(),
+        reasoning_level: entry.thinking_level.map(ToString::to_string),
     }
 }
 
@@ -112,11 +116,17 @@ fn dynamic_rainy_model_from_catalog(item: &ModelCatalogItem) -> UnifiedModel {
             function_calling: capability_flag_enabled(caps.and_then(|caps| caps.tools.as_ref())),
             vision: capability_flag_enabled(caps.and_then(|caps| caps.image_input.as_ref())),
             web_search: true,
+            reasoning: capability_flag_enabled(caps.and_then(|caps| caps.reasoning.as_ref())),
             max_context: item.context_length.unwrap_or(128_000) as usize,
             max_output: 65_536,
         },
         enabled: true,
         processing_mode: "rainy_api".to_string(),
+        reasoning_level: if capability_flag_enabled(caps.and_then(|caps| caps.reasoning.as_ref())) {
+            Some("dynamic".to_string())
+        } else {
+            None
+        },
     }
 }
 
@@ -135,11 +145,13 @@ fn dynamic_rainy_model(slug: &str) -> UnifiedModel {
             function_calling: true,
             vision: false,
             web_search: true,
+            reasoning: false,
             max_context: 128_000,
             max_output: 65_536,
         },
         enabled: true,
         processing_mode: "rainy_api".to_string(),
+        reasoning_level: None,
     }
 }
 
