@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { AnimatedThemeToggler } from "../ui/animated-theme-toggler";
 import {
   ArrowUp,
   Check,
@@ -23,9 +24,9 @@ import {
   UnifiedModelSelector,
   getReasoningOptions,
 } from "../ai/UnifiedModelSelector";
+
 import { MessageBubble } from "./MessageBubble";
 import { AgentSelector } from "./AgentSelector";
-import { MacOSToggle } from "../layout/MacOSToggle";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
@@ -88,7 +89,7 @@ export function AgentChatPanel({
   onClose,
   className,
 }: AgentChatPanelProps) {
-  const { mode, toggleModeWithTransition } = useTheme();
+  const { mode: _mode } = useTheme();
   const [input, setInput] = useState("");
   const [currentModelId, setCurrentModelId] = useState("");
   const [selectedModel, setSelectedModel] = useState<UnifiedModel | null>(null);
@@ -355,10 +356,7 @@ export function AgentChatPanel({
           </div>
 
           <div className="flex items-center gap-1">
-            <MacOSToggle
-              isDark={mode === "dark"}
-              onToggle={(_checked, e) => toggleModeWithTransition(e)}
-            />
+            <AnimatedThemeToggler />
             <div className="mx-2 hidden h-4 w-px bg-border/50 sm:block" />
             <TooltipProvider delay={0}>
               <Tooltip>

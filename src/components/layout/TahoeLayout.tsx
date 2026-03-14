@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { BackgroundManager } from "../backgrounds/BackgroundManager";
 import { AppSidebar } from "./AppSidebar";
-import { MacOSToggle } from "./MacOSToggle";
+import { AnimatedThemeToggler } from "../ui/animated-theme-toggler";
 import { Maximize2, Minus, X, FolderOpen, Cloud, CloudOff } from "lucide-react";
 import type { Folder } from "../../types";
 import { useTheme } from "../../hooks/useTheme";
@@ -39,7 +39,7 @@ export function TahoeLayout({
   activeSection,
   isImmersive,
 }: TahoeLayoutProps & { isImmersive?: boolean }) {
-  const { mode, toggleModeWithTransition } = useTheme();
+  const { mode } = useTheme();
   const [isWindows, setIsWindows] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const cloudStatus = useCloudBridgeStatus();
@@ -122,10 +122,7 @@ export function TahoeLayout({
             {/* Right Side: Global Controls */}
             <div className="window-no-drag flex items-center gap-4">
               {/* Custom macOS Toggle */}
-              <MacOSToggle
-                isDark={isDark}
-                onToggle={(_checked, e) => toggleModeWithTransition(e)}
-              />
+              <AnimatedThemeToggler />
 
               {/* Windows Controls */}
               {isWindows && (
