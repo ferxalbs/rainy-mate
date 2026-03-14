@@ -108,11 +108,18 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set environment variables for Ubuntu
+        if: matrix.platform == 'ubuntu-22.04'
+        run: echo "LIBSQLITE3_SYS_USE_PKG_CONFIG=1" >> $GITHUB_ENV
+
+      - name: Set environment variables for Windows
+        if: matrix.platform == 'windows-latest'
+        run: echo "RUSTFLAGS=-C link-arg=/FORCE:MULTIPLE" >> $GITHUB_ENV
+
       - name: Build and Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LIBSQLITE3_SYS_USE_PKG_CONFIG: ${{ matrix.platform == 'ubuntu-22.04' && '1' || '' }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:

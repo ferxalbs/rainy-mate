@@ -108,8 +108,18 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Tauri Build
+      - name: Set environment variables for Ubuntu
+        if: matrix.platform == 'ubuntu-22.04'
+        run: echo "LIBSQLITE3_SYS_USE_PKG_CONFIG=1" >> $GITHUB_ENV
+
+      - name: Set environment variables for Windows
+        if: matrix.platform == 'windows-latest'
+        run: echo "RUSTFLAGS=-C link-arg=/FORCE:MULTIPLE" >> $GITHUB_ENV
+
+      - name: Tauri Build (macOS)
+        if: matrix.platform == 'macos-latest'
         run: pnpm run tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
-        env:
-          LIBSQLITE3_SYS_USE_PKG_CONFIG: ${{ matrix.platform == 'ubuntu-22.04' && '1' || '' }}
-          RUSTFLAGS: ${{ matrix.platform == 'windows-latest' && '-C link-arg=/FORCE:MULTIPLE' || '' }}
+
+      - name: Tauri Build (Linux/Windows)
+        if: matrix.platform != 'macos-latest'
+        run: pnpm run tauri build ${{ matrix.args }}
