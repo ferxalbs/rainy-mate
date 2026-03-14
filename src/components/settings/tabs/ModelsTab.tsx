@@ -1,17 +1,17 @@
 import { useState, useEffect } from "react";
-import { Spinner, Select, ListBox, Separator } from "@heroui/react";
-import { Zap, Bot } from "lucide-react";
+import { Zap, Bot, Database } from "lucide-react";
 import * as tauri from "../../../services/tauri";
 import { useAIProvider } from "../../../hooks";
-
-const selectionToValue = (selection: unknown): string | null => {
-  if (typeof selection === "string") return selection;
-  if (selection instanceof Set) {
-    const first = selection.values().next().value;
-    return typeof first === "string" ? first : null;
-  }
-  return null;
-};
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const ModelCard = ({
   name,
@@ -20,12 +20,12 @@ const ModelCard = ({
   name: string;
   description: string;
 }) => (
-  <div className="p-4 rounded-xl border border-transparent bg-transparent">
+  <Card className="p-4 bg-muted/20 border-border/10 hover:bg-muted/30 transition-colors group">
     <div className="flex-1">
-      <span className="font-medium">{name}</span>
-      <p className="text-sm text-muted-foreground mt-1">{description}</p>
+      <span className="font-semibold text-sm group-hover:text-primary transition-colors">{name}</span>
+      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{description}</p>
     </div>
-  </div>
+  </Card>
 );
 
 export function ModelsTab() {
@@ -66,7 +66,8 @@ export function ModelsTab() {
     loadData();
   }, []);
 
-  const handleEmbedderProviderChange = async (provider: string) => {
+  const handleEmbedderProviderChange = async (provider: string | null) => {
+    if (!provider) return;
     setEmbedderProvider(provider);
     try {
       await tauri.setEmbedderProvider(provider);
@@ -75,7 +76,8 @@ export function ModelsTab() {
     }
   };
 
-  const handleEmbedderModelChange = async (model: string) => {
+  const handleEmbedderModelChange = async (model: string | null) => {
+    if (!model) return;
     setEmbedderModel(model);
     try {
       await tauri.setEmbedderModel(model);
@@ -86,145 +88,127 @@ export function ModelsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner size="lg" />
+      <div className="space-y-6">
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-10 w-full max-w-sm" />
+          <Skeleton className="h-10 w-full max-w-sm" />
+        </div>
+        <Separator className="my-6 opacity-20" />
+        <div className="space-y-4">
+          <Skeleton className="h-4 w-40" />
+          <div className="grid gap-3">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <>
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-sm font-medium text-foreground mb-3">
-            Embedder Provider
-          </h3>
-          <Select
-            className="w-full max-w-sm bg-background/30"
-            isDisabled
-            aria-label="Embedder Provider"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox
-                selectionMode="single"
-                selectedKeys={new Set([embedderProvider])}
-                onSelectionChange={(selection: unknown) => {
-                  const val = selectionToValue(selection);
-                  if (val) handleEmbedderProviderChange(val);
-                }}
-              >
-                <ListBox.Item id="gemini" textValue="Gemini">
-                  Gemini
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                <ListBox.Item id="openai" textValue="OpenAI (Coming Soon)">
-                  OpenAI (Coming Soon)
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <div className="space-y-8">
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Bot className="size-4 text-primary" />
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground/70">
+              Embedder Configurations
+            </h3>
+          </div>
+          
+          <div className="grid gap-4 max-w-sm">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground ml-1">Provider</label>
+              <Select value={embedderProvider} onValueChange={handleEmbedderProviderChange} disabled>
+                <SelectTrigger className="w-full bg-muted/20 border-border/10 h-10 px-4">
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gemini">Gemini (Active)</SelectItem>
+                  <SelectItem value="openai">OpenAI (Coming Soon)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          <Select
-            className="w-full max-w-sm mt-3"
-            isDisabled
-            aria-label="Embedder Model"
-            placeholder="Select a model"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox
-                selectionMode="single"
-                selectedKeys={new Set([embedderModel])}
-                onSelectionChange={(selection: unknown) => {
-                  const val = selectionToValue(selection);
-                  if (val) handleEmbedderModelChange(val);
-                }}
-              >
-                <ListBox.Item
-                  id="gemini-embedding-001"
-                  textValue="gemini-embedding-001 (3072 dimensions)"
-                >
-                  gemini-embedding-001 (3072 dimensions)
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-        </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground ml-1">Model</label>
+              <Select value={embedderModel} onValueChange={handleEmbedderModelChange} disabled>
+                <SelectTrigger className="w-full bg-muted/20 border-border/10 h-10 px-4">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gemini-embedding-001">gemini-embedding-001 (3072d)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </section>
 
-        <div className="pt-2">
-          <h3 className="text-sm font-medium text-foreground mb-3">
-            Vector Store Provider
-          </h3>
-          <Select
-            className="w-full max-w-sm"
-            isDisabled
-            aria-label="Vector Store Provider"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox selectionMode="single" selectedKeys={new Set(["turso"])}>
-                <ListBox.Item id="turso" textValue="Turso (libSQL)">
-                  Turso (libSQL)
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-          <p className="text-xs text-muted-foreground mt-2">
-            Currently locked to Turso for encrypted memory vault.
-          </p>
-        </div>
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Database className="size-4 text-primary" />
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground/70">
+              Memory Storage
+            </h3>
+          </div>
+          
+          <div className="space-y-2 max-w-sm">
+            <label className="text-xs font-medium text-muted-foreground ml-1">Vector Store</label>
+            <Select value="turso" disabled>
+              <SelectTrigger className="w-full bg-muted/20 border-border/10 h-10 px-4">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="turso">Turso (libSQL Enclave)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground pt-1 ml-1 italic opacity-60">
+              * Currently locked to Turso for hardware-backed encryption.
+            </p>
+          </div>
+        </section>
       </div>
 
-      <Separator className="my-6" />
+      <Separator className="my-10 opacity-10" />
 
-      {hasApiKey("rainy_api") && (
-        <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-            <Zap className="size-4" />
-            Pay-As-You-Go Models (Rainy API)
-          </h3>
-          <div className="grid gap-3">
-            {rainyApiModels.map((model) => (
-              <ModelCard
-                key={model}
-                name={model}
-                description="Billed per usage (1:1 Token)"
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="space-y-10">
+        {hasApiKey("rainy_api") && (
+          <section className="space-y-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
+              <Zap className="size-4 text-amber-500" />
+              Pay-As-You-Go Models (Rainy API)
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {rainyApiModels.map((model) => (
+                <ModelCard
+                  key={model}
+                  name={model}
+                  description="High-performance billing via 1:1 token usage."
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
-      {hasApiKey("gemini") && (
-        <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-            <Bot className="size-4" />
-            Free Tier (Gemini BYOK)
-          </h3>
-          <div className="grid gap-3">
-            {geminiModels.map((model) => (
-              <ModelCard
-                key={model}
-                name={model}
-                description="Uses your own Gemini API Key"
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </>
+        {hasApiKey("gemini") && (
+          <section className="space-y-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
+              <Bot className="size-4 text-blue-400" />
+              Free Tier Models (Bring Your Own Key)
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {geminiModels.map((model) => (
+                <ModelCard
+                  key={model}
+                  name={model}
+                  description="Experimental access via personal Gemini API key."
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
   );
 }

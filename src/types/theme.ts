@@ -55,4 +55,5 @@ export interface ThemeConfig {
   theme: ThemeName;
   mode: ThemeMode;
   enableAnimations: boolean;
+  enableCompactMode: boolean;
 }

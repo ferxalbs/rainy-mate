@@ -1,17 +1,21 @@
 import { useState } from "react";
-import { TextField, Input, Button, Spinner } from "@heroui/react";
 import {
-  Sparkles,
   Check,
   X,
   EyeOff,
   Eye,
   Copy,
-  ExternalLink,
   Trash2,
+  RefreshCw,
+  Key as KeyIcon,
 } from "lucide-react";
 import { useAIProvider } from "../../../hooks";
 import { AI_PROVIDERS, type ProviderType } from "../../../types";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 export function ApiKeysTab() {
   const { hasApiKey, validateApiKey, storeApiKey, getApiKey, deleteApiKey } =
@@ -121,7 +125,7 @@ export function ApiKeysTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       {AI_PROVIDERS.map((provider) => {
         const providerId = getProviderId(provider.id);
         const hasKey = hasApiKey(providerId);
@@ -134,77 +138,75 @@ export function ApiKeysTab() {
         const showInput = !hasKey || isReplacing;
 
         return (
-          <div
+          <Card
             key={provider.id}
-            className="p-4 rounded-xl border bg-muted/50 border-border/50"
+            className="group overflow-hidden border-border/10 bg-muted/20 backdrop-blur-xl transition-all hover:bg-muted/30 hover:border-border/20"
           >
-            <div className="space-y-3">
+            <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="size-4 text-accent" />
-                  <span className="font-medium">{provider.name}</span>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <KeyIcon className="size-4 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm tracking-tight">{provider.name}</h4>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium opacity-60">Credential Locked</p>
+                  </div>
                 </div>
                 {hasKey && !isReplacing && (
-                  <span className="text-xs text-green-600 flex items-center gap-1">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-bold uppercase tracking-wider">
                     <Check className="size-3" />
-                    Stored in Keychain
-                  </span>
+                    Secure Vault
+                  </div>
                 )}
               </div>
 
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground leading-relaxed italic">
                 {provider.description}
               </p>
 
+              <Separator className="opacity-5" />
+
               {showInput ? (
-                <div className="space-y-4 pt-1">
-                  <div className="relative group">
-                    <TextField
-                      aria-label={`${provider.name} API Key`}
-                      className="w-full"
-                      name={`api-key-${provider.id}`}
-                      type={showKey ? "text" : "password"}
-                      onChange={(value) =>
-                        handleApiKeyChange(provider.id, value)
-                      }
-                    >
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80 ml-1">
+                      {isReplacing ? "New Secret Key" : "Secret Key"}
+                    </Label>
+                    <div className="relative group/input">
                       <Input
-                        className="w-full rounded-xl border border-border/40 bg-muted/30 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-muted-foreground/40 focus:border-primary/50 focus:bg-muted/40 focus:ring-2 focus:ring-primary/10 pr-10"
-                        placeholder={
-                          isReplacing
-                            ? "Enter new API key..."
-                            : "Enter API key to enable..."
-                        }
+                        type={showKey ? "text" : "password"}
+                        placeholder={isReplacing ? "sk-..." : "Paste your key here..."}
                         value={apiKeyInputs[provider.id] || ""}
+                        onChange={(e) => handleApiKeyChange(provider.id, e.target.value)}
+                        className="h-11 bg-background/40 border-border/10 pr-10 focus:ring-primary/20 transition-all rounded-xl"
                       />
-                    </TextField>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 min-w-0 p-0 text-muted-foreground hover:text-foreground z-10"
-                      onPress={() => toggleShowKey(provider.id)}
-                    >
-                      {showKey ? (
-                        <EyeOff className="size-4" />
-                      ) : (
-                        <Eye className="size-4" />
-                      )}
-                    </Button>
+                      <button
+                        type="button"
+                        onClick={() => toggleShowKey(provider.id)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
+                      >
+                        {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
+                      {status === "validating" && (
+                        <RefreshCw className="size-3.5 animate-spin text-primary" />
+                      )}
                       {status === "valid" && (
-                        <span className="text-xs text-green-500 font-medium flex items-center gap-1.5 animate-appear">
+                        <div className="text-[11px] text-emerald-500 font-bold uppercase flex items-center gap-1.5 animate-in zoom-in-95">
                           <Check className="size-3.5" />
-                          Key Valid
-                        </span>
+                          Validated
+                        </div>
                       )}
                       {status === "invalid" && (
-                        <span className="text-xs text-red-500 font-medium flex items-center gap-1.5 animate-appear">
+                        <div className="text-[11px] text-destructive font-bold uppercase flex items-center gap-1.5 animate-in zoom-in-95">
                           <X className="size-3.5" />
-                          Invalid Key
-                        </span>
+                          Denied
+                        </div>
                       )}
                     </div>
 
@@ -213,115 +215,92 @@ export function ApiKeysTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onPress={() =>
-                            setReplacingKeys((prev) => ({
-                              ...prev,
-                              [providerId]: false,
-                            }))
-                          }
+                          onClick={() => setReplacingKeys((prev) => ({ ...prev, [providerId]: false }))}
+                          className="h-8 rounded-lg text-xs"
                         >
-                          Cancel
+                          Abort
                         </Button>
                       )}
                       <Button
                         variant="secondary"
                         size="sm"
-                        onPress={() => handleValidateKey(provider.id)}
-                        isDisabled={
-                          !apiKeyInputs[provider.id]?.trim() ||
-                          status === "validating"
-                        }
+                        onClick={() => handleValidateKey(provider.id)}
+                        disabled={!apiKeyInputs[provider.id]?.trim() || status === "validating"}
+                        className="h-8 rounded-lg text-xs px-4"
                       >
-                        {status === "validating" ? (
-                          <Spinner size="sm" color="current" />
-                        ) : (
-                          "Validate"
-                        )}
+                        {status === "validating" ? "Checking..." : "Verify"}
                       </Button>
                       <Button
-                        variant="primary"
+                        variant="default"
                         size="sm"
-                        className="font-medium shadow-lg shadow-primary/10"
-                        onPress={async () => {
+                        onClick={async () => {
                           await handleSaveKey(provider.id);
-                          setReplacingKeys((prev) => ({
-                            ...prev,
-                            [providerId]: false,
-                          }));
+                          setReplacingKeys((prev) => ({ ...prev, [providerId]: false }));
                         }}
-                        isDisabled={
-                          !apiKeyInputs[provider.id]?.trim() || saving
-                        }
+                        disabled={!apiKeyInputs[provider.id]?.trim() || saving}
+                        className="h-8 rounded-lg text-xs px-4 font-bold bg-primary hover:bg-primary/90"
                       >
-                        {saving ? "Saving..." : "Save Key"}
+                        {saving ? "Storing..." : "Lock in Vault"}
                       </Button>
                     </div>
                   </div>
 
                   {validationError[provider.id] && (
-                    <p className="text-xs text-red-500/80 pl-1">
-                      {validationError[provider.id]}
-                    </p>
+                    <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-[11px] text-destructive italic">
+                      Error: {validationError[provider.id]}
+                    </div>
                   )}
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="bg-muted/30 hover:bg-muted/50 text-foreground border border-border/20"
-                      onPress={() => handleViewKey(provider.id)}
+                      onClick={() => handleViewKey(provider.id)}
+                      className="h-8 border-border/10 bg-muted/20 hover:bg-muted/40 text-xs rounded-lg"
                     >
-                      {visibleKey ? (
-                        <>
-                          <EyeOff className="size-4 mr-1" />
-                          Hide
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="size-4 mr-1" />
-                          View
-                        </>
-                      )}
+                      {visibleKey ? <EyeOff className="size-3.5 mr-2" /> : <Eye className="size-3.5 mr-2" />}
+                      {visibleKey ? "Hide Secret" : "Reveal Secret"}
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="bg-muted/30 hover:bg-muted/50 text-foreground border border-border/20"
-                      onPress={() => handleReplaceKey(provider.id)}
+                      onClick={() => handleReplaceKey(provider.id)}
+                      className="h-8 border-border/10 bg-muted/20 hover:bg-muted/40 text-xs rounded-lg"
                     >
-                      <ExternalLink className="size-4 mr-1" />
-                      Replace
+                      <RefreshCw className="size-3.5 mr-2" />
+                      Rotate Key
                     </Button>
                     <Button
-                      variant="danger-soft"
+                      variant="destructive"
                       size="sm"
-                      onPress={() => handleDeleteKey(provider.id)}
+                      onClick={() => handleDeleteKey(provider.id)}
+                      className="h-8 text-xs rounded-lg px-4 opacity-50 hover:opacity-100 transition-opacity"
                     >
-                      <Trash2 className="size-4 mr-1" />
-                      Remove
+                      <Trash2 className="size-3.5 mr-2" />
+                      Purge
                     </Button>
                   </div>
                   {visibleKey && (
-                    <div className="mt-2 p-3 bg-muted rounded-lg border border-border/50 text-xs font-mono break-all relative group animate-appear">
-                      {visibleKey}
+                    <div className="mt-2 p-3 bg-background/50 backdrop-blur-md rounded-xl border border-border/10 text-[11px] font-mono break-all relative group/key animate-in fade-in zoom-in-95 duration-300">
+                      <span className="text-foreground/80">{visibleKey}</span>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onPress={() =>
-                          navigator.clipboard.writeText(visibleKey)
-                        }
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-background border border-border/10 opacity-0 group-hover/key:opacity-100 transition-all shadow-xl"
+                        onClick={() => {
+                          navigator.clipboard.writeText(visibleKey);
+                        }}
                       >
-                        <Copy className="size-3" />
+                        <Copy className="size-3 text-primary" />
                       </Button>
                     </div>
                   )}
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         );
       })}
     </div>

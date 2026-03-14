@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Aligned Chat UI with reference design: added growing dynamic input area, redesigned "Let's build" suggestion cards, and improved adaptive blurs (`backdrop-blur-2xl`).
 - Replaced nested `Button` components in `TooltipTrigger` with `render` props and `buttonVariants` to resolve Base UI `asChild` TypeScript errors.
 - Cleaned up the chat footer row for local model and reasoning effort selection.
+- Refactored **Settings Page** to a premium macOS-inspired sidebar layout using Shadcn/UI:
+  - Migrated all settings tabs (**Models, API Keys, Appearance, Permissions, Profile**) from HeroUI to Shadcn/UI.
+  - Rebuilt `ThemeSelector` with high-fidelity glass cards and custom mode toggles.
+  - Implemented `enableCompactMode` in `ThemeProvider` with persistent local storage.
+  - Enhanced **API Keys** management with credential masking, one-click visibility, and real-time validation feedback.
+  - Improved mobile responsiveness with a condensed horizontal tab navigation for small screens.
 
 ## [0.5.96] - 2026-03-11 - THE FORGE (AGENT FACTORY PRODUCTION)
 
