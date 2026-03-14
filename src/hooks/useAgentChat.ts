@@ -25,8 +25,9 @@ export function useAgentChat() {
   );
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isHydratingHistory, setIsHydratingHistory] = useState(false);
-  const [hasHydratedHistory, setHasHydratedHistory] = useState(false);
   const forgeRecordingIdRef = useRef<string | null>(null);
+  const isHydratingRef = useRef(false);
+  const hasHydratedRef = useRef(false);
 
   const { streamWithRouting } = useStreaming();
   const { createTask } = useTauriTask();
@@ -85,7 +86,7 @@ export function useAgentChat() {
     setCurrentPlan(null);
     setHistoryCursorRowid(null);
     setHasMoreHistory(false);
-    setHasHydratedHistory(true);
+    hasHydratedRef.current = true;
   }, [chatScopeId]);
 
   const mapPersistedRoleToUiType = useCallback(
@@ -98,14 +99,16 @@ export function useAgentChat() {
   );
 
   const ensureChatScope = useCallback(async () => {
-    if (chatScopeId) return chatScopeId;
+    // Check state but don't depend on it in the outer useCallback if possible
+    // Actually, we can just use the value from a ref or just call the service.
     const scope = await tauri.getDefaultChatScope();
     setChatScopeId(scope);
     return scope;
-  }, [chatScopeId]);
+  }, []); // No dependency on chatScopeId to avoid recreation loop
 
   const hydrateLongChatHistory = useCallback(async () => {
-    if (isHydratingHistory || hasHydratedHistory) return;
+    if (isHydratingRef.current || hasHydratedRef.current) return;
+    isHydratingRef.current = true;
     setIsHydratingHistory(true);
     try {
       const scope = await ensureChatScope();
@@ -143,16 +146,15 @@ export function useAgentChat() {
       setMessages(hydratedMessages);
       setHistoryCursorRowid(window.next_cursor_rowid ?? null);
       setHasMoreHistory(window.has_more);
-      setHasHydratedHistory(true);
+      hasHydratedRef.current = true;
     } catch (error) {
       console.error("Failed to hydrate long chat history:", error);
     } finally {
+      isHydratingRef.current = false;
       setIsHydratingHistory(false);
     }
   }, [
     ensureChatScope,
-    hasHydratedHistory,
-    isHydratingHistory,
     mapPersistedRoleToUiType,
   ]);
 

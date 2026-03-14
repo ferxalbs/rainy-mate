@@ -88,7 +88,7 @@ export function AgentChatPanel({
   onClose,
   className,
 }: AgentChatPanelProps) {
-  const { mode, setMode } = useTheme();
+  const { mode, toggleModeWithTransition } = useTheme();
   const [input, setInput] = useState("");
   const [currentModelId, setCurrentModelId] = useState("");
   const [selectedModel, setSelectedModel] = useState<UnifiedModel | null>(null);
@@ -357,7 +357,7 @@ export function AgentChatPanel({
           <div className="flex items-center gap-1">
             <MacOSToggle
               isDark={mode === "dark"}
-              onToggle={(checked) => setMode(checked ? "dark" : "light")}
+              onToggle={(_checked, e) => toggleModeWithTransition(e)}
             />
             <div className="mx-2 hidden h-4 w-px bg-border/50 sm:block" />
             <TooltipProvider delay={0}>

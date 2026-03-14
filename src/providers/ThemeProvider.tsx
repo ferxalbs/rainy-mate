@@ -5,6 +5,7 @@ import {
   useCallback,
   useRef,
 } from "react";
+import { flushSync } from "react-dom";
 import type { ReactNode } from "react";
 import type { ThemeName, ThemeMode, ThemeConfig, Theme } from "../types/theme";
 import { themes } from "../lib/themes";
@@ -21,6 +22,7 @@ interface ThemeContextType {
   setMode: (mode: ThemeMode) => void;
   setEnableAnimations: (enable: boolean) => void;
   toggleMode: () => void;
+  toggleModeWithTransition: (event?: React.MouseEvent | { x: number; y: number }) => void;
   themes: Theme[];
 }
 
@@ -125,6 +127,51 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setModeState((prev) => (prev === "light" ? "dark" : "light"));
   }, []);
 
+  const toggleModeWithTransition = useCallback((event?: React.MouseEvent | { x: number; y: number }) => {
+    if (typeof document.startViewTransition !== "function") {
+      toggleMode();
+      return;
+    }
+
+    let x = window.innerWidth / 2;
+    let y = window.innerHeight / 2;
+
+    if (event) {
+      if ("clientX" in event) {
+        x = event.clientX;
+        y = event.clientY;
+      } else if ("x" in event) {
+        x = event.x;
+        y = event.y;
+      }
+    }
+
+    const { width, height } = document.documentElement.getBoundingClientRect();
+    const maxRadius = Math.hypot(Math.max(x, width - x), Math.max(y, height - y));
+
+    const transition = document.startViewTransition(() => {
+      flushSync(() => {
+        toggleMode();
+      });
+    });
+
+    transition.ready.then(() => {
+      document.documentElement.animate(
+        {
+          clipPath: [
+            `circle(0px at ${x}px ${y}px)`,
+            `circle(${maxRadius}px at ${x}px ${y}px)`,
+          ],
+        },
+        {
+          duration: 400,
+          easing: "ease-in-out",
+          pseudoElement: "::view-transition-new(root)",
+        }
+      );
+    });
+  }, [toggleMode]);
+
   const config: ThemeConfig = { theme, mode, enableAnimations };
 
   const value = {
@@ -136,6 +183,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setMode,
     setEnableAnimations,
     toggleMode,
+    toggleModeWithTransition,
     themes: Object.values(themes),
   };
 

@@ -39,7 +39,7 @@ export function TahoeLayout({
   activeSection,
   isImmersive,
 }: TahoeLayoutProps & { isImmersive?: boolean }) {
-  const { mode, setMode } = useTheme();
+  const { mode, toggleModeWithTransition } = useTheme();
   const [isWindows, setIsWindows] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const cloudStatus = useCloudBridgeStatus();
@@ -51,10 +51,6 @@ export function TahoeLayout({
   }, []);
 
   const isDark = mode === "dark";
-
-  const toggleTheme = (selected: boolean) => {
-    setMode(selected ? "dark" : "light");
-  };
 
   const shouldBeImmersive = isImmersive ?? activeSection === "agent-chat";
 
@@ -128,7 +124,7 @@ export function TahoeLayout({
               {/* Custom macOS Toggle */}
               <MacOSToggle
                 isDark={isDark}
-                onToggle={(checked) => toggleTheme(checked)}
+                onToggle={(_checked, e) => toggleModeWithTransition(e)}
               />
 
               {/* Windows Controls */}
