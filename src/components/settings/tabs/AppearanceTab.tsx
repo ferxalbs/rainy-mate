@@ -2,17 +2,16 @@ import { useContext } from "react";
 import { Sparkles, Layers, Zap } from "lucide-react";
 import { ThemeSelector } from "../ThemeSelector";
 import { ThemeContext } from "../../../providers/ThemeProvider";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { Switch } from "@heroui/react";
 
 export function AppearanceTab() {
   const themeContext = useContext(ThemeContext);
 
   return (
-    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="space-y-12 animate-in fade-in duration-500">
       <ThemeSelector />
 
-      <Separator className="opacity-10" />
+      <div className="h-px bg-success/10 w-full opacity-10" />
 
       <div className="space-y-8">
         <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">
@@ -26,8 +25,8 @@ export function AppearanceTab() {
             </span>
           </div>
           <Switch
-            checked={themeContext?.enableAnimations}
-            onCheckedChange={(checked) => themeContext?.setEnableAnimations(checked)}
+            isSelected={themeContext?.enableAnimations}
+            onChange={(checked) => themeContext?.setEnableAnimations(checked as unknown as boolean)}
           />
         </div>
 
@@ -42,8 +41,8 @@ export function AppearanceTab() {
             </span>
           </div>
           <Switch
-            checked={themeContext?.enableCompactMode}
-            onCheckedChange={(checked) => themeContext?.setEnableCompactMode(checked)}
+            isSelected={themeContext?.enableCompactMode}
+            onChange={(checked) => themeContext?.setEnableCompactMode(checked as unknown as boolean)}
           />
         </div>
 
@@ -57,7 +56,7 @@ export function AppearanceTab() {
               Disables all blur and transparency for maximum performance.
             </span>
           </div>
-          <Switch disabled />
+          <Switch isDisabled />
         </div>
       </div>
     </div>

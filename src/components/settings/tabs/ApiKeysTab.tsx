@@ -11,11 +11,7 @@ import {
 } from "lucide-react";
 import { useAIProvider } from "../../../hooks";
 import { AI_PROVIDERS, type ProviderType } from "../../../types";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Input, Button, Card } from "@heroui/react";
 
 export function ApiKeysTab() {
   const { hasApiKey, validateApiKey, storeApiKey, getApiKey, deleteApiKey } =
@@ -125,7 +121,7 @@ export function ApiKeysTab() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {AI_PROVIDERS.map((provider) => {
         const providerId = getProviderId(provider.id);
         const hasKey = hasApiKey(providerId);
@@ -140,9 +136,9 @@ export function ApiKeysTab() {
         return (
           <Card
             key={provider.id}
-            className="group overflow-hidden border-border/10 bg-muted/20 backdrop-blur-xl transition-all hover:bg-muted/30 hover:border-border/20"
+            className="group overflow-hidden border border-border/10 bg-muted/20 backdrop-blur-xl transition-all hover:bg-muted/30 hover:border-border/20 shadow-none rounded-2xl"
           >
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-visible">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-primary/10">
@@ -165,26 +161,26 @@ export function ApiKeysTab() {
                 {provider.description}
               </p>
 
-              <Separator className="opacity-5" />
+              <div className="h-px bg-border/5 w-full opacity-5" />
 
               {showInput ? (
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80 ml-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80 ml-1 pb-1 block">
                       {isReplacing ? "New Secret Key" : "Secret Key"}
-                    </Label>
-                    <div className="relative group/input">
+                    </label>
+                    <div className="relative">
                       <Input
                         type={showKey ? "text" : "password"}
                         placeholder={isReplacing ? "sk-..." : "Paste your key here..."}
                         value={apiKeyInputs[provider.id] || ""}
                         onChange={(e) => handleApiKeyChange(provider.id, e.target.value)}
-                        className="h-11 bg-background/40 border-border/10 pr-10 focus:ring-primary/20 transition-all rounded-xl"
+                        className="h-11 bg-background/40 border-border/10 pr-10 focus:ring-primary/20 transition-all rounded-xl w-full"
                       />
                       <button
                         type="button"
                         onClick={() => toggleShowKey(provider.id)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors outline-none focus:outline-none"
                       >
                         {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                       </button>
@@ -203,7 +199,7 @@ export function ApiKeysTab() {
                         </div>
                       )}
                       {status === "invalid" && (
-                        <div className="text-[11px] text-destructive font-bold uppercase flex items-center gap-1.5 animate-in zoom-in-95">
+                        <div className="text-[11px] text-danger font-bold uppercase flex items-center gap-1.5 animate-in zoom-in-95">
                           <X className="size-3.5" />
                           Denied
                         </div>
@@ -215,7 +211,7 @@ export function ApiKeysTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setReplacingKeys((prev) => ({ ...prev, [providerId]: false }))}
+                          onPress={() => setReplacingKeys((prev) => ({ ...prev, [providerId]: false }))}
                           className="h-8 rounded-lg text-xs"
                         >
                           Abort
@@ -224,21 +220,21 @@ export function ApiKeysTab() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => handleValidateKey(provider.id)}
-                        disabled={!apiKeyInputs[provider.id]?.trim() || status === "validating"}
+                        onPress={() => handleValidateKey(provider.id)}
+                        isDisabled={!apiKeyInputs[provider.id]?.trim() || status === "validating"}
                         className="h-8 rounded-lg text-xs px-4"
                       >
                         {status === "validating" ? "Checking..." : "Verify"}
                       </Button>
                       <Button
-                        variant="default"
+                        variant="primary"
                         size="sm"
-                        onClick={async () => {
+                        onPress={async () => {
                           await handleSaveKey(provider.id);
                           setReplacingKeys((prev) => ({ ...prev, [providerId]: false }));
                         }}
-                        disabled={!apiKeyInputs[provider.id]?.trim() || saving}
-                        className="h-8 rounded-lg text-xs px-4 font-bold bg-primary hover:bg-primary/90"
+                        isDisabled={!apiKeyInputs[provider.id]?.trim() || saving}
+                        className="h-8 rounded-lg text-xs px-4 font-bold"
                       >
                         {saving ? "Storing..." : "Lock in Vault"}
                       </Button>
@@ -246,7 +242,7 @@ export function ApiKeysTab() {
                   </div>
 
                   {validationError[provider.id] && (
-                    <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-[11px] text-destructive italic">
+                    <div className="p-3 rounded-lg bg-danger/10 border border-danger/20 text-[11px] text-danger italic">
                       Error: {validationError[provider.id]}
                     </div>
                   )}
@@ -257,28 +253,28 @@ export function ApiKeysTab() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleViewKey(provider.id)}
+                      onPress={() => handleViewKey(provider.id)}
                       className="h-8 border-border/10 bg-muted/20 hover:bg-muted/40 text-xs rounded-lg"
                     >
-                      {visibleKey ? <EyeOff className="size-3.5 mr-2" /> : <Eye className="size-3.5 mr-2" />}
+                      {visibleKey ? <EyeOff className="size-3.5 mr-1" /> : <Eye className="size-3.5 mr-1" />}
                       {visibleKey ? "Hide Secret" : "Reveal Secret"}
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleReplaceKey(provider.id)}
+                      onPress={() => handleReplaceKey(provider.id)}
                       className="h-8 border-border/10 bg-muted/20 hover:bg-muted/40 text-xs rounded-lg"
                     >
-                      <RefreshCw className="size-3.5 mr-2" />
+                      <RefreshCw className="size-3.5 mr-1" />
                       Rotate Key
                     </Button>
                     <Button
-                      variant="destructive"
+                      variant="danger"
                       size="sm"
-                      onClick={() => handleDeleteKey(provider.id)}
-                      className="h-8 text-xs rounded-lg px-4 opacity-50 hover:opacity-100 transition-opacity"
+                      onPress={() => handleDeleteKey(provider.id)}
+                      className="h-8 text-xs rounded-lg px-4 opacity-70 hover:opacity-100 transition-opacity"
                     >
-                      <Trash2 className="size-3.5 mr-2" />
+                      <Trash2 className="size-3.5 mr-1" />
                       Purge
                     </Button>
                   </div>
@@ -287,13 +283,13 @@ export function ApiKeysTab() {
                       <span className="text-foreground/80">{visibleKey}</span>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-background border border-border/10 opacity-0 group-hover/key:opacity-100 transition-all shadow-xl"
-                        onClick={() => {
+                        size="sm"
+                        className="absolute -top-2 -right-2 h-7 w-7 min-w-7 rounded-full bg-background border border-border/10 opacity-0 group-hover/key:opacity-100 transition-all shadow-xl p-0 flex items-center justify-center"
+                        onPress={() => {
                           navigator.clipboard.writeText(visibleKey);
                         }}
                       >
-                        <Copy className="size-3 text-primary" />
+                         <Copy className="size-3 text-primary" />
                       </Button>
                     </div>
                   )}

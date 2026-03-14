@@ -1,156 +1,274 @@
-// Rainy Cowork - Settings Page
-// Full-page settings with AI model selection, API keys, and preferences
-
-import { Bot, Key, User, ChevronLeft, Palette, Shield } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@heroui/react";
+import { Bot, Key, User, ArrowLeft, Palette, Shield } from "lucide-react";
+import { useTheme } from "../../hooks/useTheme";
 
 import { ModelsTab } from "./tabs/ModelsTab";
 import { ApiKeysTab } from "./tabs/ApiKeysTab";
 import { AppearanceTab } from "./tabs/AppearanceTab";
 import { PermissionsTab } from "./tabs/PermissionsTab";
 import { ProfileTab } from "./tabs/ProfileTab";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SettingsPageProps {
   initialTab?: string;
   onBack?: () => void;
 }
 
+const NavItem = ({
+  icon: Icon,
+  label,
+  description,
+  isActive,
+  onPress,
+}: {
+  icon: any;
+  label: string;
+  description: string;
+  isActive: boolean;
+  onPress: () => void;
+}) => {
+  return (
+    <button
+      onClick={onPress}
+      className={`w-full text-left px-4 py-3 rounded-2xl transition-all duration-300 group relative overflow-hidden flex-shrink-0 ${
+        isActive
+          ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
+          : "hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      <div className="flex items-center gap-3 relative z-10">
+        <div
+          className={`p-1.5 rounded-full ${
+            isActive ? "bg-black/10" : "bg-white/5 group-hover:bg-white/10"
+          }`}
+        >
+          <Icon className="size-4" />
+        </div>
+        <div>
+          <span
+            className={`block text-sm font-bold ${isActive ? "text-primary-foreground" : "text-foreground"}`}
+          >
+            {label}
+          </span>
+          {description && (
+            <span
+              className={`text-[10px] uppercase tracking-wider ${isActive ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+            >
+              {description}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+};
+
 export function SettingsPage({
   initialTab = "models",
   onBack,
 }: SettingsPageProps) {
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const { mode } = useTheme();
+  const isDark = mode === "dark";
+
   return (
-    <div className="h-full flex flex-col relative z-20 bg-background/30 backdrop-blur-md">
-      {/* Header - macOS Style Premium */}
-      <div className="flex items-center gap-2 p-6 shrink-0 border-b border-border/10">
-        {onBack && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full h-8 w-8 min-w-[32px] hover:bg-foreground/5 text-foreground/80 -ml-2"
-            onClick={onBack}
-          >
-            <ChevronLeft className="size-5" />
-          </Button>
-        )}
-        <h1 className="text-xl font-bold tracking-tight pl-1 bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
-          Settings
-        </h1>
-      </div>
+    <div className="h-full w-full bg-background p-3 flex gap-3 overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground relative z-20">
+      <div
+        className="absolute inset-0 w-full h-full z-0 block md:hidden"
+        data-tauri-drag-region
+      />
 
-      {/* Settings Framework - Sidebar Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        <Tabs
-          defaultValue={initialTab}
-          orientation="vertical"
-          className="flex-1 flex"
-        >
-          {/* Sidebar */}
-          <aside className="w-64 border-r border-border/5 bg-muted/20 hidden md:block">
-            <ScrollArea className="h-full">
-              <div className="p-4 space-y-4">
-                <TabsList variant="line" className="flex flex-col h-auto bg-transparent w-full gap-1">
-                  <TabsTrigger
-                    value="models"
-                    className="w-full justify-start gap-3 px-4 py-2.5 rounded-xl data-active:bg-background/80 data-active:shadow-sm"
-                  >
-                    <Bot className="size-4.5" />
-                    <span>AI Models</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="keys"
-                    className="w-full justify-start gap-3 px-4 py-2.5 rounded-xl data-active:bg-background/80 data-active:shadow-sm"
-                  >
-                    <Key className="size-4.5" />
-                    <span>API Keys</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="appearance"
-                    className="w-full justify-start gap-3 px-4 py-2.5 rounded-xl data-active:bg-background/80 data-active:shadow-sm"
-                  >
-                    <Palette className="size-4.5" />
-                    <span>Appearance</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="permissions"
-                    className="w-full justify-start gap-3 px-4 py-2.5 rounded-xl data-active:bg-background/80 data-active:shadow-sm"
-                  >
-                    <Shield className="size-4.5" />
-                    <span>Permissions</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="profile"
-                    className="w-full justify-start gap-3 px-4 py-2.5 rounded-xl data-active:bg-background/80 data-active:shadow-sm"
-                  >
-                    <User className="size-4.5" />
-                    <span>Profile</span>
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-            </ScrollArea>
-          </aside>
+      {/* Sidebar Navigation */}
+      <aside
+        className={`hidden md:flex flex-col w-[260px] shrink-0 rounded-[1.5rem] border border-border/40 shadow-xl overflow-hidden relative z-10 ${isDark ? "bg-card/20" : "bg-card/60"} backdrop-blur-2xl`}
+      >
+        <div className="p-6 pb-2" data-tauri-drag-region>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-4 group relative z-50 window-no-drag"
+            >
+              <ArrowLeft className="size-3 group-hover:-translate-x-1 transition-transform" />
+              <span className="text-xs font-medium tracking-wide uppercase">
+                Back
+              </span>
+            </button>
+          )}
+          <h1 className="text-xl font-bold text-foreground tracking-tight leading-tight pointer-events-none">
+            Settings
+          </h1>
+        </div>
 
-          {/* Mobile Navigation (Condensed List) */}
-          <div className="md:hidden w-full border-b border-border/10">
-             <TabsList className="w-full flex justify-around p-2 bg-transparent h-auto overflow-x-auto">
-                <TabsTrigger value="models" className="flex-col gap-1 text-[10px] h-auto py-2"><Bot className="size-4" />Models</TabsTrigger>
-                <TabsTrigger value="keys" className="flex-col gap-1 text-[10px] h-auto py-2"><Key className="size-4" />Keys</TabsTrigger>
-                <TabsTrigger value="appearance" className="flex-col gap-1 text-[10px] h-auto py-2"><Palette className="size-4" />Theme</TabsTrigger>
-                <TabsTrigger value="permissions" className="flex-col gap-1 text-[10px] h-auto py-2"><Shield className="size-4" />Shield</TabsTrigger>
-                <TabsTrigger value="profile" className="flex-col gap-1 text-[10px] h-auto py-2"><User className="size-4" />User</TabsTrigger>
-             </TabsList>
+        <div className="flex-1 px-3 space-y-1 overflow-y-auto relative z-20 py-2">
+          <NavItem
+            icon={Bot}
+            label="AI Models"
+            description="Core Providers"
+            isActive={activeTab === "models"}
+            onPress={() => setActiveTab("models")}
+          />
+          <NavItem
+            icon={Key}
+            label="API Keys"
+            description="Credentials"
+            isActive={activeTab === "keys"}
+            onPress={() => setActiveTab("keys")}
+          />
+          <NavItem
+            icon={Palette}
+            label="Appearance"
+            description="Theme & Display"
+            isActive={activeTab === "appearance"}
+            onPress={() => setActiveTab("appearance")}
+          />
+          <NavItem
+            icon={Shield}
+            label="Permissions"
+            description="Security"
+            isActive={activeTab === "permissions"}
+            onPress={() => setActiveTab("permissions")}
+          />
+          <NavItem
+            icon={User}
+            label="Profile"
+            description="Account"
+            isActive={activeTab === "profile"}
+            onPress={() => setActiveTab("profile")}
+          />
+        </div>
+
+        <div className="p-4 pt-2">
+          <div className="text-[10px] text-muted-foreground font-mono text-center opacity-50 pointer-events-none">
+            Rainy Cowork
           </div>
+        </div>
+      </aside>
 
-          {/* Content Area */}
-          <main className="flex-1 bg-background/5 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="max-w-3xl mx-auto p-6 md:p-10 space-y-12 pb-32">
-                <TabsContent value="models">
-                  <header className="mb-8 space-y-1">
-                    <h2 className="text-2xl font-bold tracking-tight">AI Models</h2>
-                    <p className="text-muted-foreground text-sm">Configure preferred models and memory providers.</p>
-                  </header>
-                  <ModelsTab />
-                </TabsContent>
+      {/* Main Content Area */}
+      <main
+        className={`flex-1 rounded-[1.5rem] border border-border/40 shadow-xl flex flex-col overflow-hidden relative z-10 ${isDark ? "bg-card/20" : "bg-card/60"} backdrop-blur-2xl`}
+      >
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/[0.03] blur-[100px] rounded-full pointer-events-none z-0" />
 
-                <TabsContent value="keys">
-                  <header className="mb-8 space-y-1">
-                    <h2 className="text-2xl font-bold tracking-tight">API Keys</h2>
-                    <p className="text-muted-foreground text-sm">Manage your keys for different AI providers.</p>
-                  </header>
-                  <ApiKeysTab />
-                </TabsContent>
+        {/* Mobile Nav Top Bar */}
+        <div className="md:hidden flex overflow-x-auto p-2 border-b border-border/10 bg-background/20 backdrop-blur-xl shrink-0 gap-2 z-20">
+          <Button
+            size="sm"
+            variant="ghost"
+            className={activeTab === "models" ? "bg-primary/20 text-primary" : ""}
+            onPress={() => setActiveTab("models")}
+          >
+            <Bot className="size-4 mr-2" /> Models
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className={activeTab === "keys" ? "bg-primary/20 text-primary" : ""}
+            onPress={() => setActiveTab("keys")}
+          >
+            <Key className="size-4 mr-2" /> Keys
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className={activeTab === "appearance" ? "bg-primary/20 text-primary" : ""}
+            onPress={() => setActiveTab("appearance")}
+          >
+            <Palette className="size-4 mr-2" /> Theme
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className={activeTab === "permissions" ? "bg-primary/20 text-primary" : ""}
+            onPress={() => setActiveTab("permissions")}
+          >
+            <Shield className="size-4 mr-2" /> Shield
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className={activeTab === "profile" ? "bg-primary/20 text-primary" : ""}
+            onPress={() => setActiveTab("profile")}
+          >
+            <User className="size-4 mr-2" /> Profile
+          </Button>
+        </div>
 
-                <TabsContent value="appearance">
-                  <header className="mb-8 space-y-1">
-                    <h2 className="text-2xl font-bold tracking-tight">Appearance</h2>
-                    <p className="text-muted-foreground text-sm">Customize themes and premium animations.</p>
-                  </header>
-                  <AppearanceTab />
-                </TabsContent>
-
-                <TabsContent value="permissions">
-                  <header className="mb-8 space-y-1">
-                    <h2 className="text-2xl font-bold tracking-tight">Permissions</h2>
-                    <p className="text-muted-foreground text-sm">Global app behavior and security settings.</p>
-                  </header>
-                  <PermissionsTab />
-                </TabsContent>
-
-                <TabsContent value="profile">
-                  <header className="mb-8 space-y-1">
-                    <h2 className="text-2xl font-bold tracking-tight">Profile</h2>
-                    <p className="text-muted-foreground text-sm">Manage your personal identity across the ecosystem.</p>
-                  </header>
-                  <ProfileTab />
-                </TabsContent>
+        {/* Content Scroll Area */}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 z-10 scrollbar-hide">
+          <div className="max-w-3xl mx-auto pb-16">
+            {activeTab === "models" && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <header className="mb-8 space-y-1 pl-2">
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                    AI Models
+                  </h2>
+                  <p className="text-muted-foreground text-sm uppercase tracking-wider font-medium">
+                    Configure preferred models and memory providers
+                  </p>
+                </header>
+                <ModelsTab />
               </div>
-            </ScrollArea>
-          </main>
-        </Tabs>
-      </div>
+            )}
+
+            {activeTab === "keys" && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <header className="mb-8 space-y-1 pl-2">
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                    API Keys
+                  </h2>
+                  <p className="text-muted-foreground text-sm uppercase tracking-wider font-medium">
+                    Manage your keys for different AI providers
+                  </p>
+                </header>
+                <ApiKeysTab />
+              </div>
+            )}
+
+            {activeTab === "appearance" && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <header className="mb-8 space-y-1 pl-2">
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                    Appearance
+                  </h2>
+                  <p className="text-muted-foreground text-sm uppercase tracking-wider font-medium">
+                    Customize themes and premium animations
+                  </p>
+                </header>
+                <AppearanceTab />
+              </div>
+            )}
+
+            {activeTab === "permissions" && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <header className="mb-8 space-y-1 pl-2">
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                    Permissions
+                  </h2>
+                  <p className="text-muted-foreground text-sm uppercase tracking-wider font-medium">
+                    Global app behavior and security settings
+                  </p>
+                </header>
+                <PermissionsTab />
+              </div>
+            )}
+
+            {activeTab === "profile" && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <header className="mb-8 space-y-1 pl-2">
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                    Profile
+                  </h2>
+                  <p className="text-muted-foreground text-sm uppercase tracking-wider font-medium">
+                    Manage your personal identity across the ecosystem
+                  </p>
+                </header>
+                <ProfileTab />
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

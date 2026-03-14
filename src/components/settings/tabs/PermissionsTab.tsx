@@ -1,10 +1,9 @@
 import { Bell, ShieldCheck, Zap } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { Switch } from "@heroui/react";
 
 export function PermissionsTab() {
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="space-y-10 animate-in fade-in duration-500">
       <div className="space-y-6">
         <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">
           <div className="flex flex-col gap-1">
@@ -16,7 +15,7 @@ export function PermissionsTab() {
               Receive alerts for task completions and system status.
             </span>
           </div>
-          <Switch defaultChecked />
+          <Switch defaultSelected />
         </div>
 
         <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">
@@ -29,7 +28,7 @@ export function PermissionsTab() {
               Allow L0 tools to run without explicit approval.
             </span>
           </div>
-          <Switch defaultChecked />
+          <Switch defaultSelected />
         </div>
 
         <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">
@@ -46,7 +45,7 @@ export function PermissionsTab() {
         </div>
       </div>
 
-      <Separator className="opacity-10" />
+      <div className="h-px bg-success/10 w-full opacity-10" />
 
       <section className="space-y-4">
         <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">

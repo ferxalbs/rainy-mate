@@ -2,10 +2,7 @@ import { useState } from "react";
 import { User, Mail, Building2, Briefcase, Check, Loader2 } from "lucide-react";
 import { useUserProfile } from "../../../hooks/useUserProfile";
 import type { UserProfile } from "../../../services/tauri";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
+import { Input, Button, Card } from "@heroui/react";
 
 export function ProfileTab() {
   const {
@@ -46,9 +43,8 @@ export function ProfileTab() {
   }
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="space-y-10 animate-in fade-in duration-500">
       <Card className="p-8 bg-muted/10 border-border/5 backdrop-blur-xl rounded-3xl space-y-8 shadow-2xl shadow-primary/5">
-        {/* Header */}
         <div className="flex items-center justify-between pb-6 border-b border-border/10">
           <div className="space-y-1.5">
             <h3 className="text-sm font-bold tracking-tight text-foreground uppercase opacity-70 flex items-center gap-2">
@@ -64,36 +60,35 @@ export function ProfileTab() {
           </div>
         </div>
 
-        {/* Form Grid */}
         <div className="grid gap-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
             <div className="space-y-3 group/field">
-              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors group-focus-within/field:text-primary">
+              <label className="block text-xs font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors group-focus-within/field:text-primary">
                 Display Name
-              </Label>
+              </label>
               <div className="relative">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/40 z-10" />
                 <Input
-                  className="h-12 pl-11 rounded-2xl bg-background/50 border-border/10 focus-visible:ring-primary/20 focus-visible:border-primary/50 transition-all"
+                  className="h-12 pl-11 rounded-2xl bg-background/50 border border-border/10 focus-within:ring-1 focus-within:ring-primary/20 focus-within:border-primary/50 transition-all shadow-none w-full"
                   placeholder="Creative Name"
                   value={profileForm.displayName || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateProfileField("displayName", e.target.value)}
+                  onChange={(e) => updateProfileField("displayName", e.target.value)}
                 />
               </div>
             </div>
 
             <div className="space-y-3 group/field">
-              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors group-focus-within/field:text-primary">
+              <label className="block text-xs font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors group-focus-within/field:text-primary">
                 Email Address
-              </Label>
+              </label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/40 z-10" />
                 <Input
-                  className="h-12 pl-11 rounded-2xl bg-background/50 border-border/10 focus-visible:ring-primary/20 focus-visible:border-primary/50 transition-all"
+                  className="h-12 pl-11 rounded-2xl bg-background/50 border border-border/10 focus-within:ring-1 focus-within:ring-primary/20 focus-within:border-primary/50 transition-all shadow-none w-full"
                   placeholder="name@domain.com"
                   type="email"
                   value={profileForm.email || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateProfileField("email", e.target.value)}
+                  onChange={(e) => updateProfileField("email", e.target.value)}
                 />
               </div>
             </div>
@@ -101,38 +96,37 @@ export function ProfileTab() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
             <div className="space-y-3 group/field">
-              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors group-focus-within/field:text-primary">
+              <label className="block text-xs font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors group-focus-within/field:text-primary">
                 Organization
-              </Label>
+              </label>
               <div className="relative">
                 <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/40 z-10" />
                 <Input
-                  className="h-12 pl-11 rounded-2xl bg-background/50 border-border/10 focus-visible:ring-primary/20 focus-visible:border-primary/50 transition-all"
+                  className="h-12 pl-11 rounded-2xl bg-background/50 border border-border/10 focus-within:ring-1 focus-within:ring-primary/20 focus-within:border-primary/50 transition-all shadow-none w-full"
                   placeholder="Studio or Company"
                   value={profileForm.organization || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateProfileField("organization", e.target.value)}
+                  onChange={(e) => updateProfileField("organization", e.target.value)}
                 />
               </div>
             </div>
 
             <div className="space-y-3 group/field">
-              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors group-focus-within/field:text-primary">
+              <label className="block text-xs font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors group-focus-within/field:text-primary">
                 Role / Title
-              </Label>
+              </label>
               <div className="relative">
                 <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/40 z-10" />
                 <Input
-                  className="h-12 pl-11 rounded-2xl bg-background/50 border-border/10 focus-visible:ring-primary/20 focus-visible:border-primary/50 transition-all"
+                  className="h-12 pl-11 rounded-2xl bg-background/50 border border-border/10 focus-within:ring-1 focus-within:ring-primary/20 focus-within:border-primary/50 transition-all shadow-none w-full"
                   placeholder="e.g. Lead Designer"
                   value={profileForm.role || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateProfileField("role", e.target.value)}
+                  onChange={(e) => updateProfileField("role", e.target.value)}
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-border/10">
           <div className="flex items-center gap-3">
             <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -141,9 +135,10 @@ export function ProfileTab() {
             </p>
           </div>
           <Button
-            onClick={handleSaveProfile}
-            disabled={isSavingProfile}
-            className="w-full sm:w-auto h-12 px-8 rounded-2xl bg-primary text-primary-foreground font-bold shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all gap-2"
+            onPress={handleSaveProfile}
+            isDisabled={isSavingProfile}
+            variant="primary"
+            className="w-full sm:w-auto h-12 px-8 rounded-2xl font-bold shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
           >
             {isSavingProfile ? (
               <>

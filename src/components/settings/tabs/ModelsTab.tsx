@@ -2,16 +2,7 @@ import { useState, useEffect } from "react";
 import { Zap, Bot, Database } from "lucide-react";
 import * as tauri from "../../../services/tauri";
 import { useAIProvider } from "../../../hooks";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Select, ListBox, Card, Skeleton } from "@heroui/react";
 
 const ModelCard = ({
   name,
@@ -20,13 +11,25 @@ const ModelCard = ({
   name: string;
   description: string;
 }) => (
-  <Card className="p-4 bg-muted/20 border-border/10 hover:bg-muted/30 transition-colors group">
+  <Card className="bg-success/5 border border-success/10 shadow-none hover:bg-success/10 transition-colors group p-4 rounded-xl">
     <div className="flex-1">
-      <span className="font-semibold text-sm group-hover:text-primary transition-colors">{name}</span>
+      <span className="font-bold text-sm text-foreground/90 group-hover:text-success transition-colors">{name}</span>
       <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{description}</p>
     </div>
   </Card>
 );
+
+const selectionToValue = (selection: unknown): string | null => {
+  if (typeof selection === "string") return selection;
+  if (selection && typeof selection === "object" && "values" in selection) {
+    // Check if it's a Set
+    if (selection instanceof Set) {
+      const first = selection.values().next().value;
+      return typeof first === "string" ? first : null;
+    }
+  }
+  return null;
+};
 
 export function ModelsTab() {
   const [isLoading, setIsLoading] = useState(true);
@@ -90,16 +93,16 @@ export function ModelsTab() {
     return (
       <div className="space-y-6">
         <div className="space-y-3">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-10 w-full max-w-sm" />
-          <Skeleton className="h-10 w-full max-w-sm" />
+          <Skeleton className="h-4 w-32 rounded-md" />
+          <Skeleton className="h-10 w-full max-w-sm rounded-xl" />
+          <Skeleton className="h-10 w-full max-w-sm rounded-xl" />
         </div>
-        <Separator className="my-6 opacity-20" />
+        <div className="h-px bg-success/10 w-full my-6 opacity-20" />
         <div className="space-y-4">
-          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-40 rounded-md" />
           <div className="grid gap-3">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
           </div>
         </div>
       </div>
@@ -107,39 +110,65 @@ export function ModelsTab() {
   }
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="animate-in fade-in duration-500">
       <div className="space-y-8">
         <section className="space-y-4">
           <div className="flex items-center gap-2 mb-2">
-            <Bot className="size-4 text-primary" />
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground/70">
+            <Bot className="size-4 text-success" />
+            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground/70">
               Embedder Configurations
             </h3>
           </div>
           
           <div className="grid gap-4 max-w-sm">
-            <div className="space-y-2">
+            <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground ml-1">Provider</label>
-              <Select value={embedderProvider} onValueChange={handleEmbedderProviderChange} disabled>
-                <SelectTrigger className="w-full bg-muted/20 border-border/10 h-10 px-4">
-                  <SelectValue placeholder="Select provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gemini">Gemini (Active)</SelectItem>
-                  <SelectItem value="openai">OpenAI (Coming Soon)</SelectItem>
-                </SelectContent>
+              <Select 
+                className="w-full"
+                selectedKey={embedderProvider}
+                placeholder="Select provider"
+                onSelectionChange={(selection) => {
+                  const value = selectionToValue(selection);
+                  if (!value) return;
+                  handleEmbedderProviderChange(value);
+                }}
+                isDisabled
+              >
+                <Select.Trigger className="h-10 px-4 bg-success/5 border border-success/10 rounded-xl hover:bg-success/10 text-foreground">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover className="bg-background/95 dark:bg-background/35 border border-default-200/70 dark:border-white/15 backdrop-blur-xl">
+                  <ListBox className="bg-transparent">
+                    <ListBox.Item id="gemini" textValue="Gemini (Active)">Gemini (Active)</ListBox.Item>
+                    <ListBox.Item id="openai" textValue="OpenAI (Coming Soon)">OpenAI (Coming Soon)</ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
               </Select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground ml-1">Model</label>
-              <Select value={embedderModel} onValueChange={handleEmbedderModelChange} disabled>
-                <SelectTrigger className="w-full bg-muted/20 border-border/10 h-10 px-4">
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gemini-embedding-001">gemini-embedding-001 (3072d)</SelectItem>
-                </SelectContent>
+              <Select 
+                className="w-full"
+                selectedKey={embedderModel}
+                placeholder="Select model"
+                onSelectionChange={(selection) => {
+                  const value = selectionToValue(selection);
+                  if (!value) return;
+                  handleEmbedderModelChange(value);
+                }}
+                isDisabled
+              >
+                <Select.Trigger className="h-10 px-4 bg-success/5 border border-success/10 rounded-xl hover:bg-success/10 text-foreground">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover className="bg-background/95 dark:bg-background/35 border border-default-200/70 dark:border-white/15 backdrop-blur-xl">
+                  <ListBox className="bg-transparent">
+                    <ListBox.Item id="gemini-embedding-001" textValue="gemini-embedding-001 (3072d)">gemini-embedding-001 (3072d)</ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
               </Select>
             </div>
           </div>
@@ -147,21 +176,29 @@ export function ModelsTab() {
 
         <section className="space-y-4">
           <div className="flex items-center gap-2 mb-2">
-            <Database className="size-4 text-primary" />
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground/70">
+            <Database className="size-4 text-success" />
+            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground/70">
               Memory Storage
             </h3>
           </div>
           
-          <div className="space-y-2 max-w-sm">
+          <div className="space-y-1 max-w-sm">
             <label className="text-xs font-medium text-muted-foreground ml-1">Vector Store</label>
-            <Select value="turso" disabled>
-              <SelectTrigger className="w-full bg-muted/20 border-border/10 h-10 px-4">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="turso">Turso (libSQL Enclave)</SelectItem>
-              </SelectContent>
+            <Select 
+              className="w-full"
+              selectedKey="turso"
+              placeholder="Select store"
+              isDisabled
+            >
+              <Select.Trigger className="h-10 px-4 bg-success/5 border border-success/10 rounded-xl hover:bg-success/10 text-foreground">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover className="bg-background/95 dark:bg-background/35 border border-default-200/70 dark:border-white/15 backdrop-blur-xl">
+                <ListBox className="bg-transparent">
+                  <ListBox.Item id="turso" textValue="Turso (libSQL Enclave)">Turso (libSQL Enclave)</ListBox.Item>
+                </ListBox>
+              </Select.Popover>
             </Select>
             <p className="text-[10px] text-muted-foreground pt-1 ml-1 italic opacity-60">
               * Currently locked to Turso for hardware-backed encryption.
@@ -170,12 +207,12 @@ export function ModelsTab() {
         </section>
       </div>
 
-      <Separator className="my-10 opacity-10" />
+      <div className="h-px bg-success/10 w-full my-10" />
 
       <div className="space-y-10">
         {hasApiKey("rainy_api") && (
           <section className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-muted-foreground mb-4 flex items-center gap-2">
               <Zap className="size-4 text-amber-500" />
               Pay-As-You-Go Models (Rainy API)
             </h3>
@@ -193,7 +230,7 @@ export function ModelsTab() {
 
         {hasApiKey("gemini") && (
           <section className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-muted-foreground mb-4 flex items-center gap-2">
               <Bot className="size-4 text-blue-400" />
               Free Tier Models (Bring Your Own Key)
             </h3>
