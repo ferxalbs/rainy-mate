@@ -440,15 +440,68 @@ For **every significant change** (new features, breaking fixes, architectural ch
 
 ## 15. Code Rules (Non-Negotiable)
 
+### 15.1 Core Architecture Rules
+
 - **Rust for everything real**: file I/O, HTTP, DB, encryption, business logic, security — all Rust.
 - **TypeScript for display only**: event handlers, `invoke()` calls, DOM/UI state (modals, tabs, theme).
-- **No dead code**: remove unused code immediately. If future use, mark `// @TODO reason`, `// @deprecated reason`, or `// @RESERVED reason`. Unmarked dead code is a violation.
-- **Modular, not monolithic**: each domain has its own file. Never grow `skill_executor.rs` orchestrator. Never let a service file become a catch-all.
 - **pnpm only**: `npm` is banned everywhere. Use `bun` only inside `rainy-atm/`.
 - **Conventional Commits** with scope: `feat(agent-chat): ...`, `fix(airlock): ...`, `refactor(memory): ...`
 - **Secrets out of Git**: OS keychain and local `.env` files only. Never commit API keys.
 - **Async everything**: use `tokio` for async I/O in Rust. Use `rayon` for CPU-bound parallel tasks.
 - **Error handling**: propagate `Result<T, String>` through Tauri commands. Use typed error enums inside services.
+
+### 15.2 Modularization (MANDATORY)
+
+**Every piece of code must be modularized — this is not optional.**
+
+| Principle | Requirement |
+|-----------|-------------|
+| **Single Responsibility** | Each module must implement one clear responsibility. If a change affects more than one concept, split into multiple modules. |
+| **High Cohesion, Low Coupling** | Internals should be tightly related; dependencies between modules must be minimal and explicit. |
+| **Explicit Interfaces** | Export only what consumers need. Prefer small, well-documented APIs over large surface areas. |
+| **No Circular Dependencies** | Design dependency graph to be acyclic. |
+| **Size Limits** | Aim for modules that can be reviewed in one pass. Prefer < 400 lines of code; if exceeded, evaluate splitting. |
+| **Dependency Injection** | Depend on abstractions where appropriate to decouple implementation details. |
+| **Tests at Boundaries** | Every module must have unit/integration tests covering its public interface. |
+| **Documentation** | Each module must include short documentation describing responsibility, public interface, and examples. |
+
+**Enforcement:**
+- CI must fail on detected cycles
+- Automated checks validate modularization rules (exports, cycles, test presence)
+- PR reviewer checklist verifies modularization principles
+
+### 15.3 Code Optimization (MANDATORY)
+
+**All code must be optimized for performance, readability, and maintainability.**
+
+| Aspect | Rule |
+|--------|------|
+| **Performance** | Use appropriate data structures and algorithms. Profile before optimizing. |
+| **Readability** | Write self-documenting code with clear variable/function names. |
+| **Maintainability** | Code should be easy to understand, modify, and extend in the future. |
+| **DRY Principle** | Don't Repeat Yourself — extract common logic into reusable functions/modules. |
+| **YAGNI** | You Aren't Gonna Need It — don't add functionality until necessary. |
+| **KISS** | Keep It Simple, Stupid — prefer simple solutions over complex ones. |
+
+### 15.4 Code Unification (MANDATORY)
+
+**Consolidate duplicate code and enforce consistency across the codebase.**
+
+| Rule | Description |
+|------|-------------|
+| **DRY Enforcement** | Identical or very similar code appearing 3+ times must be extracted into a shared utility. |
+| **Consistent Patterns** | Use consistent naming, formatting, and architectural patterns across all modules. |
+| **Shared Components** | UI components, utilities, and helpers must be centralized in `src/components/ui/`, `src/lib/`, or `src/hooks/`. |
+| **No Fragmentation** | Feature-related code should be in one place, not scattered across multiple directories. |
+| **Migration Required** | When consolidating code, migrate existing usages to the unified implementation. |
+
+### 15.5 Dead Code Elimination (MANDATORY)
+
+- **No dead code**: remove unused code immediately. If future use, mark with explicit markers:
+  - `// @TODO reason` — will be implemented in timeline
+  - `// @deprecated reason` — marked for removal in version
+  - `// @RESERVED reason` — reserved for future use
+- **Unmarked dead code is a critical violation** — remove immediately during code review.
 
 ---
 

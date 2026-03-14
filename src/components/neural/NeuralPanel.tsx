@@ -437,9 +437,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       )}
       {activeTab === "agents" && <NeuralAgents onNavigate={onNavigate} />}
       {activeTab === "activity" && <NeuralActivity />}
-      {activeTab === "fleet" && (
-        <FleetCommandCenter platformKey={platformKey} userApiKey={userApiKey} />
-      )}
+      {activeTab === "fleet" && <FleetCommandCenter />}
       {activeTab === "mcp" && <NeuralMcp />}
     </NeuralLayout>
   );

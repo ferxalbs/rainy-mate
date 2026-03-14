@@ -340,6 +340,15 @@ pub struct FleetDispatchResponse {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct FleetRetireNodeResponse {
+    pub success: bool,
+    pub node_id: String,
+    pub retired_at: i64,
+    pub reason: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceSharedAgentSummary {
     pub id: String,
     pub name: String,
@@ -1387,13 +1396,13 @@ impl ATMClient {
     pub async fn push_fleet_policy(
         &self,
         tool_access_policy: ToolAccessPolicy,
-        platform_key: String,
-        user_api_key: String,
     ) -> Result<serde_json::Value, String> {
         self.verify_authenticated_connection().await?;
 
         let state = self.state.lock().await;
         let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let platform_key = state.platform_key.clone().ok_or("Missing platform key")?;
+        let user_api_key = state.user_api_key.clone().ok_or("Missing owner API key")?;
         let url = format!("{}/admin/fleet/policy", state.base_url);
 
         let res = self
@@ -1416,15 +1425,13 @@ impl ATMClient {
         res.json().await.map_err(|e| e.to_string())
     }
 
-    pub async fn trigger_fleet_kill_switch(
-        &self,
-        platform_key: String,
-        user_api_key: String,
-    ) -> Result<FleetDispatchResponse, String> {
+    pub async fn trigger_fleet_kill_switch(&self) -> Result<FleetDispatchResponse, String> {
         self.verify_authenticated_connection().await?;
 
         let state = self.state.lock().await;
         let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let platform_key = state.platform_key.clone().ok_or("Missing platform key")?;
+        let user_api_key = state.user_api_key.clone().ok_or("Missing owner API key")?;
         let url = format!("{}/admin/fleet/kill", state.base_url);
 
         let res = self
@@ -1445,6 +1452,41 @@ impl ATMClient {
                 "Fleet kill switch failed: {} - {}",
                 status, err_text
             ));
+        }
+
+        res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn retire_fleet_node(
+        &self,
+        node_id: String,
+        reason: Option<String>,
+    ) -> Result<FleetRetireNodeResponse, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let platform_key = state.platform_key.clone().ok_or("Missing platform key")?;
+        let user_api_key = state.user_api_key.clone().ok_or("Missing owner API key")?;
+        let url = format!("{}/admin/fleet/nodes/{}/retire", state.base_url, node_id);
+
+        let res = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("x-rainy-platform-key", platform_key)
+            .header("x-rainy-api-key", user_api_key)
+            .json(&serde_json::json!({
+                "reason": reason.unwrap_or_else(|| "retired_from_desktop".to_string())
+            }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!("Retire fleet node failed: {} - {}", status, err_text));
         }
 
         res.json().await.map_err(|e| e.to_string())

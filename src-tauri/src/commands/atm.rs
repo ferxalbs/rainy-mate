@@ -290,23 +290,24 @@ pub async fn get_atm_fleet_status(
 pub async fn push_atm_fleet_policy(
     client: State<'_, ATMClient>,
     tool_access_policy: crate::services::atm_client::ToolAccessPolicy,
-    platform_key: String,
-    user_api_key: String,
 ) -> Result<serde_json::Value, String> {
-    client
-        .push_fleet_policy(tool_access_policy, platform_key, user_api_key)
-        .await
+    client.push_fleet_policy(tool_access_policy).await
 }
 
 #[command]
 pub async fn trigger_atm_fleet_kill_switch(
     client: State<'_, ATMClient>,
-    platform_key: String,
-    user_api_key: String,
 ) -> Result<crate::services::atm_client::FleetDispatchResponse, String> {
-    client
-        .trigger_fleet_kill_switch(platform_key, user_api_key)
-        .await
+    client.trigger_fleet_kill_switch().await
+}
+
+#[command]
+pub async fn retire_atm_fleet_node(
+    client: State<'_, ATMClient>,
+    node_id: String,
+    reason: Option<String>,
+) -> Result<crate::services::atm_client::FleetRetireNodeResponse, String> {
+    client.retire_fleet_node(node_id, reason).await
 }
 
 #[command]

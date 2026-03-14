@@ -623,6 +623,7 @@ pub fn run() {
             commands::get_atm_fleet_status,
             commands::push_atm_fleet_policy,
             commands::trigger_atm_fleet_kill_switch,
+            commands::retire_atm_fleet_node,
             commands::set_atm_credentials,
             commands::has_atm_credentials,
             commands::ensure_atm_credentials_loaded,

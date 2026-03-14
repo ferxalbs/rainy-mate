@@ -1660,11 +1660,15 @@ export interface AtmFleetNodeStatus {
   hostname: string;
   platform: string;
   status: string;
+  effectiveStatus?: "online" | "busy" | "offline" | "stale" | "retired" | string;
+  statusReason?: string | null;
   lastHeartbeat: number;
   lastSeenMsAgo: number;
   runtimeStats: Record<string, unknown>;
   pendingApprovals: number;
   health: AtmFleetNodeHealth;
+  retiredAt?: number | null;
+  retiredBy?: string | null;
 }
 
 export interface AtmFleetStatusResponse {
@@ -1886,17 +1890,24 @@ export async function pushAtmFleetPolicy(input: {
     allow: string[];
     deny: string[];
   };
-  platformKey: string;
-  userApiKey: string;
 }): Promise<any> {
   return invoke("push_atm_fleet_policy", input);
 }
 
-export async function triggerAtmFleetKillSwitch(input: {
-  platformKey: string;
-  userApiKey: string;
-}): Promise<any> {
-  return invoke("trigger_atm_fleet_kill_switch", input);
+export async function triggerAtmFleetKillSwitch(): Promise<any> {
+  return invoke("trigger_atm_fleet_kill_switch");
+}
+
+export async function retireAtmFleetNode(
+  nodeId: string,
+  reason?: string,
+): Promise<{
+  success: boolean;
+  nodeId: string;
+  retiredAt: number;
+  reason: string;
+}> {
+  return invoke("retire_atm_fleet_node", { nodeId, reason });
 }
 
 export interface WorkflowRecordedStep {
