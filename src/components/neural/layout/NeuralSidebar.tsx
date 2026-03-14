@@ -127,7 +127,7 @@ export function NeuralSidebar({ activeTab, onTabChange }: NeuralSidebarProps) {
       <div className="p-4 mt-auto">
         <div className="px-3 py-2 rounded-xl bg-muted/30 border border-border/50">
           <div className="text-[10px] text-muted-foreground font-mono text-center opacity-70">
-            Rainy Cowork
+            Rainy MaTE
             <span className="mx-1">•</span>
             v2.1.0
           </div>
