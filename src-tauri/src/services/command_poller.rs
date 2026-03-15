@@ -59,6 +59,10 @@ fn is_transient_upstream_error(text: &str) -> bool {
     text.contains("Heartbeat failed: 502")
         || text.contains("Heartbeat failed: 503")
         || text.contains("Heartbeat failed: 504")
+        || text.contains("DB_NOT_READY")
+        || text.contains("NODE_REGISTER_TRANSIENT")
+        || text.contains("Auth context sync failed: 503")
+        || text.contains("Registration failed: 503")
 }
 
 fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
@@ -412,6 +416,22 @@ impl CommandPoller {
         if !self.neural_service.is_registered().await {
             if !self.neural_service.can_attempt_registration().await {
                 return Ok(0);
+            }
+
+            match self.atm_client.get_service_status().await {
+                Ok(status) if !status.ready => {
+                    println!(
+                        "[CommandPoller] ATM warming up (code={}): {}. Skipping registration until ready.",
+                        status.code.unwrap_or_else(|| "UNKNOWN".to_string()),
+                        status.message
+                    );
+                    return Ok(0);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("[CommandPoller] ATM readiness probe failed: {}", e);
+                    return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)));
+                }
             }
 
             if let Err(e) = self.neural_service.sync_workspace_id_with_auth_context().await {

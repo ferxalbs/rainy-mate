@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed Fleet confirmation modal completion flow: dialog now closes correctly after successful action completion.
   - `src/components/neural/modules/FleetCommandCenter.tsx`
+- Fixed Rainy ATM auto-connect regressions by serializing desktop node registration locally and surfacing deploy/transient registration states with clearer recovery messaging:
+  - `src-tauri/src/services/neural_service.rs`
+  - `src-tauri/src/services/command_poller.rs`
+  - `src-tauri/src/services/atm_client.rs`
+  - `src/components/neural/NeuralPanel.tsx`
 - Fixed ATM startup recovery regression where instances could remain permanently `DB_NOT_READY` after transient DB outages by continuing background init retries until success.
   - `rainy-atm/src/index.ts`
 - Fixed retired-node command finalization regression: retired nodes can still report progress/complete for already-running commands, preventing stranded `running` commands.

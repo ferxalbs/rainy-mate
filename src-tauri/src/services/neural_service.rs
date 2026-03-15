@@ -19,6 +19,7 @@ pub struct NeuralService {
     http: Client,
     base_url: String,
     metadata: Arc<Mutex<NodeMetadata>>,
+    register_lock: Arc<Mutex<()>>,
     authenticator: NodeAuthenticator,
     manifest_state: Arc<Mutex<ManifestState>>,
     runtime_registry: Option<Arc<RuntimeRegistry>>,
@@ -150,6 +151,7 @@ impl NeuralService {
                 platform_key: None,
                 user_api_key: None,
             })),
+            register_lock: Arc::new(Mutex::new(())),
             authenticator,
             manifest_state: Arc::new(Mutex::new(ManifestState::default())),
             runtime_registry,
@@ -354,6 +356,8 @@ impl NeuralService {
         skills: Vec<SkillManifest>,
         allowed_paths: Vec<String>,
     ) -> Result<String, String> {
+        let _register_guard = self.register_lock.lock().await;
+
         let (existing_node_id, platform_key, workspace_id, hostname, platform) = {
             let metadata = self.metadata.lock().await;
             (

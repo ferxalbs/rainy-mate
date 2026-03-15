@@ -96,6 +96,10 @@ function getNeuralConnectErrorMessage(error: unknown): string {
     return text;
   }
 
+  if (/DB_NOT_READY|NODE_REGISTER_TRANSIENT|Service warming up/i.test(text)) {
+    return "Rainy ATM is still warming up after deploy. Wait a few seconds and retry.";
+  }
+
   return "Connection failed. Please check your credentials.";
 }
 

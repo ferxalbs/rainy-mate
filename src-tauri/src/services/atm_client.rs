@@ -23,6 +23,13 @@ pub struct ATMClient {
 
 const ATM_ADMIN_KEYCHAIN_ID: &str = "atm_admin_key";
 
+#[derive(Debug, Clone)]
+pub struct ATMServiceStatus {
+    pub ready: bool,
+    pub code: Option<String>,
+    pub message: String,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BootstrapResponse {
     pub success: bool,
@@ -449,6 +456,31 @@ pub struct AdminPolicyAuditResponse {
 }
 
 impl ATMClient {
+    fn parse_service_status(status: reqwest::StatusCode, body: &str) -> ATMServiceStatus {
+        let parsed = serde_json::from_str::<serde_json::Value>(body).ok();
+        let code = parsed
+            .as_ref()
+            .and_then(|value| value.get("code"))
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string());
+        let message = parsed
+            .as_ref()
+            .and_then(|value| value.get("error").or_else(|| value.get("message")))
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| body.trim().to_string());
+
+        ATMServiceStatus {
+            ready: status.is_success(),
+            code,
+            message: if message.is_empty() {
+                format!("HTTP {}", status)
+            } else {
+                message
+            },
+        }
+    }
+
     pub fn new(base_url: String, api_key: Option<String>) -> Self {
         Self {
             http: Client::new(),
@@ -541,6 +573,22 @@ impl ATMClient {
 
     pub async fn has_credentials(&self) -> bool {
         self.ensure_credentials_loaded().await.unwrap_or(false)
+    }
+
+    pub async fn get_service_status(&self) -> Result<ATMServiceStatus, String> {
+        let state = self.state.lock().await;
+        let url = format!("{}/health/ready", state.base_url);
+        drop(state);
+
+        let res = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Rainy-ATM readiness check failed: {}", e))?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Ok(Self::parse_service_status(status, &body))
     }
 
     pub async fn generate_pairing_code(&self) -> Result<PairingCodeResponse, String> {
@@ -703,6 +751,15 @@ impl ATMClient {
     }
 
     pub async fn verify_authenticated_connection(&self) -> Result<(), String> {
+        let service_status = self.get_service_status().await?;
+        if !service_status.ready {
+            let code = service_status.code.unwrap_or_else(|| "UNKNOWN".to_string());
+            return Err(format!(
+                "Rainy-ATM auth check failed: 503 Service Unavailable - {{\"error\":\"{}\",\"code\":\"{}\"}}",
+                service_status.message, code
+            ));
+        }
+
         if !self.ensure_credentials_loaded().await? {
             return Err("Not authenticated with Rainy-ATM".to_string());
         }
