@@ -103,6 +103,7 @@ mod tests {
             allowed_paths: None,
             custom_system_prompt: None,
             streaming_enabled: Some(false),
+            reasoning_effort: None,
         };
 
         // We can't easily run() without a real SkillExecutor/Router,
