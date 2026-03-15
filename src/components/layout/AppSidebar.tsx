@@ -241,7 +241,59 @@ export function AppSidebar({
         </div>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-2.5 space-y-5 scrollbar-hide">
-          {/* Folders Section */}
+          {/* AI Studio - Now at the top, without header */}
+          <div className="space-y-1">
+            <NavItem
+              id="agent-chat"
+              label="Agent Chat"
+              icon={MessageSquare}
+              colorClass="text-purple-500"
+              isActive={activeSection === "agent-chat"}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+
+            <NavItem
+              id="neural-link"
+              label="Rainy ATM"
+              icon={Network}
+              colorClass="text-purple-500"
+              isActive={activeSection === "neural-link"}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+            <NavItem
+              id="agent-builder"
+              label="Agent Builder"
+              icon={Bot}
+              colorClass="text-orange-500"
+              isActive={activeSection === "agent-builder"}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+            <NavItem
+              id="agent-store"
+              label="Agents Store"
+              icon={Library}
+              colorClass="text-amber-500"
+              isActive={activeSection === "agent-store"}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+            <NavItem
+              id="wasm-skills"
+              label="Wasm Skills"
+              icon={CpuIcon}
+              colorClass="text-cyan-500"
+              isActive={activeSection === "wasm-skills"}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+          </div>
+
+          <Separator className="bg-border/30" />
+
+          {/* Folders Section - Now below AI Studio */}
           <div className="space-y-1">
             {!isCollapsed && (
               <div className="flex items-center justify-between px-3 py-2 mb-1">
@@ -323,65 +375,6 @@ export function AppSidebar({
                 </div>
               )
             )}
-          </div>
-
-          <Separator className="bg-border/30" />
-
-          {/* AI Studio */}
-          <div className="space-y-1">
-            {!isCollapsed && (
-              <div className="px-3 py-2 mb-1">
-                <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
-                  AI Studio
-                </span>
-              </div>
-            )}
-            <NavItem
-              id="agent-chat"
-              label="Agent Chat"
-              icon={MessageSquare}
-              colorClass="text-purple-500"
-              isActive={activeSection === "agent-chat"}
-              isCollapsed={isCollapsed}
-              onNavigate={onNavigate}
-            />
-
-            <NavItem
-              id="neural-link"
-              label="Rainy ATM"
-              icon={Network}
-              colorClass="text-purple-500"
-              isActive={activeSection === "neural-link"}
-              isCollapsed={isCollapsed}
-              onNavigate={onNavigate}
-            />
-            <NavItem
-              id="agent-builder"
-              label="Agent Builder"
-              icon={Bot}
-              colorClass="text-orange-500"
-              isActive={activeSection === "agent-builder"}
-              isCollapsed={isCollapsed}
-              onNavigate={onNavigate}
-            />
-            <NavItem
-              id="agent-store"
-              label="Agents Store"
-              icon={Library}
-              colorClass="text-amber-500"
-              isActive={activeSection === "agent-store"}
-              isCollapsed={isCollapsed}
-              onNavigate={onNavigate}
-            />
-            <NavItem
-              id="wasm-skills"
-              label="Wasm Skills"
-              icon={CpuIcon}
-              colorClass="text-cyan-500"
-              isActive={activeSection === "wasm-skills"}
-              isCollapsed={isCollapsed}
-              onNavigate={onNavigate}
-            />
           </div>
         </div>
 
