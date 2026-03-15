@@ -502,7 +502,35 @@ pub async fn run_agent_workflow(
     let selected_model_id = model_id.clone();
     let run_id = run_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+    // --- Prompt injection guard: sanitize user input before any processing ---
+    let guard_result = crate::ai::agent::prompt_guard::sanitize_user_input(&prompt);
+    if guard_result.was_modified {
+        eprintln!(
+            "[PromptGuard] User input sanitized. Flags: {:?}",
+            guard_result.flags
+        );
+    }
+    let prompt = guard_result.text;
+
     let workspace_path = workspace_id.clone();
+
+    // --- Sanitize workspace path before it is interpolated into the system prompt ---
+    // Keep the sanitized version separate for prompt interpolation only
+    let ws_guard = crate::ai::agent::prompt_guard::sanitize_workspace_id(&workspace_path);
+    if ws_guard.was_modified {
+        eprintln!(
+            "[PromptGuard] workspace_id sanitized. Flags: {:?}",
+            ws_guard.flags
+        );
+    }
+    let prompt_safe_workspace = ws_guard.text;
+
+    // Validate the original workspace_path for filesystem operations
+    // Reject if it contains invalid UTF-8 or dangerous characters before using for paths
+    if workspace_path.contains('\0') || workspace_path.contains('\r') || workspace_path.contains('\n') {
+        return Err("Invalid workspace path: contains forbidden characters".to_string());
+    }
+
     let chat_id = chat_scope_id.unwrap_or_else(|| {
         crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string()
     });
@@ -560,7 +588,7 @@ pub async fn run_agent_workflow(
                         soul: AgentSoul {
                             name: "Rainy Agent".to_string(),
                             description: "Default fallback agent".to_string(),
-                            soul_content: default_instructions(&workspace_path),
+                            soul_content: default_instructions(&prompt_safe_workspace),
                             ..Default::default()
                         },
                         skills: AgentSkills::default(),
@@ -583,7 +611,7 @@ pub async fn run_agent_workflow(
             soul: AgentSoul {
                 name: "Rainy Agent".to_string(),
                 description: "Default agent".to_string(),
-                soul_content: default_instructions(&workspace_path),
+                soul_content: default_instructions(&prompt_safe_workspace),
                 ..Default::default()
             },
             skills: AgentSkills::default(),
@@ -620,7 +648,9 @@ pub async fn run_agent_workflow(
         },
         custom_system_prompt: None,
         streaming_enabled: Some(false),
-        reasoning_effort,
+        reasoning_effort: crate::ai::agent::prompt_guard::validate_reasoning_effort(
+            reasoning_effort.as_deref()
+        ),
     };
 
     // Initialize Persistent Memory

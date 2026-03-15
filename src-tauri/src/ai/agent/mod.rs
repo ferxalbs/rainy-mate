@@ -9,6 +9,7 @@ pub mod runtime;
 pub mod runtime_registry;
 pub mod specialist;
 pub mod supervisor;
+pub mod prompt_guard;
 pub mod workflow;
 
 #[cfg(test)]

@@ -185,7 +185,11 @@ impl AgentRuntime {
     async fn generate_system_prompt(&self, skills: &SkillExecutor) -> String {
         // If a custom system prompt is provided (e.g. from Cloud/ATM), use it directly.
         if let Some(custom) = &self.options.custom_system_prompt {
-            return format!("{}{}", custom, Self::runtime_truthfulness_appendix());
+            return format!(
+                "{}\n\n--- END OPERATOR INSTRUCTIONS ---\n{}",
+                custom,
+                Self::runtime_truthfulness_appendix()
+            );
         }
 
         let spec = &self.spec;
@@ -464,7 +468,26 @@ Rules:
                 }
             }
             .to_string();
-            appended_context = self.build_semantic_context_block(&context_window, &result);
+
+            // Sanitize retrieved memory entries to prevent stored injection content
+            // from surfacing into the system prompt (indirect prompt injection vector).
+            let mut sanitized_result = result.clone();
+            sanitized_result.entries = sanitized_result
+                .entries
+                .into_iter()
+                .map(|mut entry| {
+                    let s = crate::ai::agent::prompt_guard::sanitize_memory_context(&entry.content);
+                    if s.was_modified {
+                        eprintln!(
+                            "[PromptGuard] Memory entry sanitized (id: {}). Flags: {:?}",
+                            entry.id, s.flags
+                        );
+                    }
+                    entry.content = s.text;
+                    entry
+                })
+                .collect();
+            appended_context = self.build_semantic_context_block(&context_window, &sanitized_result);
         }
         on_event(AgentEvent::Status(format!(
             "RAG_TELEMETRY:{}",
@@ -497,10 +520,13 @@ Rules:
             state.messages.extend(hist.clone());
         }
 
-        // Add the new User Message
+        // Add the new User Message — wrap in structural delimiters so the LLM
+        // can clearly identify the boundary of user-controlled text.
         state.messages.push(AgentMessage {
             role: "user".to_string(),
-            content: AgentContent::text(input),
+            content: AgentContent::text(
+                crate::ai::agent::prompt_guard::wrap_user_turn(input)
+            ),
             tool_calls: None,
             tool_call_id: None,
         });
