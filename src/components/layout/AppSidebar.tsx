@@ -82,7 +82,7 @@ const NavItem = ({
       } ${
         isActive
           ? "bg-primary/10 text-primary font-medium shadow-sm"
-          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          : "text-muted-foreground hover:text-foreground hover:bg-white/10"
       }`}
       onPress={() => onNavigate?.(id)}
     >
@@ -280,7 +280,7 @@ export function AppSidebar({
                       } ${
                         isActive
                           ? "bg-primary/10 text-primary font-medium shadow-sm"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          : "text-muted-foreground hover:text-foreground hover:bg-white/10"
                       }`}
                       onPress={() => onFolderSelect?.(folder)}
                     >
@@ -317,9 +317,8 @@ export function AppSidebar({
                   </p>
                   <Button
                     size="sm"
-                    variant="secondary"
                     onPress={onAddFolder}
-                    className="h-7 text-[10px]"
+                    className="h-7 text-[10px] bg-background/30 backdrop-blur-md border border-white/10 hover:bg-white/10 text-foreground"
                   >
                     Add First
                   </Button>
@@ -462,7 +461,7 @@ export function AppSidebar({
                       ? "text-red-400"
                       : isAvailable
                         ? "text-primary bg-primary/10 font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        : "text-muted-foreground hover:text-foreground hover:bg-white/10"
                 }`}
                 onPress={handlePress}
               >
@@ -497,7 +496,7 @@ export function AppSidebar({
                 size="sm"
                 isIconOnly
                 onPress={onSettingsClick}
-                className="text-muted-foreground hover:bg-muted/50"
+                className="text-muted-foreground hover:bg-white/10"
               >
                 <Settings className="size-4" />
               </Button>
@@ -508,7 +507,7 @@ export function AppSidebar({
               size="sm"
               isIconOnly
               onPress={onToggleCollapse}
-              className="text-muted-foreground hover:bg-muted/50"
+              className="text-muted-foreground hover:bg-white/10"
             >
               {isCollapsed ? (
                 <ChevronRight className="size-4" />

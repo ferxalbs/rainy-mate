@@ -157,7 +157,7 @@ export function RuntimePanel({
               >
                 <Slider.Track className="h-1.5 bg-default-200 dark:bg-white/10 rounded-full">
                   <Slider.Fill className="bg-primary h-full rounded-full" />
-                  <Slider.Thumb className="size-4 bg-background border-2 border-primary rounded-full shadow-md" />
+                  <Slider.Thumb className="size-4 bg-white border-2 border-primary rounded-full shadow-lg hocus:scale-110 transition-transform cursor-pointer" />
                 </Slider.Track>
               </Slider>
               <div className="flex items-center justify-between text-xs">
@@ -185,7 +185,7 @@ export function RuntimePanel({
               >
                 <Slider.Track className="h-1.5 bg-default-200 dark:bg-white/10 rounded-full">
                   <Slider.Fill className="bg-primary h-full rounded-full" />
-                  <Slider.Thumb className="size-4 bg-background border-2 border-primary rounded-full shadow-md" />
+                  <Slider.Thumb className="size-4 bg-white border-2 border-primary rounded-full shadow-lg hocus:scale-110 transition-transform cursor-pointer" />
                 </Slider.Track>
               </Slider>
 
@@ -202,7 +202,7 @@ export function RuntimePanel({
                     ),
                   })
                 }
-                className="w-full"
+                className="w-full bg-background/85 dark:bg-background/20 border border-default-300/70 dark:border-white/15 rounded-xl px-3 py-2 text-sm font-mono shadow-sm focus-within:!border-primary/50 transition-all backdrop-blur-md"
               />
 
               <div className="text-xs text-muted-foreground font-mono">

@@ -209,32 +209,26 @@ export function ApiKeysTab() {
                     <div className="flex items-center gap-2">
                       {isReplacing && (
                         <Button
-                          variant="ghost"
-                          size="sm"
                           onPress={() => setReplacingKeys((prev) => ({ ...prev, [providerId]: false }))}
-                          className="h-8 rounded-lg text-xs"
+                          className="h-8 rounded-lg text-xs bg-background/20 backdrop-blur-md border border-white/5 hover:bg-white/5 text-muted-foreground"
                         >
                           Abort
                         </Button>
                       )}
                       <Button
-                        variant="secondary"
-                        size="sm"
                         onPress={() => handleValidateKey(provider.id)}
                         isDisabled={!apiKeyInputs[provider.id]?.trim() || status === "validating"}
-                        className="h-8 rounded-lg text-xs px-4"
+                        className="h-8 rounded-lg text-xs px-4 bg-background/30 backdrop-blur-md border border-white/10 hover:bg-white/10 text-foreground transition-all"
                       >
                         {status === "validating" ? "Checking..." : "Verify"}
                       </Button>
                       <Button
-                        variant="primary"
-                        size="sm"
                         onPress={async () => {
                           await handleSaveKey(provider.id);
                           setReplacingKeys((prev) => ({ ...prev, [providerId]: false }));
                         }}
                         isDisabled={!apiKeyInputs[provider.id]?.trim() || saving}
-                        className="h-8 rounded-lg text-xs px-4 font-bold"
+                        className="h-8 rounded-lg text-xs px-4 font-bold bg-primary/20 backdrop-blur-md border border-primary/30 text-primary hover:bg-primary/30 transition-all shadow-lg shadow-primary/5"
                       >
                         {saving ? "Storing..." : "Lock in Vault"}
                       </Button>
@@ -251,19 +245,15 @@ export function ApiKeysTab() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Button
-                      variant="outline"
-                      size="sm"
                       onPress={() => handleViewKey(provider.id)}
-                      className="h-8 border-border/10 bg-muted/20 hover:bg-muted/40 text-xs rounded-lg"
+                      className="h-8 border border-white/10 bg-background/30 backdrop-blur-md hover:bg-white/10 text-xs rounded-lg text-muted-foreground hover:text-foreground transition-all"
                     >
                       {visibleKey ? <EyeOff className="size-3.5 mr-1" /> : <Eye className="size-3.5 mr-1" />}
                       {visibleKey ? "Hide Secret" : "Reveal Secret"}
                     </Button>
                     <Button
-                      variant="outline"
-                      size="sm"
                       onPress={() => handleReplaceKey(provider.id)}
-                      className="h-8 border-border/10 bg-muted/20 hover:bg-muted/40 text-xs rounded-lg"
+                      className="h-8 border border-white/10 bg-background/30 backdrop-blur-md hover:bg-white/10 text-xs rounded-lg text-muted-foreground hover:text-foreground transition-all"
                     >
                       <RefreshCw className="size-3.5 mr-1" />
                       Rotate Key

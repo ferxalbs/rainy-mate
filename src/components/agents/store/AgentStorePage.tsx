@@ -256,8 +256,7 @@ export function AgentStorePage({
         {/* Toolbar */}
         <div className="px-3 py-2 space-y-1 relative z-20">
           <Button
-            variant="ghost"
-            className="w-full justify-start text-muted-foreground hover:text-foreground h-9 px-3"
+            className="w-full justify-start bg-background/30 backdrop-blur-md border border-white/10 text-muted-foreground hover:bg-white/10 hover:text-foreground h-9 px-3 rounded-xl shadow-sm transition-all"
             onPress={loadAgents}
             isDisabled={isLoading}
           >
@@ -268,8 +267,7 @@ export function AgentStorePage({
           </Button>
 
           <Button
-            variant="ghost"
-            className="w-full justify-start text-muted-foreground hover:text-foreground h-9 px-3"
+            className="w-full justify-start bg-background/30 backdrop-blur-md border border-white/10 text-muted-foreground hover:bg-white/10 hover:text-foreground h-9 px-3 rounded-xl shadow-sm transition-all"
             onPress={onCreateAgent}
           >
             <Plus className="size-4 mr-3" />
@@ -297,7 +295,7 @@ export function AgentStorePage({
                   className={`w-full text-left px-4 py-3 rounded-2xl transition-all duration-300 group relative overflow-hidden flex items-center gap-3 ${
                     isSelected
                       ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
-                      : "hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
+                      : "hover:bg-white/10 text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {/* Background Selection Indicator (Builder Style) */}
@@ -370,9 +368,7 @@ export function AgentStorePage({
                 <Button
                   onPress={() => onEditInBuilder(draft)}
                   isDisabled={isSaving || isDeploying}
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-primary font-medium"
+                  className="bg-background/20 backdrop-blur-md border border-white/10 text-muted-foreground hover:bg-white/10 hover:text-primary font-medium px-4 h-8 rounded-full"
                 >
                   <Pencil className="size-3.5 mr-1.5" />
                   Edit Visual
@@ -380,9 +376,7 @@ export function AgentStorePage({
                 <Button
                   onPress={handleSave}
                   isDisabled={(!isDirty && !draft) || isSaving || isDeploying}
-                  variant="ghost"
-                  size="sm"
-                  className={`text-muted-foreground hover:text-primary font-medium ${isDirty ? "text-primary" : ""}`}
+                  className={`bg-background/20 backdrop-blur-md border border-white/10 text-muted-foreground hover:bg-white/10 hover:text-primary font-medium px-4 h-8 rounded-full ${isDirty ? "text-primary border-primary/30" : ""}`}
                 >
                   <Save className="size-3.5 mr-1.5" />
                   Save

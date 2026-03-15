@@ -230,7 +230,7 @@ export function AgentChatPanel({
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Codex anything, @ to add files, / for commands"
+            placeholder="Ask MaTE anything, @ to add files, / for commands"
             className={cn(
               "w-full resize-none border-none bg-transparent px-3 py-3 text-sm text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground/50 focus-visible:border-none focus-visible:ring-0",
               centered ? "min-h-[100px]" : "min-h-[64px]",

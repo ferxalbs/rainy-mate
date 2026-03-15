@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed "Codex" to "MaTE" in the chat input placeholder to align with the application's actual name.
+- Maintained version **0.5.96** as the active development release (postponed 0.5.97).
+- Applied premium glassmorphism styling (`bg-background/20-30`, `backdrop-blur-md`, `border-white/10`) and refined hover states (`hover:bg-white/10`) across the application to align with **Section 20** design standards:
+  - **AppSidebar**: Polished "Add First" button, all `NavItem` components, and footer action buttons.
+  - **WasmSkillsPage**: Updated "Browse", "Install Local", and "Install From ATM" buttons.
+  - **AgentBuilder**: Refined "Save Draft" button, Max Tokens input, and slider thumbs with `bg-white`, `shadow-lg`, and hover scale effects.
+  - **AgentStorePage**: Polished "New Agent", "Refresh List", header actions, and agent list item hover states.
+  - **ApiKeysTab**: Updated "Verify", "Lock in Vault", and key action buttons.
+
 - Refactored `AgentChatPanel.tsx` for stability, fixing syntax errors and duplicate declarations.
 - Aligned Chat UI with reference design: added growing dynamic input area, redesigned "Let's build" suggestion cards, and improved adaptive blurs (`backdrop-blur-2xl`).
 - Replaced nested `Button` components in `TooltipTrigger` with `render` props and `buttonVariants` to resolve Base UI `asChild` TypeScript errors.

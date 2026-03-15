@@ -1,4 +1,4 @@
-# Rainy MaTE (v0.5.20)
+# Rainy MaTE (v0.5.96)
 
 **High-Performance Agentic Desktop Runtime** built on the Tauri 2.0 framework.
 

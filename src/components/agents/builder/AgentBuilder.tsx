@@ -235,9 +235,7 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
             <Button
               onPress={handleSave}
               isDisabled={isSaving || isDeploying}
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-primary font-medium"
+              className="bg-background/30 backdrop-blur-md border border-white/10 hover:bg-white/10 text-foreground font-medium px-4 h-8 rounded-full shadow-sm"
             >
               <Save className="size-3.5 mr-1.5" />
               Save Draft

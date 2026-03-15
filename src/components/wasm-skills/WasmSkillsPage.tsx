@@ -282,10 +282,8 @@ function InstallLocalPanel({ onInstalled }: InstallLocalPanelProps) {
           onClick={handleBrowse}
         />
         <Button
-          variant="secondary"
-          size="sm"
           onPress={handleBrowse}
-          className="shrink-0 h-10 px-3"
+          className="shrink-0 h-10 px-3 bg-background/30 backdrop-blur-md border border-white/10 hover:bg-white/10 text-foreground text-xs"
         >
           Browse
         </Button>
@@ -307,11 +305,9 @@ function InstallLocalPanel({ onInstalled }: InstallLocalPanelProps) {
       </div>
 
       <Button
-        variant="primary"
-        size="sm"
         onPress={handleInstall}
         isDisabled={busy || !path}
-        className="w-full"
+        className="w-full bg-background/30 backdrop-blur-md border border-white/10 hover:bg-white/10 text-foreground h-10"
       >
         {busy ? (
           <Loader2 className="size-4 animate-spin" />
@@ -381,11 +377,9 @@ function InstallAtmPanel({ onInstalled }: InstallAtmPanelProps) {
       />
 
       <Button
-        variant="primary"
-        size="sm"
         onPress={handleInstall}
         isDisabled={busy || !skillId}
-        className="w-full"
+        className="w-full bg-background/30 backdrop-blur-md border border-white/10 hover:bg-white/10 text-foreground h-10"
       >
         {busy ? (
           <Loader2 className="size-4 animate-spin" />
