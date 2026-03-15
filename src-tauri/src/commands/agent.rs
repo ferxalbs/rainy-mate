@@ -502,7 +502,27 @@ pub async fn run_agent_workflow(
     let selected_model_id = model_id.clone();
     let run_id = run_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+    // --- Prompt injection guard: sanitize user input before any processing ---
+    let guard_result = crate::ai::agent::prompt_guard::sanitize_user_input(&prompt);
+    if guard_result.was_modified {
+        eprintln!(
+            "[PromptGuard] User input sanitized. Flags: {:?}",
+            guard_result.flags
+        );
+    }
+    let prompt = guard_result.text;
+
     let workspace_path = workspace_id.clone();
+
+    // --- Sanitize workspace path before it is interpolated into the system prompt ---
+    let ws_guard = crate::ai::agent::prompt_guard::sanitize_workspace_id(&workspace_path);
+    if ws_guard.was_modified {
+        eprintln!(
+            "[PromptGuard] workspace_id sanitized. Flags: {:?}",
+            ws_guard.flags
+        );
+    }
+    let workspace_path = ws_guard.text;
     let chat_id = chat_scope_id.unwrap_or_else(|| {
         crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string()
     });
@@ -620,7 +640,9 @@ pub async fn run_agent_workflow(
         },
         custom_system_prompt: None,
         streaming_enabled: Some(false),
-        reasoning_effort,
+        reasoning_effort: crate::ai::agent::prompt_guard::validate_reasoning_effort(
+            reasoning_effort.as_deref()
+        ),
     };
 
     // Initialize Persistent Memory
