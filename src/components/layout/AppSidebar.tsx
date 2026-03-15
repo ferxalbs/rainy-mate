@@ -4,19 +4,22 @@ import {
   FolderOpen,
   Download,
   FileCode,
+  PanelLeft,
   ChevronLeft,
   ChevronRight,
-  MessageSquare,
+  SquarePen,
   FileText,
   Plus,
   Settings,
-  Network,
+  Clock,
   Bot,
   Library,
+  LayoutGrid,
   RefreshCw,
   Check,
   AlertCircle,
-  CpuIcon,
+  FolderPlus,
+  ListFilter,
 } from "lucide-react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -210,44 +213,34 @@ export function AppSidebar({
           isCollapsed ? "w-16" : "w-64"
         } bg-sidebar`}
       >
-        {/* Sidebar Header / Logo */}
-        <div
+        {/* Premium Header: Traffic Lights & Toggle */}
+        <div 
           data-tauri-drag-region
-          className={`mt-6 px-4 pb-3 flex items-center shrink-0 overflow-hidden ${isCollapsed ? "justify-center" : "gap-3"}`}
+          className="h-12 px-4 flex items-center justify-end shrink-0"
         >
-          <div
-            className="size-8 bg-foreground shrink-0"
-            style={{
-              maskImage: `url(/whale-dnf.png)`,
-              maskSize: "contain",
-              maskRepeat: "no-repeat",
-              maskPosition: "center",
-              WebkitMaskImage: `url(/whale-dnf.png)`,
-              WebkitMaskSize: "contain",
-              WebkitMaskRepeat: "no-repeat",
-              WebkitMaskPosition: "center",
-            }}
-          />
           {!isCollapsed && (
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-sm tracking-tight truncate">
-                Rainy MaTE
-              </span>
-              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">
-                Agent Platform
-              </span>
-            </div>
+            <Tooltip delay={0}>
+              <Button
+                variant="ghost"
+                size="sm"
+                isIconOnly
+                onPress={onToggleCollapse}
+                className="text-muted-foreground/30 hover:bg-white/5 hover:text-foreground h-7 w-7 rounded-lg"
+              >
+                <PanelLeft className="size-4" />
+              </Button>
+              <Tooltip.Content placement="bottom">Close sidebar</Tooltip.Content>
+            </Tooltip>
           )}
         </div>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-2.5 space-y-5 scrollbar-hide">
-          {/* AI Studio - Now at the top, without header */}
+          {/* AI Studio Navigation */}
           <div className="space-y-1">
             <NavItem
               id="agent-chat"
               label="Agent Chat"
-              icon={MessageSquare}
-              colorClass="text-purple-500"
+              icon={SquarePen}
               isActive={activeSection === "agent-chat"}
               isCollapsed={isCollapsed}
               onNavigate={onNavigate}
@@ -255,18 +248,17 @@ export function AppSidebar({
 
             <NavItem
               id="neural-link"
-              label="Rainy ATM"
-              icon={Network}
-              colorClass="text-purple-500"
+              label="Agents ATM"
+              icon={Clock}
               isActive={activeSection === "neural-link"}
               isCollapsed={isCollapsed}
               onNavigate={onNavigate}
             />
+            {/* Keeping Agent Builder and Store as secondary premium items if user allows, but standardizing naming */}
             <NavItem
               id="agent-builder"
               label="Agent Builder"
               icon={Bot}
-              colorClass="text-orange-500"
               isActive={activeSection === "agent-builder"}
               isCollapsed={isCollapsed}
               onNavigate={onNavigate}
@@ -275,7 +267,6 @@ export function AppSidebar({
               id="agent-store"
               label="Agents Store"
               icon={Library}
-              colorClass="text-amber-500"
               isActive={activeSection === "agent-store"}
               isCollapsed={isCollapsed}
               onNavigate={onNavigate}
@@ -283,32 +274,46 @@ export function AppSidebar({
             <NavItem
               id="wasm-skills"
               label="Wasm Skills"
-              icon={CpuIcon}
-              colorClass="text-cyan-500"
+              icon={LayoutGrid}
               isActive={activeSection === "wasm-skills"}
               isCollapsed={isCollapsed}
               onNavigate={onNavigate}
             />
           </div>
 
-          <Separator className="bg-border/30" />
+          <Separator className="bg-border/20 mx-1" />
 
-          {/* Folders Section - Now below AI Studio */}
+          {/* Threads Section */}
           <div className="space-y-1">
             {!isCollapsed && (
-              <div className="flex items-center justify-between px-3 py-2 mb-1">
-                <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
-                  Workspace
+              <div className="flex items-center justify-between px-3 py-1 mb-1">
+                <span className="text-[11px] font-semibold text-muted-foreground/70">
+                  Threads
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  isIconOnly
-                  onPress={onAddFolder}
-                  className="size-5 min-w-5 h-5 opacity-40 hover:opacity-100"
-                >
-                  <Plus className="size-3" />
-                </Button>
+                <div className="flex items-center gap-0.5">
+                  <Tooltip delay={0}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      isIconOnly
+                      className="size-6 p-0 text-muted-foreground/40 hover:text-foreground hover:bg-white/5"
+                    >
+                      <FolderPlus className="size-3.5" />
+                    </Button>
+                    <Tooltip.Content placement="bottom">New project</Tooltip.Content>
+                  </Tooltip>
+                  <Tooltip delay={0}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      isIconOnly
+                      className="size-6 p-0 text-muted-foreground/40 hover:text-foreground hover:bg-white/5"
+                    >
+                      <ListFilter className="size-3.5" />
+                    </Button>
+                    <Tooltip.Content placement="bottom">Filter, sort, and organize threads</Tooltip.Content>
+                  </Tooltip>
+                </div>
               </div>
             )}
 
@@ -358,6 +363,23 @@ export function AppSidebar({
                     folderBtn
                   );
                 })}
+
+                {/* Add project list item */}
+                <Button
+                  variant="ghost"
+                  isIconOnly={isCollapsed}
+                  className={`transition-all duration-200 ${
+                    isCollapsed
+                      ? "w-9 h-9 justify-center mx-auto rounded-xl"
+                      : "w-full justify-start gap-3 h-9 px-3 rounded-xl"
+                  } text-muted-foreground/50 hover:text-foreground hover:bg-white/10`}
+                  onPress={onAddFolder}
+                >
+                  <Plus className="size-4 shrink-0" />
+                  {!isCollapsed && (
+                    <span className="truncate text-[13px] font-medium">Add project</span>
+                  )}
+                </Button>
               </div>
             ) : (
               !isCollapsed && (
