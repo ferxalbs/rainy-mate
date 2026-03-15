@@ -4,7 +4,6 @@ import {
   FolderOpen,
   Download,
   FileCode,
-  PanelLeft,
   ChevronLeft,
   ChevronRight,
   SquarePen,
@@ -213,24 +212,30 @@ export function AppSidebar({
           isCollapsed ? "w-16" : "w-64"
         } bg-sidebar`}
       >
-        {/* Premium Header: Traffic Lights & Toggle */}
-        <div 
+        {/* Sidebar Header: Logo & Title */}
+        <div
           data-tauri-drag-region
-          className="h-12 px-4 flex items-center justify-end shrink-0"
+          className={`h-[72px] px-4 pt-8 pb-2 flex items-center shrink-0 overflow-hidden ${isCollapsed ? "justify-center" : "gap-3"}`}
         >
+          <div
+            className="size-8 bg-foreground shrink-0"
+            style={{
+              maskImage: `url(/whale-dnf.png)`,
+              maskSize: "contain",
+              maskRepeat: "no-repeat",
+              maskPosition: "center",
+              WebkitMaskImage: `url(/whale-dnf.png)`,
+              WebkitMaskSize: "contain",
+              WebkitMaskRepeat: "no-repeat",
+              WebkitMaskPosition: "center",
+            }}
+          />
           {!isCollapsed && (
-            <Tooltip delay={0}>
-              <Button
-                variant="ghost"
-                size="sm"
-                isIconOnly
-                onPress={onToggleCollapse}
-                className="text-muted-foreground/30 hover:bg-white/5 hover:text-foreground h-7 w-7 rounded-lg"
-              >
-                <PanelLeft className="size-4" />
-              </Button>
-              <Tooltip.Content placement="bottom">Close sidebar</Tooltip.Content>
-            </Tooltip>
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-sm tracking-tight truncate">
+                Rainy MaTE
+              </span>
+            </div>
           )}
         </div>
 
