@@ -515,6 +515,7 @@ pub async fn run_agent_workflow(
     let workspace_path = workspace_id.clone();
 
     // --- Sanitize workspace path before it is interpolated into the system prompt ---
+    // Keep the sanitized version separate for prompt interpolation only
     let ws_guard = crate::ai::agent::prompt_guard::sanitize_workspace_id(&workspace_path);
     if ws_guard.was_modified {
         eprintln!(
@@ -522,7 +523,14 @@ pub async fn run_agent_workflow(
             ws_guard.flags
         );
     }
-    let workspace_path = ws_guard.text;
+    let prompt_safe_workspace = ws_guard.text;
+
+    // Validate the original workspace_path for filesystem operations
+    // Reject if it contains invalid UTF-8 or dangerous characters before using for paths
+    if workspace_path.contains('\0') || workspace_path.contains('\r') || workspace_path.contains('\n') {
+        return Err("Invalid workspace path: contains forbidden characters".to_string());
+    }
+
     let chat_id = chat_scope_id.unwrap_or_else(|| {
         crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string()
     });
@@ -580,7 +588,7 @@ pub async fn run_agent_workflow(
                         soul: AgentSoul {
                             name: "Rainy Agent".to_string(),
                             description: "Default fallback agent".to_string(),
-                            soul_content: default_instructions(&workspace_path),
+                            soul_content: default_instructions(&prompt_safe_workspace),
                             ..Default::default()
                         },
                         skills: AgentSkills::default(),
@@ -603,7 +611,7 @@ pub async fn run_agent_workflow(
             soul: AgentSoul {
                 name: "Rainy Agent".to_string(),
                 description: "Default agent".to_string(),
-                soul_content: default_instructions(&workspace_path),
+                soul_content: default_instructions(&prompt_safe_workspace),
                 ..Default::default()
             },
             skills: AgentSkills::default(),
