@@ -596,6 +596,10 @@ pub async fn run_agent_workflow(
                         memory_config: Default::default(),
                         connectors: Default::default(),
                         runtime: Default::default(),
+                        model: None,
+                        temperature: None,
+                        max_tokens: None,
+                        provider: None,
                         signature: None,
                     }
                 }
@@ -619,6 +623,10 @@ pub async fn run_agent_workflow(
             memory_config: Default::default(),
             connectors: Default::default(),
             runtime: Default::default(),
+            model: None,
+            temperature: None,
+            max_tokens: None,
+            provider: None,
             signature: None,
         }
     };
@@ -651,6 +659,8 @@ pub async fn run_agent_workflow(
         reasoning_effort: crate::ai::agent::prompt_guard::validate_reasoning_effort(
             reasoning_effort.as_deref()
         ),
+        temperature: spec.temperature,
+        max_tokens: spec.max_tokens,
     };
 
     // Initialize Persistent Memory

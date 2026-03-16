@@ -296,6 +296,8 @@ pub struct ThinkStep {
     pub model: String,
     pub allow_streaming: bool,
     pub reasoning_effort: Option<String>,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<u32>,
 }
 
 #[async_trait::async_trait]
@@ -388,8 +390,8 @@ impl WorkflowStep for ThinkStep {
         let request = crate::ai::provider_types::ChatCompletionRequest {
             model: self.model.clone(),
             messages,
-            temperature: Some(0.7),
-            max_tokens: None,
+            temperature: Some(self.temperature.unwrap_or(0.7)),
+            max_tokens: self.max_tokens,
             top_p: None,
             stream: self.allow_streaming && !has_tools,
             tools: if has_tools { Some(tools) } else { None },
@@ -899,14 +901,15 @@ mod tests {
                 soul_content: "test".to_string(),
                 ..Default::default()
             },
-            skills: AgentSkills {
-                capabilities: vec![],
-                tools: std::collections::HashMap::new(),
-            },
+            skills: AgentSkills::default(),
             airlock: Default::default(),
             memory_config: Default::default(),
             connectors: Default::default(),
             runtime: Default::default(),
+            model: None,
+            temperature: None,
+            max_tokens: None,
+            provider: None,
             signature: None,
         };
 
@@ -918,6 +921,8 @@ mod tests {
             custom_system_prompt: None,
             streaming_enabled: Some(false),
             reasoning_effort: None,
+            temperature: None,
+            max_tokens: None,
         };
 
         let mut workflow = Workflow::new(spec.clone(), options, "start".to_string());

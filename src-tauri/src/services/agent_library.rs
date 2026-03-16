@@ -136,7 +136,6 @@ mod tests {
     use crate::ai::specs::manifest::AgentSpec;
     use crate::ai::specs::skills::AgentSkills;
     use crate::ai::specs::soul::AgentSoul;
-    use std::collections::HashMap;
 
     #[test]
     fn save_list_load_roundtrip() {
@@ -153,14 +152,15 @@ mod tests {
                 name: "Roundtrip Agent".to_string(),
                 ..Default::default()
             },
-            skills: AgentSkills {
-                capabilities: vec![],
-                tools: HashMap::new(),
-            },
+            skills: AgentSkills::default(),
             airlock: Default::default(),
             memory_config: Default::default(),
             connectors: Default::default(),
             runtime: Default::default(),
+            model: None,
+            temperature: None,
+            max_tokens: None,
+            provider: None,
             signature: None,
         };
 
@@ -200,14 +200,15 @@ mod tests {
                     name: "Invalid".to_string(),
                     ..Default::default()
                 },
-                skills: AgentSkills {
-                    capabilities: vec![],
-                    tools: HashMap::new(),
-                },
+                skills: AgentSkills::default(),
                 airlock: Default::default(),
                 memory_config: Default::default(),
                 connectors: Default::default(),
                 runtime: Default::default(),
+                model: None,
+                temperature: None,
+                max_tokens: None,
+                provider: None,
                 signature: None,
             };
             assert!(service.save_spec(&spec).is_err(), "id should fail: {}", invalid_id);
@@ -258,14 +259,15 @@ mod tests {
                     name: "Valid".to_string(),
                     ..Default::default()
                 },
-                skills: AgentSkills {
-                    capabilities: vec![],
-                    tools: HashMap::new(),
-                },
+                skills: AgentSkills::default(),
                 airlock: Default::default(),
                 memory_config: Default::default(),
                 connectors: Default::default(),
                 runtime: Default::default(),
+                model: None,
+                temperature: None,
+                max_tokens: None,
+                provider: None,
                 signature: None,
             };
             service.save_spec(&spec).expect("valid save should succeed");

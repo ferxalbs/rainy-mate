@@ -50,6 +50,10 @@ mod tests {
             memory_config: Default::default(),
             connectors: Default::default(),
             runtime: Default::default(),
+            model: None,
+            temperature: None,
+            max_tokens: None,
+            provider: None,
             signature: None,
         };
 
@@ -104,6 +108,8 @@ mod tests {
             custom_system_prompt: None,
             streaming_enabled: Some(false),
             reasoning_effort: None,
+            temperature: None,
+            max_tokens: None,
         };
 
         // We can't easily run() without a real SkillExecutor/Router,

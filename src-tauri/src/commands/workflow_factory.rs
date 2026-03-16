@@ -5,7 +5,6 @@ use crate::services::agent_library::{AgentLibraryEntry, AgentLibraryService};
 use crate::services::workflow_recorder::{
     RecordedWorkflow, WorkflowRecordedStep, WorkflowRecorderService,
 };
-use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{command, State};
 
@@ -484,10 +483,7 @@ fn build_generated_spec(recording: &RecordedWorkflow, agent_name: String) -> Age
             ),
             ..Default::default()
         },
-        skills: AgentSkills {
-            capabilities: vec![],
-            tools: HashMap::new(),
-        },
+        skills: AgentSkills::default(),
         airlock: crate::ai::specs::manifest::AirlockConfig {
             tool_policy: crate::ai::specs::manifest::AirlockToolPolicy {
                 mode: "allowlist".to_string(),
@@ -502,6 +498,10 @@ fn build_generated_spec(recording: &RecordedWorkflow, agent_name: String) -> Age
             mode: RuntimeMode::Single,
             ..Default::default()
         },
+        model: None,
+        temperature: None,
+        max_tokens: None,
+        provider: None,
         signature: None,
     }
 }

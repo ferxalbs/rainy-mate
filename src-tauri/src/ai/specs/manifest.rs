@@ -24,6 +24,19 @@ pub struct AgentSpec {
     #[serde(default)]
     pub runtime: RuntimeConfig,
 
+    // v3 runtime fields
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+
+    #[serde(default, rename = "maxTokens", skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+
     // Security layer
     pub signature: Option<AgentSignature>,
 }

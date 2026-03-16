@@ -500,14 +500,15 @@ impl AgentManager {
                     soul_content: agent.soul.unwrap_or_default(),
                     ..Default::default()
                 },
-                skills: AgentSkills {
-                    capabilities: vec![],
-                    tools: std::collections::HashMap::new(),
-                },
+                skills: AgentSkills::default(),
                 airlock: Default::default(),
                 memory_config: Default::default(),
                 connectors: Default::default(),
                 runtime: Default::default(),
+                model: None,
+                temperature: None,
+                max_tokens: None,
+                provider: None,
                 signature: None,
             };
             Ok(Some(spec))
@@ -538,14 +539,15 @@ pub async fn save_agent_to_db(
             soul_content: soul.unwrap_or_default(),
             ..Default::default()
         },
-        skills: AgentSkills {
-            capabilities: vec![],
-            tools: std::collections::HashMap::new(),
-        },
+        skills: AgentSkills::default(),
         airlock: Default::default(),
         memory_config: Default::default(),
         connectors: Default::default(),
         runtime: Default::default(),
+        model: None,
+        temperature: None,
+        max_tokens: None,
+        provider: None,
         signature: None,
     };
 

@@ -23,6 +23,8 @@ pub struct RuntimeOptions {
     pub custom_system_prompt: Option<String>,
     pub streaming_enabled: Option<bool>,
     pub reasoning_effort: Option<String>,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<u32>,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
@@ -259,6 +261,40 @@ impl AgentRuntime {
                 .join("\n")
         };
 
+        // v3 workflows section
+        let active_workflows: Vec<&crate::ai::specs::skills::SkillWorkflow> = spec
+            .skills
+            .workflows
+            .iter()
+            .filter(|w| w.enabled)
+            .collect();
+        let workflow_section = if active_workflows.is_empty() {
+            String::new()
+        } else {
+            let lines: Vec<String> = active_workflows
+                .iter()
+                .map(|w| format!("- [Workflow: {}] trigger: \"{}\"\n  {}", w.name, w.trigger, w.steps))
+                .collect();
+            format!("\n\nWorkflows:\n{}", lines.join("\n"))
+        };
+
+        // v3 behaviors section
+        let active_behaviors: Vec<&crate::ai::specs::skills::SkillBehavior> = spec
+            .skills
+            .behaviors
+            .iter()
+            .filter(|b| b.enabled)
+            .collect();
+        let behavior_section = if active_behaviors.is_empty() {
+            String::new()
+        } else {
+            let lines: Vec<String> = active_behaviors
+                .iter()
+                .map(|b| format!("- {}: {}", b.name, b.instruction))
+                .collect();
+            format!("\n\nBehavior Rules:\n{}", lines.join("\n"))
+        };
+
         format!(
             "You are {}.
 
@@ -274,7 +310,7 @@ Workspace ID: {}
 Allowed Filesystem Scope: {}
 
 Capabilities:
-{}
+{}{}{}
 
 Memory:
 - strategy: {}
@@ -294,6 +330,8 @@ Rules:
             workspace_id,
             workspace_scope,
             capability_lines,
+            workflow_section,
+            behavior_section,
             spec.memory_config.strategy,
             spec.memory_config.effective_retention_days(),
             spec.memory_config.effective_max_tokens(),
@@ -562,14 +600,16 @@ Rules:
         // Step 1: Think (Router/LLM)
         let think_step = Box::new(ThinkStep {
             router: self.router.clone(),
-            // Use runtime option model or default
             model: self
                 .options
                 .model
                 .clone()
+                .or_else(|| self.spec.model.clone())
                 .unwrap_or("gemini-2.0-flash".to_string()),
             allow_streaming: self.options.streaming_enabled.unwrap_or(false),
             reasoning_effort: self.options.reasoning_effort.clone(),
+            temperature: self.options.temperature.or(self.spec.temperature),
+            max_tokens: self.options.max_tokens.or(self.spec.max_tokens),
         });
         workflow.add_step(think_step);
 

@@ -912,6 +912,8 @@ impl CommandPoller {
                             // even if we load a local (potentially stale) spec.
                             custom_system_prompt: agent_system_prompt.clone(),
                             streaming_enabled: Some(false),
+                            temperature: None,
+                            max_tokens: None,
                         };
 
                         // Create config
@@ -969,14 +971,15 @@ GUIDELINES:
                                     ),
                                     ..Default::default()
                                 },
-                                skills: AgentSkills {
-                                    capabilities: vec![],
-                                    tools: std::collections::HashMap::new(),
-                                },
+                                skills: AgentSkills::default(),
                                 airlock: Default::default(),
                                 memory_config: Default::default(),
                                 connectors: Default::default(),
                                 runtime: Default::default(),
+                                model: None,
+                                temperature: None,
+                                max_tokens: None,
+                                provider: None,
                                 signature: None,
                             }
                         };

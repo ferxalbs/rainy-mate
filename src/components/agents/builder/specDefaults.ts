@@ -20,10 +20,6 @@ export function createDefaultAgentSpec(id: string = crypto.randomUUID()): AgentS
       workflows: [],
       tool_preferences: [],
       behaviors: [],
-
-      // Compatibility with current Rust v2 parser.
-      capabilities: [],
-      tools: {},
     },
     airlock: {
       tool_policy: {
@@ -94,13 +90,6 @@ export function normalizeAgentSpec(raw: any): AgentSpec {
       behaviors: Array.isArray(source.skills?.behaviors)
         ? source.skills.behaviors
         : [],
-      capabilities: Array.isArray(source.skills?.capabilities)
-        ? source.skills.capabilities
-        : defaults.skills.capabilities,
-      tools:
-        source.skills && typeof source.skills.tools === "object"
-          ? source.skills.tools
-          : defaults.skills.tools,
     },
     airlock: {
       ...defaults.airlock,
