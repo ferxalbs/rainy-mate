@@ -23,6 +23,24 @@ impl KeychainManager {
         Self
     }
 
+    /// Check if keychain operations are supported on this platform
+    pub fn is_supported() -> bool {
+        #[cfg(test)]
+        {
+            return true;
+        }
+
+        #[cfg(all(not(test), target_os = "macos"))]
+        {
+            return true;
+        }
+
+        #[cfg(all(not(test), not(target_os = "macos")))]
+        {
+            return false;
+        }
+    }
+
     /// Store an API key in the Keychain
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
@@ -52,7 +70,7 @@ impl KeychainManager {
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
             let _ = api_key;
-            Err("Keychain storage is only supported on macOS".to_string())
+            Err("Keychain not supported on this platform".to_string())
         }
     }
 
@@ -95,7 +113,7 @@ impl KeychainManager {
 
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
-            Ok(None) // Fail gracefully on other platforms
+            Err("Keychain not supported on this platform".to_string())
         }
     }
 
@@ -135,7 +153,7 @@ impl KeychainManager {
 
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
-            Ok(()) // Fail gracefully on other platforms
+            Err("Keychain not supported on this platform".to_string())
         }
     }
 
