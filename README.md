@@ -1,260 +1,250 @@
-# Rainy MaTE (v0.5.96)
+# Rainy MaTE
 
-**High-Performance Agentic Desktop Runtime** built on the Tauri 2.0 framework.
+<div align="center">
+  <img src="./whale.png" alt="Rainy MaTE logo" width="120" />
+  <h1 style="margin-bottom: 0.35rem;">Rainy MaTE</h1>
+  <p style="margin-top: 0; font-size: 1.05rem;">
+    Native agent runtime for desktop, built with <strong>Tauri 2</strong>, <strong>Rust</strong>, and <strong>React 19</strong>.
+  </p>
+  <p>
+    <img alt="Version" src="https://img.shields.io/badge/version-0.5.96-0f766e" />
+    <img alt="Status" src="https://img.shields.io/badge/status-beta-f59e0b" />
+    <img alt="Runtime" src="https://img.shields.io/badge/runtime-tauri_2-2563eb" />
+    <img alt="Engine" src="https://img.shields.io/badge/engine-rust-111827" />
+  </p>
+</div>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/enosislabs/rainy-cowork/actions)
-[![Tauri](https://img.shields.io/badge/Tauri-2.0+-blue.svg)](https://tauri.app/)
-[![Rust](https://img.shields.io/badge/Rust-1.78+-black.svg)](https://www.rust-lang.org/)
+<div style="margin: 1.5rem 0; padding: 1rem 1.1rem; border: 1px solid #f59e0b; border-radius: 14px; background: linear-gradient(135deg, rgba(245,158,11,0.16), rgba(127,29,29,0.10));">
+  <h2 style="margin: 0 0 0.55rem 0;">Warning: MaTE is in active development and currently in BETA</h2>
+  <p style="margin: 0 0 0.65rem 0;">
+    MaTE is <strong>not the final product</strong>. Behavior, interfaces, and internal systems may change without notice while the platform is still being hardened. Unexpected regressions, unfinished flows, and sharp edges are possible.
+  </p>
+  <p style="margin: 0 0 0.65rem 0;">
+    This may cost us some public in the short term, but that is the price of building the system properly instead of pretending it is already stable.
+  </p>
+  <p style="margin: 0;">
+    <strong>Spanish note:</strong> MaTE está en desarrollo activo y en <strong>BETA</strong>. Puede haber cambios no esperados y este no es el producto final.
+  </p>
+</div>
 
-## System Overview
+## What MaTE Is
 
-Rainy MaTE is a native desktop runtime designed for executing autonomous AI agents with high performance reliability. Unlike web-based solutions, it leverages system-level capabilities directly through a secure Rust backend, ensuring minimal latency and complete data sovereignty.
+Rainy MaTE is a desktop-first agent runtime. The UI lives in React, but the real system runs in Rust: agent orchestration, tool execution, memory, security policy, browser control, workspace access, and cloud bridge logic are implemented in `src-tauri/`.
 
-### Core Architecture
+It is designed around one architectural rule:
 
-The system operates on a dual-runtime architecture:
+> TypeScript is the view layer. Rust owns the logic.
 
-1.  **Rust Backend (System Layer)**: Handles heavy computation, file I/O, networking, and the core agentic loop (`AgentRuntime`). Utilizes `Tokio` for asynchronous operations and `Rayon` for parallel data processing.
-2.  **Web Frontend (Presentation Layer)**: A lightweight React 19 interface rendered via `WebView` constraints, communicating with the backend exclusively through the secure Tauri IPC bridge.
+That separation is enforced across the project so the desktop app remains fast, inspectable, and security-aware.
 
-> **Performance Note**: The runtime is compiled to native machine code. It does not require a local Python environment or Docker container.
+## Current State
 
----
+- Active desktop version: `0.5.96`
+- Desktop stack: `Tauri 2` + `Rust` + `React 19` + `Vite`
+- Cloud/backend stack: `Bun` in [`rainy-atm/`](./rainy-atm)
+- Package manager: `pnpm` only
+- Development status: BETA / active internal iteration
 
-## Technical Specifications
+Recent system work reflected in the codebase:
 
-### 1. Agent Runtime (v2)
+- `THE FORGE` added workflow recording and specialist-agent generation.
+- ATM security was hardened with policy-hash verification, safer WebSocket auth flow, and audit fixes.
+- Memory internals were optimized, while the stable embedder surface remains locked to `gemini-embedding-001` (`3072d`) in the current desktop UI.
 
-The `AgentRuntime` implements a robust **ReAct (Reasoning + Acting)** loop designed for stability:
+## What Exists Today
 
-- **Workflow Engine**: Orchestrates the `Think -> Act -> Observe` cycle.
-- **Context Management**: Implements a sliding window context manager (`ContextWindow`) with token-aware truncation to maintain coherence within LLM constraints.
-- **Memory Persistence**: All interactions are transactionally stored in a comprehensive SQLite database with Write-Ahead Logging (WAL) enabled for concurrency.
+### Agent Runtime
 
-### 2. Intelligent Router
+MaTE ships a native ReAct-style runtime in [`src-tauri/src/ai/agent/`](./src-tauri/src/ai/agent):
 
-The `IntelligentRouter` dynamically balances AI inference loads:
+- `Think -> Act -> Observe` workflow
+- Tool-call execution through `SkillExecutor`
+- Streaming and non-streaming model paths
+- History management and long-chat continuity
+- Memory retrieval injection before model calls
+- Supervisor mode for multi-agent specialist orchestration
 
-- **Circuit Breaker**: Detects provider failures and automatically reroutes requests.
-- **Load Balancer**: Distributes traffic across configured providers (OpenAI, Anthropic, Google, xAI) based on latency and error rates.
-- **Cost Optimization**: Selects models based on task complexity and budget constraints.
+The runtime also includes explicit truthfulness rules: tool output is treated as the source of truth, and failures must be reported rather than fabricated.
 
-### 3. Security Model (Airlock)
+### Native Tooling Surface
 
-Rainy MaTE enforces a capability-based security model known as **Airlock**:
+Registered built-in tools live in [`src-tauri/src/services/skill_executor/registry.rs`](./src-tauri/src/services/skill_executor/registry.rs), with policy enforced in [`src-tauri/src/services/tool_policy.rs`](./src-tauri/src/services/tool_policy.rs).
 
-| Level  | Designation | Description                                             | Example Operations                      |
-| :----- | :---------- | :------------------------------------------------------ | :-------------------------------------- |
-| **L0** | Safe        | Read-only operations. Auto-approved.                    | `read_file`, `list_files`, `web_search` |
-| **L1** | Sensitive   | State-modifying operations. Requires user notification. | `write_file`, `browse_url`              |
-| **L2** | Creating    | Critical system operations. Requires explicit approval. | `execute_command`, `delete_file`        |
+Current built-in categories:
 
-This model ensures that autonomous agents cannot perform destructive actions without operator consent.
+- Filesystem: read, list, inspect, search, write, append, move, delete, document ingestion
+- Shell/Git: command execution with allowlist, git status/diff/log/show/branch wrappers
+- Web/HTTP: web search, page reading, JSON/text fetch, JSON POST
+- Browser automation: open URL, tabs, click, type, submit, go back, snapshot, screenshot, link extraction
 
----
+Every registered tool must have an explicit Airlock policy entry. Unknown tools are denied by default.
 
-## Capabilities & Tooling
+### Airlock Security Model
 
-The runtime exposes a standardized set of native tools to the agent:
+MaTE uses a three-level execution gate enforced in Rust:
 
-- **FileSystem**: `read`, `write`, `list`, `search`, `delete`, `move` (Scoped to allowed directories).
-- **System Shell**: Secure command execution (Allowlist: `npm`, `cargo`, `git`, `ls`, `grep`, `echo`, `cat`).
-- **Browser Automation**: Headless navigation, DOM extraction, and interaction via `ferrum` driver.
-- **Network**: HTTP/HTTPS requests, `web_search` (Tavily).
-- **Data Processing**: Text extraction, format conversion.
+| Level | Meaning | Typical behavior |
+| --- | --- | --- |
+| `L0` | Safe | Auto-approved, read-only or observational |
+| `L1` | Sensitive | State-changing, notification-gated |
+| `L2` | Dangerous | Explicit approval required |
 
----
+This is not only a UI convention. Policy is checked in multiple layers, including workflow validation, executor checks, and cloud/desktop policy reconciliation.
 
-## Integration: Cloud Cortex (Rainy ATM)
+### Memory System
 
-Rainy MaTE seamlessly integrates with the **Rainy ATM** (Cloud Cortex) protocol for distributed operations:
+The memory stack combines short-term runtime memory and an encrypted long-term vault:
 
-- **Unified Lane Queue**: Guaranteed message delivery for remote commands (Telegram/Discord).
-- **Heartbeat Sync**: Real-time status reporting and command polling.
-- **Audit Trail**: Immutable logging of all executed commands and policy changes.
+- Long-term store: AES-256-GCM encrypted `libSQL/SQLite`
+- Retrieval: hybrid semantic + lexical search
+- Injection: bounded retrieval context before model calls
+- Stable embedding surface today: `gemini-embedding-001` at `3072` dimensions
 
----
+The repo contains internal work for dual embedding profiles, but the stable end-user desktop configuration is still pinned to the locked Gemini profile in the settings UI.
 
-## Installation & Build
+### THE FORGE
+
+`THE FORGE` is the in-product workflow-to-agent factory:
+
+- Record a workflow
+- Capture steps, tools, decisions, errors, retries
+- Generate a draft specialist agent
+- Validate it before save/activation
+- Export/share through ATM flows
+
+Primary desktop entry points for this live in:
+
+- [`src-tauri/src/commands/workflow_factory.rs`](./src-tauri/src/commands/workflow_factory.rs)
+- [`src-tauri/src/services/workflow_recorder.rs`](./src-tauri/src/services/workflow_recorder.rs)
+- [`src-tauri/src/services/agent_library.rs`](./src-tauri/src/services/agent_library.rs)
+
+### Rainy ATM Integration
+
+`Rainy ATM`, located in [`rainy-atm/`](./rainy-atm), is a central part of the system architecture and acts as the connector between mobile and desktop.
+
+ATM currently covers:
+
+- mobile-to-desktop command transport
+- dynamic tool registry behavior
+- workspace/channel routing
+- node registration and heartbeat
+- fleet controls and command polling
+- audit and policy handling
+
+Its runtime uses `Bun`, not Node.js.
+
+## Architecture
+
+```text
+rainy-mate/
+├── src/                  React UI only
+├── src-tauri/            Native Rust engine
+│   ├── src/ai/           Providers, router, agent runtime, supervisor flow
+│   ├── src/commands/     Thin Tauri invoke layer
+│   ├── src/services/     Business logic, tools, memory, security, ATM bridge
+│   └── migrations/       Database and vault migrations
+├── rainy-atm/            Bun connector layer between mobile and desktop
+└── docs/                 Supporting documentation
+```
+
+Key service areas in the Rust backend:
+
+- `ai/agent/`: runtime, workflow, memory wiring, supervisor orchestration
+- `services/skill_executor/`: native tool handlers and tool registry
+- `services/airlock.rs`: approval and execution gating
+- `services/memory/` and `services/memory_vault/`: retrieval and encrypted persistence
+- `services/workspace.rs`: workspace lifecycle and scope enforcement
+- `services/command_poller.rs`: cloud command execution loop
+- `services/neural_service.rs`: desktop node registration and heartbeat
+
+## Startup Model
+
+The application boot sequence matters. `lib.rs` initializes core services first, then completes app-handle-dependent services in `setup()`.
+
+In practical terms:
+
+1. Providers, task manager, file/document/image services
+2. Workspace, router, ATM client, neural service, browser controller
+3. Skill executor, command poller, socket client, workflow recorder, agent library
+4. `setup()` services such as updater, folder manager, file-op init, memory manager, Airlock, database, agent manager, and poller startup
+
+This ordering is intentional. Services that need app data directories or `AppHandle` are initialized later.
+
+## Supported Provider Surface
+
+The codebase includes provider integrations and routing infrastructure for:
+
+- OpenAI
+- Google Gemini
+- Anthropic
+- xAI
+- Groq
+- Rainy SDK
+- additional model-catalog routing infrastructure in the unified registry
+
+Exact model availability can change over time and depends on provider configuration, credentials, and routing rules.
+
+## Development
 
 ### Prerequisites
 
-- **Rust**: v1.78+ (`rustup update stable`)
-- **Node.js**: v18+ (`LTS recommended`)
-- **Package Manager**: `pnpm` (Strictly enforced)
-- **Build Tools**: XCode Command Line Tools (macOS) or `build-essential` (Linux)
+- Rust stable
+- Node.js
+- `pnpm`
+- Tauri desktop prerequisites for your platform
+- `Bun` only if you will work inside `rainy-atm/`
 
-### Build Instructions
+### Install
 
-1.  **Clone Repository**
+```bash
+git clone https://github.com/ferxalbs/rainy-mate.git
+cd rainy-mate
+pnpm install
+```
 
-    ```bash
-    git clone https://github.com/enosislabs/rainy-cowork.git
-    cd rainy-cowork
-    ```
+### Run
 
-2.  **Install Dependencies**
+```bash
+pnpm run tauri dev
+```
 
-    ```bash
-    pnpm install
-    ```
+### Required Validation Gates
 
-3.  **Development Mode** (Hot Reload)
+These are the baseline gates used by the project:
 
-    ```bash
-    pnpm tauri dev
-    ```
+```bash
+cd src-tauri && cargo check -q
+cd src-tauri && cargo test
+pnpm exec tsc --noEmit
+```
 
-4.  **Production Build** (Optimized Release)
-    ```bash
-    pnpm tauri build
-    ```
+For this README update, the current repository passed:
 
----
+- `cargo check -q`
+- `pnpm exec tsc --noEmit`
 
-## Configuration
+`cargo check` still emits some warnings for currently unused code paths, but it completes successfully.
 
-The application requires valid API keys for AI providers. These are securely stored in the OS Keychain/Keyring.
+## Documentation Pointers
 
-**Supported Providers:**
+- [`AGENTS.md`](./AGENTS.md): architecture, rules, startup order, module map, tool policy model
+- [`CHANGELOG.md`](./CHANGELOG.md): canonical historical record
+- [`ROADMAP.md`](./ROADMAP.md): planned work
+- [`FEATURES.md`](./FEATURES.md): feature inventory
+- [`SECURITY.md`](./SECURITY.md): security notes
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md): contributor workflow
 
-- OpenAI (`OPENAI_API_KEY`)
-- Google Gemini (`GOOGLE_API_KEY`)
-- Anthropic (`ANTHROPIC_API_KEY`)
-- Groq (`GROQ_API_KEY`)
-- xAI (`XAI_API_KEY`)
-- Rainy SDK (`RAINY_API_KEY`)
+## Contribution Rules
 
----
+If you plan to contribute, read [`AGENTS.md`](./AGENTS.md) first. The project has strict rules:
+
+- business logic in Rust, not React
+- `pnpm` only
+- modularized code paths
+- explicit tool policies
+- no undocumented dead code
+- validation gates before claiming work is done
 
 ## License
 
-This software is licensed under the **MIT License**.
-
-See [LICENSE](LICENSE) for the full text.
-
-**Note**: Usage of the cloud-hosted **Rainy ATM** infrastructure is subject to the [Enosis Labs Terms of Service](https://enosislabs.com/terms).
-
----
-
-## 📚 Documentation
-
-Comprehensive documentation is available at:
-
-- **[Rainy MaTE Docs](https://rainy-mate-docs.vercel.app/)** — Main documentation
-- **[API Reference](https://rainy-mate-docs.vercel.app/docs/)** — Detailed API docs
-- **[Architecture](https://rainy-mate-docs.vercel.app/docs/architecture)** — System architecture
-- **[Features](https://rainy-mate-docs.vercel.app/docs/features)** — Feature overview
-- **[Contributing](https://rainy-mate-docs.vercel.app/docs/contributing)** — Contribution guide
-
----
-
-## 🔐 Security
-
-### Airlock Security Levels
-
-Rainy MaTE implements a three-tier security system for agent operations:
-
-| Level | Name          | Description          | Approval Required |
-| ----- | ------------- | -------------------- | ----------------- |
-| **0** | **Safe**      | Read-only operations | Auto-approved     |
-| **1** | **Sensitive** | Write operations     | Notification      |
-| **2** | **Dangerous** | Execute/Delete       | Explicit approval |
-
-### Permission Policies
-
-Enterprise-grade permission management with:
-
-- **Workspace-Specific Policies** — Granular access control
-- **Audit Trail** — Immutable policy change history
-- **SLO Monitoring** — Service level objective tracking
-- **Alert Management** — Retention, acknowledgment, and audit
-
-### Security Best Practices
-
-- API keys stored in OS keychain
-- Local-first data by default
-- Sandboxed AI operations
-- Explicit user permissions for sensitive operations
-
----
-
-## 🤝 Contributing
-
-We welcome contributions from the community! Rainy MaTE is built by developers, for developers.
-
-### Ways to Contribute
-
-- 🐛 **Bug Reports** — Help us identify and fix issues
-- ✨ **Feature Requests** — Suggest new capabilities
-- 💻 **Code Contributions** — Submit pull requests
-- 📚 **Documentation** — Improve guides and examples
-- 🎨 **UI/UX** — Enhance the user experience
-- 🧪 **Testing** — Help ensure quality and reliability
-
-### Contribution Guidelines
-
-1. **Fork** the repository
-2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
-3. **Commit** your changes: `git commit -m 'feat(area): add amazing feature'`
-4. **Push** to the branch: `git push origin feature/amazing-feature`
-5. **Open** a Pull Request
-
-See our [Contributing Guide](https://rainy-mate-docs.vercel.app/docs/contributing) for detailed information.
-
----
-
-## 📄 License & Legal
-
-This project is licensed under the **MIT License** with additional terms for AI services.
-
-### Legal Documentation
-
-- **[LICENSE](LICENSE)** — MIT License terms
-- **[TERMS_OF_USE.md](TERMS_OF_USE.md)** — Complete terms and conditions
-- **[PRIVACY_POLICY.md](PRIVACY_POLICY.md)** — Data and privacy handling
-- **[SECURITY.md](SECURITY.md)** — Security practices and reporting
-
-### Enosis Labs Integration
-
-When using Enosis Labs AI services, you must also comply with:
-
-- [Enosis Labs Terms of Service](https://enosislabs.vercel.app/terms)
-- [Enosis Labs Privacy Policy](https://enosislabs.vercel.app/privacy)
-
----
-
-## 🌟 Acknowledgments
-
-Rainy MaTE is inspired by the agentic AI revolution and built on the shoulders of giants:
-
-- **Tauri** — For the amazing cross-platform framework
-- **React** — For the powerful UI library
-- **Rust** — For performance and safety
-- **HeroUI** — For beautiful, accessible components
-- **OpenAI, Google, Anthropic, xAI** — For advancing AI capabilities
-- **The Open Source Community** — For making this possible
-
-Special thanks to all contributors who help make Rainy MaTE better every day! 🎉
-
----
-
-## 📞 Support
-
-- 📖 **[Documentation](https://rainy-mate-docs.vercel.app/)** — Comprehensive guides
-- 💬 **[Discussions](https://github.com/enosislabs/rainy-cowork/discussions)** — Community Q&A
-- 🐛 **[Issues](https://github.com/enosislabs/rainy-cowork/issues)** — Bug reports
-- 📧 **Email** — Direct support for complex issues
-
----
-
-<div align="center">
-
-**Built with ❤️ for the open source community**
-
-[⭐ Star on GitHub](https://github.com/enosislabs/rainy-cowork) • [📖 Documentation](https://rainy-mate-docs.vercel.app/) • [💬 Community](https://github.com/enosislabs/rainy-cowork/discussions)
-
-**Rainy MaTE** — _The Open-Source AI Desktop Agent Platform_
-
-</div>
+This repository is licensed under the [MIT License](./LICENSE).
