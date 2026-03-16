@@ -917,6 +917,7 @@ mod tests {
             allowed_paths: None,
             custom_system_prompt: None,
             streaming_enabled: Some(false),
+            reasoning_effort: None,
         };
 
         let mut workflow = Workflow::new(spec.clone(), options, "start".to_string());
