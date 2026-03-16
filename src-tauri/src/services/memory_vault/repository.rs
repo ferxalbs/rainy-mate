@@ -585,6 +585,133 @@ impl MemoryVaultRepository {
         Ok((total as usize, workspace as usize))
     }
 
+    /// Delete all entries for a workspace whose created_at is older than `cutoff` (unix seconds).
+    /// Returns the number of rows deleted.
+    pub async fn delete_workspace_entries_older_than(
+        &self,
+        workspace_id: &str,
+        cutoff: i64,
+    ) -> Result<u64, String> {
+        self.conn
+            .execute("BEGIN IMMEDIATE TRANSACTION", ())
+            .await
+            .map_err(|e| format!("Failed to begin retention prune transaction: {}", e))?;
+
+        let result: Result<u64, String> = async {
+            // Collect IDs to cascade-delete from embedding_vectors table.
+            let mut id_rows = self
+                .conn
+                .query(
+                    "SELECT id FROM memory_vault_entries
+                     WHERE workspace_id = ?1 AND created_at < ?2",
+                    params![workspace_id.to_string(), cutoff],
+                )
+                .await
+                .map_err(|e| format!("Failed to collect expired ids: {}", e))?;
+
+            let mut ids: Vec<String> = Vec::new();
+            while let Some(row) = id_rows.next().await.map_err(|e| e.to_string())? {
+                ids.push(row.get::<String>(0).map_err(|e| e.to_string())?);
+            }
+
+            for id in &ids {
+                self.conn
+                    .execute(
+                        "DELETE FROM memory_vault_embedding_vectors WHERE entry_id = ?1",
+                        params![id.clone()],
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to delete expired embedding vector {}: {}", id, e))?;
+            }
+
+            self.conn
+                .execute(
+                    "DELETE FROM memory_vault_entries
+                     WHERE workspace_id = ?1 AND created_at < ?2",
+                    params![workspace_id.to_string(), cutoff],
+                )
+                .await
+                .map_err(|e| format!("Failed to delete expired entries: {}", e))?;
+
+            Ok(ids.len() as u64)
+        }
+        .await;
+
+        match result {
+            Ok(count) => {
+                self.conn
+                    .execute("COMMIT", ())
+                    .await
+                    .map_err(|e| format!("Failed to commit retention prune: {}", e))?;
+                Ok(count)
+            }
+            Err(err) => {
+                let _ = self.conn.execute("ROLLBACK", ()).await;
+                Err(err)
+            }
+        }
+    }
+
+    /// Delete entries across ALL workspaces older than `cutoff` (unix seconds).
+    /// Used as a startup safety net for very stale entries.
+    pub async fn delete_all_entries_older_than(&self, cutoff: i64) -> Result<u64, String> {
+        self.conn
+            .execute("BEGIN IMMEDIATE TRANSACTION", ())
+            .await
+            .map_err(|e| format!("Failed to begin global prune transaction: {}", e))?;
+
+        let result: Result<u64, String> = async {
+            let mut id_rows = self
+                .conn
+                .query(
+                    "SELECT id FROM memory_vault_entries WHERE created_at < ?1",
+                    params![cutoff],
+                )
+                .await
+                .map_err(|e| format!("Failed to collect globally expired ids: {}", e))?;
+
+            let mut ids: Vec<String> = Vec::new();
+            while let Some(row) = id_rows.next().await.map_err(|e| e.to_string())? {
+                ids.push(row.get::<String>(0).map_err(|e| e.to_string())?);
+            }
+
+            for id in &ids {
+                self.conn
+                    .execute(
+                        "DELETE FROM memory_vault_embedding_vectors WHERE entry_id = ?1",
+                        params![id.clone()],
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to delete expired embedding vector {}: {}", id, e))?;
+            }
+
+            self.conn
+                .execute(
+                    "DELETE FROM memory_vault_entries WHERE created_at < ?1",
+                    params![cutoff],
+                )
+                .await
+                .map_err(|e| format!("Failed to delete globally expired entries: {}", e))?;
+
+            Ok(ids.len() as u64)
+        }
+        .await;
+
+        match result {
+            Ok(count) => {
+                self.conn
+                    .execute("COMMIT", ())
+                    .await
+                    .map_err(|e| format!("Failed to commit global prune: {}", e))?;
+                Ok(count)
+            }
+            Err(err) => {
+                let _ = self.conn.execute("ROLLBACK", ()).await;
+                Err(err)
+            }
+        }
+    }
+
     pub async fn migration_completed(&self, id: &str) -> Result<bool, String> {
         let mut rows = self
             .conn

@@ -22,6 +22,7 @@ pub enum SemanticRetrievalMode {
     Ann,
     Exact,
     LexicalFallback,
+    SimpleBuffer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -40,6 +40,15 @@ impl MemoryManager {
         let _ = self.resolve_gemini_embedder();
         if let Ok(vault) = self.ensure_vault().await {
             vault.spawn_reembed_backfill();
+            // Startup safety-net: prune entries older than 365 days across all workspaces.
+            let vault_for_prune = vault.clone();
+            tokio::spawn(async move {
+                match vault_for_prune.prune_global_expired(365).await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::info!("Startup pruning: removed {} globally expired entries", n),
+                    Err(e) => tracing::warn!("Startup global pruning failed: {}", e),
+                }
+            });
         }
     }
 
@@ -169,7 +178,7 @@ impl MemoryManager {
         limit: usize,
     ) -> Result<Vec<MemoryEntry>, MemoryError> {
         let result = self
-            .search_semantic_detailed(workspace_id, query, limit)
+            .search_semantic_detailed(workspace_id, query, limit, "hybrid")
             .await?;
         Ok(result.entries)
     }
@@ -226,6 +235,23 @@ impl MemoryManager {
             .map_err(MemoryError::Other)
     }
 
+    /// Delete vault entries older than `retention_days` for a workspace.
+    /// No-op when `retention_days` is 0. Spawned as a background task by the agent runtime.
+    pub async fn prune_expired(
+        &self,
+        workspace_id: &str,
+        retention_days: u32,
+    ) -> Result<u64, MemoryError> {
+        if retention_days == 0 {
+            return Ok(0);
+        }
+        let vault = self.ensure_vault().await?;
+        vault
+            .prune_workspace_expired(workspace_id, retention_days)
+            .await
+            .map_err(MemoryError::Other)
+    }
+
     pub async fn short_term_size(&self) -> usize {
         let stm = self.short_term.read().await;
         stm.len()
@@ -264,7 +290,26 @@ impl MemoryManager {
         workspace_id: &str,
         query: &str,
         limit: usize,
+        strategy: &str,
     ) -> Result<SemanticSearchResult, MemoryError> {
+        // simple_buffer: ring buffer only — no vault I/O, no embedding cost
+        if strategy == "simple_buffer" {
+            let stm = self.short_term.read().await;
+            let entries: Vec<MemoryEntry> = stm
+                .iter()
+                .filter(|e| e.tags.contains(&format!("workspace:{}", workspace_id)))
+                .rev()
+                .take(limit)
+                .cloned()
+                .collect();
+            return Ok(SemanticSearchResult {
+                entries,
+                mode: SemanticRetrievalMode::SimpleBuffer,
+                reason: None,
+                confidential_entry_ids: Vec::new(),
+            });
+        }
+
         let embedder = match self.resolve_gemini_embedder() {
             Ok(Some(embedder)) => embedder,
             Ok(None) => {
@@ -329,11 +374,6 @@ impl MemoryManager {
             .await
             .map_err(MemoryError::Other)?;
 
-        let lexical_rows = vault
-            .search_workspace(workspace_id, query, limit.saturating_mul(3).max(20))
-            .await
-            .map_err(MemoryError::Other)?;
-
         let mode = match mode {
             crate::services::memory_vault::service::VectorSearchMode::Ann => {
                 SemanticRetrievalMode::Ann
@@ -342,6 +382,61 @@ impl MemoryManager {
                 SemanticRetrievalMode::Exact
             }
         };
+
+        // vector strategy: skip lexical, score by semantic + recency + access only
+        if strategy == "vector" {
+            let now = chrono::Utc::now().timestamp();
+            let mut merged: HashMap<
+                String,
+                (f64, crate::services::memory_vault::types::DecryptedMemoryEntry),
+            > = HashMap::new();
+
+            for (entry, distance) in rows {
+                let recency = recency_score(entry.created_at, now);
+                let access = access_score(entry.access_count);
+                let semantic = semantic_score(distance);
+                let score = 0.70 * semantic + 0.20 * recency + 0.10 * access;
+                upsert_ranked_entry(&mut merged, entry, score);
+            }
+
+            let mut ranked = merged.into_values().collect::<Vec<_>>();
+            ranked.sort_by(|(a_score, _), (b_score, _)| {
+                b_score
+                    .partial_cmp(a_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            let mut confidential_entry_ids = Vec::new();
+            for (_score, entry) in ranked.iter().take(limit.max(1)) {
+                if matches!(entry.sensitivity, MemorySensitivity::Confidential) {
+                    confidential_entry_ids.push(entry.id.clone());
+                }
+            }
+
+            return Ok(SemanticSearchResult {
+                entries: ranked
+                    .into_iter()
+                    .take(limit.max(1))
+                    .map(|(_score, entry)| MemoryEntry {
+                        id: entry.id,
+                        content: entry.content,
+                        embedding: None,
+                        timestamp: chrono::DateTime::from_timestamp(entry.created_at, 0)
+                            .unwrap_or_else(chrono::Utc::now),
+                        tags: entry.tags,
+                    })
+                    .collect(),
+                mode,
+                reason: None,
+                confidential_entry_ids,
+            });
+        }
+
+        // hybrid (default): vector + lexical merged by scoring
+        let lexical_rows = vault
+            .search_workspace(workspace_id, query, limit.saturating_mul(3).max(20))
+            .await
+            .map_err(MemoryError::Other)?;
 
         let query_tokens = normalize_query_tokens(query);
         let now = chrono::Utc::now().timestamp();
@@ -691,5 +786,120 @@ fn upsert_ranked_entry(
         _ => {
             merged.insert(id, (score, entry));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn make_manager() -> MemoryManager {
+        MemoryManager::new(100, PathBuf::from(":memory:"))
+    }
+
+    #[tokio::test]
+    async fn test_simple_buffer_returns_ring_buffer_only() {
+        let mm = make_manager();
+        let workspace_id = "test-ws-simple";
+        let now = chrono::Utc::now().timestamp();
+
+        // Write directly to ring buffer via store_workspace_memory
+        mm.store_workspace_memory(
+            workspace_id,
+            uuid::Uuid::new_v4().to_string(),
+            "ring buffer content".to_string(),
+            "test".to_string(),
+            vec![format!("workspace:{}", workspace_id)],
+            HashMap::new(),
+            now,
+            crate::services::memory_vault::MemorySensitivity::Internal,
+        )
+        .await
+        .unwrap();
+
+        // simple_buffer strategy reads from ring buffer without vault I/O
+        let result = mm
+            .search_semantic_detailed(workspace_id, "ring buffer", 5, "simple_buffer")
+            .await
+            .unwrap();
+
+        assert!(!result.entries.is_empty(), "simple_buffer should return ring buffer entries");
+        assert_eq!(result.mode, crate::services::memory::SemanticRetrievalMode::SimpleBuffer);
+        assert!(result.entries.iter().any(|e| e.content.contains("ring buffer content")));
+    }
+
+    #[tokio::test]
+    async fn test_prune_expired_removes_old_entries() {
+        let mm = make_manager();
+        let workspace_id = "test-ws-prune";
+
+        // Store an entry with created_at 60 days ago
+        let old_ts = chrono::Utc::now().timestamp() - 60 * 24 * 3600;
+        mm.store_workspace_memory(
+            workspace_id,
+            "old-entry-id".to_string(),
+            "old content to prune".to_string(),
+            "test".to_string(),
+            vec![format!("workspace:{}", workspace_id)],
+            HashMap::new(),
+            old_ts,
+            crate::services::memory_vault::MemorySensitivity::Internal,
+        )
+        .await
+        .unwrap();
+
+        // Store a fresh entry (should survive)
+        let now = chrono::Utc::now().timestamp();
+        mm.store_workspace_memory(
+            workspace_id,
+            "fresh-entry-id".to_string(),
+            "fresh content to keep".to_string(),
+            "test".to_string(),
+            vec![format!("workspace:{}", workspace_id)],
+            HashMap::new(),
+            now,
+            crate::services::memory_vault::MemorySensitivity::Internal,
+        )
+        .await
+        .unwrap();
+
+        // Prune with 30 day retention — should remove the 60-day-old entry
+        let pruned = mm.prune_expired(workspace_id, 30).await.unwrap();
+        assert_eq!(pruned, 1, "should have pruned exactly 1 old entry");
+
+        // Verify fresh entry still present
+        let fresh = mm.get_by_id("fresh-entry-id").await.unwrap();
+        assert!(fresh.is_some(), "fresh entry should survive pruning");
+
+        // Verify old entry gone
+        let old = mm.get_by_id("old-entry-id").await.unwrap();
+        assert!(old.is_none(), "old entry should be pruned");
+    }
+
+    #[tokio::test]
+    async fn test_simple_buffer_no_cross_workspace_leak() {
+        let mm = make_manager();
+        let now = chrono::Utc::now().timestamp();
+
+        mm.store_workspace_memory(
+            "workspace-a",
+            uuid::Uuid::new_v4().to_string(),
+            "workspace A secret".to_string(),
+            "test".to_string(),
+            vec!["workspace:workspace-a".to_string()],
+            HashMap::new(),
+            now,
+            crate::services::memory_vault::MemorySensitivity::Internal,
+        )
+        .await
+        .unwrap();
+
+        let result = mm
+            .search_semantic_detailed("workspace-b", "secret", 5, "simple_buffer")
+            .await
+            .unwrap();
+
+        assert!(result.entries.is_empty(), "workspace-b must not see workspace-a entries");
     }
 }

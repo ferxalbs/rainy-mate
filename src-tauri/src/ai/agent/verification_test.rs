@@ -110,6 +110,8 @@ mod tests {
             reasoning_effort: None,
             temperature: None,
             max_tokens: None,
+            connector_id: None,
+            user_id: None,
         };
 
         // We can't easily run() without a real SkillExecutor/Router,

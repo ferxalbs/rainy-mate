@@ -55,6 +55,7 @@ pub async fn execute_skill(
             tool_access_policy: None,
             tool_access_policy_version: None,
             tool_access_policy_hash: None,
+            ..Default::default()
         },
         priority: CommandPriority::Normal,
         status: CommandStatus::Pending,

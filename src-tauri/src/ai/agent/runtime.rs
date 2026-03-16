@@ -11,6 +11,7 @@ use crate::ai::specs::manifest::{AgentSpec, RuntimeMode};
 use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::SkillExecutor;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -25,6 +26,13 @@ pub struct RuntimeOptions {
     pub reasoning_effort: Option<String>,
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
+    /// Connector that spawned this run (Telegram, Discord, etc.). Used for
+    /// per_connector_isolation and per_channel session scoping.
+    #[serde(default)]
+    pub connector_id: Option<String>,
+    /// End-user identifier passed by connectors. Used for per_user session scoping.
+    #[serde(default)]
+    pub user_id: Option<String>,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
@@ -38,6 +46,8 @@ pub struct AgentRuntime {
     kill_switch: Option<AgentKillSwitch>,
     runtime_registry: Option<Arc<RuntimeRegistry>>,
     history: Arc<Mutex<Vec<AgentMessage>>>,
+    /// Sliding window of request timestamps for rate limiting.
+    request_timestamps: Arc<Mutex<VecDeque<std::time::Instant>>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -175,7 +185,40 @@ impl AgentRuntime {
             kill_switch,
             runtime_registry,
             history: Arc::new(Mutex::new(Vec::new())),
+            request_timestamps: Arc::new(Mutex::new(VecDeque::new())),
         }
+    }
+
+    /// Compute the vault workspace key honoring persistence isolation settings.
+    /// - `per_connector_isolation` → append connector_id
+    /// - `session_scope: "per_user"` → append user_id
+    /// - `session_scope: "per_channel"` → append connector_id (when not already added)
+    fn effective_workspace_id(&self) -> String {
+        let p = &self.spec.memory_config.persistence;
+        let base = &self.options.workspace_id;
+        let mut parts: Vec<&str> = vec![base.as_str()];
+
+        if p.per_connector_isolation {
+            if let Some(ref cid) = self.options.connector_id {
+                parts.push(cid.as_str());
+            }
+        }
+
+        match p.session_scope.as_str() {
+            "per_user" => {
+                if let Some(ref uid) = self.options.user_id {
+                    parts.push(uid.as_str());
+                }
+            }
+            "per_channel" if !p.per_connector_isolation => {
+                if let Some(ref cid) = self.options.connector_id {
+                    parts.push(cid.as_str());
+                }
+            }
+            _ => {}
+        }
+
+        if parts.len() == 1 { base.clone() } else { parts.join(":") }
     }
 
     /// Replace in-memory history for this runtime instance.
@@ -415,6 +458,34 @@ Rules:
     where
         F: Fn(AgentEvent) + Send + Sync + 'static + Clone,
     {
+        // --- RATE LIMIT CHECK ---
+        let max_rpm = self.spec.airlock.rate_limits.max_requests_per_minute;
+        if max_rpm > 0 {
+            let mut ts = self.request_timestamps.lock().await;
+            let now = std::time::Instant::now();
+            let window = std::time::Duration::from_secs(60);
+            while ts.front().map(|t| now.duration_since(*t) > window).unwrap_or(false) {
+                ts.pop_front();
+            }
+            if ts.len() >= max_rpm as usize {
+                return Err(format!(
+                    "Rate limit exceeded: max {} requests/minute for this agent",
+                    max_rpm
+                ));
+            }
+            ts.push_back(now);
+        }
+
+        // --- RETENTION PRUNING (background, non-blocking) ---
+        let retention_days = self.spec.memory_config.effective_retention_days();
+        if retention_days > 0 {
+            let mm = self.memory.manager();
+            let ws = self.effective_workspace_id();
+            tokio::spawn(async move {
+                let _ = mm.prune_expired(&ws, retention_days).await;
+            });
+        }
+
         // 1. Initialize State
         let mut state = AgentState::new(
             self.options.workspace_id.clone(),
@@ -442,9 +513,10 @@ Rules:
         // We'll add the semantic results as an invisible "system" state message or inject into the system prompt.
         let mut appended_context = String::new();
         let mut retrieval_mode = "unavailable".to_string();
+        let effective_ws = self.effective_workspace_id();
         let mm = self.memory.manager();
         if let Ok(mut result) = mm
-            .search_semantic_detailed(&self.options.workspace_id, input, 5)
+            .search_semantic_detailed(&effective_ws, input, 5, &self.spec.memory_config.strategy)
             .await
         {
             if !result.confidential_entry_ids.is_empty() {
@@ -464,6 +536,7 @@ Rules:
                             tool_access_policy: None,
                             tool_access_policy_version: None,
                             tool_access_policy_hash: None,
+                            ..Default::default()
                         },
                         status: crate::models::neural::CommandStatus::Pending,
                         priority: crate::models::neural::CommandPriority::Normal,
@@ -504,6 +577,7 @@ Rules:
                 crate::services::memory::SemanticRetrievalMode::LexicalFallback => {
                     "lexical_fallback"
                 }
+                crate::services::memory::SemanticRetrievalMode::SimpleBuffer => "simple_buffer",
             }
             .to_string();
 
@@ -670,6 +744,7 @@ Rules:
                         tool_access_policy: None,
                         tool_access_policy_version: None,
                         tool_access_policy_hash: None,
+                        ..Default::default()
                     },
                     status: crate::models::neural::CommandStatus::Pending,
                     priority: crate::models::neural::CommandPriority::Normal,
@@ -702,18 +777,31 @@ Rules:
                     true
                 };
 
-                if allowed {
+                if allowed && self.spec.memory_config.persistence.cross_session {
                     let mut metadata = std::collections::HashMap::new();
                     metadata.insert(
                         "source_input".to_string(),
                         input.chars().take(200).collect::<String>(),
                     );
                     metadata.insert("role".to_string(), "assistant".to_string());
-                    self.memory
-                        .store(
-                            response_text.chars().take(2000).collect::<String>(),
+                    let entry_id = uuid::Uuid::new_v4().to_string();
+                    let content = response_text.chars().take(2000).collect::<String>();
+                    let tags = vec![
+                        format!("workspace:{}", effective_ws),
+                        "source:agent_conversation".to_string(),
+                        "agent_memory".to_string(),
+                        "role:assistant".to_string(),
+                    ];
+                    let _ = mm
+                        .store_workspace_memory(
+                            &effective_ws,
+                            entry_id,
+                            content,
                             "agent_conversation".to_string(),
-                            Some(metadata),
+                            tags,
+                            metadata,
+                            chrono::Utc::now().timestamp(),
+                            crate::services::memory_vault::MemorySensitivity::Internal,
                         )
                         .await;
                     on_event(AgentEvent::MemoryStored(
@@ -725,5 +813,52 @@ Rules:
         } else {
             Ok("Workflow completed without final response".to_string())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+    use std::time::{Duration, Instant};
+
+    /// Simulate the sliding-window rate limiter logic from run_single().
+    fn check_rate_limit(
+        timestamps: &mut VecDeque<Instant>,
+        max_rpm: usize,
+    ) -> bool {
+        let now = Instant::now();
+        let window = Duration::from_secs(60);
+        while timestamps.front().map(|t| now.duration_since(*t) > window).unwrap_or(false) {
+            timestamps.pop_front();
+        }
+        if timestamps.len() >= max_rpm {
+            return false; // blocked
+        }
+        timestamps.push_back(now);
+        true
+    }
+
+    #[test]
+    fn test_rate_limiter_blocks_after_limit() {
+        let mut ts = VecDeque::new();
+        let limit = 3;
+
+        assert!(check_rate_limit(&mut ts, limit), "request 1 allowed");
+        assert!(check_rate_limit(&mut ts, limit), "request 2 allowed");
+        assert!(check_rate_limit(&mut ts, limit), "request 3 allowed");
+        assert!(!check_rate_limit(&mut ts, limit), "request 4 must be blocked");
+    }
+
+    #[test]
+    fn test_rate_limiter_allows_after_window_expires() {
+        let mut ts: VecDeque<Instant> = VecDeque::new();
+        // Manually insert a timestamp that is 61 seconds old (outside the window)
+        let expired = Instant::now().checked_sub(Duration::from_secs(61)).unwrap();
+        ts.push_back(expired);
+        ts.push_back(expired);
+        ts.push_back(expired);
+
+        // Window should evict all 3 expired entries, allowing a new request
+        assert!(check_rate_limit(&mut ts, 3), "should allow after window expires");
     }
 }

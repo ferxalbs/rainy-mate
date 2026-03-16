@@ -175,8 +175,6 @@ impl Default for AirlockScopes {
 pub struct AirlockRateLimits {
     #[serde(default)]
     pub max_requests_per_minute: u32,
-    #[serde(default)]
-    pub max_tokens_per_day: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

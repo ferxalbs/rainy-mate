@@ -661,6 +661,8 @@ pub async fn run_agent_workflow(
         ),
         temperature: spec.temperature,
         max_tokens: spec.max_tokens,
+        connector_id: None,
+        user_id: None,
     };
 
     // Initialize Persistent Memory

@@ -5,7 +5,57 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-15 - ATM SECURITY AUDIT & CONNECTOR FIX
+## [Unreleased] - 2026-03-16 - MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING
+
+### Added
+
+- **Memory strategy dispatch** — `AgentSpec.memory_config.strategy` now controls runtime RAG retrieval (was display-only):
+  - `"simple_buffer"` — reads in-process ring buffer only (zero vault I/O, fastest, ephemeral agents)
+  - `"vector"` — ANN/Exact vault vector search only, no lexical merge (high-precision)
+  - `"hybrid"` — existing behavior: vault vector + lexical, merged by scoring (default)
+  - Added `SemanticRetrievalMode::SimpleBuffer` variant to `src-tauri/src/services/memory/types.rs`
+  - `search_semantic_detailed()` accepts new `strategy: &str` param; `search()` convenience wrapper defaults to `"hybrid"` (`src-tauri/src/services/memory/memory_manager.rs`)
+- **`retention_days` pruning** — memory entries older than the configured retention window are now actively pruned:
+  - Per-workspace prune on each agent run (`prune_expired(workspace_id, retention_days)`)
+  - Global startup sweep (`prune_global_expired(365)`) spawned during `MemoryManager::init()` as a safety net
+  - `delete_workspace_entries_older_than` / `delete_all_entries_older_than` with cascade to embedding vectors (`src-tauri/src/services/memory_vault/repository.rs`)
+  - `prune_workspace_expired` / `prune_global_expired` added to `MemoryVaultService` (`src-tauri/src/services/memory_vault/service.rs`)
+- **Workspace scoping via persistence flags** — `AgentRuntime.effective_workspace_id()` computes a compound vault key based on:
+  - `per_connector_isolation: true` → appends `connector_id`
+  - `session_scope: "per_user"` → appends `user_id`; `"per_channel"` → appends `connector_id` when isolation is off
+  - `cross_session: false` → agent skips writing memories to vault entirely
+- **Per-agent rate limiting** — `max_requests_per_minute` enforced in `AgentRuntime` via a sliding window `VecDeque<Instant>`; returns `RateLimitExceeded` error immediately when limit is hit (`src-tauri/src/ai/agent/runtime.rs`)
+- **connector_id / user_id end-to-end propagation** — connector context flows from ATM webhooks → `command_queue` payload → desktop poller → `RainyPayload` → `RuntimeOptions` → `effective_workspace_id()`:
+  - `RainyPayload` gains `connector_id` and `user_id` fields with `#[derive(Default)]` (`src-tauri/src/models/neural.rs`)
+  - `RuntimeOptions` gains `connector_id` and `user_id` fields (`src-tauri/src/ai/agent/runtime.rs`)
+  - `command_poller.rs` reads and forwards both fields to `RuntimeOptions` (`src-tauri/src/services/command_poller.rs`)
+- **5 new integration/unit tests**:
+  - `test_simple_buffer_returns_ring_buffer_only` — verifies no vault I/O on `simple_buffer` strategy
+  - `test_prune_expired_removes_old_entries` — verifies retention pruning removes stale entries
+  - `test_simple_buffer_no_cross_workspace_leak` — verifies workspace isolation in ring buffer path
+  - `test_rate_limiter_blocks_after_limit` — verifies RPM gate fires at threshold
+  - `test_rate_limiter_allows_after_window_expires` — verifies sliding window resets correctly
+
+### Fixed
+
+- **Dead code from CodeRabbit auto-fix** — `KeychainManager::is_supported()` was injected by CodeRabbit bot (commit `7adca1f`) without any call site; removed entirely since per-method `#[cfg]` branches already handle platform detection (`src-tauri/src/ai/keychain.rs`)
+
+### Changed
+
+- `max_tokens_per_day` removed from `AirlockRateLimits` everywhere — field was unimplementable and misleading:
+  - `src-tauri/src/ai/specs/manifest.rs`
+  - `src/types/airlock.ts`
+  - `src/components/agents/builder/specDefaults.ts`
+  - `src/components/agents/builder/airlock/RateLimitsSection.tsx` (removed "Tokens / Day" UI field)
+- All 4 `@TODO` markers in `manifest.rs` resolved — `strategy`, `retention_days`, `persistence`, and `rate_limits` are now fully implemented
+
+### Validation
+
+- `cargo check -q` → pass (zero warnings)
+- `cargo test -q memory --lib` → 21 tests pass
+- `cargo test -q agent --lib` → 49 tests pass
+- `pnpm exec tsc --noEmit` → pass
+- `bun test` (rainy-atm/v0.1.16) → 50 tests pass
 
 ### Fixed
 

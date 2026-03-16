@@ -434,6 +434,7 @@ mod tests {
                 }),
                 tool_access_policy_version: None,
                 tool_access_policy_hash: None,
+                ..Default::default()
             },
             priority: CommandPriority::Normal,
             status: CommandStatus::Pending,
@@ -480,6 +481,7 @@ mod tests {
                 }),
                 tool_access_policy_version: None,
                 tool_access_policy_hash: None,
+                ..Default::default()
             },
             priority: CommandPriority::Normal,
             status: CommandStatus::Pending,

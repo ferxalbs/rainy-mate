@@ -36,14 +36,13 @@ export function createDefaultAgentSpec(id: string = crypto.randomUUID()): AgentS
       },
       rate_limits: {
         max_requests_per_minute: 0,
-        max_tokens_per_day: 0,
       },
     },
     memory_config: {
       strategy: "hybrid",
       retrieval: {
-        retention_days: 0,
-        max_tokens: 0,
+        retention_days: 30,
+        max_tokens: 32000,
       },
       persistence: {
         cross_session: false,

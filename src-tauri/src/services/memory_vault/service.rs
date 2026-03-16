@@ -176,6 +176,30 @@ impl MemoryVaultService {
         });
     }
 
+    /// Delete vault entries older than `retention_days` for a workspace.
+    pub async fn prune_workspace_expired(
+        &self,
+        workspace_id: &str,
+        retention_days: u32,
+    ) -> Result<u64, String> {
+        let cutoff = chrono::Utc::now().timestamp()
+            - (retention_days as i64) * 24 * 3600;
+        self.repository
+            .delete_workspace_entries_older_than(workspace_id, cutoff)
+            .await
+    }
+
+    /// Delete ALL entries older than `max_retention_days` across every workspace.
+    /// Called once at startup as a safety net for abandoned workspaces.
+    /// Does nothing when `max_retention_days` is 0.
+    pub async fn prune_global_expired(&self, max_retention_days: u32) -> Result<u64, String> {
+        if max_retention_days == 0 {
+            return Ok(0);
+        }
+        let cutoff = chrono::Utc::now().timestamp() - (max_retention_days as i64) * 24 * 3600;
+        self.repository.delete_all_entries_older_than(cutoff).await
+    }
+
     pub async fn search_workspace(
         &self,
         workspace_id: &str,

@@ -23,24 +23,6 @@ impl KeychainManager {
         Self
     }
 
-    /// Check if keychain operations are supported on this platform
-    pub fn is_supported() -> bool {
-        #[cfg(test)]
-        {
-            return true;
-        }
-
-        #[cfg(all(not(test), target_os = "macos"))]
-        {
-            return true;
-        }
-
-        #[cfg(all(not(test), not(target_os = "macos")))]
-        {
-            return false;
-        }
-    }
-
     /// Store an API key in the Keychain
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);

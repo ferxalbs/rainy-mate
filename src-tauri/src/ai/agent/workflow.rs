@@ -670,6 +670,7 @@ impl WorkflowStep for ActStep {
                     tool_access_policy: None,
                     tool_access_policy_version: None,
                     tool_access_policy_hash: None,
+                    ..Default::default()
                 },
                 status: CommandStatus::Pending,
                 priority: CommandPriority::Normal,
@@ -788,6 +789,7 @@ impl WorkflowStep for ActStep {
                             tool_access_policy: None,
                             tool_access_policy_version: None,
                             tool_access_policy_hash: None,
+                            ..Default::default()
                         },
                         status: crate::models::neural::CommandStatus::Pending,
                         priority: crate::models::neural::CommandPriority::Normal,
@@ -920,9 +922,11 @@ mod tests {
             allowed_paths: None,
             custom_system_prompt: None,
             streaming_enabled: Some(false),
-            reasoning_effort: None,
+               reasoning_effort: None,
             temperature: None,
             max_tokens: None,
+            connector_id: None,
+            user_id: None,
         };
 
         let mut workflow = Workflow::new(spec.clone(), options, "start".to_string());

@@ -41,16 +41,6 @@ export function RateLimitsSection({ airlock, onRateLimitsChange }: RateLimitsSec
           })
         }
       />
-      <RateLimitField
-        title="Tokens / Day"
-        value={airlock.rate_limits.max_tokens_per_day}
-        onChange={(max_tokens_per_day) =>
-          onRateLimitsChange({
-            ...airlock.rate_limits,
-            max_tokens_per_day,
-          })
-        }
-      />
     </section>
   );
 }

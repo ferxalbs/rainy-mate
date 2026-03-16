@@ -1,31 +1,26 @@
 # Rainy MaTE
 
-<div align="center">
+<p align="center">
   <img src="./whale.png" alt="Rainy MaTE logo" width="120" />
-  <h1 style="margin-bottom: 0.35rem;">Rainy MaTE</h1>
-  <p style="margin-top: 0; font-size: 1.05rem;">
-    Native agent runtime for desktop, built with <strong>Tauri 2</strong>, <strong>Rust</strong>, and <strong>React 19</strong>.
-  </p>
-  <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.5.96-0f766e" />
-    <img alt="Status" src="https://img.shields.io/badge/status-beta-f59e0b" />
-    <img alt="Runtime" src="https://img.shields.io/badge/runtime-tauri_2-2563eb" />
-    <img alt="Engine" src="https://img.shields.io/badge/engine-rust-111827" />
-  </p>
-</div>
+</p>
 
-<div style="margin: 1.5rem 0; padding: 1rem 1.1rem; border: 1px solid #f59e0b; border-radius: 14px; background: linear-gradient(135deg, rgba(245,158,11,0.16), rgba(127,29,29,0.10));">
-  <h2 style="margin: 0 0 0.55rem 0;">Warning: MaTE is in active development and currently in BETA</h2>
-  <p style="margin: 0 0 0.65rem 0;">
-    MaTE is <strong>not the final product</strong>. Behavior, interfaces, and internal systems may change without notice while the platform is still being hardened. Unexpected regressions, unfinished flows, and sharp edges are possible.
-  </p>
-  <p style="margin: 0 0 0.65rem 0;">
-    This may cost us some public in the short term, but that is the price of building the system properly instead of pretending it is already stable.
-  </p>
-  <p style="margin: 0;">
-    <strong>Spanish note:</strong> MaTE está en desarrollo activo y en <strong>BETA</strong>. Puede haber cambios no esperados y este no es el producto final.
-  </p>
-</div>
+<p align="center">
+  <strong>Native agent runtime for desktop, built with Tauri 2, Rust, and React 19.</strong>
+</p>
+
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.5.96-0f766e" />
+  <img alt="Status" src="https://img.shields.io/badge/status-beta-f59e0b" />
+  <img alt="Runtime" src="https://img.shields.io/badge/runtime-tauri_2-2563eb" />
+  <img alt="Engine" src="https://img.shields.io/badge/engine-rust-111827" />
+</p>
+
+> [!WARNING]
+> **MaTE is in active development and currently in BETA**
+>
+> MaTE is **not the final product**. Behavior, interfaces, and internal systems may change without notice while the platform is still being hardened. Unexpected regressions, unfinished flows, and sharp edges are possible.
+>
+> This may cost us some public in the short term, but that is the price of building the system properly instead of pretending it is already stable.
 
 ## What MaTE Is
 
@@ -230,7 +225,6 @@ For this README update, the current repository passed:
 - [`AGENTS.md`](./AGENTS.md): architecture, rules, startup order, module map, tool policy model
 - [`CHANGELOG.md`](./CHANGELOG.md): canonical historical record
 - [`ROADMAP.md`](./ROADMAP.md): planned work
-- [`FEATURES.md`](./FEATURES.md): feature inventory
 - [`SECURITY.md`](./SECURITY.md): security notes
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md): contributor workflow
 

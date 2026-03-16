@@ -15,7 +15,6 @@ export interface AirlockScopes {
 
 export interface AirlockRateLimits {
   max_requests_per_minute: number;
-  max_tokens_per_day: number;
 }
 
 export interface AirlockConfig {

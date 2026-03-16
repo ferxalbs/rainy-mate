@@ -914,6 +914,8 @@ impl CommandPoller {
                             streaming_enabled: Some(false),
                             temperature: None,
                             max_tokens: None,
+                            connector_id: command.payload.connector_id.clone(),
+                            user_id: command.payload.user_id.clone(),
                         };
 
                         // Create config

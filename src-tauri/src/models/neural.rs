@@ -129,7 +129,7 @@ pub struct RainyContext {
     pub permissions: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RainyPayload {
     pub skill: Option<String>,
@@ -157,6 +157,12 @@ pub struct RainyPayload {
     /// Optional SHA-256 hash of canonicalized tool policy.
     #[serde(default)]
     pub tool_access_policy_hash: Option<String>,
+    /// Connector that originated the command (e.g. "telegram", "discord", "whatsapp").
+    #[serde(default)]
+    pub connector_id: Option<String>,
+    /// End-user identifier from the connector (peer phone, user ID, etc.).
+    #[serde(default)]
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
