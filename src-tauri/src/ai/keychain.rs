@@ -1,15 +1,12 @@
 // Rainy Cowork - macOS Keychain Integration
 // Secure storage for API keys using security-framework
 
-use security_framework::passwords::{
-    delete_generic_password, get_generic_password, set_generic_password,
-};
 #[cfg(test)]
 use std::collections::HashMap;
 #[cfg(test)]
 use std::sync::{Mutex, OnceLock};
 
-#[cfg(not(test))]
+#[cfg(all(not(test), target_os = "macos"))]
 const SERVICE_NAME: &str = "com.enosislabs.rainycowork";
 
 #[cfg(test)]
@@ -26,6 +23,24 @@ impl KeychainManager {
         Self
     }
 
+    /// Check if keychain operations are supported on this platform
+    pub fn is_supported() -> bool {
+        #[cfg(test)]
+        {
+            return true;
+        }
+
+        #[cfg(all(not(test), target_os = "macos"))]
+        {
+            return true;
+        }
+
+        #[cfg(all(not(test), not(target_os = "macos")))]
+        {
+            return false;
+        }
+    }
+
     /// Store an API key in the Keychain
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
         let account = format!("api_key_{}", provider);
@@ -39,13 +54,23 @@ impl KeychainManager {
             return Ok(());
         }
 
-        #[cfg(not(test))]
+        #[cfg(all(not(test), target_os = "macos"))]
         {
+            use security_framework::passwords::{
+                delete_generic_password, set_generic_password,
+            };
+
             // Try to delete existing key first (in case of update)
             let _ = delete_generic_password(SERVICE_NAME, &account);
 
             set_generic_password(SERVICE_NAME, &account, api_key.as_bytes())
                 .map_err(|e| format!("Failed to store API key: {}", e))
+        }
+
+        #[cfg(all(not(test), not(target_os = "macos")))]
+        {
+            let _ = api_key;
+            Err("Keychain not supported on this platform".to_string())
         }
     }
 
@@ -61,8 +86,10 @@ impl KeychainManager {
             return Ok(store.get(&account).cloned());
         }
 
-        #[cfg(not(test))]
+        #[cfg(all(not(test), target_os = "macos"))]
         {
+            use security_framework::passwords::get_generic_password;
+
             match get_generic_password(SERVICE_NAME, &account) {
                 Ok(bytes) => {
                     let key = String::from_utf8(bytes.to_vec())
@@ -70,7 +97,7 @@ impl KeychainManager {
                     Ok(Some(key))
                 }
                 Err(e) => {
-                    let err_str = e.to_string();
+                    let err_str = format!("{}", e);
                     // ItemNotFound is not an error - just means no key stored
                     if err_str.contains("ItemNotFound")
                         || err_str.contains("not found")
@@ -82,6 +109,11 @@ impl KeychainManager {
                     }
                 }
             }
+        }
+
+        #[cfg(all(not(test), not(target_os = "macos")))]
+        {
+            Err("Keychain not supported on this platform".to_string())
         }
     }
 
@@ -98,12 +130,14 @@ impl KeychainManager {
             return Ok(());
         }
 
-        #[cfg(not(test))]
+        #[cfg(all(not(test), target_os = "macos"))]
         {
+            use security_framework::passwords::delete_generic_password;
+
             match delete_generic_password(SERVICE_NAME, &account) {
                 Ok(_) => Ok(()),
                 Err(e) => {
-                    let err_str = e.to_string();
+                    let err_str = format!("{}", e);
                     // Ignore "not found" errors
                     if err_str.contains("ItemNotFound")
                         || err_str.contains("not found")
@@ -115,6 +149,11 @@ impl KeychainManager {
                     }
                 }
             }
+        }
+
+        #[cfg(all(not(test), not(target_os = "macos")))]
+        {
+            Err("Keychain not supported on this platform".to_string())
         }
     }
 

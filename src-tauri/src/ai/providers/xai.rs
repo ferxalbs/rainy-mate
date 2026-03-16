@@ -463,6 +463,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             json_mode: false,
+            reasoning_effort: None,
         };
 
         let xai_request = XAIChatRequest::from(request);
