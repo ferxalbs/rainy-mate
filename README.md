@@ -22,223 +22,153 @@
 >
 > This may cost us some public in the short term, but that is the price of building the system properly instead of pretending it is already stable.
 
-## What MaTE Is
+## Project Overview
 
-Rainy MaTE is a desktop-first agent runtime. The UI lives in React, but the real system runs in Rust: agent orchestration, tool execution, memory, security policy, browser control, workspace access, and cloud bridge logic are implemented in `src-tauri/`.
+Rainy MaTE is a high-performance, locally-orchestrated desktop AI agent runtime.
 
-It is designed around one architectural rule:
+While many AI agent platforms are constructed entirely within interpreted environments like Python or Node.js, MaTE adopts a fundamentally different architectural philosophy: maximum native performance, strict security borders, and absolute layer separation.
 
-> TypeScript is the view layer. Rust owns the logic.
+> **TypeScript is exclusively the view layer. Rust owns the system logic.**
 
-That separation is enforced across the project so the desktop app remains fast, inspectable, and security-aware.
+By pushing all orchestration, memory loops, capability routing, and security policies into a native Rust engine (via Tauri v2), MaTE delivers a fast, highly inspectable, and secure agent experience running natively on your desktop OS instead of inside a web abstraction or cloud container.
 
-## Current State
+## Why Rainy MaTE?
 
-- Active desktop version: `0.5.96`
-- Desktop stack: `Tauri 2` + `Rust` + `React 19` + `Vite`
-- Cloud/backend stack: `Bun` in [`rainy-atm/`](./rainy-atm)
-- Package manager: `pnpm` only
-- Development status: BETA / active internal iteration
+The transition from single-turn LLM chatbots to autonomous, stateful agents requires redefining how software trusts AI. Giving AI access to a local filesystem and shell requires uncompromising safety.
 
-Recent system work reflected in the codebase:
+MaTE was built to solve specific challenges with existing agent platforms:
 
-- `THE FORGE` added workflow recording and specialist-agent generation.
-- ATM security was hardened with policy-hash verification, safer WebSocket auth flow, and audit fixes.
-- Memory internals were optimized, while the stable embedder surface remains locked to `gemini-embedding-001` (`3072d`) in the current desktop UI.
+1. **Security Escapes:** Agents executing outside of hardware-level isolation often operate with the full permissions of the user. MaTE sandboxes and gates capabilities before the tool is ever executed.
+2. **Context Amnesia:** Long-running conversations collapse as context windows fill. MaTE implements continuous rolling summarization and hybrid vector-lexical memory retrieval to preserve state over days or weeks of runtime.
+3. **Execution Latency:** Local file I/O and process execution heavily dictate agent speed. Rust provides predictable, low-overhead system interfaces compared to interpreted language counterparts.
 
-## What Exists Today
+## Core Architecture & Capabilities
 
-### Agent Runtime
+### Native Agent Supervisor
 
-MaTE ships a native ReAct-style runtime in [`src-tauri/src/ai/agent/`](./src-tauri/src/ai/agent):
+MaTE implements a robust ReAct (Think → Act → Observe) agent loop directly on your host machine.
 
-- `Think -> Act -> Observe` workflow
-- Tool-call execution through `SkillExecutor`
-- Streaming and non-streaming model paths
-- History management and long-chat continuity
-- Memory retrieval injection before model calls
-- Supervisor mode for multi-agent specialist orchestration
+- **Multi-Agent Orchestration:** The Supervisor mode spawns and coordinates specialized micro-agents (e.g., Research, Executor, Verifier) to resolve complex, multi-step workflows.
+- **Context Compression:** Built-in rolling summarization preserves active context in long chats. When the context exceeds optimal thresholds (e.g., 80k tokens), MaTE automatically compacts the conversation history while preserving key signals.
+- **Deterministic Routing:** First-class dynamic routing for leading LLM providers (Gemini BYOK, OpenAI, Anthropic, xAI), ensuring requests are routed to specific models based on capability (e.g., function calling, reasoning).
 
-The runtime also includes explicit truthfulness rules: tool output is treated as the source of truth, and failures must be reported rather than fabricated.
+### The Airlock Security Model
 
-### Native Tooling Surface
+MaTE enforces a rigid, 3-tier permission gate at the Rust level before any tool or capability is invoked:
 
-Registered built-in tools live in [`src-tauri/src/services/skill_executor/registry.rs`](./src-tauri/src/services/skill_executor/registry.rs), with policy enforced in [`src-tauri/src/services/tool_policy.rs`](./src-tauri/src/services/tool_policy.rs).
+- **L0 (Safe):** Read-only observational tasks (e.g., viewing files, reading web pages). Auto-approved silently.
+- **L1 (Sensitive):** State-changing but contained actions (e.g., writing explicitly named files). Generates OS notifications.
+- **L2 (Dangerous):** Execution of arbitrary code, destructive filesystem actions, or wide-scoping changes. Requires explicit, blocking human UI approval.
 
-Current built-in categories:
+*Law: No tool can be registered in the system without an explicit, hardened security policy block. Unregistered tools fail closed.*
 
-- Filesystem: read, list, inspect, search, write, append, move, delete, document ingestion
-- Shell/Git: command execution with allowlist, git status/diff/log/show/branch wrappers
-- Web/HTTP: web search, page reading, JSON/text fetch, JSON POST
-- Browser automation: open URL, tabs, click, type, submit, go back, snapshot, screenshot, link extraction
+### Built-in Tool Arsenal
 
-Every registered tool must have an explicit Airlock policy entry. Unknown tools are denied by default.
+The runtime ships with a compiled suite of capabilities:
 
-### Airlock Security Model
+- **Filesystem & Documents:** Read, write, list, search, and parse documents natively (including built-in PDF and Markdown extraction).
+- **Shell & Git:** Execute commands (against a strict binary allowlist) and manage version control wrappers natively.
+- **Web & Browser:** Headless reading, arbitrary HTTP fetches, or fully visible Chrome DevTools Protocol (CDP) automation (clicking, typing, navigation, screenshots).
 
-MaTE uses a three-level execution gate enforced in Rust:
+### The Quarantine Zone (WASM Extensibility)
 
-| Level | Meaning | Typical behavior |
-| --- | --- | --- |
-| `L0` | Safe | Auto-approved, read-only or observational |
-| `L1` | Sensitive | State-changing, notification-gated |
-| `L2` | Dangerous | Explicit approval required |
+MaTE supports third-party capability expansion through WebAssembly. Native sandbox environments built on `Wasmtime` ensure that external skills operate within strict resource constraints (e.g., <50MB RAM limits, bounded timeouts, Ed25519 signature verification) and deny-first filesystem/network access.
 
-This is not only a UI convention. Policy is checked in multiple layers, including workflow validation, executor checks, and cloud/desktop policy reconciliation.
+### Encrypted Local Knowledge Graph
 
-### Memory System
+Your context stays entirely on your machine. Agents build and query a secure local memory vault backed by `libSQL/SQLite` and encrypted point-to-point via AES-256-GCM.
 
-The memory stack combines short-term runtime memory and an encrypted long-term vault:
+Retrieval is powered by a high-speed hybrid search combining semantic vector distances (currently pinned to `gemini-embedding-001` at 3072d) and lexical frequency matching.
 
-- Long-term store: AES-256-GCM encrypted `libSQL/SQLite`
-- Retrieval: hybrid semantic + lexical search
-- Injection: bounded retrieval context before model calls
-- Stable embedding surface today: `gemini-embedding-001` at `3072` dimensions
+### The Forge (Agent Synthesis)
 
-The repo contains internal work for dual embedding profiles, but the stable end-user desktop configuration is still pinned to the locked Gemini profile in the settings UI.
+MaTE records your workflows. **The Forge** is an interactive workflow recorder. Perform a human workflow (clicks, terminal commands, file edits), and MaTE captures the traces, decisions, and fallbacks. It then synthesizes these signals into a fully autonomous, deterministic AI agent capable of repeating that workflow locally or being shared securely.
 
-### THE FORGE
+### Rainy ATM (Cloud Bridge)
 
-`THE FORGE` is the in-product workflow-to-agent factory:
+The desktop runtime is entirely local, but it isn't isolated. **Rainy ATM** serves as the secure connection bridge that routes communications between your isolated local agents and external environments. It provides:
 
-- Record a workflow
-- Capture steps, tools, decisions, errors, retries
-- Generate a draft specialist agent
-- Validate it before save/activation
-- Export/share through ATM flows
+- Seamless webhook polling and routing from Telegram, Discord, and WhatsApp directly into your local desktop agents.
+- Fleet command capabilities, including cryptographic policy verification.
 
-Primary desktop entry points for this live in:
+---
 
-- [`src-tauri/src/commands/workflow_factory.rs`](./src-tauri/src/commands/workflow_factory.rs)
-- [`src-tauri/src/services/workflow_recorder.rs`](./src-tauri/src/services/workflow_recorder.rs)
-- [`src-tauri/src/services/agent_library.rs`](./src-tauri/src/services/agent_library.rs)
+## Design Philosophy
 
-### Rainy ATM Integration
+**Architectural Law:**
+If code calculates state, persists data, executes system commands, or makes access decisions, **it lives in Rust**. React is used strictly to render state and dispatch Tauri IPC commands.
 
-`Rainy ATM`, located in [`rainy-atm/`](./rainy-atm), is a central part of the system architecture and acts as the connector between mobile and desktop.
+---
 
-ATM currently covers:
+## Getting Started
 
-- mobile-to-desktop command transport
-- dynamic tool registry behavior
-- workspace/channel routing
-- node registration and heartbeat
-- fleet controls and command polling
-- audit and policy handling
-
-Its runtime uses `Bun`, not Node.js.
-
-## Architecture
-
-```text
-rainy-mate/
-├── src/                  React UI only
-├── src-tauri/            Native Rust engine
-│   ├── src/ai/           Providers, router, agent runtime, supervisor flow
-│   ├── src/commands/     Thin Tauri invoke layer
-│   ├── src/services/     Business logic, tools, memory, security, ATM bridge
-│   └── migrations/       Database and vault migrations
-├── rainy-atm/            Bun connector layer between mobile and desktop
-└── docs/                 Supporting documentation
-```
-
-Key service areas in the Rust backend:
-
-- `ai/agent/`: runtime, workflow, memory wiring, supervisor orchestration
-- `services/skill_executor/`: native tool handlers and tool registry
-- `services/airlock.rs`: approval and execution gating
-- `services/memory/` and `services/memory_vault/`: retrieval and encrypted persistence
-- `services/workspace.rs`: workspace lifecycle and scope enforcement
-- `services/command_poller.rs`: cloud command execution loop
-- `services/neural_service.rs`: desktop node registration and heartbeat
-
-## Startup Model
-
-The application boot sequence matters. `lib.rs` initializes core services first, then completes app-handle-dependent services in `setup()`.
-
-In practical terms:
-
-1. Providers, task manager, file/document/image services
-2. Workspace, router, ATM client, neural service, browser controller
-3. Skill executor, command poller, socket client, workflow recorder, agent library
-4. `setup()` services such as updater, folder manager, file-op init, memory manager, Airlock, database, agent manager, and poller startup
-
-This ordering is intentional. Services that need app data directories or `AppHandle` are initialized later.
-
-## Supported Provider Surface
-
-The codebase includes provider integrations and routing infrastructure for:
-
-- OpenAI
-- Google Gemini
-- Anthropic
-- xAI
-- Groq
-- Rainy SDK
-- additional model-catalog routing infrastructure in the unified registry
-
-Exact model availability can change over time and depends on provider configuration, credentials, and routing rules.
-
-## Development
+To run Rainy MaTE locally, you will need to set up the development environment.
 
 ### Prerequisites
 
-- Rust stable
-- Node.js
-- `pnpm`
-- Tauri desktop prerequisites for your platform
-- `Bun` only if you will work inside `rainy-atm/`
+Ensure you have the following installed on your host machine:
 
-### Install
+- **Rust** (stable toolchain)
+- **Node.js** (v20+)
+- **pnpm** (Strictly required; `npm` is not supported)
+- **Tauri 2 Prerequisites** (macOS: Xcode Command Line Tools)
+
+### Installation & Execution
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/ferxalbs/rainy-mate.git
+   cd rainy-mate
+   ```
+
+2. Install workspace dependencies using pnpm:
+
+   ```bash
+   pnpm install
+   ```
+
+3. Boot the desktop application in development mode:
+
+   ```bash
+   pnpm run tauri dev
+   ```
+
+---
+
+## Contributing Guidelines
+
+We welcome contributions, but we enforce strict architectural rules to maintain system integrity. Before submitting a Pull Request, you **must** read our [Agent Reference Checklist](./AGENTS.md).
+
+### Core Contribution Rules
+
+1. **Rust First:** No business logic in React components. Period.
+2. **Explicit Security:** Adding a new agent capability/tool requires an explicit Airlock policy entry, or the build will fail.
+3. **No Unmarked Dead Code:** Unused code must be explicitly marked for future use or removed immediately. Avoid generating warnings in the compiler output.
+
+### Pre-Commit Validation
+
+Every PR must pass the exact same gates used by our internal Continuous Integration. Run these locally before committing:
 
 ```bash
-git clone https://github.com/ferxalbs/rainy-mate.git
-cd rainy-mate
-pnpm install
-```
-
-### Run
-
-```bash
-pnpm run tauri dev
-```
-
-### Required Validation Gates
-
-These are the baseline gates used by the project:
-
-```bash
+# 1. Rust compilation and dead-code checks
 cd src-tauri && cargo check -q
+
+# 2. Rust test suite validation
 cd src-tauri && cargo test
+
+# 3. TypeScript type integrity
 pnpm exec tsc --noEmit
 ```
 
-For this README update, the current repository passed:
+*Note: The `cargo check` command may emit warnings for unused code paths during active development iterations, but the application must successfully compile without errors for a PR to be merged.*
 
-- `cargo check -q`
-- `pnpm exec tsc --noEmit`
+---
 
-`cargo check` still emits some warnings for currently unused code paths, but it completes successfully.
+## Documentation
 
-## Documentation Pointers
+- [**Agent Architecture & Rules (AGENTS.md)**](./AGENTS.md)
+- [**Historical Record (CHANGELOG.md)**](./CHANGELOG.md)
+- [**Development Roadmap (ROADMAP.md)**](./ROADMAP.md)
 
-- [`AGENTS.md`](./AGENTS.md): architecture, rules, startup order, module map, tool policy model
-- [`CHANGELOG.md`](./CHANGELOG.md): canonical historical record
-- [`ROADMAP.md`](./ROADMAP.md): planned work
-- [`SECURITY.md`](./SECURITY.md): security notes
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md): contributor workflow
-
-## Contribution Rules
-
-If you plan to contribute, read [`AGENTS.md`](./AGENTS.md) first. The project has strict rules:
-
-- business logic in Rust, not React
-- `pnpm` only
-- modularized code paths
-- explicit tool policies
-- no undocumented dead code
-- validation gates before claiming work is done
-
-## License
-
-This repository is licensed under the [MIT License](./LICENSE).
+Rainy MaTE is licensed under the [MIT License](./LICENSE).
