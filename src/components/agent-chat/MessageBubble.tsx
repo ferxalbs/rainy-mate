@@ -159,7 +159,7 @@ function MessageBubbleComponent({
         <div
           className={`relative w-full min-w-0 overflow-hidden rounded-[20px] px-5 py-3.5 text-[15px] leading-relaxed shadow-sm transition-colors ${
             isUser
-              ? "bg-primary text-primary-foreground rounded-br-sm"
+              ? "bg-primary/70 dark:bg-primary/40 text-primary-foreground rounded-br-sm"
               : neuralState !== "idle"
                 ? "bg-white/40 dark:bg-white/5 border border-primary/20 text-foreground backdrop-blur-md rounded-bl-sm shadow-[0_0_15px_-3px_rgba(var(--primary-rgb),0.1)]"
                 : "bg-white/40 dark:bg-white/5 border border-white/10 text-foreground backdrop-blur-md rounded-bl-sm"
@@ -181,6 +181,7 @@ function MessageBubbleComponent({
                 content={message.content}
                 isStreaming={message.isLoading}
                 useContentVisibility={false}
+                tone={isUser ? "user" : "assistant"}
               />
             ) : neuralState !== "idle" ? (
               <NeuralStatus

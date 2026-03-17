@@ -315,6 +315,30 @@
       padding-left: 0;
     }
   }
+
+  .chat-markdown-assistant :where(h1, h2, h3, h4, p, strong, em, ul, ol, li) {
+    color: inherit;
+  }
+
+  .chat-markdown-user :where(h1, h2, h3, h4, p, strong, em, ul, ol, li) {
+    color: inherit;
+  }
+
+  .chat-markdown-user :where(p, li) {
+    opacity: 0.96;
+  }
+
+  .chat-markdown-user :where(strong) {
+    font-weight: 650;
+  }
+
+  .chat-markdown-user :where(hr) {
+    border-color: rgb(255 255 255 / 0.16);
+  }
+
+  .chat-markdown-user :where(code) {
+    text-shadow: none;
+  }
 }
 
 /* ============================================

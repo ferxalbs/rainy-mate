@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed `transition-all duration-300` from message scroll container — eliminates layout thrashing
   - `latestTelemetry` computed via `useMemo` (reverse loop) instead of `.reverse().find()` on every render
   - Simplified `MessageBubble` memo comparator from 7 checks to 3 (message, isExecuting, workspaceId)
+  - Added transcript windowing via `VirtualTranscript` + `useVirtualTranscript` so only visible message rows stay mounted while preserving prepend-history scroll position and bottom anchoring during streaming
+  - Lazy-mounted runtime trace bodies and paged trace rows behind explicit expansion, preventing collapsed supervisor/sub-agent traces from keeping large hidden DOM trees alive
+  - Removed the chat markdown `content-visibility` placeholder path inside virtualized rows and increased transcript overscan to eliminate the transient ghost gap that appeared on mount/screen switches with large markdown tables
+- **User message markdown rendering and theme consistency**:
+  - User-authored chat messages now render markdown with the same parser as assistant responses, including tables, fenced code blocks, blockquotes, links, and inline code
+  - Restored the original `bg-primary text-primary-foreground` user bubble styling and made the user-markdown tone inherit that existing bubble palette instead of introducing hard-coded gradients or theme-specific color overrides
+  - Tightened user markdown contrast inside the original bubble so pasted markdown remains legible across the app's existing theme system without breaking the prior visual pattern
 - **React Compiler compatibility fixes** (react-doctor 95→99/100):
   - Replaced `Date.now()` in render paths with `performance.now()` via refs (`ThoughtDisplay`, `MessageBubble.formatDuration`)
   - Extracted `EmptyStatePrompts` and `TelemetryBar` as `React.memo` sub-components from `AgentChatPanel`
@@ -126,6 +133,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cargo test -q workflow --lib` → 9 tests pass
 - `cargo test -q supervisor --lib` → 9 tests pass
 - `cargo test -q agent --lib` → 52 tests pass
+- `pnpm exec tsc --noEmit` → pass (chat transcript virtualization + user markdown bubble updates)
+- `cargo check -q` → pass (chat transcript virtualization + user markdown bubble updates)
+- `npx -y react-doctor@latest . --verbose --diff` → 100/100 (no issues found after final chat rendering adjustments)
 
 ### Fixed
 
