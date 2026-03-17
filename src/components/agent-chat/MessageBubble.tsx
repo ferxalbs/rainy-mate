@@ -180,6 +180,7 @@ function MessageBubbleComponent({
               <MarkdownRenderer
                 content={message.content}
                 isStreaming={message.isLoading}
+                useContentVisibility={false}
               />
             ) : neuralState !== "idle" ? (
               <NeuralStatus

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -7,6 +7,7 @@ import "highlight.js/styles/atom-one-dark.css";
 interface MarkdownRendererProps {
   content: string;
   isStreaming?: boolean;
+  useContentVisibility?: boolean;
 }
 
 const HIGHLIGHT_MAX_CONTENT_LENGTH = 12_000;
@@ -91,17 +92,14 @@ const REHYPE_PLUGINS_NONE: [] = [];
 export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   content,
   isStreaming = false,
+  useContentVisibility = true,
 }: MarkdownRendererProps) {
   const shouldHighlight = !isStreaming && content.length <= HIGHLIGHT_MAX_CONTENT_LENGTH;
   const rehypePlugins = shouldHighlight ? REHYPE_PLUGINS_HIGHLIGHT : REHYPE_PLUGINS_NONE;
-
-  const style = useMemo(
-    () =>
-      isStreaming
-        ? undefined
-        : { contentVisibility: "auto" as const, containIntrinsicSize: "800px" },
-    [isStreaming],
-  );
+  const style =
+    !isStreaming && useContentVisibility
+      ? { contentVisibility: "auto" as const, containIntrinsicSize: "800px" }
+      : undefined;
 
   return (
     <div
@@ -119,4 +117,6 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   );
 },
 (prev, next) =>
-  prev.content === next.content && prev.isStreaming === next.isStreaming);
+  prev.content === next.content &&
+  prev.isStreaming === next.isStreaming &&
+  prev.useContentVisibility === next.useContentVisibility);

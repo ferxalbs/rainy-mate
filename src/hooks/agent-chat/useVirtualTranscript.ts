@@ -17,7 +17,7 @@ interface VirtualRow<T> {
   item: T;
 }
 
-const DEFAULT_OVERSCAN = 4;
+const DEFAULT_OVERSCAN = 6;
 const NEAR_BOTTOM_THRESHOLD_PX = 96;
 
 function findNearestIndex(offsets: number[], target: number): number {
