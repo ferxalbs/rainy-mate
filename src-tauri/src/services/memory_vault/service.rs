@@ -368,6 +368,68 @@ impl MemoryVaultService {
         })
     }
 
+    /// Paginated listing with server-side filtering on unencrypted columns.
+    pub async fn list_filtered(
+        &self,
+        opts: super::types::ListFilteredOpts,
+    ) -> Result<super::types::PaginatedEntries, String> {
+        use super::orm::{OrderBy, VaultQuery};
+
+        let limit = opts.limit.unwrap_or(20).min(100);
+        let offset = opts.offset.unwrap_or(0);
+
+        let query = VaultQuery {
+            workspace_id: opts.workspace_id,
+            sensitivity: opts.sensitivity,
+            source_prefix: opts.source_prefix,
+            created_after: opts.created_after,
+            created_before: opts.created_before,
+            order_by: OrderBy::from_str_loose(opts.order_by.as_deref().unwrap_or("created_at")),
+            limit,
+            offset,
+        };
+
+        let total_count = self.repository.count_entries_filtered(&query).await?;
+        let rows = self.repository.list_entries_filtered(&query).await?;
+
+        let mut entries = Vec::with_capacity(rows.len());
+        for row in &rows {
+            entries.push(self.decrypt_row(row)?);
+        }
+
+        Ok(super::types::PaginatedEntries {
+            entries,
+            total_count,
+            offset,
+            limit,
+        })
+    }
+
+    /// List distinct workspace IDs with entry counts.
+    pub async fn list_workspaces(&self) -> Result<Vec<super::types::WorkspaceSummary>, String> {
+        let raw = self.repository.list_workspaces().await?;
+        Ok(raw
+            .into_iter()
+            .map(|(workspace_id, entry_count)| super::types::WorkspaceSummary {
+                workspace_id,
+                entry_count,
+            })
+            .collect())
+    }
+
+    /// Detailed vault statistics.
+    pub async fn detailed_stats(
+        &self,
+        workspace_id: Option<&str>,
+    ) -> Result<super::types::VaultDetailedStats, String> {
+        self.repository.detailed_stats(workspace_id).await
+    }
+
+    /// Bulk delete entries by IDs.
+    pub async fn delete_batch(&self, ids: &[String]) -> Result<u64, String> {
+        self.repository.delete_batch(ids).await
+    }
+
     fn decrypt_row(&self, row: &VaultRow) -> Result<DecryptedMemoryEntry, String> {
         let content_bytes = decrypt_bytes(
             self.master_key.as_slice(),

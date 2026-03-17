@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useReducer } from "react";
 import { Tooltip, Button, Separator } from "@heroui/react";
 import {
   FolderOpen,
@@ -19,6 +19,7 @@ import {
   AlertCircle,
   FolderPlus,
   ListFilter,
+  BrainCircuit,
 } from "lucide-react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -37,6 +38,8 @@ interface AppSidebarProps {
   onToggleCollapse?: () => void;
   onSettingsClick?: () => void;
 }
+
+const EMPTY_FOLDERS: Folder[] = [];
 
 const folderIcons: Record<string, any> = {
   Documents: FileText,
@@ -120,7 +123,7 @@ const NavItem = ({
 };
 
 export function AppSidebar({
-  folders = [],
+  folders = EMPTY_FOLDERS,
   onFolderSelect,
   onAddFolder,
   onNavigate,
@@ -130,79 +133,98 @@ export function AppSidebar({
   onToggleCollapse,
   onSettingsClick,
 }: AppSidebarProps) {
-  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
-  const [updateVersion, setUpdateVersion] = useState<string>("");
-  const [currentVersion, setCurrentVersion] = useState<string>("");
-  const [pendingUpdate, setPendingUpdate] = useState<Awaited<
-    ReturnType<typeof check>
-  > | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<{
-    downloaded: number;
-    total: number | null;
-  }>({ downloaded: 0, total: null });
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  type UpdateState = {
+    status: UpdateStatus;
+    version: string;
+    currentVersion: string;
+    pendingUpdate: Awaited<ReturnType<typeof check>> | null;
+    progress: { downloaded: number; total: number | null };
+    error: string;
+  };
+
+  type UpdateAction =
+    | { type: "checking" }
+    | { type: "available"; update: NonNullable<Awaited<ReturnType<typeof check>>> }
+    | { type: "up-to-date" }
+    | { type: "downloading" }
+    | { type: "download-started"; total: number | null }
+    | { type: "download-progress"; chunk: number }
+    | { type: "error"; message: string }
+    | { type: "reset" };
+
+  const [updater, dispatch] = useReducer(
+    (state: UpdateState, action: UpdateAction): UpdateState => {
+      switch (action.type) {
+        case "checking":
+          return { ...state, status: "checking", error: "" };
+        case "available":
+          return { ...state, status: "available", version: action.update.version, currentVersion: action.update.currentVersion, pendingUpdate: action.update };
+        case "up-to-date":
+          return { ...state, status: "up-to-date" };
+        case "downloading":
+          return { ...state, status: "downloading", progress: { downloaded: 0, total: null } };
+        case "download-started":
+          return { ...state, progress: { downloaded: 0, total: action.total } };
+        case "download-progress":
+          return { ...state, progress: { ...state.progress, downloaded: state.progress.downloaded + action.chunk } };
+        case "error":
+          return { ...state, status: "error", error: action.message };
+        case "reset":
+          return { ...state, status: "idle", error: "" };
+        default:
+          return state;
+      }
+    },
+    { status: "idle" as UpdateStatus, version: "", currentVersion: "", pendingUpdate: null, progress: { downloaded: 0, total: null }, error: "" },
+  );
 
   const handleCheckUpdate = async () => {
-    if (updateStatus === "checking" || updateStatus === "downloading") return;
-    setUpdateStatus("checking");
-    setErrorMsg("");
+    if (updater.status === "checking" || updater.status === "downloading") return;
+    dispatch({ type: "checking" });
     try {
       const update = await check();
       if (update) {
-        setUpdateVersion(update.version);
-        setCurrentVersion(update.currentVersion);
-        setPendingUpdate(update);
-        setUpdateStatus("available");
+        dispatch({ type: "available", update });
       } else {
-        setUpdateStatus("up-to-date");
-        setTimeout(() => setUpdateStatus("idle"), 3000);
+        dispatch({ type: "up-to-date" });
+        setTimeout(() => dispatch({ type: "reset" }), 3000);
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-      setUpdateStatus("error");
-      setTimeout(() => setUpdateStatus("idle"), 3000);
+      dispatch({ type: "error", message: err instanceof Error ? err.message : String(err) });
+      setTimeout(() => dispatch({ type: "reset" }), 3000);
     }
   };
 
   const handleInstallUpdate = async () => {
-    if (!pendingUpdate) return;
-    setUpdateStatus("downloading");
-    setDownloadProgress({ downloaded: 0, total: null });
+    if (!updater.pendingUpdate) return;
+    dispatch({ type: "downloading" });
     try {
-      await pendingUpdate.downloadAndInstall((event) => {
+      await updater.pendingUpdate.downloadAndInstall((event) => {
         if (event.event === "Started") {
-          setDownloadProgress({
-            downloaded: 0,
-            total: event.data.contentLength ?? null,
-          });
+          dispatch({ type: "download-started", total: event.data.contentLength ?? null });
         } else if (event.event === "Progress") {
-          setDownloadProgress((prev) => ({
-            ...prev,
-            downloaded: prev.downloaded + (event.data.chunkLength ?? 0),
-          }));
+          dispatch({ type: "download-progress", chunk: event.data.chunkLength ?? 0 });
         }
       });
       await relaunch();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-      setUpdateStatus("error");
+      dispatch({ type: "error", message: err instanceof Error ? err.message : String(err) });
     }
   };
 
   const handleRetryUpdate = async () => {
-    setErrorMsg("");
-    setDownloadProgress({ downloaded: 0, total: null });
+    dispatch({ type: "reset" });
     await handleCheckUpdate();
   };
 
   const showMandatoryOverlay =
-    updateStatus === "available" ||
-    updateStatus === "downloading" ||
-    (updateStatus === "error" && pendingUpdate !== null);
+    updater.status === "available" ||
+    updater.status === "downloading" ||
+    (updater.status === "error" && updater.pendingUpdate !== null);
 
   const progressPercent =
-    downloadProgress.total && downloadProgress.total > 0
-      ? Math.round((downloadProgress.downloaded / downloadProgress.total) * 100)
+    updater.progress.total && updater.progress.total > 0
+      ? Math.round((updater.progress.downloaded / updater.progress.total) * 100)
       : null;
 
   return (
@@ -281,6 +303,14 @@ export function AppSidebar({
               label="Wasm Skills"
               icon={LayoutGrid}
               isActive={activeSection === "wasm-skills"}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+            <NavItem
+              id="memory-vault"
+              label="Memory Vault"
+              icon={BrainCircuit}
+              isActive={activeSection === "memory-vault"}
               isCollapsed={isCollapsed}
               onNavigate={onNavigate}
             />
@@ -410,11 +440,11 @@ export function AppSidebar({
 
           {/* Update Check Button */}
           {(() => {
-            const isChecking = updateStatus === "checking";
-            const isAvailable = updateStatus === "available";
-            const isDownloading = updateStatus === "downloading";
-            const isUpToDate = updateStatus === "up-to-date";
-            const isError = updateStatus === "error";
+            const isChecking = updater.status === "checking";
+            const isAvailable = updater.status === "available";
+            const isDownloading = updater.status === "downloading";
+            const isUpToDate = updater.status === "up-to-date";
+            const isError = updater.status === "error";
 
             const UpdateIcon = isUpToDate
               ? Check
@@ -427,7 +457,7 @@ export function AppSidebar({
             const label = isChecking
               ? "Checking…"
               : isAvailable
-                ? `Update v${updateVersion}`
+                ? `Update v${updater.version}`
                 : isDownloading
                   ? "Installing…"
                   : isUpToDate
@@ -522,16 +552,16 @@ export function AppSidebar({
       {showMandatoryOverlay && (
         <MandatoryUpdateOverlay
           phase={
-            updateStatus === "downloading"
+            updater.status === "downloading"
               ? "downloading"
-              : updateStatus === "error"
+              : updater.status === "error"
                 ? "error"
                 : "available"
           }
-          currentVersion={currentVersion}
-          newVersion={updateVersion}
+          currentVersion={updater.currentVersion}
+          newVersion={updater.version}
           progressPercent={progressPercent}
-          errorMsg={errorMsg}
+          errorMsg={updater.error}
           onInstall={handleInstallUpdate}
           onRetry={handleRetryUpdate}
         />

@@ -712,6 +712,199 @@ impl MemoryVaultRepository {
         }
     }
 
+    /// Paginated, filtered listing using VaultQuery.
+    pub async fn list_entries_filtered(
+        &self,
+        query: &super::orm::VaultQuery,
+    ) -> Result<Vec<VaultRow>, String> {
+        query.execute(&self.conn).await
+    }
+
+    /// Count entries matching a VaultQuery (ignores limit/offset).
+    pub async fn count_entries_filtered(
+        &self,
+        query: &super::orm::VaultQuery,
+    ) -> Result<usize, String> {
+        query.count(&self.conn).await
+    }
+
+    /// List distinct workspace IDs with their entry counts.
+    pub async fn list_workspaces(&self) -> Result<Vec<(String, usize)>, String> {
+        let mut rows = self
+            .conn
+            .query(
+                "SELECT workspace_id, COUNT(*) as cnt FROM memory_vault_entries GROUP BY workspace_id ORDER BY cnt DESC",
+                (),
+            )
+            .await
+            .map_err(|e| format!("Failed to list workspaces: {}", e))?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+            let ws: String = row.get(0).unwrap_or_default();
+            let count: i64 = row.get(1).unwrap_or(0);
+            results.push((ws, count as usize));
+        }
+        Ok(results)
+    }
+
+    /// Detailed statistics for the vault, optionally filtered by workspace.
+    pub async fn detailed_stats(
+        &self,
+        workspace_id: Option<&str>,
+    ) -> Result<super::types::VaultDetailedStats, String> {
+        let (total, workspace_entries) = self.counts(workspace_id).await?;
+
+        let ws_filter = workspace_id.map(|ws| ws.to_string());
+
+        // Entries by sensitivity
+        let sensitivity_sql = if ws_filter.is_some() {
+            "SELECT sensitivity, COUNT(*) FROM memory_vault_entries WHERE workspace_id = ?1 GROUP BY sensitivity"
+        } else {
+            "SELECT sensitivity, COUNT(*) FROM memory_vault_entries GROUP BY sensitivity"
+        };
+        let mut sensitivity_map = std::collections::HashMap::new();
+        {
+            let mut rows = if let Some(ref ws) = ws_filter {
+                self.conn.query(sensitivity_sql, params![ws.clone()]).await
+            } else {
+                self.conn.query(sensitivity_sql, ()).await
+            }
+            .map_err(|e| format!("Failed to query sensitivity stats: {}", e))?;
+
+            while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+                let s: String = row.get(0).unwrap_or_default();
+                let c: i64 = row.get(1).unwrap_or(0);
+                sensitivity_map.insert(s, c as usize);
+            }
+        }
+
+        // Entries by source (top 20)
+        let source_sql = if ws_filter.is_some() {
+            "SELECT source, COUNT(*) as cnt FROM memory_vault_entries WHERE workspace_id = ?1 GROUP BY source ORDER BY cnt DESC LIMIT 20"
+        } else {
+            "SELECT source, COUNT(*) as cnt FROM memory_vault_entries GROUP BY source ORDER BY cnt DESC LIMIT 20"
+        };
+        let mut entries_by_source = Vec::new();
+        {
+            let mut rows = if let Some(ref ws) = ws_filter {
+                self.conn.query(source_sql, params![ws.clone()]).await
+            } else {
+                self.conn.query(source_sql, ()).await
+            }
+            .map_err(|e| format!("Failed to query source stats: {}", e))?;
+
+            while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+                let s: String = row.get(0).unwrap_or_default();
+                let c: i64 = row.get(1).unwrap_or(0);
+                entries_by_source.push((s, c as usize));
+            }
+        }
+
+        // Embedding coverage
+        let emb_sql = if ws_filter.is_some() {
+            "SELECT COUNT(*) FROM memory_vault_entries WHERE workspace_id = ?1 AND embedding IS NOT NULL"
+        } else {
+            "SELECT COUNT(*) FROM memory_vault_entries WHERE embedding IS NOT NULL"
+        };
+        let has_embeddings: usize = {
+            let mut rows = if let Some(ref ws) = ws_filter {
+                self.conn.query(emb_sql, params![ws.clone()]).await
+            } else {
+                self.conn.query(emb_sql, ()).await
+            }
+            .map_err(|e| format!("Failed to query embedding stats: {}", e))?;
+
+            if let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+                row.get::<i64>(0).unwrap_or(0) as usize
+            } else {
+                0
+            }
+        };
+
+        // Min/max created_at
+        let range_sql = if ws_filter.is_some() {
+            "SELECT MIN(created_at), MAX(created_at) FROM memory_vault_entries WHERE workspace_id = ?1"
+        } else {
+            "SELECT MIN(created_at), MAX(created_at) FROM memory_vault_entries"
+        };
+        let (oldest, newest) = {
+            let mut rows = if let Some(ref ws) = ws_filter {
+                self.conn.query(range_sql, params![ws.clone()]).await
+            } else {
+                self.conn.query(range_sql, ()).await
+            }
+            .map_err(|e| format!("Failed to query time range: {}", e))?;
+
+            if let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
+                let min: Option<i64> = row.get::<Option<i64>>(0).unwrap_or(None);
+                let max: Option<i64> = row.get::<Option<i64>>(1).unwrap_or(None);
+                (min, max)
+            } else {
+                (None, None)
+            }
+        };
+
+        Ok(super::types::VaultDetailedStats {
+            total_entries: total,
+            workspace_entries,
+            entries_by_sensitivity: sensitivity_map,
+            entries_by_source,
+            has_embeddings,
+            missing_embeddings: workspace_entries.saturating_sub(has_embeddings),
+            oldest_entry: oldest,
+            newest_entry: newest,
+        })
+    }
+
+    /// Delete multiple entries by ID in a single transaction.
+    pub async fn delete_batch(&self, ids: &[String]) -> Result<u64, String> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        self.conn
+            .execute("BEGIN IMMEDIATE TRANSACTION", ())
+            .await
+            .map_err(|e| format!("Failed to begin delete_batch transaction: {}", e))?;
+
+        let result: Result<u64, String> = async {
+            for id in ids {
+                self.conn
+                    .execute(
+                        "DELETE FROM memory_vault_embedding_vectors WHERE entry_id = ?1",
+                        params![id.clone()],
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to delete vectors for {}: {}", id, e))?;
+
+                self.conn
+                    .execute(
+                        "DELETE FROM memory_vault_entries WHERE id = ?1",
+                        params![id.clone()],
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to delete entry {}: {}", id, e))?;
+            }
+            Ok(ids.len() as u64)
+        }
+        .await;
+
+        match result {
+            Ok(count) => {
+                self.conn
+                    .execute("COMMIT", ())
+                    .await
+                    .map_err(|e| format!("Failed to commit delete_batch: {}", e))?;
+                Ok(count)
+            }
+            Err(err) => {
+                let _ = self.conn.execute("ROLLBACK", ()).await;
+                Err(err)
+            }
+        }
+    }
+
     pub async fn migration_completed(&self, id: &str) -> Result<bool, String> {
         let mut rows = self
             .conn
@@ -738,28 +931,7 @@ impl MemoryVaultRepository {
 }
 
 fn row_to_vault(row: &libsql::Row) -> Result<VaultRow, String> {
-    Ok(VaultRow {
-        id: row.get::<String>(0).map_err(|e| e.to_string())?,
-        workspace_id: row.get::<String>(1).map_err(|e| e.to_string())?,
-        source: row.get::<String>(2).map_err(|e| e.to_string())?,
-        sensitivity: row.get::<String>(3).map_err(|e| e.to_string())?,
-        created_at: row.get::<i64>(4).map_err(|e| e.to_string())?,
-        last_accessed: row.get::<i64>(5).map_err(|e| e.to_string())?,
-        access_count: row.get::<i64>(6).map_err(|e| e.to_string())?,
-        content_ciphertext: row.get::<Vec<u8>>(7).map_err(|e| e.to_string())?,
-        content_nonce: row.get::<Vec<u8>>(8).map_err(|e| e.to_string())?,
-        tags_ciphertext: row.get::<Vec<u8>>(9).map_err(|e| e.to_string())?,
-        tags_nonce: row.get::<Vec<u8>>(10).map_err(|e| e.to_string())?,
-        metadata_ciphertext: row.get::<Option<Vec<u8>>>(11).unwrap_or(None),
-        metadata_nonce: row.get::<Option<Vec<u8>>>(12).unwrap_or(None),
-        embedding: row.get::<Option<Vec<u8>>>(13).unwrap_or(None),
-        embedding_model: row.get::<Option<String>>(14).unwrap_or(None),
-        embedding_provider: row.get::<Option<String>>(15).unwrap_or(None),
-        embedding_dim: row
-            .get::<Option<i64>>(16)
-            .unwrap_or(None)
-            .map(|v| v as usize),
-    })
+    super::orm::vault_column_map().to_vault_row(row)
 }
 
 #[cfg(test)]

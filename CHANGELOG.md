@@ -5,7 +5,42 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-16 - MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING
+## [Unreleased] - 2026-03-17 - INTELLIGENT MEMORY DISTILLATION & CHAT PERFORMANCE AND MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING
+
+### Added
+
+- **Memory distillation pipeline** — replaces raw conversation dumping with LLM-based fact extraction:
+  - `MemoryDistiller` (`src-tauri/src/services/memory_vault/distiller.rs`) extracts structured facts from conversation turns via cheap LLM call (temperature 0.1, 1024 tokens)
+  - `DedupGate` (`src-tauri/src/services/memory_vault/dedup.rs`) checks embedding similarity before storage — Skip (distance <0.05), Update (<0.15), or Insert
+  - `DistillationBuffer` in `AgentMemory` batches 5 turns before flushing; flushes remaining at end of each agent run
+  - Fast-path skip: read-only tool results (`read_file`, `list_files`, `git_status`, etc.) never enter the pipeline
+- **Memory categories** — `MemoryCategory` enum: `Preference`, `Correction`, `Fact`, `Procedure`, `Observation` stored in encrypted metadata as `_category`
+- **Importance scoring** — each distilled memory gets a 0.0–1.0 importance score stored as `_importance`; floors enforced (Preference ≥0.7, Correction ≥0.8)
+- **Category-aware retrieval scoring** — hybrid and vector-only search formulas now include `_importance` (12%) and `category_boost` (10–15%) weights; preferences and corrections rank highest
+- **Memory Explorer UI enhancements** — category badge (colored per type), importance bar (thin progress), and category filter dropdown in `MemoryExplorerPanel.tsx`
+
+### Fixed
+
+- **Agent chat 58% CPU on scroll** — complete rendering pipeline overhaul:
+  - `stopAgentRun`/`retryAgentRun` no longer depend on `messages` array (uses `messagesRef` pattern) — stabilizes callback references so `React.memo` on `MessageBubble` actually works
+  - Replaced all Framer Motion infinite animations (`motion.div`) with CSS `@keyframes` (`neural-bar`, `shimmer`) — eliminates JS animation frame overhead
+  - Hoisted `MarkdownRenderer` component overrides, remark/rehype plugin arrays to module scope — zero allocation per render
+  - `NeuralStatus` wrapped in `React.memo` to prevent cascade re-renders during streaming
+  - Scroll updates coalesced via `requestAnimationFrame` instead of firing on every streaming chunk
+  - Removed `transition-all duration-300` from message scroll container — eliminates layout thrashing
+  - `latestTelemetry` computed via `useMemo` (reverse loop) instead of `.reverse().find()` on every render
+  - Simplified `MessageBubble` memo comparator from 7 checks to 3 (message, isExecuting, workspaceId)
+- **React Compiler compatibility fixes** (react-doctor 95→99/100):
+  - Replaced `Date.now()` in render paths with `performance.now()` via refs (`ThoughtDisplay`, `MessageBubble.formatDuration`)
+  - Extracted `EmptyStatePrompts` and `TelemetryBar` as `React.memo` sub-components from `AgentChatPanel`
+  - Eliminated inline `renderComposer()` function — renders `<ChatComposer>` directly
+  - All event handlers wrapped in `useCallback` with stable deps
+  - Replaced array index keys with content-based keys in `MessageBubble` step/error lists
+  - Added module-scope `EMPTY_REASONING` constant to prevent per-render array allocation
+  - **ThoughtDisplay**: extracted `useElapsedTimer` hook — no refs during render, no synchronous setState in effects; derived `isExpanded` from `isStreaming` prop instead of cascading effect
+  - **AgentChatPanel**: replaced reasoning effort `useEffect` → `useMemo` derivation — zero cascading renders
+  - **App.tsx**: auto-select folder uses `.then()` callbacks instead of synchronous setState in effect
+  - **AppSidebar**: consolidated 6 `useState` → `useReducer` for updater state; extracted default `[]` to module-scope `EMPTY_FOLDERS` constant
 
 ### Added
 
@@ -35,10 +70,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `test_simple_buffer_no_cross_workspace_leak` — verifies workspace isolation in ring buffer path
   - `test_rate_limiter_blocks_after_limit` — verifies RPM gate fires at threshold
   - `test_rate_limiter_allows_after_window_expires` — verifies sliding window resets correctly
+- **Supervisor/UI projection helpers** — extracted focused runtime/UI support modules to reduce hot-path duplication:
+  - Rust frontend event projector in `src-tauri/src/commands/agent_frontend_events.rs`
+  - frontend message update helper in `src/hooks/agent-chat/messageState.ts`
 
 ### Fixed
 
 - **Dead code from CodeRabbit auto-fix** — `KeychainManager::is_supported()` was injected by CodeRabbit bot (commit `7adca1f`) without any call site; removed entirely since per-method `#[cfg]` branches already handle platform detection (`src-tauri/src/ai/keychain.rs`)
+- **Durable local Airlock approvals** — local agent tool/memory approvals no longer disappear on timeout by default:
+  - `QueuedCommand` gained explicit `approval_timeout_secs` control in `src-tauri/src/models/neural.rs`
+  - local workflow/runtime-generated approvals now use indefinite blocking semantics (`Some(0)`) in `src-tauri/src/ai/agent/workflow.rs` and `src-tauri/src/ai/agent/runtime.rs`
+  - `src-tauri/src/services/airlock.rs` now represents non-expiring approvals cleanly and only times out when explicitly configured
+- **Supervisor verifier lane drift** — verifier is no longer left visually stranded in `pending` when executor completed without write-like actions:
+  - `src-tauri/src/ai/agent/supervisor.rs`
+- **Chat bubble overflow/regression path** — long markdown tables/code blocks are now contained instead of stretching the transcript layout:
+  - `src/components/agent-chat/MarkdownRenderer.tsx`
+  - `src/components/agent-chat/MessageBubble.tsx`
+  - `src/components/agent-chat/AgentChatPanel.tsx`
 
 ### Changed
 
@@ -48,6 +96,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/components/agents/builder/specDefaults.ts`
   - `src/components/agents/builder/airlock/RateLimitsSection.tsx` (removed "Tokens / Day" UI field)
 - All 4 `@TODO` markers in `manifest.rs` resolved — `strategy`, `retention_days`, `persistence`, and `rate_limits` are now fully implemented
+- **Supervisor runtime and chat rendering hardening** — reduced CPU churn and event spam across local multi-agent runs:
+  - Rust now coalesces frontend-facing agent events before emitting them from `src-tauri/src/commands/agent.rs`
+  - `src/hooks/useAgentChat.ts` batches runtime event application per animation frame instead of issuing a React state write per backend event
+  - `src/components/agent-chat/MarkdownRenderer.tsx` disables syntax highlighting while streaming and uses render containment for large completed responses
+  - `src/components/agent-chat/MessageBubble.tsx` and `src/components/neural/AirlockEvents.tsx` now surface safer layout/approval states
+- **Supervisor mode product wiring** — runtime metadata, lane state, builder controls, and telemetry continue to be exposed end-to-end through:
+  - `src-tauri/src/ai/agent/events.rs`
+  - `src-tauri/src/ai/agent/protocol.rs`
+  - `src-tauri/src/ai/agent/runtime_registry.rs`
+  - `src-tauri/src/ai/agent/specialist.rs`
+  - `src-tauri/src/services/command_poller.rs`
+  - `src-tauri/src/services/neural_service.rs`
+  - `src/components/agents/builder/AgentBuilder.tsx`
+  - `src/components/agents/builder/RuntimePanel.tsx`
+  - `src/components/agents/builder/specDefaults.ts`
+  - `src/services/tauri.ts`
+  - `src/types/agent.ts`
+  - `src/types/neural.ts`
 
 ### Validation
 
@@ -56,6 +122,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cargo test -q agent --lib` → 49 tests pass
 - `pnpm exec tsc --noEmit` → pass
 - `bun test` (rainy-atm/v0.1.16) → 50 tests pass
+- `cargo test -q airlock --lib` → 11 tests pass
+- `cargo test -q workflow --lib` → 9 tests pass
+- `cargo test -q supervisor --lib` → 9 tests pass
+- `cargo test -q agent --lib` → 52 tests pass
 
 ### Fixed
 

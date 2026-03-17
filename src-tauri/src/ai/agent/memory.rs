@@ -1,3 +1,8 @@
+use crate::ai::router::IntelligentRouter;
+use crate::services::embedder::EmbeddingTaskType;
+use crate::services::memory_vault::dedup::{DedupDecision, DedupGate};
+use crate::services::memory_vault::distiller::MemoryDistiller;
+use crate::services::memory_vault::types::RawMemoryTurn;
 use crate::services::memory_vault::MemorySensitivity;
 use chrono::{TimeZone, Utc};
 use reqwest::Client;
@@ -8,6 +13,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryEntry {
@@ -20,13 +26,69 @@ pub struct MemoryEntry {
     pub sensitivity: crate::services::memory_vault::MemorySensitivity,
 }
 
-#[derive(Debug, Clone)]
+struct DistillationBuffer {
+    turns: Vec<RawMemoryTurn>,
+    max_before_flush: usize,
+    distiller: Arc<MemoryDistiller>,
+    dedup_gate: Arc<DedupGate>,
+    manager: Arc<crate::services::MemoryManager>,
+    workspace_id: String,
+}
+
+impl DistillationBuffer {
+    fn new(
+        distiller: Arc<MemoryDistiller>,
+        dedup_gate: Arc<DedupGate>,
+        manager: Arc<crate::services::MemoryManager>,
+        workspace_id: String,
+    ) -> Self {
+        Self {
+            turns: Vec::with_capacity(5),
+            max_before_flush: 5,
+            distiller,
+            dedup_gate,
+            manager,
+            workspace_id,
+        }
+    }
+
+    fn push(&mut self, turn: RawMemoryTurn) -> bool {
+        self.turns.push(turn);
+        self.turns.len() >= self.max_before_flush
+    }
+
+    fn drain(&mut self) -> Vec<RawMemoryTurn> {
+        std::mem::take(&mut self.turns)
+    }
+}
+
 pub struct AgentMemory {
     workspace_id: String,
     db: Arc<sqlx::SqlitePool>,
     manager: Arc<crate::services::MemoryManager>,
     #[allow(dead_code)]
     http_client: Client,
+    distillation_buffer: Arc<Mutex<Option<DistillationBuffer>>>,
+}
+
+impl std::fmt::Debug for AgentMemory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgentMemory")
+            .field("workspace_id", &self.workspace_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for AgentMemory {
+    fn clone(&self) -> Self {
+        Self {
+            workspace_id: self.workspace_id.clone(),
+            db: self.db.clone(),
+            manager: self.manager.clone(),
+            http_client: self.http_client.clone(),
+            distillation_buffer: self.distillation_buffer.clone(),
+        }
+    }
 }
 
 impl AgentMemory {
@@ -34,6 +96,8 @@ impl AgentMemory {
         workspace_id: &str,
         app_data_dir: PathBuf,
         manager: Arc<crate::services::MemoryManager>,
+        router: Option<Arc<tokio::sync::RwLock<IntelligentRouter>>>,
+        vault: Option<Arc<crate::services::memory_vault::MemoryVaultService>>,
     ) -> Self {
         let _ = std::fs::create_dir_all(&app_data_dir);
         let db_path = app_data_dir.join("rainy_cowork_v2.db");
@@ -61,6 +125,20 @@ impl AgentMemory {
         .execute(&pool)
         .await;
 
+        let distillation_buffer = match (router, vault) {
+            (Some(r), Some(v)) => {
+                let distiller = Arc::new(MemoryDistiller::new(r));
+                let dedup_gate = Arc::new(DedupGate::new(v));
+                Some(DistillationBuffer::new(
+                    distiller,
+                    dedup_gate,
+                    manager.clone(),
+                    workspace_id.to_string(),
+                ))
+            }
+            _ => None,
+        };
+
         let memory = Self {
             workspace_id: workspace_id.to_string(),
             db: Arc::new(pool),
@@ -69,6 +147,7 @@ impl AgentMemory {
                 .user_agent("Rainy-MaTE-Agent/1.0")
                 .build()
                 .unwrap_or_default(),
+            distillation_buffer: Arc::new(Mutex::new(distillation_buffer)),
         };
 
         memory.migrate_legacy_json_if_present(app_data_dir).await;
@@ -130,6 +209,136 @@ impl AgentMemory {
             .execute(&*self.db)
             .await;
         }
+    }
+
+    pub async fn push_for_distillation(&self, turn: RawMemoryTurn) {
+        let should_flush = {
+            let mut guard = self.distillation_buffer.lock().await;
+            match guard.as_mut() {
+                Some(buf) => buf.push(turn),
+                None => return, // No distillation available, skip silently
+            }
+        };
+
+        if should_flush {
+            self.flush_distillation_buffer().await;
+        }
+    }
+
+    pub async fn flush_remaining(&self) {
+        self.flush_distillation_buffer().await;
+    }
+
+    async fn flush_distillation_buffer(&self) {
+        let (turns, distiller, dedup_gate, manager, workspace_id) = {
+            let mut guard = self.distillation_buffer.lock().await;
+            match guard.as_mut() {
+                Some(buf) => {
+                    let turns = buf.drain();
+                    if turns.is_empty() {
+                        return;
+                    }
+                    (
+                        turns,
+                        buf.distiller.clone(),
+                        buf.dedup_gate.clone(),
+                        buf.manager.clone(),
+                        buf.workspace_id.clone(),
+                    )
+                }
+                None => return,
+            }
+        };
+
+        // Spawn the expensive work (LLM call + embedding + dedup) off the hot path
+        tokio::spawn(async move {
+            let distilled = match distiller.distill(turns).await {
+                Ok(d) => d,
+                Err(e) => {
+                    tracing::warn!("Memory distillation failed: {}", e);
+                    return;
+                }
+            };
+
+            for mem in distilled {
+                // Embed the distilled content
+                let embedder = manager.resolve_gemini_embedder().ok().flatten();
+                let embedding = if let Some(ref emb) = embedder {
+                    emb.embed_text_for_model_with_task_strict(
+                        &mem.content,
+                        crate::services::memory_vault::EMBEDDING_MODEL,
+                        EmbeddingTaskType::RetrievalDocument,
+                    )
+                    .await
+                    .ok()
+                } else {
+                    None
+                };
+
+                // Dedup gate
+                let decision = if let Some(ref emb) = embedding {
+                    dedup_gate.gate(&workspace_id, mem.clone(), emb).await
+                } else {
+                    DedupDecision::Insert(mem.clone())
+                };
+
+                match decision {
+                    DedupDecision::Insert(distilled) => {
+                        let entry_id = uuid::Uuid::new_v4().to_string();
+                        let mut metadata = HashMap::new();
+                        metadata.insert("_category".to_string(), distilled.category.as_str().to_string());
+                        metadata.insert("_importance".to_string(), format!("{:.2}", distilled.importance));
+
+                        let tags = vec![
+                            format!("workspace:{}", workspace_id),
+                            "source:distilled".to_string(),
+                            format!("category:{}", distilled.category.as_str()),
+                            "agent_memory".to_string(),
+                        ];
+
+                        let _ = manager
+                            .store_workspace_memory(
+                                &workspace_id,
+                                entry_id,
+                                distilled.content,
+                                "distilled".to_string(),
+                                tags,
+                                metadata,
+                                chrono::Utc::now().timestamp(),
+                                MemorySensitivity::Internal,
+                            )
+                            .await;
+                    }
+                    DedupDecision::Update { existing_id, merged } => {
+                        let mut metadata = HashMap::new();
+                        metadata.insert("_category".to_string(), merged.category.as_str().to_string());
+                        metadata.insert("_importance".to_string(), format!("{:.2}", merged.importance));
+
+                        let tags = vec![
+                            format!("workspace:{}", workspace_id),
+                            "source:distilled".to_string(),
+                            format!("category:{}", merged.category.as_str()),
+                            "agent_memory".to_string(),
+                        ];
+
+                        // Re-store with same ID to update
+                        let _ = manager
+                            .store_workspace_memory(
+                                &workspace_id,
+                                existing_id,
+                                merged.content,
+                                "distilled".to_string(),
+                                tags,
+                                metadata,
+                                chrono::Utc::now().timestamp(),
+                                MemorySensitivity::Internal,
+                            )
+                            .await;
+                    }
+                    DedupDecision::Skip => {}
+                }
+            }
+        });
     }
 
     #[allow(dead_code)]

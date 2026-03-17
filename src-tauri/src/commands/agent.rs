@@ -682,8 +682,15 @@ pub async fn run_agent_workflow(
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
+    let vault = memory_manager.0.get_vault().await;
     let memory_obj =
-        crate::ai::agent::memory::AgentMemory::new(&chat_id, app_data_dir, memory_manager.0.clone())
+        crate::ai::agent::memory::AgentMemory::new(
+            &chat_id,
+            app_data_dir,
+            memory_manager.0.clone(),
+            Some(router.0.clone()),
+            vault,
+        )
             .await;
     let memory = Arc::new(memory_obj);
 

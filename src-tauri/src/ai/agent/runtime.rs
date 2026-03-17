@@ -780,39 +780,25 @@ Rules:
                 };
 
                 if allowed && self.spec.memory_config.persistence.cross_session {
-                    let mut metadata = std::collections::HashMap::new();
-                    metadata.insert(
-                        "source_input".to_string(),
-                        input.chars().take(200).collect::<String>(),
-                    );
-                    metadata.insert("role".to_string(), "assistant".to_string());
-                    let entry_id = uuid::Uuid::new_v4().to_string();
-                    let content = response_text.chars().take(2000).collect::<String>();
-                    let tags = vec![
-                        format!("workspace:{}", effective_ws),
-                        "source:agent_conversation".to_string(),
-                        "agent_memory".to_string(),
-                        "role:assistant".to_string(),
-                    ];
-                    let _ = mm
-                        .store_workspace_memory(
-                            &effective_ws,
-                            entry_id,
-                            content,
-                            "agent_conversation".to_string(),
-                            tags,
-                            metadata,
-                            chrono::Utc::now().timestamp(),
-                            crate::services::memory_vault::MemorySensitivity::Internal,
-                        )
+                    self.memory
+                        .push_for_distillation(crate::services::memory_vault::types::RawMemoryTurn {
+                            content: response_text.chars().take(2000).collect(),
+                            role: "assistant".to_string(),
+                            source: "agent_conversation".to_string(),
+                            workspace_id: effective_ws.clone(),
+                            timestamp: chrono::Utc::now().timestamp(),
+                        })
                         .await;
                     on_event(AgentEvent::MemoryStored(
-                        "Response persisted to memory".to_string(),
+                        "Response queued for distillation".to_string(),
                     ));
                 }
             }
+            // Flush any remaining buffered turns for distillation
+            self.memory.flush_remaining().await;
             Ok(response_text)
         } else {
+            self.memory.flush_remaining().await;
             Ok("Workflow completed without final response".to_string())
         }
     }

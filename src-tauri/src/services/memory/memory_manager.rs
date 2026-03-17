@@ -52,6 +52,11 @@ impl MemoryManager {
         }
     }
 
+    /// Get the vault reference if initialized, without creating it.
+    pub async fn get_vault(&self) -> Option<Arc<MemoryVaultService>> {
+        self.vault.read().await.clone()
+    }
+
     async fn ensure_vault(&self) -> Result<Arc<MemoryVaultService>, MemoryError> {
         {
             let guard = self.vault.read().await;
@@ -261,6 +266,11 @@ impl MemoryManager {
         self.short_term_size().await == 0
     }
 
+    /// Expose the underlying MemoryVaultService for direct vault queries.
+    pub async fn vault(&self) -> Result<Arc<MemoryVaultService>, MemoryError> {
+        self.ensure_vault().await
+    }
+
     pub async fn query_workspace_memory(
         &self,
         workspace_id: &str,
@@ -395,7 +405,12 @@ impl MemoryManager {
                 let recency = recency_score(entry.created_at, now);
                 let access = access_score(entry.access_count);
                 let semantic = semantic_score(distance);
-                let score = 0.70 * semantic + 0.20 * recency + 0.10 * access;
+                let importance = entry.metadata.get("_importance")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .unwrap_or(0.5);
+                let cat_boost = category_boost(entry.metadata.get("_category").map(|s| s.as_str()));
+                let score = 0.55 * semantic + 0.13 * recency + 0.05 * access
+                          + 0.15 * importance + 0.12 * cat_boost;
                 upsert_ranked_entry(&mut merged, entry, score);
             }
 
@@ -450,7 +465,12 @@ impl MemoryManager {
             let recency = recency_score(entry.created_at, now);
             let access = access_score(entry.access_count);
             let semantic = semantic_score(distance);
-            let score = 0.65 * semantic + 0.15 * lexical + 0.15 * recency + 0.05 * access;
+            let importance = entry.metadata.get("_importance")
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.5);
+            let cat_boost = category_boost(entry.metadata.get("_category").map(|s| s.as_str()));
+            let score = 0.50 * semantic + 0.12 * lexical + 0.12 * recency + 0.04 * access
+                      + 0.12 * importance + 0.10 * cat_boost;
             upsert_ranked_entry(&mut merged, entry, score);
         }
 
@@ -690,7 +710,7 @@ impl MemoryManager {
         })
     }
 
-    fn resolve_gemini_embedder(&self) -> Result<Option<Arc<EmbedderService>>, String> {
+    pub fn resolve_gemini_embedder(&self) -> Result<Option<Arc<EmbedderService>>, String> {
         let cached = self.embedder_cache.get_or_init(|| {
             let settings = crate::services::settings::SettingsManager::new();
             let provider_raw = settings.get_embedder_provider().to_string();
@@ -773,6 +793,16 @@ fn access_score(access_count: i64) -> f64 {
 fn semantic_score(distance: f32) -> f64 {
     let d = distance.max(0.0) as f64;
     (1.0 / (1.0 + d)).clamp(0.0, 1.0)
+}
+
+fn category_boost(cat: Option<&str>) -> f64 {
+    match cat {
+        Some("preference") => 1.0,
+        Some("correction") => 0.95,
+        Some("fact") => 0.7,
+        Some("procedure") => 0.5,
+        Some("observation") | _ => 0.2,
+    }
 }
 
 fn upsert_ranked_entry(

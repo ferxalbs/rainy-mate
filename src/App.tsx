@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { UpdateChecker } from "./components/updater/UpdateChecker";
 import { TahoeLayout, AIDocumentPanel, AIResearchPanel } from "./components";
 import { SettingsPage } from "./components/settings";
@@ -7,6 +7,7 @@ import { NeuralPanel, AirlockEvents, McpApprovalEvents } from "./components/neur
 import { AgentBuilder } from "./components/agents/builder/AgentBuilder";
 import { AgentStorePage } from "./components/agents/store/AgentStorePage";
 import { WasmSkillsPage } from "./components/wasm-skills/WasmSkillsPage";
+import { MemoryExplorerPanel } from "./components/memory/MemoryExplorerPanel";
 import { Toaster } from "sonner";
 import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
@@ -66,12 +67,21 @@ function App() {
     [refreshFolders],
   );
 
-  // Auto-select first folder when folders are loaded
+  // Auto-select first folder when folders are loaded — uses async callback, not synchronous setState
+  const didAutoSelect = useRef(false);
   useEffect(() => {
-    if (folders.length > 0 && !activeFolder) {
-      handleFolderSelect(folders[0]);
+    if (folders.length > 0 && !didAutoSelect.current) {
+      didAutoSelect.current = true;
+      const folder = folders[0];
+      tauri.setWorkspace(folder.path, folder.name)
+        .then(() => tauri.updateFolderAccess(folder.id))
+        .then(() => {
+          setActiveFolder(folder);
+          refreshFolders();
+        })
+        .catch((err) => console.error("Failed to auto-select workspace:", err));
     }
-  }, [folders, activeFolder, handleFolderSelect]);
+  }, [folders, refreshFolders]);
 
   // Handle navigation
   const handleNavigate = useCallback((section: string) => {
@@ -193,6 +203,13 @@ function App() {
           {activeSection === "wasm-skills" && (
             <div className="flex-1 h-full min-h-0 overflow-hidden">
               <WasmSkillsPage />
+            </div>
+          )}
+
+          {/* Memory Vault Explorer */}
+          {activeSection === "memory-vault" && (
+            <div className="flex-1 h-full min-h-0 overflow-hidden">
+              <MemoryExplorerPanel />
             </div>
           )}
 

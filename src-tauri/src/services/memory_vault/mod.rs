@@ -1,5 +1,8 @@
 pub mod crypto;
+pub mod dedup;
+pub mod distiller;
 pub mod key_provider;
+pub mod orm;
 pub mod profiles;
 pub mod repository;
 pub mod service;

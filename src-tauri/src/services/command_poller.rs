@@ -885,11 +885,14 @@ impl CommandPoller {
                     let context_lock = self.agent_context.read().await;
                     if let Some(ctx) = context_lock.as_ref() {
                         // Create memory for this workspace
+                        let vault = ctx.memory_manager.get_vault().await;
                         let memory = Arc::new(
                             AgentMemory::new(
                                 &workspace_id,
                                 ctx.app_data_dir.clone(),
                                 ctx.memory_manager.clone(),
+                                Some(ctx.router.clone()),
+                                vault,
                             )
                             .await,
                         );

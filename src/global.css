@@ -82,6 +82,16 @@
   }
 }
 
+/* Neural status bar & shimmer — CSS-only replacements for Framer Motion */
+@keyframes neural-bar {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.8; }
+}
+@keyframes shimmer {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.3; }
+}
+
 /* ============================================
    LIGHT THEME - macOS Tahoe (Rose/Pink tint)
    Default theme - Can be overridden by JS theme system

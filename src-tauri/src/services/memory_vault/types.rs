@@ -80,3 +80,92 @@ pub struct MemoryVaultStats {
     pub total_entries: usize,
     pub workspace_entries: usize,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ListFilteredOpts {
+    pub workspace_id: Option<String>,
+    pub sensitivity: Option<String>,
+    pub source_prefix: Option<String>,
+    pub created_after: Option<i64>,
+    pub created_before: Option<i64>,
+    pub order_by: Option<String>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaginatedEntries {
+    pub entries: Vec<DecryptedMemoryEntry>,
+    pub total_count: usize,
+    pub offset: usize,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceSummary {
+    pub workspace_id: String,
+    pub entry_count: usize,
+}
+
+// ─── Distillation Types ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MemoryCategory {
+    Preference,
+    Correction,
+    Fact,
+    Procedure,
+    Observation,
+}
+
+impl MemoryCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Preference => "preference",
+            Self::Correction => "correction",
+            Self::Fact => "fact",
+            Self::Procedure => "procedure",
+            Self::Observation => "observation",
+        }
+    }
+
+    pub fn from_str_loose(s: &str) -> Self {
+        match s {
+            "preference" => Self::Preference,
+            "correction" => Self::Correction,
+            "fact" => Self::Fact,
+            "procedure" => Self::Procedure,
+            _ => Self::Observation,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DistilledMemory {
+    pub content: String,
+    pub category: MemoryCategory,
+    pub importance: f32,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct RawMemoryTurn {
+    pub content: String,
+    pub role: String,
+    pub source: String,
+    pub workspace_id: String,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultDetailedStats {
+    pub total_entries: usize,
+    pub workspace_entries: usize,
+    pub entries_by_sensitivity: HashMap<String, usize>,
+    pub entries_by_source: Vec<(String, usize)>,
+    pub has_embeddings: usize,
+    pub missing_embeddings: usize,
+    pub oldest_entry: Option<i64>,
+    pub newest_entry: Option<i64>,
+}

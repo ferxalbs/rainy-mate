@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eraser, FileText, Gamepad2, Sparkles } from "lucide-react";
 
 import * as tauri from "../../services/tauri";
@@ -11,7 +11,7 @@ import { getReasoningOptions } from "../ai/UnifiedModelSelector";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
-import { MessageBubble } from "./MessageBubble";
+import { MemoizedMessageBubble } from "./MessageBubble";
 import { ChatComposer } from "./ChatComposer";
 import { ChatTopbar } from "./ChatTopbar";
 
@@ -47,18 +47,92 @@ const PROMPTS = [
   },
 ];
 
-function useAutoResizeTextarea(
-  ref: React.RefObject<HTMLTextAreaElement | null>,
-  value: string,
-  maxHeight: number,
-) {
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    element.style.height = "0px";
-    element.style.height = `${Math.min(element.scrollHeight, maxHeight)}px`;
-  }, [maxHeight, ref, value]);
-}
+const EMPTY_REASONING: string[] = [];
+
+// ─── Extracted sub-components for proper reconciliation ──────────────
+
+const EmptyStatePrompts = React.memo(function EmptyStatePrompts({
+  onApplyPrompt,
+}: {
+  onApplyPrompt: (prompt: string) => void;
+}) {
+  return (
+    <div className="mb-8 flex w-full max-w-2xl flex-col gap-2.5 px-2 md:flex-row">
+      {PROMPTS.map(({ accent, icon: Icon, prompt, title }) => (
+        <button
+          key={title}
+          type="button"
+          onClick={() => onApplyPrompt(prompt)}
+          className="group relative flex-1 overflow-hidden rounded-2xl border border-white/10 bg-background/66 p-4 text-left shadow-sm transition-colors hover:bg-white/5"
+        >
+          <div className="relative z-10 flex h-full flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-xl bg-white/10",
+                  accent,
+                )}
+              >
+                <Icon className="size-3.5" />
+              </div>
+              <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60">
+                Explore
+              </span>
+            </div>
+            <p className="text-xs font-medium leading-relaxed tracking-[-0.01em] text-foreground/90">
+              {title}
+            </p>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+});
+
+const TelemetryBar = React.memo(function TelemetryBar({
+  telemetry,
+}: {
+  telemetry: {
+    historySource?: string;
+    retrievalMode?: string;
+    embeddingProfile?: string;
+    compressionApplied?: boolean;
+    compressionTriggerTokens?: number;
+  } | undefined;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      <Badge
+        variant="outline"
+        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+      >
+        History: {telemetry?.historySource || "persisted_long_chat"}
+      </Badge>
+      <Badge
+        variant="outline"
+        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+      >
+        Retrieval: {telemetry?.retrievalMode || "unavailable"}
+      </Badge>
+      <Badge
+        variant="outline"
+        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+      >
+        Embedding: {telemetry?.embeddingProfile || "gemini-embedding-2-preview"}
+      </Badge>
+      {telemetry?.compressionApplied && (
+        <Badge
+          variant="outline"
+          className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+        >
+          Compression @{telemetry.compressionTriggerTokens || 80000}
+        </Badge>
+      )}
+    </div>
+  );
+});
+
+// ─── Main component ──────────────────────────────────────────────────
 
 export function AgentChatPanel({
   workspacePath,
@@ -72,7 +146,7 @@ export function AgentChatPanel({
   const [input, setInput] = useState("");
   const [currentModelId, setCurrentModelId] = useState("");
   const [selectedModel, setSelectedModel] = useState<UnifiedModel | null>(null);
-  const [reasoningEffort, setReasoningEffort] = useState<string | undefined>(undefined);
+  const [reasoningEffortOverride, setReasoningEffortOverride] = useState<string | undefined>(undefined);
   const [agentSpecs, setAgentSpecs] = useState<AgentSpec[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -102,90 +176,101 @@ export function AgentChatPanel({
 
   const isProcessing = isPlanning || isExecuting;
   const reasoningOptions = useMemo(() => getReasoningOptions(selectedModel), [selectedModel]);
-  const latestTelemetry = [...messages]
-    .reverse()
-    .find((message) => message.type === "agent" && message.ragTelemetry)?.ragTelemetry;
+  const stableReasoningOptions = reasoningOptions.length > 0 ? reasoningOptions : EMPTY_REASONING;
 
-  useAutoResizeTextarea(textareaRef, input, messages.length === 0 ? 280 : 220);
-
-  useEffect(() => {
-    const initModel = async () => {
-      try {
-        const model = await tauri.getSelectedModel();
-        if (model) setCurrentModelId(model);
-      } catch (error) {
-        console.error("Failed to load selected model", error);
+  const latestTelemetry = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].type === "agent" && messages[i].ragTelemetry) {
+        return messages[i].ragTelemetry;
       }
-    };
+    }
+    return undefined;
+  }, [messages]);
 
-    void initModel();
+  // ─── Textarea auto-resize (external DOM mutation, not cascading setState) ──
+  useEffect(() => {
+    const element = textareaRef.current;
+    if (!element) return;
+    const maxHeight = messages.length === 0 ? 280 : 220;
+    element.style.height = "0px";
+    element.style.height = `${Math.min(element.scrollHeight, maxHeight)}px`;
+  }, [input, messages.length]);
+
+  // ─── One-time init effects ─────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    tauri.getSelectedModel().then((model) => {
+      if (!cancelled && model) setCurrentModelId(model);
+    }).catch((error) => console.error("Failed to load selected model", error));
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    const loadSpecs = async () => {
-      try {
-        const specs = (await tauri.listAgentSpecs()) as AgentSpec[];
-        setAgentSpecs(specs);
-        if (specs.length > 0) {
-          setSelectedAgentId((previous) => previous || specs[0].id);
-        }
-      } catch (error) {
-        console.error("Failed to load saved agents", error);
+    let cancelled = false;
+    tauri.listAgentSpecs().then((specs) => {
+      if (cancelled) return;
+      const typed = specs as AgentSpec[];
+      setAgentSpecs(typed);
+      if (typed.length > 0) {
+        setSelectedAgentId((prev) => prev || typed[0].id);
       }
-    };
-
-    void loadSpecs();
+    }).catch((error) => console.error("Failed to load saved agents", error));
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     void hydrateLongChatHistory();
   }, [hydrateLongChatHistory]);
 
-  useEffect(() => {
-    if (!reasoningOptions.length) {
-      setReasoningEffort(undefined);
-      return;
+  // Derive reasoning effort from options + user override — no effect needed
+  const reasoningEffort = useMemo(() => {
+    if (!stableReasoningOptions.length) return undefined;
+    if (reasoningEffortOverride && stableReasoningOptions.includes(reasoningEffortOverride)) {
+      return reasoningEffortOverride;
     }
+    return stableReasoningOptions.includes("medium") ? "medium" : stableReasoningOptions[0];
+  }, [stableReasoningOptions, reasoningEffortOverride]);
 
-    setReasoningEffort((current) => {
-      if (current && reasoningOptions.includes(current)) return current;
-      return reasoningOptions.includes("medium") ? "medium" : reasoningOptions[0];
-    });
-  }, [reasoningOptions]);
-
+  // ─── Scroll management — coalesced via rAF ─────────────────────────
+  const scrollRafRef = useRef<number | null>(null);
   useEffect(() => {
     const prevLength = prevMessagesLengthRef.current;
     const currentLength = messages.length;
     prevMessagesLengthRef.current = currentLength;
 
     if (currentLength > prevLength) {
-      // New message added — scroll to its top so the user reads from the beginning
       latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
-      // Streaming/runtime update — avoid repeated smooth-scroll animation on every tick.
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      if (scrollRafRef.current != null) return;
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = null;
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      });
     }
+    return () => {
+      if (scrollRafRef.current != null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+    };
   }, [messages]);
 
-  const handleModelSelect = async (modelId: string) => {
+  // ─── Stable callbacks ──────────────────────────────────────────────
+  const handleModelSelect = useCallback(async (modelId: string) => {
     setCurrentModelId(modelId);
     try {
       await tauri.setSelectedModel(modelId);
     } catch (error) {
       console.error("Failed to persist model selection", error);
     }
-  };
+  }, []);
 
-  const focusComposer = () => {
-    textareaRef.current?.focus();
-  };
-
-  const applyPrompt = (prompt: string) => {
+  const applyPrompt = useCallback((prompt: string) => {
     setInput(prompt);
-    window.requestAnimationFrame(focusComposer);
-  };
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     const instruction = input.trim();
     if (!instruction || isProcessing) return;
 
@@ -195,37 +280,27 @@ export function AgentChatPanel({
       currentModelId,
       workspacePath,
       selectedAgentId || undefined,
-      reasoningOptions.length ? reasoningEffort : undefined,
+      stableReasoningOptions.length ? reasoningEffort : undefined,
     );
-  };
+  }, [input, isProcessing, runNativeAgent, currentModelId, workspacePath, selectedAgentId, stableReasoningOptions, reasoningEffort]);
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void handleSubmit();
     }
-  };
+  }, [handleSubmit]);
 
-  const renderComposer = (centered: boolean) => (
-    <ChatComposer
-      input={input}
-      onInputChange={setInput}
-      onKeyDown={handleKeyDown}
-      onSubmit={() => void handleSubmit()}
-      disabled={isProcessing}
-      textareaRef={textareaRef}
-      currentModelId={currentModelId}
-      onSelectModel={handleModelSelect}
-      onModelResolved={setSelectedModel}
-      selectedAgentId={selectedAgentId}
-      onSelectAgent={setSelectedAgentId}
-      agentSpecs={agentSpecs}
-      reasoningOptions={reasoningOptions}
-      reasoningEffort={reasoningEffort}
-      onSelectReasoningEffort={setReasoningEffort}
-      centered={centered}
-    />
-  );
+  const handleNewChat = useCallback(() => {
+    void clearMessagesAndContext(workspacePath);
+  }, [clearMessagesAndContext, workspacePath]);
+
+  const handleComposerSubmit = useCallback(() => {
+    void handleSubmit();
+  }, [handleSubmit]);
+
+  // ─── Render ────────────────────────────────────────────────────────
+  const hasMessages = messages.length > 0;
 
   return (
     <div className={cn("relative h-full w-full overflow-hidden bg-transparent text-foreground", className)}>
@@ -239,7 +314,7 @@ export function AgentChatPanel({
         activeFolderId={activeFolderId}
         onSelectFolder={onSelectWorkspace}
         onAddFolder={onAddWorkspace}
-        onNewChat={() => void clearMessagesAndContext(workspacePath)}
+        onNewChat={handleNewChat}
         onClearUi={clearMessages}
         onOpenSettings={onOpenSettings}
       />
@@ -247,11 +322,11 @@ export function AgentChatPanel({
       <ScrollArea className="absolute inset-0 z-10 h-full w-full">
         <div
           className={cn(
-            "mx-auto flex w-full max-w-6xl flex-col px-4 transition-all duration-300 md:px-6",
-            messages.length === 0 ? "min-h-full justify-center pb-12 pt-16" : "min-h-full pb-44 pt-24",
+            "mx-auto flex w-full max-w-6xl flex-col px-4 md:px-6",
+            hasMessages ? "min-h-full pb-44 pt-24" : "min-h-full justify-center pb-12 pt-16",
           )}
         >
-          {messages.length === 0 ? (
+          {!hasMessages ? (
             <div className="flex flex-1 flex-col items-center justify-center">
               <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-black/5 bg-background shadow-sm dark:border-white/10 dark:bg-background/20">
                 <Sparkles className="size-5 text-primary" />
@@ -267,88 +342,41 @@ export function AgentChatPanel({
               </div>
 
               <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md"
-                >
+                <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
                   Single persistent scope
                 </Badge>
-                <Badge
-                  variant="outline"
-                  className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md"
-                >
+                <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
                   GPT-5 Nano titles
                 </Badge>
-                <Badge
-                  variant="outline"
-                  className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md"
-                >
+                <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
                   Dynamic chats next
                 </Badge>
               </div>
 
-              <div className="mb-8 flex w-full max-w-2xl flex-col gap-2.5 px-2 md:flex-row">
-                {PROMPTS.map(({ accent, icon: Icon, prompt, title }) => (
-                  <button
-                    key={title}
-                    type="button"
-                    onClick={() => applyPrompt(prompt)}
-                    className="group relative flex-1 overflow-hidden rounded-2xl border border-white/10 bg-background/66 p-4 text-left shadow-sm transition-colors hover:bg-white/5"
-                  >
-                    <div className="relative z-10 flex h-full flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <div
-                          className={cn(
-                            "flex size-8 items-center justify-center rounded-xl bg-white/10",
-                            accent,
-                          )}
-                        >
-                          <Icon className="size-3.5" />
-                        </div>
-                        <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60">
-                          Explore
-                        </span>
-                      </div>
-                      <p className="text-xs font-medium leading-relaxed tracking-[-0.01em] text-foreground/90">
-                        {title}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              <EmptyStatePrompts onApplyPrompt={applyPrompt} />
 
-              {renderComposer(true)}
+              <ChatComposer
+                input={input}
+                onInputChange={setInput}
+                onKeyDown={handleKeyDown}
+                onSubmit={handleComposerSubmit}
+                disabled={isProcessing}
+                textareaRef={textareaRef}
+                currentModelId={currentModelId}
+                onSelectModel={handleModelSelect}
+                onModelResolved={setSelectedModel}
+                selectedAgentId={selectedAgentId}
+                onSelectAgent={setSelectedAgentId}
+                agentSpecs={agentSpecs}
+                reasoningOptions={stableReasoningOptions}
+                reasoningEffort={reasoningEffort}
+                onSelectReasoningEffort={setReasoningEffortOverride}
+                centered
+              />
             </div>
           ) : (
             <div className="space-y-8">
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-                >
-                  History: {latestTelemetry?.historySource || "persisted_long_chat"}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-                >
-                  Retrieval: {latestTelemetry?.retrievalMode || "unavailable"}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-                >
-                  Embedding: {latestTelemetry?.embeddingProfile || "gemini-embedding-2-preview"}
-                </Badge>
-                {latestTelemetry?.compressionApplied && (
-                  <Badge
-                    variant="outline"
-                    className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-                  >
-                    Compression @{latestTelemetry.compressionTriggerTokens || 80000}
-                  </Badge>
-                )}
-              </div>
+              <TelemetryBar telemetry={latestTelemetry} />
 
               {hasMoreHistory && (
                 <div className="flex justify-center">
@@ -366,7 +394,7 @@ export function AgentChatPanel({
 
               {messages.map((message, index) => (
                 <div key={message.id} ref={index === messages.length - 1 ? latestMessageRef : undefined}>
-                  <MessageBubble
+                  <MemoizedMessageBubble
                     message={message}
                     currentPlan={currentPlan}
                     isExecuting={isExecuting}
@@ -384,9 +412,28 @@ export function AgentChatPanel({
         </div>
       </ScrollArea>
 
-      {messages.length > 0 && (
+      {hasMessages && (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 px-4 md:px-6">
-          <div className="pointer-events-auto mx-auto w-full max-w-6xl">{renderComposer(false)}</div>
+          <div className="pointer-events-auto mx-auto w-full max-w-6xl">
+            <ChatComposer
+              input={input}
+              onInputChange={setInput}
+              onKeyDown={handleKeyDown}
+              onSubmit={handleComposerSubmit}
+              disabled={isProcessing}
+              textareaRef={textareaRef}
+              currentModelId={currentModelId}
+              onSelectModel={handleModelSelect}
+              onModelResolved={setSelectedModel}
+              selectedAgentId={selectedAgentId}
+              onSelectAgent={setSelectedAgentId}
+              agentSpecs={agentSpecs}
+              reasoningOptions={stableReasoningOptions}
+              reasoningEffort={reasoningEffort}
+              onSelectReasoningEffort={setReasoningEffortOverride}
+              centered={false}
+            />
+          </div>
         </div>
       )}
     </div>

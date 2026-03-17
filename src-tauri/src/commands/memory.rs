@@ -523,6 +523,77 @@ pub async fn query_agent_memory(
     Ok(results)
 }
 
+// ─── Memory Vault Explorer Commands ───────────────────────────────────
+
+#[tauri::command]
+pub async fn list_vault_entries(
+    manager: State<'_, MemoryManagerState>,
+    workspace_id: Option<String>,
+    sensitivity: Option<String>,
+    source_prefix: Option<String>,
+    created_after: Option<i64>,
+    created_before: Option<i64>,
+    order_by: Option<String>,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<crate::services::memory_vault::types::PaginatedEntries, String> {
+    let vault = manager.0.vault().await.map_err(|e| e.to_string())?;
+    vault
+        .list_filtered(crate::services::memory_vault::types::ListFilteredOpts {
+            workspace_id,
+            sensitivity,
+            source_prefix,
+            created_after,
+            created_before,
+            order_by,
+            limit,
+            offset,
+        })
+        .await
+}
+
+#[tauri::command]
+pub async fn list_memory_workspaces(
+    manager: State<'_, MemoryManagerState>,
+) -> Result<Vec<crate::services::memory_vault::types::WorkspaceSummary>, String> {
+    let vault = manager.0.vault().await.map_err(|e| e.to_string())?;
+    vault.list_workspaces().await
+}
+
+#[tauri::command]
+pub async fn get_vault_detailed_stats(
+    manager: State<'_, MemoryManagerState>,
+    workspace_id: Option<String>,
+) -> Result<crate::services::memory_vault::types::VaultDetailedStats, String> {
+    let vault = manager.0.vault().await.map_err(|e| e.to_string())?;
+    vault.detailed_stats(workspace_id.as_deref()).await
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteBatchResult {
+    pub deleted: u64,
+}
+
+#[tauri::command]
+pub async fn delete_vault_entries_batch(
+    manager: State<'_, MemoryManagerState>,
+    ids: Vec<String>,
+) -> Result<DeleteBatchResult, String> {
+    let vault = manager.0.vault().await.map_err(|e| e.to_string())?;
+    let deleted = vault.delete_batch(&ids).await?;
+    Ok(DeleteBatchResult { deleted })
+}
+
+#[tauri::command]
+pub async fn clear_workspace_vault(
+    manager: State<'_, MemoryManagerState>,
+    workspace_id: String,
+) -> Result<DeleteBatchResult, String> {
+    let vault = manager.0.vault().await.map_err(|e| e.to_string())?;
+    vault.delete_workspace(&workspace_id).await?;
+    Ok(DeleteBatchResult { deleted: 0 })
+}
+
 fn extract_tag_value(tags: &[String], key: &str) -> Option<String> {
     let prefix = format!("{}:", key);
     tags.iter()

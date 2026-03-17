@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ChevronDown, Brain, Clock } from "lucide-react";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
@@ -12,7 +12,39 @@ interface ThoughtDisplayProps {
   durationMs?: number;
 }
 
-export function ThoughtDisplay({
+const LEVEL_COLORS: Record<string, string> = {
+  minimal: "text-slate-500",
+  low: "text-blue-500",
+  medium: "text-amber-500",
+  high: "text-purple-500",
+};
+
+const BG_COLORS: Record<string, string> = {
+  minimal: "bg-slate-500",
+  low: "bg-blue-500",
+  medium: "bg-amber-500",
+  high: "bg-purple-500",
+};
+
+/** Hook that tracks elapsed ms while active, updating every 100ms via interval callback. */
+function useElapsedTimer(active: boolean): number {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!active) return;
+    const start = performance.now();
+    startRef.current = start;
+    const interval = setInterval(() => {
+      setElapsed(Math.round(performance.now() - start));
+    }, 100);
+    return () => clearInterval(interval);
+  }, [active]);
+
+  return elapsed;
+}
+
+export const ThoughtDisplay = React.memo(function ThoughtDisplay({
   thought,
   thinkingLevel = "medium",
   modelName,
@@ -20,60 +52,30 @@ export function ThoughtDisplay({
   isStreaming = false,
   durationMs,
 }: ThoughtDisplayProps) {
-  // Default to expanded if currently streaming
-  const [isExpanded, setIsExpanded] = useState(isStreaming);
-  const [elapsed, setElapsed] = useState(0);
+  // User can toggle; streaming auto-opens via derived initial state
+  const [userClosed, setUserClosed] = useState(false);
+  const isExpanded = isStreaming ? !userClosed : false;
+  const elapsed = useElapsedTimer(isStreaming);
 
-  // Auto-expand and track time during streaming
-  useEffect(() => {
-    if (isStreaming) {
-      setIsExpanded(true);
-      const start = Date.now();
-      const interval = setInterval(() => {
-        setElapsed(Date.now() - start);
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [isStreaming]);
+  const handleOpenChange = (open: boolean) => {
+    setUserClosed(!open);
+  };
 
-  // Use provided duration (if finished) or local elapsed (if streaming)
   const displayTime = durationMs || (isStreaming ? elapsed : null);
 
-  const formatTime = (ms: number) => {
-    return (ms / 1000).toFixed(1) + "s";
-  };
-
-  // Use modelName if available
+  const currentLevelColor = LEVEL_COLORS[thinkingLevel] || LEVEL_COLORS.medium;
+  const currentBgColor = BG_COLORS[thinkingLevel] || BG_COLORS.medium;
   const headerTitle = modelName ? `${modelName} Thinking` : "Thinking Process";
-
-  const levelColor: Record<string, string> = {
-    minimal: "text-slate-500",
-    low: "text-blue-500",
-    medium: "text-amber-500",
-    high: "text-purple-500",
-  };
-
-  const bgColor: Record<string, string> = {
-    minimal: "bg-slate-500",
-    low: "bg-blue-500",
-    medium: "bg-amber-500",
-    high: "bg-purple-500",
-  };
-
-  const currentLevelColor = levelColor[thinkingLevel] || levelColor.medium;
-  const currentBgColor = bgColor[thinkingLevel] || bgColor.medium;
 
   return (
     <Collapsible
       open={isExpanded}
-      onOpenChange={setIsExpanded}
+      onOpenChange={handleOpenChange}
       className={`w-full font-sans ${className}`}
     >
       <div className="flex items-center gap-2 group select-none py-2">
         <CollapsibleTrigger>
-          <div
-            className={`p-1 rounded-md bg-opacity-10 ${currentBgColor} transition-colors cursor-pointer`}
-          >
+          <div className={`p-1 rounded-md bg-opacity-10 ${currentBgColor} transition-colors cursor-pointer`}>
             <Brain className={`size-3.5 ${currentLevelColor}`} />
           </div>
         </CollapsibleTrigger>
@@ -84,10 +86,10 @@ export function ThoughtDisplay({
           </span>
         </CollapsibleTrigger>
 
-        {displayTime && (
+        {displayTime != null && displayTime > 0 && (
           <span className="text-xs text-muted-foreground font-mono flex items-center gap-1 ml-1 bg-muted/30 px-1.5 py-0.5 rounded">
             <Clock className="size-3" />
-            {formatTime(displayTime)}
+            {(displayTime / 1000).toFixed(1)}s
           </span>
         )}
 
@@ -118,38 +120,22 @@ export function ThoughtDisplay({
       </CollapsibleContent>
     </Collapsible>
   );
-}
+});
 
-export function ThoughtBadge({
+export const ThoughtBadge = React.memo(function ThoughtBadge({
   thinkingLevel = "medium",
 }: {
   thinkingLevel?: string;
 }) {
-  const levelColor: Record<string, string> = {
-    minimal: "text-slate-500",
-    low: "text-blue-500",
-    medium: "text-amber-500",
-    high: "text-purple-500",
-  };
-
-  const bgColor: Record<string, string> = {
-    minimal: "bg-slate-500",
-    low: "bg-blue-500",
-    medium: "bg-amber-500",
-    high: "bg-purple-500",
-  };
-
-  const currentLevelColor = levelColor[thinkingLevel] || levelColor.medium;
-  const currentBgColor = bgColor[thinkingLevel] || bgColor.medium;
+  const currentLevelColor = LEVEL_COLORS[thinkingLevel] || LEVEL_COLORS.medium;
+  const currentBgColor = BG_COLORS[thinkingLevel] || BG_COLORS.medium;
 
   return (
-    <div
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-opacity-10 ${currentBgColor}`}
-    >
+    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-opacity-10 ${currentBgColor}`}>
       <Brain className={`size-3 ${currentLevelColor}`} />
       <span className={`text-[10px] font-medium ${currentLevelColor}`}>
         Thinking
       </span>
     </div>
   );
-}
+});

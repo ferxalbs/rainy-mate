@@ -84,6 +84,8 @@ mod tests {
                 "test-persisted",
                 temp_dir_mem.path().to_path_buf(),
                 memory_manager,
+                None,
+                None,
             )
             .await,
         );

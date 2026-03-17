@@ -40,6 +40,8 @@ export function useAgentChat() {
   const forgeRecordingIdRef = useRef<string | null>(null);
   const isHydratingRef = useRef(false);
   const hasHydratedRef = useRef(false);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   const { streamWithRouting } = useStreaming();
   const { createTask } = useTauriTask();
@@ -1262,7 +1264,7 @@ export function useAgentChat() {
   );
 
   const stopAgentRun = useCallback(async (messageId: string) => {
-    const target = messages.find((m) => m.id === messageId);
+    const target = messagesRef.current.find((m) => m.id === messageId);
     const runId = target?.requestContext?.runId;
     if (!runId) return;
     try {
@@ -1287,10 +1289,10 @@ export function useAgentChat() {
     } catch (error) {
       console.error("Failed to cancel run", error);
     }
-  }, [createTraceEntry, messages]);
+  }, [createTraceEntry]);
 
   const retryAgentRun = useCallback(async (messageId: string) => {
-    const target = messages.find((m) => m.id === messageId);
+    const target = messagesRef.current.find((m) => m.id === messageId);
     if (!target?.requestContext?.prompt) return;
     await runNativeAgent(
       target.requestContext.prompt,
@@ -1299,7 +1301,7 @@ export function useAgentChat() {
       target.requestContext.agentSpecId,
       target.requestContext.reasoningEffort,
     );
-  }, [messages, runNativeAgent]);
+  }, [runNativeAgent]);
 
   return {
     messages,

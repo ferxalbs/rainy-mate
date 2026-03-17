@@ -341,19 +341,19 @@ impl WorkflowStep for ThinkStep {
             })
             .collect();
 
-        // 1.5. Persist user input to long-term memory
+        // 1.5. Push user input to distillation buffer for intelligent extraction
         if let Some(last_user_msg) = state.messages.iter().rfind(|m| m.role == "user") {
             let user_text = last_user_msg.content.as_text();
             if !user_text.is_empty() && user_text.len() > 10 {
-                let mut metadata = std::collections::HashMap::new();
-                metadata.insert("role".to_string(), "user".to_string());
                 state
                     .memory
-                    .store(
-                        user_text.chars().take(1000).collect::<String>(),
-                        "agent_conversation".to_string(),
-                        Some(metadata),
-                    )
+                    .push_for_distillation(crate::services::memory_vault::types::RawMemoryTurn {
+                        content: user_text.chars().take(2000).collect(),
+                        role: "user".to_string(),
+                        source: "agent_conversation".to_string(),
+                        workspace_id: state.workspace_id.clone(),
+                        timestamp: chrono::Utc::now().timestamp(),
+                    })
                     .await;
             }
         }
@@ -821,19 +821,18 @@ impl WorkflowStep for ActStep {
                     true
                 };
 
-                if allowed {
-                    let mut metadata = std::collections::HashMap::new();
-                    metadata.insert("tool".to_string(), function_name.clone());
-                    metadata.insert("role".to_string(), "tool_result".to_string());
+                if allowed && !crate::services::memory_vault::distiller::MemoryDistiller::is_readonly_tool(&function_name) {
                     let content_preview: String = final_output.chars().take(2000).collect();
                     if !content_preview.is_empty() {
                         state
                             .memory
-                            .store(
-                                content_preview,
-                                format!("tool:{}", function_name),
-                                Some(metadata),
-                            )
+                            .push_for_distillation(crate::services::memory_vault::types::RawMemoryTurn {
+                                content: content_preview,
+                                role: "tool_result".to_string(),
+                                source: format!("tool:{}", function_name),
+                                workspace_id: state.workspace_id.clone(),
+                                timestamp: chrono::Utc::now().timestamp(),
+                            })
                             .await;
                     }
                 }
@@ -954,7 +953,7 @@ mod tests {
         ));
         memory_manager.init().await;
         let memory = Arc::new(
-            AgentMemory::new("test-ws", temp_dir.path().to_path_buf(), memory_manager).await,
+            AgentMemory::new("test-ws", temp_dir.path().to_path_buf(), memory_manager, None, None).await,
         );
 
         let state = AgentState::new(

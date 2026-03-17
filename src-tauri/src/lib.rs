@@ -542,6 +542,12 @@ pub fn run() {
             commands::is_short_term_memory_empty,
             commands::index_knowledge_file,
             commands::query_agent_memory,
+            // Memory Vault Explorer commands
+            commands::list_vault_entries,
+            commands::list_memory_workspaces,
+            commands::get_vault_detailed_stats,
+            commands::delete_vault_entries_batch,
+            commands::clear_workspace_vault,
             // Settings commands
             commands::get_user_settings,
             commands::get_selected_model,

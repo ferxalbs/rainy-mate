@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
-import { motion } from "framer-motion";
+// framer-motion removed — CSS animations only for perf
 import type { AgentMessage, TaskPlan } from "../../types/agent";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { PlanConfirmationCard } from "./PlanConfirmationCard";
@@ -153,16 +153,12 @@ function MessageBubbleComponent({
                 : "bg-white/40 dark:bg-white/5 border border-white/10 text-foreground backdrop-blur-md rounded-bl-sm"
           }`}
         >
-          {/* Animated Background for Active States */}
+          {/* Animated Background for Active States — CSS only */}
           {!isUser && neuralState !== "idle" && (
             <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[20px]">
               <div className="absolute inset-0 bg-primary/5" />
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: [0.1, 0.3, 0.1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent skew-x-12 translate-x-[-100%]"
-                style={{ translateX: "-100%" }}
+              <div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent skew-x-12 animate-[shimmer_2s_ease-in-out_infinite]"
               />
             </div>
           )}
@@ -276,8 +272,8 @@ function MessageBubbleComponent({
               <p>Changes made: {message.result.totalChanges}</p>
               {message.result.errors.length > 0 && (
                 <div className="mt-2 p-2 bg-red-500/10 text-red-500 rounded text-xs">
-                  {message.result.errors.map((e, i) => (
-                    <div key={i}>{e}</div>
+                  {message.result.errors.map((e) => (
+                    <div key={e}>{e}</div>
                   ))}
                 </div>
               )}
@@ -314,12 +310,11 @@ export const MessageBubble = React.memo(
   (prev, next) =>
     prev.message === next.message &&
     prev.isExecuting === next.isExecuting &&
-    prev.workspaceId === next.workspaceId &&
-    prev.onExecute === next.onExecute &&
-    prev.onExecuteToolCalls === next.onExecuteToolCalls &&
-    prev.onStopRun === next.onStopRun &&
-    prev.onRetryRun === next.onRetryRun,
+    prev.workspaceId === next.workspaceId,
 );
+
+// Re-export with a name hint for the parent to avoid confusion
+export { MessageBubble as MemoizedMessageBubble };
 
 function SupervisorRail({
   summary,
@@ -352,8 +347,10 @@ function SupervisorRail({
 
   const formatDuration = (specialist: SpecialistRunState) => {
     if (!specialist.startedAtMs) return null;
-    const end = specialist.finishedAtMs ?? Date.now();
-    const elapsedMs = Math.max(0, end - specialist.startedAtMs);
+    // Use finishedAtMs when available; for running specialists show nothing
+    // to avoid impure Date.now() calls during render
+    if (!specialist.finishedAtMs) return null;
+    const elapsedMs = Math.max(0, specialist.finishedAtMs - specialist.startedAtMs);
     if (elapsedMs < 1000) return `${elapsedMs}ms`;
     return `${(elapsedMs / 1000).toFixed(1)}s`;
   };
@@ -371,9 +368,9 @@ function SupervisorRail({
 
       {steps.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
-          {steps.map((step, index) => (
+          {steps.map((step) => (
             <span
-              key={`${index}-${step}`}
+              key={step}
               className="rounded-full border border-border/40 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground"
             >
               {step}
@@ -531,11 +528,11 @@ function PlanCard({
       </div>
 
       <div className="space-y-2">
-        {plan.steps.map((step, idx) => {
+        {plan.steps.map((step) => {
           const Icon = stepIcons[step.type] || stepIcons.default;
           return (
             <div
-              key={idx}
+              key={`${step.type}-${step.description}`}
               className="flex gap-3 items-start text-xs p-2 rounded bg-background/40 hover:bg-background/80 transition-colors border border-transparent hover:border-border/30"
             >
               <Icon className="size-3.5 mt-0.5 text-muted-foreground shrink-0" />
@@ -549,8 +546,8 @@ function PlanCard({
         <div className="bg-orange-500/10 text-orange-600 dark:text-orange-400 p-3 rounded-lg text-xs space-y-1">
           <p className="font-semibold flex items-center gap-1">⚠️ Warnings</p>
           <ul className="list-disc list-inside opacity-90">
-            {plan.warnings.map((w, i: number) => (
-              <li key={i}>{w}</li>
+            {plan.warnings.map((w) => (
+              <li key={w}>{w}</li>
             ))}
           </ul>
         </div>
@@ -571,8 +568,8 @@ function PlanCard({
   );
 }
 
-// Neural Status Component
-const NeuralStatus = ({
+// Neural Status Component — CSS animations only
+const NeuralStatus = React.memo(({
   state,
   toolName,
 }: {
@@ -590,25 +587,16 @@ const NeuralStatus = ({
       </div>
       <div className="flex flex-col gap-0.5">
         <span className="text-sm font-medium">{toolName || config.text}</span>
-        {/* Animated progress bar */}
         <div className="flex gap-0.5 h-1 mt-1 overflow-hidden rounded-full w-16">
-          {[0, 1, 2, 3].map((i) => (
-            <motion.div
-              key={i}
-              animate={{
-                opacity: [0.2, 0.8, 0.2],
-              }}
-              transition={{
-                duration: 1.2,
-                repeat: Infinity,
-                delay: i * 0.15,
-                ease: "easeInOut",
-              }}
-              className={`flex-1 h-full rounded-full ${config.bgColor}`}
+          {[0, 1, 2, 3].map((barIndex) => (
+            <div
+              key={`neural-bar-${barIndex}`}
+              className={`flex-1 h-full rounded-full ${config.bgColor} animate-[neural-bar_1.2s_ease-in-out_infinite]`}
+              style={{ animationDelay: `${barIndex * 0.15}s` }}
             />
           ))}
         </div>
       </div>
     </div>
   );
-};
+});
