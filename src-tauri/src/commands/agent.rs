@@ -1,5 +1,6 @@
 use crate::ai::agent::runtime::{AgentContent, AgentMessage, AgentRuntime, RuntimeOptions};
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
+use crate::ai::specs::manifest::RuntimeMode;
 use crate::ai::specs::AgentSpec;
 use crate::ai::{
     agent::context_window::ContextWindow,
@@ -12,6 +13,7 @@ use crate::ai::{
 };
 use crate::commands::ai_providers::ProviderRegistryState;
 use crate::commands::airlock::AirlockServiceState;
+use crate::commands::agent_frontend_events::{FrontendAgentEvent, FrontendEventProjector};
 use crate::commands::memory::MemoryManagerState;
 use crate::commands::router::IntelligentRouterState;
 use crate::services::agent_kill_switch::AgentKillSwitch;
@@ -19,7 +21,7 @@ use crate::services::agent_run_control::{AgentRunControl, CancelRunResult};
 use crate::services::SkillExecutor;
 use chrono::Utc;
 use serde::Serialize;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{Emitter, Manager, State};
 
 const MAX_HISTORY_MESSAGE_CHARS: usize = 12_000;
@@ -30,13 +32,12 @@ const MAX_COMPACTION_SUMMARY_CHARS: usize = 12_000;
 const CHAT_TITLE_MODEL_ID: &str = "openai/gpt-5-nano";
 const MAX_CHAT_TITLE_CHARS: usize = 72;
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct FrontendAgentEvent {
-    run_id: String,
-    timestamp_ms: i64,
-    #[serde(flatten)]
-    payload: AgentEvent,
+fn default_runtime_mode_for_chat(agent_spec_id: Option<&str>) -> RuntimeMode {
+    if agent_spec_id.is_some() {
+        RuntimeMode::Single
+    } else {
+        RuntimeMode::Supervisor
+    }
 }
 
 #[derive(Serialize)]
@@ -543,7 +544,8 @@ pub async fn run_agent_workflow(
 
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
-    let spec = if let Some(spec_id) = agent_spec_id {
+    let selected_spec_id = agent_spec_id.clone();
+    let mut spec = if let Some(spec_id) = selected_spec_id.clone() {
         // Try DB first, then fall back to file-based spec storage
         let db_spec = match agent_manager.get_agent_spec(&spec_id).await {
             Ok(Some(s)) => Some(s),
@@ -622,7 +624,10 @@ pub async fn run_agent_workflow(
             airlock: Default::default(),
             memory_config: Default::default(),
             connectors: Default::default(),
-            runtime: Default::default(),
+            runtime: crate::ai::specs::manifest::RuntimeConfig {
+                mode: default_runtime_mode_for_chat(selected_spec_id.as_deref()),
+                ..Default::default()
+            },
             model: None,
             temperature: None,
             max_tokens: None,
@@ -630,6 +635,12 @@ pub async fn run_agent_workflow(
             signature: None,
         }
     };
+
+    if selected_spec_id.is_none() {
+        spec.runtime.mode = default_runtime_mode_for_chat(None);
+        spec.runtime.max_specialists = spec.runtime.max_specialists.clamp(2, 3);
+        spec.runtime.verification_required = true;
+    }
 
     // Extract allowed paths from spec. If absent, derive a safe local default
     // from the provided workspace identifier when it looks like an absolute path.
@@ -753,6 +764,7 @@ pub async fn run_agent_workflow(
     let agent_manager_clone = agent_manager.inner().clone();
     let chat_id_for_events = chat_id.clone();
     let run_id_for_events = run_id.clone();
+    let frontend_event_projector = Arc::new(StdMutex::new(FrontendEventProjector::default()));
 
     // Persist Initial User Prompt
     let _ = agent_manager
@@ -760,54 +772,81 @@ pub async fn run_agent_workflow(
         .await
         .map_err(|e| format!("Failed to save user message: {}", e))?;
 
+    let frontend_event_projector_for_events = frontend_event_projector.clone();
     let response_result = runtime
         .run(&prompt, move |event| {
-            // Emit to frontend
-            let _ = app_handle_clone.emit(
-                "agent://event",
-                FrontendAgentEvent {
-                    run_id: run_id_for_events.clone(),
-                    timestamp_ms: Utc::now().timestamp_millis(),
-                    payload: event.clone(),
-                },
-            );
-            if let AgentEvent::Status(text) = event {
-                if text.starts_with("RAG_TELEMETRY:") {
-                    if let Ok(value) =
-                        serde_json::from_str::<serde_json::Value>(&text["RAG_TELEMETRY:".len()..])
-                    {
-                        let history_source = value
-                            .get("history_source")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("persisted_long_chat")
-                            .to_string();
-                        let retrieval_mode = value
-                            .get("retrieval_mode")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("unavailable")
-                            .to_string();
-                        let embedding_profile = value
-                            .get("embedding_profile")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(crate::services::memory_vault::types::EMBEDDING_MODEL)
-                            .to_string();
-                        let manager = agent_manager_clone.clone();
-                        let chat_id = chat_id_for_events.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = manager
-                                .upsert_chat_runtime_telemetry(
-                                    &chat_id,
-                                    &history_source,
-                                    &retrieval_mode,
-                                    &embedding_profile,
-                                )
-                                .await;
-                        });
+            let projected_events = {
+                let mut projector = frontend_event_projector_for_events
+                    .lock()
+                    .expect("frontend event projector poisoned");
+                projector.project(&event)
+            };
+
+            for projected_event in projected_events {
+                let _ = app_handle_clone.emit(
+                    "agent://event",
+                    FrontendAgentEvent {
+                        run_id: run_id_for_events.clone(),
+                        timestamp_ms: Utc::now().timestamp_millis(),
+                        payload: projected_event.clone(),
+                    },
+                );
+
+                if let AgentEvent::Status(text) = projected_event {
+                    if text.starts_with("RAG_TELEMETRY:") {
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(
+                            &text["RAG_TELEMETRY:".len()..],
+                        ) {
+                            let history_source = value
+                                .get("history_source")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("persisted_long_chat")
+                                .to_string();
+                            let retrieval_mode = value
+                                .get("retrieval_mode")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unavailable")
+                                .to_string();
+                            let embedding_profile = value
+                                .get("embedding_profile")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(crate::services::memory_vault::types::EMBEDDING_MODEL)
+                                .to_string();
+                            let manager = agent_manager_clone.clone();
+                            let chat_id = chat_id_for_events.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = manager
+                                    .upsert_chat_runtime_telemetry(
+                                        &chat_id,
+                                        &history_source,
+                                        &retrieval_mode,
+                                        &embedding_profile,
+                                    )
+                                    .await;
+                            });
+                        }
                     }
                 }
             }
         })
         .await;
+
+    let pending_projected_events = {
+        let mut projector = frontend_event_projector
+            .lock()
+            .expect("frontend event projector poisoned");
+        projector.flush_pending()
+    };
+    for projected_event in pending_projected_events {
+        let _ = app_handle.emit(
+            "agent://event",
+            FrontendAgentEvent {
+                run_id: run_id.clone(),
+                timestamp_ms: Utc::now().timestamp_millis(),
+                payload: projected_event,
+            },
+        );
+    }
 
     run_control.unregister_run(&run_id).await;
     let response = response_result?;

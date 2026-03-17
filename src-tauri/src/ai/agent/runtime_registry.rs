@@ -6,10 +6,34 @@ use tokio::sync::RwLock;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SpecialistRunSnapshot {
+    pub agent_id: String,
+    pub role: SpecialistRole,
+    pub status: SpecialistStatus,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_tool: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finished_at_ms: Option<i64>,
+    pub tool_count: u32,
+    pub write_like_used: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SupervisorRunSnapshot {
     pub run_id: String,
     pub status: String,
     pub specialist_count: usize,
+    pub completed_specialists: usize,
+    pub failed_specialists: usize,
+    #[serde(default)]
+    pub specialists: Vec<SpecialistRunSnapshot>,
 }
 
 #[derive(Clone, Debug, Serialize, Default)]
@@ -30,10 +54,39 @@ pub struct RuntimeStatsSnapshot {
     pub tool_usage_by_role: ToolUsageByRole,
 }
 
+#[derive(Clone, Debug)]
+struct ActiveSpecialistRun {
+    role: SpecialistRole,
+    status: SpecialistStatus,
+    depends_on: Vec<String>,
+    detail: Option<String>,
+    active_tool: Option<String>,
+    started_at_ms: Option<i64>,
+    finished_at_ms: Option<i64>,
+    tool_count: u32,
+    write_like_used: bool,
+}
+
+impl Default for ActiveSpecialistRun {
+    fn default() -> Self {
+        Self {
+            role: SpecialistRole::Research,
+            status: SpecialistStatus::Pending,
+            depends_on: Vec::new(),
+            detail: None,
+            active_tool: None,
+            started_at_ms: None,
+            finished_at_ms: None,
+            tool_count: 0,
+            write_like_used: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct ActiveSupervisorRun {
     status: String,
-    specialists: HashMap<String, SpecialistRole>,
+    specialists: HashMap<String, ActiveSpecialistRun>,
 }
 
 #[derive(Default)]
@@ -52,16 +105,25 @@ impl RuntimeRegistry {
         Self::default()
     }
 
-    pub async fn start_supervisor_run(&self, run_id: &str, specialist_roles: &[SpecialistRole]) {
+    pub async fn start_supervisor_run(&self, run_id: &str, assignments: &[(String, SpecialistRole, Vec<String>)]) {
         let mut state = self.state.write().await;
         state.supervisors.insert(
             run_id.to_string(),
             ActiveSupervisorRun {
                 status: "planning".to_string(),
-                specialists: specialist_roles
+                specialists: assignments
                     .iter()
-                    .enumerate()
-                    .map(|(idx, role)| (format!("{}-{}", role.as_str(), idx + 1), role.clone()))
+                    .map(|(agent_id, role, depends_on)| {
+                        (
+                            agent_id.clone(),
+                            ActiveSpecialistRun {
+                                role: role.clone(),
+                                status: SpecialistStatus::Pending,
+                                depends_on: depends_on.clone(),
+                                ..Default::default()
+                            },
+                        )
+                    })
                     .collect(),
             },
         );
@@ -80,16 +142,43 @@ impl RuntimeRegistry {
         agent_id: &str,
         role: &SpecialistRole,
         status: &SpecialistStatus,
+        depends_on: &[String],
+        detail: Option<String>,
+        active_tool: Option<String>,
+        started_at_ms: Option<i64>,
+        finished_at_ms: Option<i64>,
+        tool_count: Option<u32>,
+        write_like_used: Option<bool>,
     ) {
         let mut state = self.state.write().await;
         if let Some(run) = state.supervisors.get_mut(run_id) {
-            if matches!(status, SpecialistStatus::Cancelled | SpecialistStatus::Failed | SpecialistStatus::Completed) {
-                run.specialists.insert(agent_id.to_string(), role.clone());
-            } else {
-                run.specialists.insert(agent_id.to_string(), role.clone());
-                if status == &SpecialistStatus::Running {
-                    run.status = "running".to_string();
-                }
+            let specialist = run
+                .specialists
+                .entry(agent_id.to_string())
+                .or_insert_with(|| ActiveSpecialistRun {
+                    role: role.clone(),
+                    depends_on: depends_on.to_vec(),
+                    ..Default::default()
+                });
+            specialist.role = role.clone();
+            specialist.status = status.clone();
+            specialist.depends_on = depends_on.to_vec();
+            specialist.detail = detail;
+            specialist.active_tool = active_tool;
+            if started_at_ms.is_some() {
+                specialist.started_at_ms = started_at_ms;
+            }
+            if finished_at_ms.is_some() {
+                specialist.finished_at_ms = finished_at_ms;
+            }
+            if let Some(tool_count) = tool_count {
+                specialist.tool_count = tool_count;
+            }
+            if let Some(write_like_used) = write_like_used {
+                specialist.write_like_used = write_like_used;
+            }
+            if matches!(status, SpecialistStatus::Running | SpecialistStatus::WaitingOnAirlock | SpecialistStatus::Verifying) {
+                run.status = "running".to_string();
             }
         }
     }
@@ -117,7 +206,19 @@ impl RuntimeRegistry {
             active_specialists: state
                 .supervisors
                 .values()
-                .map(|run| run.specialists.len())
+                .map(|run| {
+                    run.specialists
+                        .values()
+                        .filter(|specialist| {
+                            !matches!(
+                                specialist.status,
+                                SpecialistStatus::Completed
+                                    | SpecialistStatus::Failed
+                                    | SpecialistStatus::Cancelled
+                            )
+                        })
+                        .count()
+                })
                 .sum(),
             supervisors: state
                 .supervisors
@@ -126,6 +227,37 @@ impl RuntimeRegistry {
                     run_id: run_id.clone(),
                     status: run.status.clone(),
                     specialist_count: run.specialists.len(),
+                    completed_specialists: run
+                        .specialists
+                        .values()
+                        .filter(|specialist| specialist.status == SpecialistStatus::Completed)
+                        .count(),
+                    failed_specialists: run
+                        .specialists
+                        .values()
+                        .filter(|specialist| {
+                            matches!(
+                                specialist.status,
+                                SpecialistStatus::Failed | SpecialistStatus::Cancelled
+                            )
+                        })
+                        .count(),
+                    specialists: run
+                        .specialists
+                        .iter()
+                        .map(|(agent_id, specialist)| SpecialistRunSnapshot {
+                            agent_id: agent_id.clone(),
+                            role: specialist.role.clone(),
+                            status: specialist.status.clone(),
+                            depends_on: specialist.depends_on.clone(),
+                            detail: specialist.detail.clone(),
+                            active_tool: specialist.active_tool.clone(),
+                            started_at_ms: specialist.started_at_ms,
+                            finished_at_ms: specialist.finished_at_ms,
+                            tool_count: specialist.tool_count,
+                            write_like_used: specialist.write_like_used,
+                        })
+                        .collect(),
                 })
                 .collect(),
             tool_usage_by_role: state.tool_usage_by_role.clone(),
@@ -142,7 +274,13 @@ mod tests {
     async fn snapshot_reflects_active_supervisor_and_tool_usage() {
         let registry = RuntimeRegistry::new();
         registry
-            .start_supervisor_run("run-1", &[SpecialistRole::Research, SpecialistRole::Executor])
+            .start_supervisor_run(
+                "run-1",
+                &[
+                    ("research-1".to_string(), SpecialistRole::Research, vec![]),
+                    ("executor-1".to_string(), SpecialistRole::Executor, vec!["research-1".to_string()]),
+                ],
+            )
             .await;
         registry
             .update_specialist_status(
@@ -150,6 +288,13 @@ mod tests {
                 "research-1",
                 &SpecialistRole::Research,
                 &SpecialistStatus::Running,
+                &[],
+                Some("Reading context".to_string()),
+                None,
+                Some(10),
+                None,
+                Some(1),
+                Some(false),
             )
             .await;
         registry.record_tool_use(&SpecialistRole::Research).await;
@@ -158,5 +303,6 @@ mod tests {
         assert_eq!(snapshot.active_supervisor_runs, 1);
         assert_eq!(snapshot.active_specialists, 2);
         assert_eq!(snapshot.tool_usage_by_role.research, 1);
+        assert_eq!(snapshot.supervisors[0].specialists.len(), 2);
     }
 }

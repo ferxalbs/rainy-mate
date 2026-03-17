@@ -13,6 +13,14 @@ import {
   resolveNeuralState,
   getToolDisplayName,
 } from "../components/agent-chat/neural-config";
+import { updateMessageById } from "./agent-chat/messageState";
+
+type RuntimeAgentEvent = {
+  runId?: string;
+  timestampMs?: number;
+  type: string;
+  data: any;
+};
 
 export function useAgentChat() {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -755,6 +763,11 @@ export function useAgentChat() {
 
       // Listen to real-time agent events from Rust backend
       let unlisten: (() => void) | null = null;
+      let queuedRuntimeEvents: RuntimeAgentEvent[] = [];
+      let runtimeEventFrame: number | null = null;
+      let applyRuntimeEventToMessage:
+        | ((message: AgentMessage, payload: RuntimeAgentEvent) => AgentMessage)
+        | null = null;
       try {
         void captureForgeStep("agent_run_requested", "run_agent_workflow", {
           workspaceId,
@@ -762,343 +775,378 @@ export function useAgentChat() {
           reasoningEffort: reasoningEffort || null,
           agentSpecId: agentSpecId || null,
         });
+        const upsertSpecialist = (
+          specialists: SpecialistRunState[] | undefined,
+          next: Partial<SpecialistRunState> & {
+            agentId: string;
+            role: SpecialistRunState["role"];
+            status: SpecialistRunState["status"];
+          },
+        ): SpecialistRunState[] => {
+          const current = specialists ? [...specialists] : [];
+          const idx = current.findIndex((item) => item.agentId === next.agentId);
+          const merged = {
+            ...(idx >= 0 ? current[idx] : {}),
+            ...next,
+          } as SpecialistRunState;
+          if (idx >= 0) {
+            current[idx] = merged;
+          } else {
+            current.push(merged);
+          }
+          return current;
+        };
+
+        applyRuntimeEventToMessage = (
+          message: AgentMessage,
+          payload: RuntimeAgentEvent,
+        ): AgentMessage => {
+          switch (payload.type) {
+            case "supervisor_plan_created": {
+              void captureForgeStep(
+                "decision",
+                payload.data?.summary || "supervisor_plan_created",
+                {
+                  steps: Array.isArray(payload.data?.steps)
+                    ? payload.data.steps.length
+                    : 0,
+                },
+              );
+              return {
+                ...message,
+                neuralState: "planning",
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(
+                    "act",
+                    payload.data?.summary || "Supervisor plan created",
+                    undefined,
+                    payload.timestampMs,
+                  ),
+                ],
+                supervisorPlan: {
+                  summary: payload.data?.summary || "Supervisor plan ready",
+                  steps: Array.isArray(payload.data?.steps)
+                    ? payload.data.steps
+                    : [],
+                  verificationRequired:
+                    payload.data?.verificationRequired || false,
+                },
+              };
+            }
+            case "specialist_spawned":
+            case "specialist_status_changed": {
+              const activeTool = payload.data?.activeTool || undefined;
+              const waitingOnAirlock =
+                payload.data?.status === "waiting_on_airlock";
+              return {
+                ...message,
+                neuralState: waitingOnAirlock
+                  ? "planning"
+                  : activeTool
+                    ? resolveNeuralState(activeTool)
+                    : "planning",
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(
+                    waitingOnAirlock ? "approval" : "act",
+                    `${payload.data?.role || "specialist"}: ${payload.data?.status || "running"}`,
+                    { toolName: activeTool || undefined },
+                    payload.timestampMs,
+                  ),
+                ],
+                activeToolName: waitingOnAirlock
+                  ? "Awaiting Airlock approval"
+                  : activeTool
+                    ? getToolDisplayName(activeTool)
+                    : undefined,
+                specialists: upsertSpecialist(message.specialists, {
+                  agentId: payload.data?.agentId,
+                  role: payload.data?.role,
+                  status: payload.data?.status,
+                  detail: payload.data?.detail,
+                  activeTool,
+                  dependsOn: payload.data?.dependsOn || [],
+                  startedAtMs: payload.data?.startedAtMs,
+                  finishedAtMs: payload.data?.finishedAtMs,
+                  toolCount: payload.data?.toolCount,
+                  writeLikeUsed: payload.data?.writeLikeUsed,
+                }),
+              };
+            }
+            case "specialist_completed": {
+              return {
+                ...message,
+                neuralState: "thinking",
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(
+                    "act",
+                    `${payload.data?.role || "specialist"} completed`,
+                    {
+                      preview: payload.data?.summary || payload.data?.responsePreview,
+                    },
+                    payload.timestampMs,
+                  ),
+                ],
+                activeToolName: undefined,
+                specialists: upsertSpecialist(message.specialists, {
+                  agentId: payload.data?.agentId,
+                  role: payload.data?.role,
+                  status: "completed",
+                  summary: payload.data?.summary,
+                  responsePreview: payload.data?.responsePreview,
+                  dependsOn: payload.data?.dependsOn || [],
+                  startedAtMs: payload.data?.startedAtMs,
+                  finishedAtMs: payload.data?.finishedAtMs,
+                  toolCount: payload.data?.toolCount,
+                  writeLikeUsed: payload.data?.writeLikeUsed,
+                }),
+              };
+            }
+            case "specialist_failed": {
+              void captureForgeStep(
+                "error",
+                payload.data?.error || "specialist_failed",
+                {
+                  agentId: payload.data?.agentId ?? null,
+                  role: payload.data?.role ?? null,
+                },
+              );
+              return {
+                ...message,
+                neuralState: "thinking",
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(
+                    "error",
+                    `${payload.data?.role || "specialist"} failed`,
+                    { preview: payload.data?.error },
+                    payload.timestampMs,
+                  ),
+                ],
+                activeToolName: undefined,
+                specialists: upsertSpecialist(message.specialists, {
+                  agentId: payload.data?.agentId,
+                  role: payload.data?.role,
+                  status: "failed",
+                  error: payload.data?.error,
+                  dependsOn: payload.data?.dependsOn || [],
+                  startedAtMs: payload.data?.startedAtMs,
+                  finishedAtMs: payload.data?.finishedAtMs,
+                  toolCount: payload.data?.toolCount,
+                  writeLikeUsed: payload.data?.writeLikeUsed,
+                }),
+              };
+            }
+            case "tool_call": {
+              const functionName = payload.data?.function?.name || "";
+              void captureForgeStep("tool_call", functionName || "tool_call", {
+                toolCallId: payload.data?.id ?? null,
+                arguments: payload.data?.function?.arguments ?? null,
+              });
+              return {
+                ...message,
+                neuralState: resolveNeuralState(functionName),
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(
+                    "tool",
+                    `Tool call: ${getToolDisplayName(functionName)}`,
+                    { toolName: functionName },
+                    payload.timestampMs,
+                  ),
+                ],
+                activeToolName: getToolDisplayName(functionName),
+              };
+            }
+            case "tool_result": {
+              void captureForgeStep(
+                "tool_result",
+                payload.data?.id || "tool_result",
+                {
+                  toolCallId: payload.data?.id ?? null,
+                  resultPreview: payload.data?.result ?? null,
+                },
+              );
+              return {
+                ...message,
+                neuralState: "thinking",
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(
+                    "tool",
+                    `Tool result: ${payload.data?.id || "completed"}`,
+                    {
+                      preview:
+                        typeof payload.data?.result === "string"
+                          ? payload.data.result.slice(0, 180)
+                          : undefined,
+                    },
+                    payload.timestampMs,
+                  ),
+                ],
+                activeToolName: undefined,
+              };
+            }
+            case "thought":
+            case "stream_chunk":
+            case "supervisor_summary":
+              return {
+                ...message,
+                neuralState: "thinking",
+                activeToolName: undefined,
+              };
+            case "status": {
+              const statusText = String(payload.data || "");
+              const lower = statusText.toLowerCase();
+              if (lower.includes("retry")) {
+                void captureForgeStep("retry", statusText, {});
+              } else if (
+                lower.includes("error") ||
+                lower.includes("failed") ||
+                lower.includes("exception")
+              ) {
+                void captureForgeStep("error", statusText, {});
+              }
+              if (statusText.startsWith("RAG_TELEMETRY:")) {
+                try {
+                  const raw = statusText.slice("RAG_TELEMETRY:".length);
+                  const parsed = JSON.parse(raw) as {
+                    history_source?: string;
+                    retrieval_mode?: string;
+                    embedding_profile?: string;
+                  };
+                  const nextTelemetry = {
+                    historySource:
+                      parsed.history_source ||
+                      message.ragTelemetry?.historySource ||
+                      defaultRagTelemetry.historySource,
+                    retrievalMode:
+                      parsed.retrieval_mode ||
+                      message.ragTelemetry?.retrievalMode ||
+                      defaultRagTelemetry.retrievalMode,
+                    embeddingProfile:
+                      parsed.embedding_profile ||
+                      message.ragTelemetry?.embeddingProfile ||
+                      defaultRagTelemetry.embeddingProfile,
+                    compressionApplied: message.ragTelemetry?.compressionApplied,
+                    compressionTriggerTokens:
+                      message.ragTelemetry?.compressionTriggerTokens,
+                  };
+                  if (
+                    message.ragTelemetry?.historySource ===
+                      nextTelemetry.historySource &&
+                    message.ragTelemetry?.retrievalMode ===
+                      nextTelemetry.retrievalMode &&
+                    message.ragTelemetry?.embeddingProfile ===
+                      nextTelemetry.embeddingProfile
+                  ) {
+                    return message;
+                  }
+                  return {
+                    ...message,
+                    ragTelemetry: nextTelemetry,
+                  };
+                } catch {
+                  return message;
+                }
+              }
+              if (statusText.startsWith("CONTEXT_COMPACTION:")) {
+                try {
+                  const raw = statusText.slice("CONTEXT_COMPACTION:".length);
+                  const parsed = JSON.parse(raw) as {
+                    applied?: boolean;
+                    trigger_tokens?: number;
+                  };
+                  return {
+                    ...message,
+                    ragTelemetry: {
+                      ...message.ragTelemetry,
+                      compressionApplied:
+                        parsed.applied ?? message.ragTelemetry?.compressionApplied,
+                      compressionTriggerTokens:
+                        parsed.trigger_tokens ||
+                        message.ragTelemetry?.compressionTriggerTokens,
+                    },
+                  };
+                } catch {
+                  return message;
+                }
+              }
+              const waitingOnMcpApproval =
+                statusText.toLowerCase().includes("approval") &&
+                statusText.toLowerCase().includes("mcp");
+              const waitingOnAirlockApproval =
+                statusText.toLowerCase().includes("awaiting airlock approval");
+              const statusLower = statusText.toLowerCase();
+              const isRetry = statusLower.includes("retry");
+              const isError =
+                statusLower.includes("error") ||
+                statusLower.includes("failed") ||
+                statusLower.includes("exception");
+              const isCancelled =
+                statusLower.includes("terminated by fleet kill switch") ||
+                statusLower.includes("terminated by user") ||
+                statusLower.includes("cancelled by user");
+              const tracePhase: AgentTraceEntry["phase"] =
+                waitingOnMcpApproval || waitingOnAirlockApproval
+                  ? "approval"
+                  : isRetry
+                    ? "retry"
+                    : isError
+                      ? "error"
+                      : isCancelled
+                        ? "cancelled"
+                        : "think";
+              return {
+                ...message,
+                neuralState: "planning",
+                runState: isCancelled ? "cancelled" : message.runState,
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(tracePhase, statusText, undefined, payload.timestampMs),
+                ],
+                activeToolName: waitingOnMcpApproval
+                  ? "Awaiting MCP approval"
+                  : waitingOnAirlockApproval
+                    ? "Awaiting Airlock approval"
+                    : undefined,
+              };
+            }
+            default:
+              return message;
+          }
+        };
+
+        const flushRuntimeEvents = () => {
+          runtimeEventFrame = null;
+          if (!queuedRuntimeEvents.length) return;
+          if (!applyRuntimeEventToMessage) return;
+          const applyQueuedRuntimeEvent = applyRuntimeEventToMessage;
+          const batch = queuedRuntimeEvents;
+          queuedRuntimeEvents = [];
+          setMessages((prev) =>
+            updateMessageById(prev, agentMsgId, (message) =>
+              batch.reduce(
+                (current, payload) => applyQueuedRuntimeEvent(current, payload),
+                message,
+              ),
+            ),
+          );
+        };
+
+        const scheduleRuntimeEvent = (payload: RuntimeAgentEvent) => {
+          queuedRuntimeEvents.push(payload);
+          if (runtimeEventFrame != null) return;
+          runtimeEventFrame = window.requestAnimationFrame(flushRuntimeEvents);
+        };
+
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<{
-          runId?: string;
-          timestampMs?: number;
-          type: string;
-          data: any;
-        }>("agent://event", (event) => {
+        unlisten = await listen<RuntimeAgentEvent>("agent://event", (event) => {
           const payload = event.payload;
           if (payload?.runId && payload.runId !== clientRunId) return;
-
-          const upsertSpecialist = (
-            specialists: SpecialistRunState[] | undefined,
-            next: Partial<SpecialistRunState> & {
-              agentId: string;
-              role: SpecialistRunState["role"];
-              status: SpecialistRunState["status"];
-            },
-          ): SpecialistRunState[] => {
-            const current = specialists ? [...specialists] : [];
-            const idx = current.findIndex((item) => item.agentId === next.agentId);
-            const merged = {
-              ...(idx >= 0 ? current[idx] : {}),
-              ...next,
-            } as SpecialistRunState;
-            if (idx >= 0) {
-              current[idx] = merged;
-            } else {
-              current.push(merged);
-            }
-            return current;
-          };
-
-          setMessages((prev) =>
-            prev.map((m) => {
-              if (m.id !== agentMsgId) return m;
-
-              switch (payload.type) {
-                case "supervisor_plan_created": {
-                  void captureForgeStep(
-                    "decision",
-                    payload.data?.summary || "supervisor_plan_created",
-                    {
-                      steps: Array.isArray(payload.data?.steps)
-                        ? payload.data.steps.length
-                        : 0,
-                    },
-                  );
-                  return {
-                    ...m,
-                    neuralState: "planning",
-                    trace: [
-                      ...(m.trace || []),
-                      createTraceEntry(
-                        "act",
-                        payload.data?.summary || "Supervisor plan created",
-                        undefined,
-                        payload.timestampMs,
-                      ),
-                    ],
-                    supervisorPlan: {
-                      summary: payload.data?.summary || "Supervisor plan ready",
-                      steps: Array.isArray(payload.data?.steps)
-                        ? payload.data.steps
-                        : [],
-                      verificationRequired:
-                        payload.data?.verificationRequired || false,
-                    },
-                  };
-                }
-                case "specialist_spawned":
-                case "specialist_status_changed": {
-                  const activeTool = payload.data?.activeTool || undefined;
-                  return {
-                    ...m,
-                    neuralState: activeTool
-                      ? resolveNeuralState(activeTool)
-                      : "planning",
-                    trace: [
-                      ...(m.trace || []),
-                      createTraceEntry(
-                        "act",
-                        `${payload.data?.role || "specialist"}: ${payload.data?.status || "running"}`,
-                        { toolName: activeTool || undefined },
-                        payload.timestampMs,
-                      ),
-                    ],
-                    activeToolName: activeTool
-                      ? getToolDisplayName(activeTool)
-                      : undefined,
-                    specialists: upsertSpecialist(m.specialists, {
-                      agentId: payload.data?.agentId,
-                      role: payload.data?.role,
-                      status: payload.data?.status,
-                      detail: payload.data?.detail,
-                      activeTool,
-                    }),
-                  };
-                }
-                case "specialist_completed": {
-                  return {
-                    ...m,
-                    neuralState: "thinking",
-                    trace: [
-                      ...(m.trace || []),
-                      createTraceEntry(
-                        "act",
-                        `${payload.data?.role || "specialist"} completed`,
-                        {
-                          preview: payload.data?.summary || payload.data?.responsePreview,
-                        },
-                        payload.timestampMs,
-                      ),
-                    ],
-                    activeToolName: undefined,
-                    specialists: upsertSpecialist(m.specialists, {
-                      agentId: payload.data?.agentId,
-                      role: payload.data?.role,
-                      status: "completed",
-                      summary: payload.data?.summary,
-                      responsePreview: payload.data?.responsePreview,
-                    }),
-                  };
-                }
-                case "specialist_failed": {
-                  void captureForgeStep(
-                    "error",
-                    payload.data?.error || "specialist_failed",
-                    {
-                      agentId: payload.data?.agentId ?? null,
-                      role: payload.data?.role ?? null,
-                    },
-                  );
-                  return {
-                    ...m,
-                    neuralState: "thinking",
-                    trace: [
-                      ...(m.trace || []),
-                      createTraceEntry(
-                        "error",
-                        `${payload.data?.role || "specialist"} failed`,
-                        { preview: payload.data?.error },
-                        payload.timestampMs,
-                      ),
-                    ],
-                    activeToolName: undefined,
-                    specialists: upsertSpecialist(m.specialists, {
-                      agentId: payload.data?.agentId,
-                      role: payload.data?.role,
-                      status: "failed",
-                      error: payload.data?.error,
-                    }),
-                  };
-                }
-                case "tool_call": {
-                  // payload.data is a ToolCall: { id, type, function: { name, arguments } }
-                  const functionName = payload.data?.function?.name || "";
-                  void captureForgeStep("tool_call", functionName || "tool_call", {
-                    toolCallId: payload.data?.id ?? null,
-                    arguments: payload.data?.function?.arguments ?? null,
-                  });
-                  return {
-                    ...m,
-                    neuralState: resolveNeuralState(functionName),
-                    trace: [
-                      ...(m.trace || []),
-                      createTraceEntry(
-                        "tool",
-                        `Tool call: ${getToolDisplayName(functionName)}`,
-                        { toolName: functionName },
-                        payload.timestampMs,
-                      ),
-                    ],
-                    activeToolName: getToolDisplayName(functionName),
-                  };
-                }
-                case "tool_result": {
-                  void captureForgeStep(
-                    "tool_result",
-                    payload.data?.id || "tool_result",
-                    {
-                      toolCallId: payload.data?.id ?? null,
-                      resultPreview: payload.data?.result ?? null,
-                    },
-                  );
-                  // Tool finished, back to thinking for next iteration
-                  return {
-                    ...m,
-                    neuralState: "thinking",
-                    trace: [
-                      ...(m.trace || []),
-                      createTraceEntry(
-                        "tool",
-                        `Tool result: ${payload.data?.id || "completed"}`,
-                        {
-                          preview:
-                            typeof payload.data?.result === "string"
-                              ? payload.data.result.slice(0, 180)
-                              : undefined,
-                        },
-                        payload.timestampMs,
-                      ),
-                    ],
-                    activeToolName: undefined,
-                  };
-                }
-                case "thought":
-                case "stream_chunk": {
-                  return {
-                    ...m,
-                    neuralState: "thinking",
-                    activeToolName: undefined,
-                  };
-                }
-                case "supervisor_summary": {
-                  return {
-                    ...m,
-                    neuralState: "thinking",
-                    activeToolName: undefined,
-                  };
-                }
-                case "status": {
-                  const statusText = String(payload.data || "");
-                  const lower = statusText.toLowerCase();
-                  if (lower.includes("retry")) {
-                    void captureForgeStep("retry", statusText, {});
-                  } else if (
-                    lower.includes("error") ||
-                    lower.includes("failed") ||
-                    lower.includes("exception")
-                  ) {
-                    void captureForgeStep("error", statusText, {});
-                  }
-                  if (statusText.startsWith("RAG_TELEMETRY:")) {
-                    try {
-                      const raw = statusText.slice("RAG_TELEMETRY:".length);
-                      const parsed = JSON.parse(raw) as {
-                        history_source?: string;
-                        retrieval_mode?: string;
-                        embedding_profile?: string;
-                      };
-                      const nextTelemetry = {
-                        historySource:
-                          parsed.history_source ||
-                          m.ragTelemetry?.historySource ||
-                          defaultRagTelemetry.historySource,
-                        retrievalMode:
-                          parsed.retrieval_mode ||
-                          m.ragTelemetry?.retrievalMode ||
-                          defaultRagTelemetry.retrievalMode,
-                        embeddingProfile:
-                          parsed.embedding_profile ||
-                          m.ragTelemetry?.embeddingProfile ||
-                          defaultRagTelemetry.embeddingProfile,
-                        compressionApplied: m.ragTelemetry?.compressionApplied,
-                        compressionTriggerTokens:
-                          m.ragTelemetry?.compressionTriggerTokens,
-                      };
-                      if (
-                        m.ragTelemetry?.historySource ===
-                          nextTelemetry.historySource &&
-                        m.ragTelemetry?.retrievalMode ===
-                          nextTelemetry.retrievalMode &&
-                        m.ragTelemetry?.embeddingProfile ===
-                          nextTelemetry.embeddingProfile
-                      ) {
-                        return m;
-                      }
-                      return {
-                        ...m,
-                        ragTelemetry: nextTelemetry,
-                      };
-                    } catch {
-                      return m;
-                    }
-                  }
-                  if (statusText.startsWith("CONTEXT_COMPACTION:")) {
-                    try {
-                      const raw = statusText.slice("CONTEXT_COMPACTION:".length);
-                      const parsed = JSON.parse(raw) as {
-                        applied?: boolean;
-                        trigger_tokens?: number;
-                      };
-                      return {
-                        ...m,
-                        ragTelemetry: {
-                          ...m.ragTelemetry,
-                          compressionApplied:
-                            parsed.applied ?? m.ragTelemetry?.compressionApplied,
-                          compressionTriggerTokens:
-                            parsed.trigger_tokens ||
-                            m.ragTelemetry?.compressionTriggerTokens,
-                        },
-                      };
-                    } catch {
-                      return m;
-                    }
-                  }
-                  const waitingOnMcpApproval =
-                    statusText.toLowerCase().includes("approval") &&
-                    statusText.toLowerCase().includes("mcp");
-                  const statusLower = statusText.toLowerCase();
-                  const isRetry = statusLower.includes("retry");
-                  const isError =
-                    statusLower.includes("error") ||
-                    statusLower.includes("failed") ||
-                    statusLower.includes("exception");
-                  const isCancelled =
-                    statusLower.includes("terminated by fleet kill switch") ||
-                    statusLower.includes("terminated by user") ||
-                    statusLower.includes("cancelled by user");
-                  const tracePhase: AgentTraceEntry["phase"] = waitingOnMcpApproval
-                    ? "approval"
-                    : isRetry
-                      ? "retry"
-                      : isError
-                        ? "error"
-                        : isCancelled
-                          ? "cancelled"
-                          : "think";
-                  return {
-                    ...m,
-                    neuralState: waitingOnMcpApproval ? "communicating" : "planning",
-                    runState: isCancelled ? "cancelled" : m.runState,
-                    trace: [
-                      ...(m.trace || []),
-                      createTraceEntry(tracePhase, statusText, undefined, payload.timestampMs),
-                    ],
-                    activeToolName: waitingOnMcpApproval
-                      ? "Awaiting MCP approval"
-                      : undefined,
-                  };
-                }
-                default:
-                  return m;
-              }
-            }),
-          );
+          scheduleRuntimeEvent(payload);
         });
 
         const result = await runAgentWorkflow(
@@ -1112,38 +1160,33 @@ export function useAgentChat() {
         );
 
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === agentMsgId
-              ? {
-                  ...m,
-                  content:
-                    typeof result.response === "string" &&
-                    result.response.trim().length > 0
-                      ? result.response
-                      : "No final text response was generated. Please try again with a more specific instruction.",
-                  isLoading: false,
-                  runState: m.runState === "cancelled" ? "cancelled" : "completed",
-                  requestContext: {
-                    ...m.requestContext,
-                    runId: result.runId || clientRunId,
-                    completedAtMs: Date.now(),
-                  },
-                  trace: [
-                    ...(m.trace || []),
-                    createTraceEntry(
-                      m.runState === "cancelled" ? "cancelled" : "done",
-                      m.runState === "cancelled"
-                        ? "Run cancelled."
-                        : "Run completed.",
-                    ),
-                  ],
-                  neuralState: undefined,
-                  activeToolName: undefined,
-                  specialists: m.specialists,
-                  supervisorPlan: m.supervisorPlan,
-                }
-              : m,
-          ),
+          updateMessageById(prev, agentMsgId, (message) => ({
+            ...message,
+            content:
+              typeof result.response === "string" && result.response.trim().length > 0
+                ? result.response
+                : "No final text response was generated. Please try again with a more specific instruction.",
+            isLoading: false,
+            runState: message.runState === "cancelled" ? "cancelled" : "completed",
+            requestContext: {
+              ...message.requestContext,
+              runId: result.runId || clientRunId,
+              completedAtMs: Date.now(),
+            },
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                message.runState === "cancelled" ? "cancelled" : "done",
+                message.runState === "cancelled"
+                  ? "Run cancelled."
+                  : "Run completed.",
+              ),
+            ],
+            neuralState: undefined,
+            activeToolName: undefined,
+            specialists: message.specialists,
+            supervisorPlan: message.supervisorPlan,
+          })),
         );
 
         if (typeof result.response === "string" && result.response.trim().length > 0) {
@@ -1167,36 +1210,51 @@ export function useAgentChat() {
       } catch (err: any) {
         console.error("Native agent error:", err);
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === agentMsgId
-              ? {
-                  ...m,
-                  content: `❌ Agent Runtime Error: ${err.message || err}`,
-                  isLoading: false,
-                  runState: "failed",
-                  requestContext: {
-                    ...m.requestContext,
-                    completedAtMs: Date.now(),
-                  },
-                  trace: [
-                    ...(m.trace || []),
-                    createTraceEntry(
-                      "error",
-                      "Agent runtime failed.",
-                      { preview: String(err?.message || err) },
-                    ),
-                  ],
-                  neuralState: undefined,
-                  activeToolName: undefined,
-                  specialists: m.specialists,
-                  supervisorPlan: m.supervisorPlan,
-                }
-              : m,
-          ),
+          updateMessageById(prev, agentMsgId, (message) => ({
+            ...message,
+            content: `❌ Agent Runtime Error: ${err.message || err}`,
+            isLoading: false,
+            runState: "failed",
+            requestContext: {
+              ...message.requestContext,
+              completedAtMs: Date.now(),
+            },
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                "error",
+                "Agent runtime failed.",
+                { preview: String(err?.message || err) },
+              ),
+            ],
+            neuralState: undefined,
+            activeToolName: undefined,
+            specialists: message.specialists,
+            supervisorPlan: message.supervisorPlan,
+          })),
         );
       } finally {
         forgeRecordingIdRef.current = null;
         setIsExecuting(false);
+        if (runtimeEventFrame != null) {
+          window.cancelAnimationFrame(runtimeEventFrame);
+          runtimeEventFrame = null;
+        }
+        if (queuedRuntimeEvents.length > 0) {
+          const batch = queuedRuntimeEvents;
+          queuedRuntimeEvents = [];
+          setMessages((prev) =>
+            updateMessageById(prev, agentMsgId, (message) =>
+              batch.reduce(
+                (current, payload) =>
+                  applyRuntimeEventToMessage
+                    ? applyRuntimeEventToMessage(current, payload)
+                    : current,
+                message,
+              ),
+            ),
+          );
+        }
         if (unlisten) unlisten();
       }
     },
@@ -1210,25 +1268,21 @@ export function useAgentChat() {
     try {
       const res = await tauri.cancelAgentRun(runId);
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId
-            ? {
-                ...m,
-                isLoading: res.status === "cancelled" ? false : m.isLoading,
-                neuralState: res.status === "cancelled" ? undefined : m.neuralState,
-                runState: res.status === "cancelled" ? "cancelled" : m.runState,
-                trace: [
-                  ...(m.trace || []),
-                  createTraceEntry(
-                    res.status === "cancelled" ? "cancelled" : "error",
-                    res.status === "cancelled"
-                      ? "Cancellation requested by user."
-                      : "Run already finished.",
-                  ),
-                ],
-              }
-            : m,
-        ),
+        updateMessageById(prev, messageId, (message) => ({
+          ...message,
+          isLoading: res.status === "cancelled" ? false : message.isLoading,
+          neuralState: res.status === "cancelled" ? undefined : message.neuralState,
+          runState: res.status === "cancelled" ? "cancelled" : message.runState,
+          trace: [
+            ...(message.trace || []),
+            createTraceEntry(
+              res.status === "cancelled" ? "cancelled" : "error",
+              res.status === "cancelled"
+                ? "Cancellation requested by user."
+                : "Run already finished.",
+            ),
+          ],
+        })),
       );
     } catch (error) {
       console.error("Failed to cancel run", error);

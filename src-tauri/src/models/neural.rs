@@ -193,6 +193,10 @@ pub struct QueuedCommand {
     pub status: CommandStatus,
     #[serde(default)]
     pub airlock_level: AirlockLevel,
+    /// Approval timeout override in seconds.
+    /// `None` = use Airlock defaults, `Some(0)` = wait indefinitely.
+    #[serde(default)]
+    pub approval_timeout_secs: Option<u64>,
     #[serde(default)]
     pub approved_by: Option<String>,
     #[serde(default)]
@@ -231,6 +235,12 @@ pub struct SupervisorRunStatus {
     pub run_id: String,
     pub status: String,
     pub specialist_count: usize,
+    #[serde(default)]
+    pub completed_specialists: usize,
+    #[serde(default)]
+    pub failed_specialists: usize,
+    #[serde(default)]
+    pub specialists: Vec<SpecialistRuntimeStatus>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -239,6 +249,28 @@ pub struct ToolUsageByRole {
     pub research: u64,
     pub executor: u64,
     pub verifier: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecialistRuntimeStatus {
+    pub agent_id: String,
+    pub role: String,
+    pub status: String,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    #[serde(default)]
+    pub detail: Option<String>,
+    #[serde(default)]
+    pub active_tool: Option<String>,
+    #[serde(default)]
+    pub started_at_ms: Option<i64>,
+    #[serde(default)]
+    pub finished_at_ms: Option<i64>,
+    #[serde(default)]
+    pub tool_count: u32,
+    #[serde(default)]
+    pub write_like_used: bool,
 }
 
 #[cfg(test)]

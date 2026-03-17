@@ -54,6 +54,11 @@ export function createDefaultAgentSpec(id: string = crypto.randomUUID()): AgentS
         indexed_files: [],
       },
     },
+    runtime: {
+      mode: "single",
+      max_specialists: 3,
+      verification_required: true,
+    },
   };
 }
 
@@ -156,6 +161,18 @@ export function normalizeAgentSpec(raw: any): AgentSpec {
           ? sourceKnowledge.indexed_files
           : defaults.memory_config.knowledge.indexed_files,
       },
+    },
+    runtime: {
+      mode:
+        source.runtime?.mode === "supervisor" ? "supervisor" : "single",
+      max_specialists:
+        typeof source.runtime?.max_specialists === "number"
+          ? Math.max(1, Math.min(3, Math.round(source.runtime.max_specialists)))
+          : defaults.runtime?.max_specialists,
+      verification_required:
+        typeof source.runtime?.verification_required === "boolean"
+          ? source.runtime.verification_required
+          : defaults.runtime?.verification_required,
     },
     model:
       typeof source.model === "string" && source.model.trim().length > 0

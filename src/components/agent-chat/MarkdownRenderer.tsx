@@ -1,3 +1,4 @@
+import React from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -5,14 +6,32 @@ import "highlight.js/styles/atom-one-dark.css"; // Start with a default dark the
 
 interface MarkdownRendererProps {
   content: string;
+  isStreaming?: boolean;
 }
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+const HIGHLIGHT_MAX_CONTENT_LENGTH = 12_000;
+
+export const MarkdownRenderer = React.memo(function MarkdownRenderer({
+  content,
+  isStreaming = false,
+}: MarkdownRendererProps) {
+  const shouldHighlight = !isStreaming && content.length <= HIGHLIGHT_MAX_CONTENT_LENGTH;
+
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
+    <div
+      className="prose prose-sm dark:prose-invert max-w-none min-w-0 break-words text-foreground"
+      style={
+        isStreaming
+          ? undefined
+          : {
+              contentVisibility: "auto",
+              containIntrinsicSize: "800px",
+            }
+      }
+    >
       <Markdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        rehypePlugins={shouldHighlight ? [rehypeHighlight] : []}
         components={{
           a: ({ node, ...props }) => (
             <a
@@ -25,7 +44,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           pre: ({ node, ...props }) => (
             <pre
               {...props}
-              className="bg-muted border border-border/50 rounded-lg p-0 overflow-x-auto text-[13px]"
+              className="max-w-full overflow-x-auto rounded-lg border border-border/50 bg-muted p-0 text-[13px]"
             />
           ),
           code: ({ node, className, children, ...props }: any) => {
@@ -42,12 +61,38 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             ) : (
               <code
                 {...props}
-                className={`${className} block p-4 text-sm font-mono text-foreground/90`}
+                className={`${className} block min-w-0 p-4 text-sm font-mono text-foreground/90`}
               >
                 {children}
               </code>
             );
           },
+          table: ({ node, ...props }) => (
+            <div className="my-4 w-full max-w-full overflow-x-auto rounded-lg border border-border/40">
+              <table
+                {...props}
+                className="w-full min-w-[640px] border-collapse text-left text-xs"
+              />
+            </div>
+          ),
+          thead: ({ node, ...props }) => (
+            <thead {...props} className="bg-background/80" />
+          ),
+          th: ({ node, ...props }) => (
+            <th
+              {...props}
+              className="border-b border-r border-border/30 px-3 py-2 align-top font-semibold text-foreground last:border-r-0"
+            />
+          ),
+          td: ({ node, ...props }) => (
+            <td
+              {...props}
+              className="border-b border-r border-border/20 px-3 py-2 align-top text-foreground/90 last:border-r-0"
+            />
+          ),
+          tr: ({ node, ...props }) => (
+            <tr {...props} className="odd:bg-background/30" />
+          ),
           ul: ({ node, ...props }) => (
             <ul {...props} className="list-disc pl-5 space-y-1 mb-4" />
           ),
@@ -63,4 +108,6 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
       </Markdown>
     </div>
   );
-}
+},
+(prev, next) =>
+  prev.content === next.content && prev.isStreaming === next.isStreaming);

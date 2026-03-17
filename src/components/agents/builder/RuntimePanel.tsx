@@ -7,10 +7,16 @@ interface RuntimePanelProps {
   model: string;
   temperature: number;
   maxTokens: number;
+  runtimeMode: "single" | "supervisor";
+  maxSpecialists: number;
+  verificationRequired: boolean;
   onChange: (updates: {
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    runtimeMode?: "single" | "supervisor";
+    maxSpecialists?: number;
+    verificationRequired?: boolean;
   }) => void;
 }
 
@@ -40,6 +46,9 @@ export function RuntimePanel({
   model,
   temperature,
   maxTokens,
+  runtimeMode,
+  maxSpecialists,
+  verificationRequired,
   onChange,
 }: RuntimePanelProps) {
   const tempLabel =
@@ -78,6 +87,30 @@ export function RuntimePanel({
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <section className="xl:col-span-2 rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5">
+          <Field label="Runtime Mode" className="mb-6">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={runtimeMode === "single" ? "primary" : "ghost"}
+                className="rounded-full"
+                onPress={() => onChange({ runtimeMode: "single" })}
+              >
+                Single agent
+              </Button>
+              <Button
+                size="sm"
+                variant={runtimeMode === "supervisor" ? "primary" : "ghost"}
+                className="rounded-full"
+                onPress={() => onChange({ runtimeMode: "supervisor" })}
+              >
+                Supervisor
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground/90">
+              Supervisor mode activates specialist orchestration, dependency-aware execution, and optional verifier passes.
+            </p>
+          </Field>
+
           <Field label="Model">
             <div className="rounded-xl border border-border/30 bg-background/35 px-3 py-2">
               <UnifiedModelSelector
@@ -139,6 +172,65 @@ export function RuntimePanel({
         </section>
 
         <section className="rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5 space-y-6">
+          <Field label="Specialist Count">
+            <div className="space-y-3">
+              <Slider
+                minValue={1}
+                maxValue={3}
+                step={1}
+                value={maxSpecialists}
+                isDisabled={runtimeMode !== "supervisor"}
+                onChange={(value) =>
+                  onChange({
+                    maxSpecialists: Array.isArray(value)
+                      ? Number(value[0] ?? maxSpecialists)
+                      : Number(value),
+                  })
+                }
+                className="max-w-full"
+              >
+                <Slider.Track className="h-1.5 bg-default-200 dark:bg-white/10 rounded-full">
+                  <Slider.Fill className="bg-primary h-full rounded-full" />
+                  <Slider.Thumb className="size-4 bg-white border-2 border-primary rounded-full shadow-lg hocus:scale-110 transition-transform cursor-pointer" />
+                </Slider.Track>
+              </Slider>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-mono text-primary">{maxSpecialists}</span>
+                <span className="text-muted-foreground">
+                  {runtimeMode === "supervisor"
+                    ? "Parallel specialist budget"
+                    : "Single mode only uses one lane"}
+                </span>
+              </div>
+            </div>
+          </Field>
+
+          <Field label="Verifier">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={verificationRequired ? "primary" : "ghost"}
+                isDisabled={runtimeMode !== "supervisor"}
+                className="rounded-full"
+                onPress={() => onChange({ verificationRequired: true })}
+              >
+                Required
+              </Button>
+              <Button
+                size="sm"
+                variant={!verificationRequired ? "primary" : "ghost"}
+                isDisabled={runtimeMode !== "supervisor"}
+                className="rounded-full"
+                onPress={() => onChange({ verificationRequired: false })}
+              >
+                Optional
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground/90">
+              The verifier runs after write-like execution and checks resulting state with read-only tools.
+            </p>
+          </Field>
+
           <Field label="Temperature">
             <div className="space-y-3">
               <Slider

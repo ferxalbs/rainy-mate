@@ -67,7 +67,13 @@ pub struct SpecialistOutcome {
     pub status: SpecialistStatus,
     pub summary: String,
     pub response: String,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
     pub used_write_like_tools: bool,
+    #[serde(default)]
+    pub tool_count: u32,
+    pub started_at_ms: i64,
+    pub finished_at_ms: i64,
 }
 
 #[derive(Clone, Debug)]
@@ -76,6 +82,8 @@ pub enum SupervisorMessage {
         run_id: String,
         agent_id: String,
         role: SpecialistRole,
+        depends_on: Vec<String>,
+        started_at_ms: i64,
     },
     SpecialistStatus {
         run_id: String,
@@ -84,6 +92,11 @@ pub enum SupervisorMessage {
         status: SpecialistStatus,
         detail: Option<String>,
         active_tool: Option<String>,
+        depends_on: Vec<String>,
+        started_at_ms: Option<i64>,
+        finished_at_ms: Option<i64>,
+        tool_count: Option<u32>,
+        write_like_used: Option<bool>,
     },
     SpecialistCompleted {
         run_id: String,
@@ -94,5 +107,10 @@ pub enum SupervisorMessage {
         agent_id: String,
         role: SpecialistRole,
         error: String,
+        depends_on: Vec<String>,
+        started_at_ms: Option<i64>,
+        finished_at_ms: Option<i64>,
+        tool_count: Option<u32>,
+        write_like_used: Option<bool>,
     },
 }

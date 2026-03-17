@@ -162,8 +162,8 @@ export function AgentChatPanel({
       // New message added — scroll to its top so the user reads from the beginning
       latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
-      // Streaming update — scroll to bottom to show latest tokens
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      // Streaming/runtime update — avoid repeated smooth-scroll animation on every tick.
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
     }
   }, [messages]);
 

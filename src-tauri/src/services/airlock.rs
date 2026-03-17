@@ -25,8 +25,13 @@ use tokio::sync::{oneshot, Mutex};
 pub struct ApprovalRequest {
     pub command_id: String,
     pub intent: String,
+    pub tool_name: Option<String>,
     pub payload_summary: String,
     pub airlock_level: AirlockLevel,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<i64>,
     pub timestamp: i64,
 }
 
@@ -60,6 +65,56 @@ impl std::fmt::Debug for AirlockService {
 }
 
 impl AirlockService {
+    fn default_approval_timeout_secs(effective_level: AirlockLevel) -> u64 {
+        if effective_level == AirlockLevel::Dangerous {
+            30
+        } else {
+            10
+        }
+    }
+
+    fn resolve_approval_timeout_secs(
+        command: &QueuedCommand,
+        effective_level: AirlockLevel,
+    ) -> Option<u64> {
+        match command.approval_timeout_secs {
+            Some(0) => None,
+            Some(value) => Some(value),
+            None => Some(Self::default_approval_timeout_secs(effective_level)),
+        }
+    }
+
+    fn summarize_payload(command: &QueuedCommand) -> String {
+        let params = command.payload.params.as_ref();
+        let path = params
+            .and_then(|value| value.get("path"))
+            .and_then(|value| value.as_str());
+        let url = params
+            .and_then(|value| value.get("url"))
+            .and_then(|value| value.as_str());
+        let query = params
+            .and_then(|value| value.get("query"))
+            .and_then(|value| value.as_str());
+
+        if let Some(path) = path {
+            return format!("path={}", path);
+        }
+        if let Some(url) = url {
+            return format!("url={}", url);
+        }
+        if let Some(query) = query {
+            return format!("query={}", query);
+        }
+        if let Some(content) = command.payload.content.as_deref() {
+            let compact = content.chars().take(120).collect::<String>();
+            if !compact.is_empty() {
+                return compact;
+            }
+        }
+
+        serde_json::to_string(&command.payload.params).unwrap_or_default()
+    }
+
     fn is_agent_run_bootstrap(command: &QueuedCommand) -> bool {
         if command.intent == "agent.run" {
             return true;
@@ -256,12 +311,17 @@ impl AirlockService {
         effective_level: AirlockLevel,
         allow_on_timeout: bool,
     ) -> Result<bool, String> {
+        let timeout_secs = Self::resolve_approval_timeout_secs(command, effective_level);
+        let now = chrono::Utc::now().timestamp_millis();
         let request = ApprovalRequest {
             command_id: command.id.clone(),
             intent: command.intent.clone(),
-            payload_summary: serde_json::to_string(&command.payload).unwrap_or_default(),
+            tool_name: Self::infer_tool_name(command),
+            payload_summary: Self::summarize_payload(command),
             airlock_level: effective_level,
-            timestamp: chrono::Utc::now().timestamp_millis(),
+            timeout_secs,
+            expires_at: timeout_secs.map(|value| now + (value as i64 * 1000)),
+            timestamp: now,
         };
 
         let (tx, rx) = oneshot::channel::<ApprovalResult>();
@@ -277,14 +337,17 @@ impl AirlockService {
             .emit("airlock:approval_required", &request)
             .map_err(|e| format!("Failed to emit approval event: {}", e))?;
 
-        // Wait for response with timeout (30 seconds for dangerous, 10 for sensitive)
-        let timeout_secs = if effective_level == AirlockLevel::Dangerous {
-            30
+        let result = if let Some(timeout_secs) = timeout_secs {
+            match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
+                Ok(Ok(result)) => result,
+                Ok(Err(_)) | Err(_) => ApprovalResult::Timeout,
+            }
         } else {
-            10
+            match rx.await {
+                Ok(result) => result,
+                Err(_) => ApprovalResult::Rejected,
+            }
         };
-
-        let result = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await;
 
         // Clean up pending approval
         {
@@ -293,19 +356,19 @@ impl AirlockService {
         }
 
         match result {
-            Ok(Ok(ApprovalResult::Approved)) => {
+            ApprovalResult::Approved => {
                 tracing::info!("Airlock: Command {} APPROVED by user", command.id);
                 // Notify frontend to clear the request from UI
                 let _ = self.app.emit("airlock:approval_resolved", &command.id);
                 Ok(true)
             }
-            Ok(Ok(ApprovalResult::Rejected)) => {
+            ApprovalResult::Rejected => {
                 tracing::info!("Airlock: Command {} REJECTED by user", command.id);
                 // Notify frontend to clear the request from UI
                 let _ = self.app.emit("airlock:approval_resolved", &command.id);
                 Ok(false)
             }
-            Ok(Ok(ApprovalResult::Timeout)) | Ok(Err(_)) | Err(_) => {
+            ApprovalResult::Timeout => {
                 // Timeout or channel closed
                 // Notify frontend to clear the request from UI
                 let _ = self.app.emit("airlock:approval_resolved", &command.id);
@@ -371,8 +434,11 @@ mod tests {
         ApprovalRequest {
             command_id: command_id.to_string(),
             intent: "filesystem.write_file".to_string(),
+            tool_name: Some("write_file".to_string()),
             payload_summary: "{\"path\":\"/tmp/x\"}".to_string(),
             airlock_level: AirlockLevel::Sensitive,
+            timeout_secs: Some(10),
+            expires_at: Some(timestamp + 10_000),
             timestamp,
         }
     }
@@ -439,6 +505,7 @@ mod tests {
             priority: CommandPriority::Normal,
             status: CommandStatus::Pending,
             airlock_level: AirlockLevel::Safe,
+            approval_timeout_secs: None,
             approved_by: None,
             result: None,
             created_at: None,
@@ -486,6 +553,7 @@ mod tests {
             priority: CommandPriority::Normal,
             status: CommandStatus::Pending,
             airlock_level: declared,
+            approval_timeout_secs: None,
             approved_by: None,
             result: None,
             created_at: None,
@@ -577,6 +645,25 @@ mod tests {
         assert_eq!(
             AirlockService::effective_airlock_level(&command),
             AirlockLevel::Safe
+        );
+    }
+
+    #[test]
+    fn resolve_approval_timeout_uses_default_when_unspecified() {
+        let command = make_command_with_tool("write_file", AirlockLevel::Sensitive);
+        assert_eq!(
+            AirlockService::resolve_approval_timeout_secs(&command, AirlockLevel::Sensitive),
+            Some(10)
+        );
+    }
+
+    #[test]
+    fn resolve_approval_timeout_supports_durable_override() {
+        let mut command = make_command_with_tool("execute_command", AirlockLevel::Dangerous);
+        command.approval_timeout_secs = Some(0);
+        assert_eq!(
+            AirlockService::resolve_approval_timeout_secs(&command, AirlockLevel::Dangerous),
+            None
         );
     }
 }

@@ -8,7 +8,10 @@ export type AirlockLevel = typeof AirlockLevel[keyof typeof AirlockLevel];
 export interface ApprovalRequest {
   commandId: string;
   intent: string;
+  toolName?: string | null;
   payloadSummary: string;
   airlockLevel: AirlockLevel;
+  timeoutSecs?: number | null;
+  expiresAt?: number | null;
   timestamp: number;
 }

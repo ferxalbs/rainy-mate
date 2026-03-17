@@ -675,6 +675,7 @@ impl WorkflowStep for ActStep {
                 status: CommandStatus::Pending,
                 priority: CommandPriority::Normal,
                 airlock_level,
+                approval_timeout_secs: Some(0),
                 created_at: Some(Utc::now().timestamp()),
                 started_at: None,
                 completed_at: None,
@@ -794,6 +795,7 @@ impl WorkflowStep for ActStep {
                         status: crate::models::neural::CommandStatus::Pending,
                         priority: crate::models::neural::CommandPriority::Normal,
                         airlock_level: crate::models::neural::AirlockLevel::Sensitive, // Required for memory writes
+                        approval_timeout_secs: Some(0),
                         created_at: Some(chrono::Utc::now().timestamp()),
                         started_at: None,
                         completed_at: None,

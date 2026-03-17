@@ -54,7 +54,7 @@ interface MessageBubbleProps {
   workspaceId?: string;
 }
 
-export function MessageBubble({
+function MessageBubbleComponent({
   message,
   onExecute,
   onExecuteToolCalls,
@@ -138,14 +138,14 @@ export function MessageBubble({
 
   return (
     <div
-      className={`flex w-full gap-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}
+      className={`flex w-full min-w-0 gap-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}
     >
       {/* Content */}
       <div
-        className={`flex flex-col gap-1 max-w-[85%] ${isUser ? "items-end" : "items-start"}`}
+        className={`flex min-w-0 flex-col gap-1 max-w-[85%] ${isUser ? "items-end" : "items-start"}`}
       >
         <div
-          className={`rounded-[20px] px-5 py-3.5 shadow-sm text-[15px] leading-relaxed transition-all relative overflow-hidden ${
+          className={`relative w-full min-w-0 overflow-hidden rounded-[20px] px-5 py-3.5 text-[15px] leading-relaxed shadow-sm transition-all ${
             isUser
               ? "bg-primary text-primary-foreground rounded-br-sm"
               : neuralState !== "idle"
@@ -167,9 +167,12 @@ export function MessageBubble({
             </div>
           )}
 
-          <div className="relative z-10 select-text">
+          <div className="relative z-10 min-w-0 select-text">
             {message.content ? (
-              <MarkdownRenderer content={message.content} />
+              <MarkdownRenderer
+                content={message.content}
+                isStreaming={message.isLoading}
+              />
             ) : neuralState !== "idle" ? (
               <NeuralStatus
                 state={neuralState}
@@ -284,6 +287,11 @@ export function MessageBubble({
 
         {/* Timestamp */}
         <div className="flex items-center gap-2 px-1">
+          {!isUser && (message.supervisorPlan || (message.specialists && message.specialists.length > 0)) && (
+            <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+              Supervisor
+            </span>
+          )}
           {!isUser && message.modelUsed?.name && (
             <span className="text-[10px] text-muted-foreground/70 font-medium">
               {message.modelUsed.name}
@@ -300,6 +308,18 @@ export function MessageBubble({
     </div>
   );
 }
+
+export const MessageBubble = React.memo(
+  MessageBubbleComponent,
+  (prev, next) =>
+    prev.message === next.message &&
+    prev.isExecuting === next.isExecuting &&
+    prev.workspaceId === next.workspaceId &&
+    prev.onExecute === next.onExecute &&
+    prev.onExecuteToolCalls === next.onExecuteToolCalls &&
+    prev.onStopRun === next.onStopRun &&
+    prev.onRetryRun === next.onRetryRun,
+);
 
 function SupervisorRail({
   summary,
@@ -330,6 +350,14 @@ function SupervisorRail({
     cancelled: "text-muted-foreground",
   };
 
+  const formatDuration = (specialist: SpecialistRunState) => {
+    if (!specialist.startedAtMs) return null;
+    const end = specialist.finishedAtMs ?? Date.now();
+    const elapsedMs = Math.max(0, end - specialist.startedAtMs);
+    if (elapsedMs < 1000) return `${elapsedMs}ms`;
+    return `${(elapsedMs / 1000).toFixed(1)}s`;
+  };
+
   return (
     <div className="w-full rounded-2xl border border-primary/15 bg-background/50 p-4 backdrop-blur-md">
       {summary && (
@@ -355,11 +383,11 @@ function SupervisorRail({
       )}
 
       {specialists.length > 0 && (
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid gap-2 xl:grid-cols-3">
           {specialists.map((specialist) => (
             <div
               key={specialist.agentId}
-              className="rounded-xl border border-border/30 bg-background/70 p-3"
+              className="min-w-0 rounded-xl border border-border/30 bg-background/70 p-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-foreground">
@@ -373,13 +401,25 @@ function SupervisorRail({
               </div>
 
               {specialist.detail && (
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="mt-2 break-words text-xs text-muted-foreground">
                   {specialist.detail}
+                </p>
+              )}
+              {specialist.dependsOn && specialist.dependsOn.length > 0 && (
+                <p className="mt-2 break-words text-[11px] text-muted-foreground">
+                  Depends on: {specialist.dependsOn.join(", ")}
                 </p>
               )}
               {specialist.activeTool && (
                 <p className="mt-2 text-xs text-primary/80">
                   Tool: {specialist.activeTool}
+                </p>
+              )}
+              {(specialist.toolCount || formatDuration(specialist) || specialist.writeLikeUsed) && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {specialist.toolCount ? `${specialist.toolCount} tool${specialist.toolCount === 1 ? "" : "s"}` : "No tools yet"}
+                  {formatDuration(specialist) ? ` · ${formatDuration(specialist)}` : ""}
+                  {specialist.writeLikeUsed ? " · write-like actions" : ""}
                 </p>
               )}
               {specialist.responsePreview && (

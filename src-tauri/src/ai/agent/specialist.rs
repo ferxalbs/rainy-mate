@@ -4,6 +4,7 @@ use crate::ai::agent::runtime::{AgentRuntime, RuntimeOptions};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::{AgentSpec, RuntimeMode};
 use crate::services::{agent_kill_switch::AgentKillSwitch, airlock::AirlockService, SkillExecutor};
+use chrono::Utc;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, RwLock};
 
@@ -143,8 +144,12 @@ impl SpecialistAgent {
         let spec = self.build_specialist_spec();
         let used_write_like_tools = Arc::new(Mutex::new(false));
         let tool_flag = used_write_like_tools.clone();
+        let tool_count = Arc::new(Mutex::new(0u32));
+        let tool_count_flag = tool_count.clone();
         let role = self.role.clone();
         let agent_id = assignment.agent_id.clone();
+        let depends_on = assignment.depends_on.clone();
+        let started_at_ms = Utc::now().timestamp_millis();
         let role_prompt = format!(
             "{}\n\nAssignment: {}\nInstructions: {}",
             self.role_prompt(),
@@ -171,6 +176,8 @@ impl SpecialistAgent {
                 run_id: run_id.to_string(),
                 agent_id: agent_id.clone(),
                 role: role.clone(),
+                depends_on: depends_on.clone(),
+                started_at_ms,
             })
             .await;
 
@@ -178,10 +185,14 @@ impl SpecialistAgent {
         let callback_run_id = run_id.to_string();
         let callback_agent_id = agent_id.clone();
         let callback_role = role.clone();
+        let callback_depends_on = depends_on.clone();
         let response = runtime
             .run_single(&input, move |event| {
                 match event {
                     super::events::AgentEvent::ToolCall(ref call) => {
+                        if let Ok(mut count) = tool_count_flag.lock() {
+                            *count += 1;
+                        }
                         if matches!(
                             call.function.name.as_str(),
                             "write_file" | "append_file" | "mkdir" | "move_file" | "delete_file" | "execute_command"
@@ -197,6 +208,11 @@ impl SpecialistAgent {
                             status: SpecialistStatus::Running,
                             detail: Some(format!("Executing {}", call.function.name)),
                             active_tool: Some(call.function.name.clone()),
+                            depends_on: callback_depends_on.clone(),
+                            started_at_ms: Some(started_at_ms),
+                            finished_at_ms: None,
+                            tool_count: tool_count_flag.lock().ok().map(|count| *count),
+                            write_like_used: tool_flag.lock().ok().map(|flag| *flag),
                         });
                     }
                     super::events::AgentEvent::Status(ref text) => {
@@ -212,6 +228,11 @@ impl SpecialistAgent {
                             status,
                             detail: Some(text.clone()),
                             active_tool: None,
+                            depends_on: callback_depends_on.clone(),
+                            started_at_ms: Some(started_at_ms),
+                            finished_at_ms: None,
+                            tool_count: tool_count_flag.lock().ok().map(|count| *count),
+                            write_like_used: tool_flag.lock().ok().map(|flag| *flag),
                         });
                     }
                     _ => {}
@@ -219,16 +240,21 @@ impl SpecialistAgent {
             })
             .await?;
 
+        let finished_at_ms = Utc::now().timestamp_millis();
         Ok(SpecialistOutcome {
             agent_id,
             role,
             status: SpecialistStatus::Completed,
             summary: assignment.title,
             response: response.clone(),
+            depends_on,
             used_write_like_tools: used_write_like_tools
                 .lock()
                 .map(|flag| *flag)
                 .unwrap_or(false),
+            tool_count: tool_count.lock().map(|count| *count).unwrap_or(0),
+            started_at_ms,
+            finished_at_ms,
         })
     }
 }

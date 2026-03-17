@@ -211,4 +211,9 @@ export interface SpecialistRunState {
   summary?: string;
   responsePreview?: string;
   error?: string;
+  dependsOn?: string[];
+  startedAtMs?: number;
+  finishedAtMs?: number;
+  toolCount?: number;
+  writeLikeUsed?: boolean;
 }

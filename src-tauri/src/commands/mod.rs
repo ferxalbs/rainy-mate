@@ -2,6 +2,7 @@
 // Export all command handlers for registration with Tauri
 
 pub mod agent;
+pub(crate) mod agent_frontend_events;
 pub mod agent_builder;
 pub mod ai;
 pub mod ai_providers;

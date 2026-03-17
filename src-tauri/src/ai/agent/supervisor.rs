@@ -13,8 +13,10 @@ use crate::ai::agent::memory::AgentMemory;
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::{AgentSpec, RuntimeConfig};
 use crate::services::{agent_kill_switch::AgentKillSwitch, airlock::AirlockService, SkillExecutor};
-use std::collections::HashMap;
+use chrono::Utc;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use tokio::task::JoinSet;
 use tokio::sync::{mpsc, RwLock};
 
 pub struct SupervisorAgent {
@@ -66,6 +68,21 @@ impl SupervisorAgent {
         .any(|needle| input.contains(needle))
     }
 
+    fn should_gate_executor_on_research(input: &str) -> bool {
+        let input = input.to_ascii_lowercase();
+        [
+            "first",
+            "before",
+            "root cause",
+            "investigate why",
+            "understand current",
+            "analyze current",
+            "review current",
+        ]
+        .iter()
+        .any(|needle| input.contains(needle))
+    }
+
     fn build_plan(&self, input: &str) -> SupervisorPlan {
         Self::build_plan_for_runtime(&self.spec.runtime, input)
     }
@@ -88,19 +105,25 @@ impl SupervisorAgent {
             steps.push("Research Agent reviews code and supporting references".to_string());
         }
 
+        let executor_depends_on = if use_research && Self::should_gate_executor_on_research(input) {
+            vec!["research-1".to_string()]
+        } else {
+            vec![]
+        };
+
         if use_executor {
             base_assignments.push(SpecialistAssignment {
                 agent_id: "executor-1".to_string(),
                 role: SpecialistRole::Executor,
                 title: "Execute the requested changes".to_string(),
                 instructions: "Carry out the implementation work using the minimum necessary edits and tool calls.".to_string(),
-                depends_on: if use_research {
-                    vec!["research-1".to_string()]
-                } else {
-                    vec![]
-                },
+                depends_on: executor_depends_on.clone(),
             });
-            steps.push("Executor Agent performs the requested workspace actions".to_string());
+            steps.push(if executor_depends_on.is_empty() {
+                "Executor Agent performs workspace actions while Research Agent gathers parallel context".to_string()
+            } else {
+                "Executor Agent performs the requested workspace actions after research context is complete".to_string()
+            });
         }
 
         let has_executor = base_assignments
@@ -161,6 +184,12 @@ impl SupervisorAgent {
             assignments,
             verification_required,
         }
+    }
+
+    fn should_run_verifier(outcomes: &[SpecialistOutcome]) -> bool {
+        outcomes.iter().any(|outcome| {
+            outcome.role == SpecialistRole::Executor && outcome.used_write_like_tools
+        })
     }
 
     fn synthesize_final_response(
@@ -268,6 +297,18 @@ impl SupervisorAgent {
             .collect()
     }
 
+    fn failed_dependencies(
+        assignment: &SpecialistAssignment,
+        failed_agent_ids: &HashSet<String>,
+    ) -> Vec<String> {
+        assignment
+            .depends_on
+            .iter()
+            .filter(|dependency_id| failed_agent_ids.contains(*dependency_id))
+            .cloned()
+            .collect()
+    }
+
     async fn emit_messages<F>(
         mut rx: mpsc::Receiver<SupervisorMessage>,
         on_event: Arc<F>,
@@ -281,6 +322,8 @@ impl SupervisorAgent {
                     run_id,
                     agent_id,
                     role,
+                    depends_on,
+                    started_at_ms,
                 } => {
                     if let Some(registry) = runtime_registry.as_ref() {
                         registry
@@ -289,6 +332,13 @@ impl SupervisorAgent {
                                 &agent_id,
                                 &role,
                                 &SpecialistStatus::Planning,
+                                &depends_on,
+                                Some("Specialist started".to_string()),
+                                None,
+                                Some(started_at_ms),
+                                None,
+                                Some(0),
+                                Some(false),
                             )
                             .await;
                     }
@@ -297,8 +347,13 @@ impl SupervisorAgent {
                         agent_id,
                         role,
                         status: SpecialistStatus::Planning,
+                        depends_on,
                         detail: Some("Specialist started".to_string()),
                         active_tool: None,
+                        started_at_ms: Some(started_at_ms),
+                        finished_at_ms: None,
+                        tool_count: Some(0),
+                        write_like_used: Some(false),
                     }));
                 }
                 SupervisorMessage::SpecialistStatus {
@@ -308,10 +363,27 @@ impl SupervisorAgent {
                     status,
                     detail,
                     active_tool,
+                    depends_on,
+                    started_at_ms,
+                    finished_at_ms,
+                    tool_count,
+                    write_like_used,
                 } => {
                     if let Some(registry) = runtime_registry.as_ref() {
                         registry
-                            .update_specialist_status(&run_id, &agent_id, &role, &status)
+                            .update_specialist_status(
+                                &run_id,
+                                &agent_id,
+                                &role,
+                                &status,
+                                &depends_on,
+                                detail.clone(),
+                                active_tool.clone(),
+                                started_at_ms,
+                                finished_at_ms,
+                                tool_count,
+                                write_like_used,
+                            )
                             .await;
                         if active_tool.is_some() {
                             registry.record_tool_use(&role).await;
@@ -322,8 +394,13 @@ impl SupervisorAgent {
                         agent_id,
                         role,
                         status,
+                        depends_on,
                         detail,
                         active_tool,
+                        started_at_ms,
+                        finished_at_ms,
+                        tool_count,
+                        write_like_used,
                     }));
                 }
                 SupervisorMessage::SpecialistCompleted { run_id, outcome } => {
@@ -334,6 +411,13 @@ impl SupervisorAgent {
                                 &outcome.agent_id,
                                 &outcome.role,
                                 &SpecialistStatus::Completed,
+                                &outcome.depends_on,
+                                Some(outcome.summary.clone()),
+                                None,
+                                Some(outcome.started_at_ms),
+                                Some(outcome.finished_at_ms),
+                                Some(outcome.tool_count),
+                                Some(outcome.used_write_like_tools),
                             )
                             .await;
                     }
@@ -343,6 +427,11 @@ impl SupervisorAgent {
                         role: outcome.role,
                         summary: outcome.summary,
                         response_preview: outcome.response.chars().take(240).collect(),
+                        depends_on: outcome.depends_on,
+                        tool_count: outcome.tool_count,
+                        write_like_used: outcome.used_write_like_tools,
+                        started_at_ms: outcome.started_at_ms,
+                        finished_at_ms: outcome.finished_at_ms,
                     }));
                 }
                 SupervisorMessage::SpecialistFailed {
@@ -350,6 +439,11 @@ impl SupervisorAgent {
                     agent_id,
                     role,
                     error,
+                    depends_on,
+                    started_at_ms,
+                    finished_at_ms,
+                    tool_count,
+                    write_like_used,
                 } => {
                     if let Some(registry) = runtime_registry.as_ref() {
                         registry
@@ -358,6 +452,13 @@ impl SupervisorAgent {
                                 &agent_id,
                                 &role,
                                 &SpecialistStatus::Failed,
+                                &depends_on,
+                                Some(error.clone()),
+                                None,
+                                started_at_ms,
+                                finished_at_ms,
+                                tool_count,
+                                write_like_used,
                             )
                             .await;
                     }
@@ -366,9 +467,46 @@ impl SupervisorAgent {
                         agent_id,
                         role,
                         error,
+                        depends_on,
+                        started_at_ms,
+                        finished_at_ms,
+                        tool_count,
+                        write_like_used,
                     }));
                 }
             }
+        }
+    }
+
+    async fn emit_pending_assignments(
+        run_id: &str,
+        tx: &mpsc::Sender<SupervisorMessage>,
+        assignments: &[SpecialistAssignment],
+    ) {
+        for assignment in assignments {
+            let detail = if assignment.depends_on.is_empty() {
+                "Queued for execution".to_string()
+            } else {
+                format!(
+                    "Waiting on dependencies: {}",
+                    assignment.depends_on.join(", ")
+                )
+            };
+            let _ = tx
+                .send(SupervisorMessage::SpecialistStatus {
+                    run_id: run_id.to_string(),
+                    agent_id: assignment.agent_id.clone(),
+                    role: assignment.role.clone(),
+                    status: SpecialistStatus::Pending,
+                    detail: Some(detail),
+                    active_tool: None,
+                    depends_on: assignment.depends_on.clone(),
+                    started_at_ms: None,
+                    finished_at_ms: None,
+                    tool_count: Some(0),
+                    write_like_used: Some(false),
+                })
+                .await;
         }
     }
 
@@ -378,14 +516,22 @@ impl SupervisorAgent {
     {
         let run_id = uuid::Uuid::new_v4().to_string();
         let plan = self.build_plan(input);
-        let roles: Vec<SpecialistRole> = plan
+        let assignments_for_registry: Vec<(String, SpecialistRole, Vec<String>)> = plan
             .assignments
             .iter()
-            .map(|assignment| assignment.role.clone())
+            .map(|assignment| {
+                (
+                    assignment.agent_id.clone(),
+                    assignment.role.clone(),
+                    assignment.depends_on.clone(),
+                )
+            })
             .collect();
 
         if let Some(registry) = self.runtime_registry.as_ref() {
-            registry.start_supervisor_run(&run_id, &roles).await;
+            registry
+                .start_supervisor_run(&run_id, &assignments_for_registry)
+                .await;
             registry.update_supervisor_status(&run_id, "planning").await;
         }
 
@@ -395,93 +541,194 @@ impl SupervisorAgent {
         let on_event_arc = Arc::new(on_event.clone());
         let registry_for_events = self.runtime_registry.clone();
         let emitter = tokio::spawn(Self::emit_messages(rx, on_event_arc, registry_for_events));
+        Self::emit_pending_assignments(&run_id, &tx, &plan.assignments).await;
 
         let mut outcomes = Vec::new();
         let mut completed_outcomes: HashMap<String, SpecialistOutcome> = HashMap::new();
         let mut failures: Vec<LaneFailure> = Vec::new();
+        let mut failed_agent_ids: HashSet<String> = HashSet::new();
+        let max_parallel = self.spec.runtime.max_specialists.clamp(1, 3) as usize;
 
         if let Some(registry) = self.runtime_registry.as_ref() {
             registry.update_supervisor_status(&run_id, "running").await;
         }
-        for assignment in plan
+        let mut remaining: HashMap<String, SpecialistAssignment> = plan
             .assignments
             .clone()
             .into_iter()
             .filter(|a| a.role != SpecialistRole::Verifier)
-        {
-            let missing_dependencies =
-                Self::missing_dependencies(&assignment, &completed_outcomes);
-            if !missing_dependencies.is_empty() {
-                let error = format!(
-                    "Skipped because required prior lane(s) did not complete successfully: {}",
-                    missing_dependencies.join(", ")
-                );
-                failures.push(LaneFailure {
-                    agent_id: assignment.agent_id.clone(),
-                    role: assignment.role.clone(),
-                    error: error.clone(),
-                });
-                tx.send(SupervisorMessage::SpecialistFailed {
-                    run_id: run_id.clone(),
-                    agent_id: assignment.agent_id,
-                    role: assignment.role,
-                    error,
+            .map(|assignment| (assignment.agent_id.clone(), assignment))
+            .collect();
+        let mut running_ids: HashSet<String> = HashSet::new();
+        let mut join_set: JoinSet<(SpecialistAssignment, Result<SpecialistOutcome, String>)> =
+            JoinSet::new();
+
+        loop {
+            let skipped_ids: Vec<String> = remaining
+                .values()
+                .filter(|assignment| {
+                    !Self::failed_dependencies(assignment, &failed_agent_ids).is_empty()
                 })
-                .await
-                .ok();
-                continue;
-            }
+                .map(|assignment| assignment.agent_id.clone())
+                .collect();
 
-            let specialist = SpecialistAgent::new(
-                assignment.role.clone(),
-                self.spec.clone(),
-                self.options.clone(),
-                self.router.clone(),
-                self.skills.clone(),
-                self.memory.clone(),
-                self.airlock_service.clone(),
-                self.kill_switch.clone(),
-            );
-            let specialist_input =
-                Self::build_specialist_input(input, &assignment, &completed_outcomes);
-
-            match specialist
-                .run(&run_id, assignment.clone(), specialist_input, tx.clone())
-                .await
-            {
-                Ok(outcome) => {
-                    tx.send(SupervisorMessage::SpecialistCompleted {
-                        run_id: run_id.clone(),
-                        outcome: outcome.clone(),
-                    })
-                    .await
-                    .ok();
-                    completed_outcomes.insert(assignment.agent_id.clone(), outcome.clone());
-                    outcomes.push(outcome);
-                }
-                Err(error) => {
+            for skipped_id in skipped_ids {
+                if let Some(assignment) = remaining.remove(&skipped_id) {
+                    let failed_dependencies =
+                        Self::failed_dependencies(&assignment, &failed_agent_ids);
+                    let error = format!(
+                        "Skipped because required prior lane(s) failed: {}",
+                        failed_dependencies.join(", ")
+                    );
                     failures.push(LaneFailure {
                         agent_id: assignment.agent_id.clone(),
                         role: assignment.role.clone(),
                         error: error.clone(),
                     });
+                    failed_agent_ids.insert(assignment.agent_id.clone());
                     tx.send(SupervisorMessage::SpecialistFailed {
                         run_id: run_id.clone(),
                         agent_id: assignment.agent_id,
                         role: assignment.role,
                         error,
+                        depends_on: assignment.depends_on,
+                        started_at_ms: None,
+                        finished_at_ms: Some(Utc::now().timestamp_millis()),
+                        tool_count: Some(0),
+                        write_like_used: Some(false),
                     })
                     .await
                     .ok();
                 }
             }
+
+            let ready_ids: Vec<String> = remaining
+                .values()
+                .filter(|assignment| {
+                    !running_ids.contains(&assignment.agent_id)
+                        && Self::missing_dependencies(assignment, &completed_outcomes).is_empty()
+                })
+                .map(|assignment| assignment.agent_id.clone())
+                .collect();
+
+            for ready_id in ready_ids {
+                if join_set.len() >= max_parallel {
+                    break;
+                }
+                let Some(assignment) = remaining.remove(&ready_id) else {
+                    continue;
+                };
+                running_ids.insert(assignment.agent_id.clone());
+                let specialist = SpecialistAgent::new(
+                    assignment.role.clone(),
+                    self.spec.clone(),
+                    self.options.clone(),
+                    self.router.clone(),
+                    self.skills.clone(),
+                    self.memory.clone(),
+                    self.airlock_service.clone(),
+                    self.kill_switch.clone(),
+                );
+                let specialist_input =
+                    Self::build_specialist_input(input, &assignment, &completed_outcomes);
+                let tx_clone = tx.clone();
+                let run_id_clone = run_id.clone();
+                let assignment_clone = assignment.clone();
+                join_set.spawn(async move {
+                    let result = specialist
+                        .run(&run_id_clone, assignment_clone.clone(), specialist_input, tx_clone)
+                        .await;
+                    (assignment_clone, result)
+                });
+            }
+
+            if join_set.is_empty() {
+                if remaining.is_empty() {
+                    break;
+                }
+
+                for assignment in remaining.into_values() {
+                    let unresolved =
+                        Self::missing_dependencies(&assignment, &completed_outcomes);
+                    let error = if unresolved.is_empty() {
+                        "Lane could not be scheduled".to_string()
+                    } else {
+                        format!(
+                            "Lane stalled waiting on unresolved dependencies: {}",
+                            unresolved.join(", ")
+                        )
+                    };
+                    failures.push(LaneFailure {
+                        agent_id: assignment.agent_id.clone(),
+                        role: assignment.role.clone(),
+                        error: error.clone(),
+                    });
+                    failed_agent_ids.insert(assignment.agent_id.clone());
+                    tx.send(SupervisorMessage::SpecialistFailed {
+                        run_id: run_id.clone(),
+                        agent_id: assignment.agent_id,
+                        role: assignment.role,
+                        error,
+                        depends_on: assignment.depends_on,
+                        started_at_ms: None,
+                        finished_at_ms: Some(Utc::now().timestamp_millis()),
+                        tool_count: Some(0),
+                        write_like_used: Some(false),
+                    })
+                    .await
+                    .ok();
+                }
+                break;
+            }
+
+            if let Some(joined) = join_set.join_next().await {
+                match joined {
+                    Ok((assignment, Ok(outcome))) => {
+                        running_ids.remove(&assignment.agent_id);
+                        tx.send(SupervisorMessage::SpecialistCompleted {
+                            run_id: run_id.clone(),
+                            outcome: outcome.clone(),
+                        })
+                        .await
+                        .ok();
+                        completed_outcomes.insert(assignment.agent_id.clone(), outcome.clone());
+                        outcomes.push(outcome);
+                    }
+                    Ok((assignment, Err(error))) => {
+                        running_ids.remove(&assignment.agent_id);
+                        failed_agent_ids.insert(assignment.agent_id.clone());
+                        failures.push(LaneFailure {
+                            agent_id: assignment.agent_id.clone(),
+                            role: assignment.role.clone(),
+                            error: error.clone(),
+                        });
+                        tx.send(SupervisorMessage::SpecialistFailed {
+                            run_id: run_id.clone(),
+                            agent_id: assignment.agent_id,
+                            role: assignment.role,
+                            error,
+                            depends_on: assignment.depends_on,
+                            started_at_ms: None,
+                            finished_at_ms: Some(Utc::now().timestamp_millis()),
+                            tool_count: None,
+                            write_like_used: None,
+                        })
+                        .await
+                        .ok();
+                    }
+                    Err(join_error) => {
+                        let error = format!("Specialist task join failure: {}", join_error);
+                        failures.push(LaneFailure {
+                            agent_id: "unknown".to_string(),
+                            role: SpecialistRole::Executor,
+                            error,
+                        });
+                    }
+                }
+            }
         }
 
-        if plan.verification_required
-            && outcomes.iter().any(|outcome| {
-                outcome.role == SpecialistRole::Executor && outcome.used_write_like_tools
-            })
-        {
+        if plan.verification_required && Self::should_run_verifier(&outcomes) {
             if let Some(registry) = self.runtime_registry.as_ref() {
                 registry.update_supervisor_status(&run_id, "verifying").await;
             }
@@ -490,8 +737,13 @@ impl SupervisorAgent {
                 agent_id: "verifier-1".to_string(),
                 role: SpecialistRole::Verifier,
                 status: SpecialistStatus::Verifying,
+                depends_on: vec!["executor-1".to_string()],
                 detail: Some("Verifier Agent validating resulting state".to_string()),
                 active_tool: None,
+                started_at_ms: None,
+                finished_at_ms: None,
+                tool_count: Some(0),
+                write_like_used: Some(false),
             }));
             if let Some(assignment) = plan
                 .assignments
@@ -516,6 +768,11 @@ impl SupervisorAgent {
                         agent_id: assignment.agent_id,
                         role: SpecialistRole::Verifier,
                         error,
+                        depends_on: assignment.depends_on,
+                        started_at_ms: None,
+                        finished_at_ms: Some(Utc::now().timestamp_millis()),
+                        tool_count: Some(0),
+                        write_like_used: Some(false),
                     })
                     .await
                     .ok();
@@ -570,11 +827,41 @@ impl SupervisorAgent {
                             agent_id: assignment.agent_id,
                             role: SpecialistRole::Verifier,
                             error,
+                            depends_on: assignment.depends_on,
+                            started_at_ms: None,
+                            finished_at_ms: Some(Utc::now().timestamp_millis()),
+                            tool_count: None,
+                            write_like_used: None,
                         })
                         .await
                         .ok();
                     }
                 }
+            }
+        } else if plan.verification_required {
+            if let Some(assignment) = plan
+                .assignments
+                .iter()
+                .find(|assignment| assignment.role == SpecialistRole::Verifier)
+            {
+                tx.send(SupervisorMessage::SpecialistStatus {
+                    run_id: run_id.clone(),
+                    agent_id: assignment.agent_id.clone(),
+                    role: SpecialistRole::Verifier,
+                    status: SpecialistStatus::Completed,
+                    detail: Some(
+                        "Verification skipped: executor completed without write-like actions"
+                            .to_string(),
+                    ),
+                    active_tool: None,
+                    depends_on: assignment.depends_on.clone(),
+                    started_at_ms: None,
+                    finished_at_ms: Some(Utc::now().timestamp_millis()),
+                    tool_count: Some(0),
+                    write_like_used: Some(false),
+                })
+                .await
+                .ok();
             }
         }
 
@@ -623,7 +910,7 @@ mod tests {
     #[test]
     fn build_plan_makes_executor_wait_for_research() {
         let runtime = test_runtime(3, true);
-        let plan = SupervisorAgent::build_plan_for_runtime(&runtime, "research and implement feature x");
+        let plan = SupervisorAgent::build_plan_for_runtime(&runtime, "research the root cause first and implement feature x");
         let executor = plan
             .assignments
             .iter()
@@ -658,7 +945,11 @@ mod tests {
                 status: SpecialistStatus::Completed,
                 summary: "Research".to_string(),
                 response: "Found the root cause in the scheduler.".to_string(),
+                depends_on: vec![],
                 used_write_like_tools: false,
+                tool_count: 1,
+                started_at_ms: 1,
+                finished_at_ms: 2,
             },
         );
 
@@ -699,7 +990,11 @@ mod tests {
                 status: SpecialistStatus::Completed,
                 summary: "Execute".to_string(),
                 response: "Applied patch".to_string(),
+                depends_on: vec!["research-1".to_string()],
                 used_write_like_tools: true,
+                tool_count: 2,
+                started_at_ms: 2,
+                finished_at_ms: 3,
             },
             SpecialistOutcome {
                 agent_id: "research-1".to_string(),
@@ -707,7 +1002,11 @@ mod tests {
                 status: SpecialistStatus::Completed,
                 summary: "Research".to_string(),
                 response: "Found bug".to_string(),
+                depends_on: vec![],
                 used_write_like_tools: false,
+                tool_count: 1,
+                started_at_ms: 1,
+                finished_at_ms: 2,
             },
         ];
 
@@ -729,6 +1028,41 @@ mod tests {
 
         let missing = SupervisorAgent::missing_dependencies(&assignment, &HashMap::new());
         assert_eq!(missing, vec!["research-1".to_string()]);
+    }
+
+    #[test]
+    fn build_plan_allows_parallel_research_and_execution_when_not_ordered() {
+        let runtime = test_runtime(3, true);
+        let plan = SupervisorAgent::build_plan_for_runtime(&runtime, "research and implement feature x");
+        let executor = plan
+            .assignments
+            .iter()
+            .find(|assignment| assignment.role == SpecialistRole::Executor)
+            .expect("executor assignment");
+        assert!(executor.depends_on.is_empty());
+    }
+
+    #[test]
+    fn verifier_runs_only_when_executor_used_write_like_tools() {
+        let without_writes = vec![SpecialistOutcome {
+            agent_id: "executor-1".to_string(),
+            role: SpecialistRole::Executor,
+            status: SpecialistStatus::Completed,
+            summary: "Execute".to_string(),
+            response: "Reviewed files only".to_string(),
+            depends_on: vec![],
+            used_write_like_tools: false,
+            tool_count: 3,
+            started_at_ms: 1,
+            finished_at_ms: 2,
+        }];
+        assert!(!SupervisorAgent::should_run_verifier(&without_writes));
+
+        let with_writes = vec![SpecialistOutcome {
+            used_write_like_tools: true,
+            ..without_writes[0].clone()
+        }];
+        assert!(SupervisorAgent::should_run_verifier(&with_writes));
     }
 }
 

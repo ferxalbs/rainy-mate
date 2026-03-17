@@ -1249,8 +1249,11 @@ export const AirlockLevels = {
 export interface ApprovalRequest {
   commandId: string;
   intent: string;
+  toolName?: string | null;
   payloadSummary: string;
   airlockLevel: AirlockLevel;
+  timeoutSecs?: number | null;
+  expiresAt?: number | null;
   timestamp: number;
 }
 
@@ -2379,4 +2382,59 @@ export async function cancelAgentRun(
   runId: string,
 ): Promise<CancelAgentRunResponse> {
   return invoke<CancelAgentRunResponse>("cancel_agent_run", { runId });
+}
+
+// ─── Memory Vault Explorer ───────────────────────────────────────────
+
+import type {
+  PaginatedVaultEntries,
+  WorkspaceSummary,
+  VaultDetailedStats,
+  DeleteBatchResult,
+} from "../types/memory";
+
+export async function listVaultEntries(opts: {
+  workspaceId?: string;
+  sensitivity?: string;
+  sourcePrefix?: string;
+  createdAfter?: number;
+  createdBefore?: number;
+  orderBy?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedVaultEntries> {
+  return invoke<PaginatedVaultEntries>("list_vault_entries", {
+    workspaceId: opts.workspaceId,
+    sensitivity: opts.sensitivity,
+    sourcePrefix: opts.sourcePrefix,
+    createdAfter: opts.createdAfter,
+    createdBefore: opts.createdBefore,
+    orderBy: opts.orderBy,
+    limit: opts.limit,
+    offset: opts.offset,
+  });
+}
+
+export async function listMemoryWorkspaces(): Promise<WorkspaceSummary[]> {
+  return invoke<WorkspaceSummary[]>("list_memory_workspaces");
+}
+
+export async function getVaultDetailedStats(
+  workspaceId?: string,
+): Promise<VaultDetailedStats> {
+  return invoke<VaultDetailedStats>("get_vault_detailed_stats", {
+    workspaceId,
+  });
+}
+
+export async function deleteVaultEntriesBatch(
+  ids: string[],
+): Promise<DeleteBatchResult> {
+  return invoke<DeleteBatchResult>("delete_vault_entries_batch", { ids });
+}
+
+export async function clearWorkspaceVault(
+  workspaceId: string,
+): Promise<DeleteBatchResult> {
+  return invoke<DeleteBatchResult>("clear_workspace_vault", { workspaceId });
 }

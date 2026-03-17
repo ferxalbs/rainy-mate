@@ -60,6 +60,7 @@ pub async fn execute_skill(
         priority: CommandPriority::Normal,
         status: CommandStatus::Pending,
         airlock_level: AirlockLevel::Safe, // Assumed safe since triggered by user via UI
+        approval_timeout_secs: None,
         approved_by: Some("user".to_string()),
         result: None,
         created_at: Some(chrono::Utc::now().timestamp()),

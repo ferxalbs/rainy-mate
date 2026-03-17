@@ -293,6 +293,9 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
                 maxTokens={
                   typeof spec.maxTokens === "number" ? spec.maxTokens : 4096
                 }
+                runtimeMode={spec.runtime?.mode === "supervisor" ? "supervisor" : "single"}
+                maxSpecialists={spec.runtime?.max_specialists ?? 3}
+                verificationRequired={spec.runtime?.verification_required ?? true}
                 onChange={(updates) =>
                   updateSpec({
                     model:
@@ -305,6 +308,20 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
                       updates.maxTokens !== undefined
                         ? updates.maxTokens
                         : spec.maxTokens,
+                    runtime: {
+                      mode:
+                        updates.runtimeMode !== undefined
+                          ? updates.runtimeMode
+                          : spec.runtime?.mode ?? "single",
+                      max_specialists:
+                        updates.maxSpecialists !== undefined
+                          ? Math.max(1, Math.min(3, updates.maxSpecialists))
+                          : spec.runtime?.max_specialists ?? 3,
+                      verification_required:
+                        updates.verificationRequired !== undefined
+                          ? updates.verificationRequired
+                          : spec.runtime?.verification_required ?? true,
+                    },
                   })
                 }
               />

@@ -455,6 +455,24 @@ impl NeuralService {
                         run_id: run.run_id,
                         status: run.status,
                         specialist_count: run.specialist_count,
+                        completed_specialists: run.completed_specialists,
+                        failed_specialists: run.failed_specialists,
+                        specialists: run
+                            .specialists
+                            .into_iter()
+                            .map(|specialist| crate::models::neural::SpecialistRuntimeStatus {
+                                agent_id: specialist.agent_id,
+                                role: specialist.role.as_str().to_string(),
+                                status: format!("{:?}", specialist.status).to_ascii_lowercase(),
+                                depends_on: specialist.depends_on,
+                                detail: specialist.detail,
+                                active_tool: specialist.active_tool,
+                                started_at_ms: specialist.started_at_ms,
+                                finished_at_ms: specialist.finished_at_ms,
+                                tool_count: specialist.tool_count,
+                                write_like_used: specialist.write_like_used,
+                            })
+                            .collect(),
                     })
                     .collect(),
                 tool_usage_by_role: crate::models::neural::ToolUsageByRole {

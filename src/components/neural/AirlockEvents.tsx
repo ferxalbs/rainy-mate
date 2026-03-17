@@ -13,6 +13,7 @@ export function AirlockEvents() {
 
   // Format info
   const isDangerous = request.airlockLevel === AirlockLevel.Dangerous;
+  const hasExpiry = typeof request.timeoutSecs === "number" && request.timeoutSecs > 0;
 
   // Try to format JSON payload if possible
   let formattedPayload = request.payloadSummary;
@@ -67,6 +68,11 @@ export function AirlockEvents() {
                 </Modal.Heading>
                 <p className="text-xs text-white/50 font-medium">
                   {request.commandId}
+                </p>
+                <p className="text-[11px] text-white/40">
+                  {hasExpiry
+                    ? `Expires in ${request.timeoutSecs}s if unresolved`
+                    : "Awaiting explicit approval"}
                 </p>
               </div>
             </div>

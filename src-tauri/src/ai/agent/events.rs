@@ -9,10 +9,20 @@ pub struct SpecialistEventPayload {
     pub agent_id: String,
     pub role: SpecialistRole,
     pub status: SpecialistStatus,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_tool: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finished_at_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub write_like_used: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -23,6 +33,12 @@ pub struct SpecialistCompletedPayload {
     pub role: SpecialistRole,
     pub summary: String,
     pub response_preview: String,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    pub tool_count: u32,
+    pub write_like_used: bool,
+    pub started_at_ms: i64,
+    pub finished_at_ms: i64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -32,6 +48,16 @@ pub struct SpecialistFailedPayload {
     pub agent_id: String,
     pub role: SpecialistRole,
     pub error: String,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finished_at_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub write_like_used: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize)]
