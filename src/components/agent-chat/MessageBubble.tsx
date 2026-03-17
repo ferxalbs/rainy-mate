@@ -83,12 +83,24 @@ function MessageBubbleComponent({
 
   const traceStats = useMemo(() => {
     const trace = message.trace || [];
+    let toolCalls = 0;
+    let retries = 0;
+    let errors = 0;
+    let approvals = 0;
+
+    for (const item of trace) {
+      if (item.phase === "tool") toolCalls += 1;
+      if (item.phase === "retry") retries += 1;
+      if (item.phase === "error") errors += 1;
+      if (item.phase === "approval") approvals += 1;
+    }
+
     return {
       total: trace.length,
-      toolCalls: trace.filter((item) => item.phase === "tool").length,
-      retries: trace.filter((item) => item.phase === "retry").length,
-      errors: trace.filter((item) => item.phase === "error").length,
-      approvals: trace.filter((item) => item.phase === "approval").length,
+      toolCalls,
+      retries,
+      errors,
+      approvals,
     };
   }, [message.trace]);
 
@@ -145,7 +157,7 @@ function MessageBubbleComponent({
         className={`flex min-w-0 flex-col gap-1 max-w-[85%] ${isUser ? "items-end" : "items-start"}`}
       >
         <div
-          className={`relative w-full min-w-0 overflow-hidden rounded-[20px] px-5 py-3.5 text-[15px] leading-relaxed shadow-sm transition-all ${
+          className={`relative w-full min-w-0 overflow-hidden rounded-[20px] px-5 py-3.5 text-[15px] leading-relaxed shadow-sm transition-colors ${
             isUser
               ? "bg-primary text-primary-foreground rounded-br-sm"
               : neuralState !== "idle"
@@ -450,6 +462,8 @@ function TraceAccordion({
     approvals: number;
   };
 }) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [visibleCount, setVisibleCount] = React.useState(40);
   const stateTone =
     runState === "failed"
       ? "text-red-500"
@@ -459,8 +473,20 @@ function TraceAccordion({
           ? "text-emerald-500"
           : "text-cyan-500";
 
+  const visibleTrace = isOpen ? trace.slice(0, visibleCount) : [];
+  const hasHiddenTrace = visibleCount < trace.length;
+
   return (
-    <details className="w-full rounded-xl border border-border/30 bg-background/40 px-3 py-2">
+    <details
+      className="w-full rounded-xl border border-border/30 bg-background/40 px-3 py-2"
+      onToggle={(event) => {
+        const nextOpen = (event.currentTarget as HTMLDetailsElement).open;
+        setIsOpen(nextOpen);
+        if (!nextOpen) {
+          setVisibleCount(40);
+        }
+      }}
+    >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
           <ChevronDown className="size-3.5" />
@@ -476,30 +502,48 @@ function TraceAccordion({
       </summary>
 
       <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-border/20 bg-background/30 p-2 font-mono text-[11px]">
-        {trace.length === 0 ? (
+        {!isOpen ? (
+          <div className="text-muted-foreground">
+            Expand to inspect {trace.length} runtime event{trace.length === 1 ? "" : "s"}.
+          </div>
+        ) : trace.length === 0 ? (
           <div className="text-muted-foreground">Waiting for runtime events...</div>
         ) : (
-          trace.map((item) => (
-            <div
-              key={item.id}
-              className="mb-1.5 rounded-md border border-border/10 bg-background/40 p-2"
-            >
-              <div className="flex items-center justify-between gap-2 text-muted-foreground">
-                <span className="uppercase tracking-wide">{item.phase}</span>
-                <span>
-                  {item.timestamp.toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  })}
-                </span>
+          <>
+            {visibleTrace.map((item) => (
+              <div
+                key={item.id}
+                className="mb-1.5 rounded-md border border-border/10 bg-background/40 p-2"
+              >
+                <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                  <span className="uppercase tracking-wide">{item.phase}</span>
+                  <span>
+                    {item.timestamp.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <div className="mt-1 text-foreground">{item.label}</div>
+                {item.preview && (
+                  <div className="mt-1 line-clamp-2 text-muted-foreground">{item.preview}</div>
+                )}
               </div>
-              <div className="mt-1 text-foreground">{item.label}</div>
-              {item.preview && (
-                <div className="mt-1 line-clamp-2 text-muted-foreground">{item.preview}</div>
-              )}
-            </div>
-          ))
+            ))}
+            {hasHiddenTrace && (
+              <div className="mt-2 flex justify-center">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setVisibleCount((count) => Math.min(trace.length, count + 40))}
+                >
+                  Show {Math.min(40, trace.length - visibleCount)} more
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </details>

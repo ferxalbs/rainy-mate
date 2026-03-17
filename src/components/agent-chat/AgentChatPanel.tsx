@@ -9,11 +9,10 @@ import type { AgentSpec } from "../../types/agent-spec";
 import type { UnifiedModel } from "../ai/UnifiedModelSelector";
 import { getReasoningOptions } from "../ai/UnifiedModelSelector";
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { ScrollArea } from "../ui/scroll-area";
 import { MemoizedMessageBubble } from "./MessageBubble";
 import { ChatComposer } from "./ChatComposer";
 import { ChatTopbar } from "./ChatTopbar";
+import { VirtualTranscript } from "./VirtualTranscript";
 
 interface AgentChatPanelProps {
   workspacePath: string;
@@ -150,9 +149,6 @@ export function AgentChatPanel({
   const [agentSpecs, setAgentSpecs] = useState<AgentSpec[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const latestMessageRef = useRef<HTMLDivElement>(null);
-  const prevMessagesLengthRef = useRef(0);
 
   const {
     messages,
@@ -231,30 +227,6 @@ export function AgentChatPanel({
     return stableReasoningOptions.includes("medium") ? "medium" : stableReasoningOptions[0];
   }, [stableReasoningOptions, reasoningEffortOverride]);
 
-  // ─── Scroll management — coalesced via rAF ─────────────────────────
-  const scrollRafRef = useRef<number | null>(null);
-  useEffect(() => {
-    const prevLength = prevMessagesLengthRef.current;
-    const currentLength = messages.length;
-    prevMessagesLengthRef.current = currentLength;
-
-    if (currentLength > prevLength) {
-      latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-      if (scrollRafRef.current != null) return;
-      scrollRafRef.current = requestAnimationFrame(() => {
-        scrollRafRef.current = null;
-        messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-      });
-    }
-    return () => {
-      if (scrollRafRef.current != null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-    };
-  }, [messages]);
-
   // ─── Stable callbacks ──────────────────────────────────────────────
   const handleModelSelect = useCallback(async (modelId: string) => {
     setCurrentModelId(modelId);
@@ -301,6 +273,22 @@ export function AgentChatPanel({
 
   // ─── Render ────────────────────────────────────────────────────────
   const hasMessages = messages.length > 0;
+  const transcriptHeader = hasMessages ? <TelemetryBar telemetry={latestTelemetry} /> : null;
+
+  const estimateTranscriptMessageSize = useCallback(
+    (message: (typeof messages)[number]) => {
+      const baseHeight = message.type === "user" ? 104 : 180;
+      const contentHeight = Math.min(720, Math.ceil(message.content.length / 44) * 14);
+      const traceHeight = Math.min(320, (message.trace?.length || 0) * 26);
+      const specialistsHeight = message.specialists?.length
+        ? 120 + message.specialists.length * 52
+        : 0;
+      const supervisorHeight = message.supervisorPlan ? 84 : 0;
+      const thoughtHeight = message.thought ? 96 : 0;
+      return baseHeight + contentHeight + traceHeight + specialistsHeight + supervisorHeight + thoughtHeight;
+    },
+    [],
+  );
 
   return (
     <div className={cn("relative h-full w-full overflow-hidden bg-transparent text-foreground", className)}>
@@ -319,14 +307,9 @@ export function AgentChatPanel({
         onOpenSettings={onOpenSettings}
       />
 
-      <ScrollArea className="absolute inset-0 z-10 h-full w-full">
-        <div
-          className={cn(
-            "mx-auto flex w-full max-w-6xl flex-col px-4 md:px-6",
-            hasMessages ? "min-h-full pb-44 pt-24" : "min-h-full justify-center pb-12 pt-16",
-          )}
-        >
-          {!hasMessages ? (
+      {!hasMessages ? (
+        <div className="absolute inset-0 z-10 h-full w-full overflow-y-auto">
+          <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-4 pb-12 pt-16 md:px-6">
             <div className="flex flex-1 flex-col items-center justify-center">
               <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-black/5 bg-background shadow-sm dark:border-white/10 dark:bg-background/20">
                 <Sparkles className="size-5 text-primary" />
@@ -374,43 +357,30 @@ export function AgentChatPanel({
                 centered
               />
             </div>
-          ) : (
-            <div className="space-y-8">
-              <TelemetryBar telemetry={latestTelemetry} />
-
-              {hasMoreHistory && (
-                <div className="flex justify-center">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={loadOlderHistory}
-                    disabled={isHydratingHistory}
-                    className="rounded-full border border-white/10 bg-background/80 px-4 backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-                  >
-                    {isHydratingHistory ? "Loading..." : "Load older messages"}
-                  </Button>
-                </div>
-              )}
-
-              {messages.map((message, index) => (
-                <div key={message.id} ref={index === messages.length - 1 ? latestMessageRef : undefined}>
-                  <MemoizedMessageBubble
-                    message={message}
-                    currentPlan={currentPlan}
-                    isExecuting={isExecuting}
-                    onExecute={executePlan}
-                    onExecuteToolCalls={executeToolCalls}
-                    onStopRun={stopAgentRun}
-                    onRetryRun={retryAgentRun}
-                    workspaceId={workspacePath}
-                  />
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
+          </div>
         </div>
-      </ScrollArea>
+      ) : (
+        <VirtualTranscript
+          items={messages}
+          header={transcriptHeader}
+          hasMoreHistory={hasMoreHistory}
+          isHydratingHistory={isHydratingHistory}
+          onLoadOlderHistory={loadOlderHistory}
+          estimateSize={estimateTranscriptMessageSize}
+          renderItem={(message) => (
+            <MemoizedMessageBubble
+              message={message}
+              currentPlan={currentPlan}
+              isExecuting={isExecuting}
+              onExecute={executePlan}
+              onExecuteToolCalls={executeToolCalls}
+              onStopRun={stopAgentRun}
+              onRetryRun={retryAgentRun}
+              workspaceId={workspacePath}
+            />
+          )}
+        />
+      )}
 
       {hasMessages && (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 px-4 md:px-6">
