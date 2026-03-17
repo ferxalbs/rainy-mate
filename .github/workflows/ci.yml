@@ -83,7 +83,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsqlite3-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -108,5 +108,16 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Tauri Build
-        run: pnpm run tauri build ${{ matrix.args }}
+      - name: Tauri Build (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: pnpm run tauri build ${{ matrix.args }} --config "{\"bundle\":{\"createUpdaterArtifacts\":false}}"
+
+      - name: Tauri Build (Ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          LIBSQLITE3_SYS_USE_PKG_CONFIG: 1
+        run: pnpm run tauri build ${{ matrix.args }} --config "{\"bundle\":{\"createUpdaterArtifacts\":false}}"
+
+      - name: Tauri Build (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: pnpm run tauri build ${{ matrix.args }} --config "{\"bundle\":{\"createUpdaterArtifacts\":false}}"
