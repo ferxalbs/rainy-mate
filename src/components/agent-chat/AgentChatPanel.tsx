@@ -77,6 +77,8 @@ export function AgentChatPanel({
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLengthRef = useRef(0);
 
   const {
     messages,
@@ -152,7 +154,17 @@ export function AgentChatPanel({
   }, [reasoningOptions]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const prevLength = prevMessagesLengthRef.current;
+    const currentLength = messages.length;
+    prevMessagesLengthRef.current = currentLength;
+
+    if (currentLength > prevLength) {
+      // New message added — scroll to its top so the user reads from the beginning
+      latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      // Streaming update — scroll to bottom to show latest tokens
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   const handleModelSelect = async (modelId: string) => {
@@ -352,18 +364,19 @@ export function AgentChatPanel({
                 </div>
               )}
 
-              {messages.map((message) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  currentPlan={currentPlan}
-                  isExecuting={isExecuting}
-                  onExecute={executePlan}
-                  onExecuteToolCalls={executeToolCalls}
-                  onStopRun={stopAgentRun}
-                  onRetryRun={retryAgentRun}
-                  workspaceId={workspacePath}
-                />
+              {messages.map((message, index) => (
+                <div key={message.id} ref={index === messages.length - 1 ? latestMessageRef : undefined}>
+                  <MessageBubble
+                    message={message}
+                    currentPlan={currentPlan}
+                    isExecuting={isExecuting}
+                    onExecute={executePlan}
+                    onExecuteToolCalls={executeToolCalls}
+                    onStopRun={stopAgentRun}
+                    onRetryRun={retryAgentRun}
+                    workspaceId={workspacePath}
+                  />
+                </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
