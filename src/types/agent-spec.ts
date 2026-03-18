@@ -60,6 +60,7 @@ export interface SkillBehavior {
 }
 
 export type PromptSkillScope = "project" | "global" | "mate_managed";
+export type PromptSkillKind = "prompt_skill" | "workspace_instruction";
 
 export interface PromptSkillBinding {
   id: string;
@@ -68,6 +69,7 @@ export interface PromptSkillBinding {
   content: string;
   source_path: string;
   scope: PromptSkillScope;
+  kind: PromptSkillKind;
   source_hash: string;
   enabled: boolean;
   last_synced_at: number;

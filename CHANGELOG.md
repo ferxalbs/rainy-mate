@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/src/ai/specs/skills.rs`, `src/types/agent-spec.ts`, and `src/components/agents/builder/specDefaults.ts` add `prompt_skills` bindings to the agent spec shape
   - `src/components/agents/builder/SkillsEditor.tsx`, `src/components/agents/builder/AgentBuilder.tsx`, `src/components/agents/store/AgentStorePage.tsx`, `src/App.tsx`, and `src/services/tauri.ts` now surface detected prompt skills in Agent Builder with per-agent/all-agent toggles and refresh-on-drift
   - `src-tauri/src/ai/agent/runtime.rs` injects bound prompt skills into the local runtime prompt, while `rainy-atm/src/services/agent-spec-migration.ts` and `rainy-atm/src/services/agent-runtime-config.ts` preserve and render embedded prompt-skill snapshots in cloud execution
+- **Manual skill invocation + workspace instruction layer** — prompt skills and repo instruction files can now be used more explicitly without mixing them into agent `soul`:
+  - `src-tauri/src/commands/agent.rs` adds deterministic parsing for `list my skills`, `list me your skills`, `use skill <name>`, `invoke <name>`, `apply <name>`, `/skills`, and `/skill <name>`
+  - manual skill listing now returns a registry-backed response from discovered workspace/global entries instead of a generic model answer
+  - explicit manual skill invocation forces the selected skill into the current turn, while ambiguous or missing matches return deterministic responses with candidate names
+  - `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` are now first-class `workspace_instruction` entries with explicit precedence and are rendered separately from regular prompt skills
+  - `src-tauri/src/ai/agent/runtime.rs` and `rainy-atm/src/services/agent-runtime-config.ts` now separate `Workspace Instructions` from `Prompt Skills` in prompt assembly
+  - the default local agent now inherits workspace/global skill registry behavior, including skill listing and auto-applied workspace instruction fallback, without redefining its identity `soul`
 - **Workspace accordion chat shell** — the sidebar now groups chat history under project/workspace accordions instead of a flat thread list:
   - `src/components/layout/AppSidebar.tsx`, `src/components/layout/ChatThreadList.tsx`, `src/components/layout/TahoeLayout.tsx`, and `src/App.tsx`
   - active workspace opens by default, chat lists scroll inside the shared sidebar, and the active chat can be refreshed without leaving the conversation view
@@ -201,6 +208,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cargo test -q prompt_skills --lib` → 2 tests pass
 - `pnpm exec tsc --noEmit` → pass (`skills.sh`-compatible prompt skill discovery + Agent Builder binding flow)
 - `bunx tsc --noEmit` (`rainy-atm`) → fails on pre-existing WhatsApp runtime type errors in `src/services/whatsapp-agent-runtime.ts` and `src/services/whatsapp-lane-queue.ts`; prompt-skill ATM changes compile within the touched files
+- `cargo check -q` → pass (manual skill invocation + workspace instruction layer)
+- `cargo test -q prompt_skills --lib` → 2 tests pass (manual skill invocation + workspace instruction layer)
+- `pnpm exec tsc --noEmit` → pass (manual skill invocation + workspace instruction layer)
 
 ### Fixed
 

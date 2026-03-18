@@ -1,7 +1,7 @@
 use crate::ai::agent::runtime::{AgentContent, AgentMessage, AgentRuntime, RuntimeOptions};
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::ai::specs::manifest::RuntimeMode;
-use crate::ai::specs::AgentSpec;
+use crate::ai::specs::{AgentSpec, PromptSkillBinding, PromptSkillKind};
 use crate::ai::{
     agent::context_window::ContextWindow,
     agent::events::AgentEvent,
@@ -18,9 +18,11 @@ use crate::commands::memory::MemoryManagerState;
 use crate::commands::router::IntelligentRouterState;
 use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::agent_run_control::{AgentRunControl, CancelRunResult};
-use crate::services::SkillExecutor;
+use crate::services::{PromptSkillDiscoveryService, SkillExecutor};
 use chrono::Utc;
+use regex::Regex;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{Emitter, Manager, State};
 
@@ -38,6 +40,304 @@ fn default_runtime_mode_for_chat(agent_spec_id: Option<&str>) -> RuntimeMode {
     } else {
         RuntimeMode::Supervisor
     }
+}
+
+enum SkillInvocationIntent {
+    None,
+    ListSkills,
+    ForceSkill { query: String },
+}
+
+enum ResolvedSkillSelection {
+    None,
+    Forced(Vec<PromptSkillBinding>),
+    ListResponse(String),
+    NotFound { query: String, available: Vec<String> },
+    Ambiguous { query: String, matches: Vec<String> },
+}
+
+fn merge_runtime_prompt_skills(
+    existing: Vec<PromptSkillBinding>,
+    discovered: Vec<crate::services::DiscoveredPromptSkill>,
+) -> Vec<PromptSkillBinding> {
+    let mut merged: BTreeMap<String, PromptSkillBinding> = existing
+        .into_iter()
+        .filter(|binding| binding.enabled)
+        .map(|binding| (binding.source_path.clone(), binding))
+        .collect();
+
+    for skill in discovered
+        .into_iter()
+        .filter(|skill| skill.valid && skill.all_agents_enabled)
+    {
+        merged
+            .entry(skill.source_path.clone())
+            .or_insert_with(|| skill.to_binding());
+    }
+
+    merged.into_values().collect()
+}
+
+fn instruction_priority(path: &str) -> usize {
+    let path = path.to_lowercase();
+    if path.ends_with("/claude.md") {
+        0
+    } else if path.ends_with("/agents.md") {
+        1
+    } else if path.ends_with("/gemini.md") {
+        2
+    } else {
+        99
+    }
+}
+
+fn auto_apply_instruction(skills: &[PromptSkillBinding]) -> Option<PromptSkillBinding> {
+    skills
+        .iter()
+        .filter(|skill| skill.kind == PromptSkillKind::WorkspaceInstruction)
+        .min_by(|a, b| {
+            instruction_priority(&a.source_path)
+                .cmp(&instruction_priority(&b.source_path))
+                .then(a.name.cmp(&b.name))
+        })
+        .cloned()
+}
+
+fn dedupe_bindings(bindings: Vec<PromptSkillBinding>) -> Vec<PromptSkillBinding> {
+    let mut merged = BTreeMap::new();
+    for binding in bindings {
+        merged.insert(binding.source_path.clone(), binding);
+    }
+    merged.into_values().collect()
+}
+
+fn parse_skill_invocation_intent(prompt: &str) -> SkillInvocationIntent {
+    let trimmed = prompt.trim();
+    let lower = trimmed.to_lowercase();
+    if matches!(
+        lower.as_str(),
+        "/skills" | "list my skills" | "list your skills" | "list me your skills" | "what skills are available here?"
+    ) || lower.starts_with("what skills are available")
+        || lower.starts_with("show my skills")
+        || lower.starts_with("show available skills")
+        || lower.starts_with("list available skills")
+        || lower.starts_with("what skills do you have")
+    {
+        return SkillInvocationIntent::ListSkills;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("/skill ") {
+        let query = rest.trim();
+        if !query.is_empty() {
+            return SkillInvocationIntent::ForceSkill {
+                query: query.to_string(),
+            };
+        }
+    }
+
+    let natural_patterns = [
+        r"(?i)^\s*use skill\s+(.+?)\s*$",
+        r"(?i)^\s*invoke skill\s+(.+?)\s*$",
+        r"(?i)^\s*invoke\s+(.+?)\s*$",
+        r"(?i)^\s*apply skill\s+(.+?)\s*$",
+        r"(?i)^\s*apply\s+(.+?)\s*(?:to this task)?\s*$",
+    ];
+    for pattern in natural_patterns {
+        let re = Regex::new(pattern).expect("valid manual skill regex");
+        if let Some(captures) = re.captures(trimmed) {
+            if let Some(query) = captures.get(1) {
+                let query = query.as_str().trim();
+                if !query.is_empty() {
+                    return SkillInvocationIntent::ForceSkill {
+                        query: query.to_string(),
+                    };
+                }
+            }
+        }
+    }
+
+    SkillInvocationIntent::None
+}
+
+fn render_skill_registry_response(
+    discovered: &[crate::services::DiscoveredPromptSkill],
+    attached: &[PromptSkillBinding],
+) -> String {
+    if discovered.is_empty() {
+        return "No prompt skills or workspace instruction files were detected for the current workspace.".to_string();
+    }
+
+    let attached_paths: std::collections::HashSet<&str> =
+        attached.iter().map(|skill| skill.source_path.as_str()).collect();
+    let mut lines = vec!["Available workspace skills:".to_string()];
+    for skill in discovered {
+        let kind = match skill.kind {
+            PromptSkillKind::WorkspaceInstruction => "workspace-instruction",
+            PromptSkillKind::PromptSkill => "skill",
+        };
+        let scope = match skill.scope {
+            crate::ai::specs::PromptSkillScope::Project => "project",
+            crate::ai::specs::PromptSkillScope::Global => "global",
+            crate::ai::specs::PromptSkillScope::MateManaged => "mate",
+        };
+        let mut status = Vec::new();
+        if skill.all_agents_enabled {
+            status.push("all-agents");
+        }
+        if attached_paths.contains(skill.source_path.as_str()) {
+            status.push("attached");
+        }
+        if !skill.valid {
+            status.push("invalid");
+        }
+        let status_suffix = if status.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", status.join(", "))
+        };
+        lines.push(format!(
+            "- {} ({}, {}){}",
+            skill.name, kind, scope, status_suffix
+        ));
+        lines.push(format!("  {}", skill.description));
+    }
+    lines.join("\n")
+}
+
+fn resolve_manual_skill_selection(
+    prompt: &str,
+    discovered: &[crate::services::DiscoveredPromptSkill],
+    attached: &[PromptSkillBinding],
+) -> ResolvedSkillSelection {
+    match parse_skill_invocation_intent(prompt) {
+        SkillInvocationIntent::None => ResolvedSkillSelection::None,
+        SkillInvocationIntent::ListSkills => {
+            ResolvedSkillSelection::ListResponse(render_skill_registry_response(discovered, attached))
+        }
+        SkillInvocationIntent::ForceSkill { query } => {
+            let query_lc = query.trim().to_lowercase();
+            let mut exact = Vec::new();
+            let mut partial = Vec::new();
+            for skill in discovered.iter().filter(|skill| skill.valid) {
+                let name_lc = skill.name.to_lowercase();
+                let id_lc = skill.id.to_lowercase();
+                if name_lc == query_lc || id_lc == query_lc {
+                    exact.push(skill);
+                } else if name_lc.contains(&query_lc) || id_lc.contains(&query_lc) {
+                    partial.push(skill);
+                }
+            }
+
+            let selected = if exact.len() == 1 {
+                vec![exact[0].to_binding()]
+            } else if exact.len() > 1 {
+                return ResolvedSkillSelection::Ambiguous {
+                    query,
+                    matches: exact.iter().map(|skill| skill.name.clone()).collect(),
+                };
+            } else if partial.len() == 1 {
+                vec![partial[0].to_binding()]
+            } else if partial.len() > 1 {
+                return ResolvedSkillSelection::Ambiguous {
+                    query,
+                    matches: partial.iter().map(|skill| skill.name.clone()).collect(),
+                };
+            } else {
+                return ResolvedSkillSelection::NotFound {
+                    query,
+                    available: discovered.iter().filter(|skill| skill.valid).map(|skill| skill.name.clone()).collect(),
+                };
+            };
+
+            ResolvedSkillSelection::Forced(selected)
+        }
+    }
+}
+
+fn select_relevant_prompt_skills(
+    prompt: &str,
+    skills: Vec<PromptSkillBinding>,
+) -> Vec<PromptSkillBinding> {
+    let mut pinned = auto_apply_instruction(&skills).into_iter().collect::<Vec<_>>();
+    let candidates = skills
+        .into_iter()
+        .filter(|skill| skill.kind != PromptSkillKind::WorkspaceInstruction)
+        .collect::<Vec<_>>();
+    if candidates.len() + pinned.len() <= 3 {
+        pinned.extend(candidates);
+        return pinned;
+    }
+
+    let prompt_lc = prompt.to_lowercase();
+    let explicitly_requests_skills = !matches!(parse_skill_invocation_intent(prompt), SkillInvocationIntent::None);
+    if explicitly_requests_skills {
+        let mut out = pinned;
+        out.extend(candidates);
+        return out;
+    }
+    let prompt_tokens: Vec<&str> = prompt_lc
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|token| token.len() >= 3)
+        .collect();
+
+    let mut scored = candidates
+        .into_iter()
+        .map(|skill| {
+            let haystack = format!("{} {}", skill.name.to_lowercase(), skill.description.to_lowercase());
+            let mut score = 0usize;
+            for token in &prompt_tokens {
+                if haystack.contains(token) {
+                    score += 1;
+                }
+            }
+            if prompt_lc.contains(&skill.name.to_lowercase()) {
+                score += 3;
+            }
+            (score, skill)
+        })
+        .collect::<Vec<_>>();
+
+    let has_positive = scored.iter().any(|(score, _)| *score > 0);
+    if !has_positive {
+        let mut out = pinned;
+        out.extend(scored.into_iter().take(3usize.saturating_sub(out.len())).map(|(_, skill)| skill));
+        return out;
+    }
+
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.name.cmp(&b.1.name)));
+    let mut out = pinned;
+    out.extend(scored
+        .into_iter()
+        .filter(|(score, _)| *score > 0)
+        .take(3usize.saturating_sub(out.len()))
+        .map(|(_, skill)| skill));
+    out
+}
+
+fn materialize_runtime_prompt_skills(
+    app_handle: &tauri::AppHandle,
+    workspace_path: &str,
+    prompt: &str,
+    spec: &mut AgentSpec,
+) -> Result<ResolvedSkillSelection, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let service = PromptSkillDiscoveryService::new(app_data_dir);
+    let discovered = service.discover(Some(std::path::Path::new(workspace_path)))?;
+    let existing = std::mem::take(&mut spec.skills.prompt_skills);
+    let manual = resolve_manual_skill_selection(prompt, &discovered, &existing);
+    let merged = merge_runtime_prompt_skills(existing, discovered);
+    spec.skills.prompt_skills = match &manual {
+        ResolvedSkillSelection::Forced(skills) => {
+            let mut selected = auto_apply_instruction(&merged).into_iter().collect::<Vec<_>>();
+            selected.extend(skills.clone());
+            dedupe_bindings(selected)
+        }
+        _ => select_relevant_prompt_skills(prompt, merged),
+    };
+    Ok(manual)
 }
 
 #[derive(Serialize)]
@@ -640,6 +940,50 @@ pub async fn run_agent_workflow(
         spec.runtime.mode = default_runtime_mode_for_chat(None);
         spec.runtime.max_specialists = spec.runtime.max_specialists.clamp(2, 3);
         spec.runtime.verification_required = true;
+    }
+
+    let skill_resolution =
+        materialize_runtime_prompt_skills(&app_handle, &workspace_path, &prompt, &mut spec)?;
+
+    if matches!(
+        skill_resolution,
+        ResolvedSkillSelection::ListResponse(_)
+            | ResolvedSkillSelection::NotFound { .. }
+            | ResolvedSkillSelection::Ambiguous { .. }
+    ) {
+        let response = match skill_resolution {
+            ResolvedSkillSelection::ListResponse(text) => text,
+            ResolvedSkillSelection::NotFound { query, available } => {
+                let mut out = format!("No skill named \"{}\" was found in the current workspace.", query);
+                if !available.is_empty() {
+                    out.push_str("\n\nAvailable skills:\n");
+                    for name in available {
+                        out.push_str(&format!("- {}\n", name));
+                    }
+                    out.pop();
+                }
+                out
+            }
+            ResolvedSkillSelection::Ambiguous { query, matches } => {
+                let mut out =
+                    format!("The skill request \"{}\" is ambiguous. Matching skills:", query);
+                for name in matches {
+                    out.push_str(&format!("\n- {}", name));
+                }
+                out
+            }
+            _ => unreachable!("filtered by matches above"),
+        };
+
+        let _ = agent_manager
+            .save_message(&chat_id, "user", &prompt)
+            .await
+            .map_err(|e| format!("Failed to save user message: {}", e))?;
+        let _ = agent_manager
+            .save_message(&chat_id, "assistant", &response)
+            .await
+            .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+        return Ok(RunAgentWorkflowResponse { run_id, response });
     }
 
     // Extract allowed paths from spec. If absent, derive a safe local default

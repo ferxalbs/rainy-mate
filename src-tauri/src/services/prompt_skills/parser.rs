@@ -42,6 +42,24 @@ pub fn parse_prompt_skill(skill_dir: &Path) -> Result<ParsedPromptSkill, String>
     })
 }
 
+pub fn parse_instruction_skill(file_path: &Path, name: &str, description: &str) -> Result<ParsedPromptSkill, String> {
+    let raw = std::fs::read_to_string(file_path)
+        .map_err(|e| format!("Failed to read {}: {}", file_path.display(), e))?;
+    let canonical = std::fs::canonicalize(file_path).unwrap_or_else(|_| file_path.to_path_buf());
+    let id = build_skill_id(name, &canonical);
+
+    Ok(ParsedPromptSkill {
+        id,
+        name: name.to_string(),
+        description: description.to_string(),
+        body_markdown: raw.trim().to_string(),
+        scripts: Vec::new(),
+        references: Vec::new(),
+        source_hash: hash_content(&raw),
+        source_path: canonical,
+    })
+}
+
 fn split_frontmatter(raw: &str) -> Result<(&str, &str), String> {
     if !raw.starts_with("---\n") {
         return Err("Missing YAML frontmatter".to_string());

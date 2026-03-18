@@ -338,11 +338,42 @@ impl AgentRuntime {
             format!("\n\nBehavior Rules:\n{}", lines.join("\n"))
         };
 
+        let active_workspace_instructions: Vec<&crate::ai::specs::skills::PromptSkillBinding> = spec
+            .skills
+            .prompt_skills
+            .iter()
+            .filter(|binding| {
+                binding.enabled
+                    && !binding.content.trim().is_empty()
+                    && binding.kind == crate::ai::specs::skills::PromptSkillKind::WorkspaceInstruction
+            })
+            .collect();
+        let workspace_instruction_section = if active_workspace_instructions.is_empty() {
+            String::new()
+        } else {
+            let lines: Vec<String> = active_workspace_instructions
+                .iter()
+                .map(|skill| {
+                    format!(
+                        "- [{}] {}\n{}",
+                        skill.name,
+                        skill.description,
+                        skill.content
+                    )
+                })
+                .collect();
+            format!("\n\nWorkspace Instructions:\n{}", lines.join("\n"))
+        };
+
         let active_prompt_skills: Vec<&crate::ai::specs::skills::PromptSkillBinding> = spec
             .skills
             .prompt_skills
             .iter()
-            .filter(|binding| binding.enabled && !binding.content.trim().is_empty())
+            .filter(|binding| {
+                binding.enabled
+                    && !binding.content.trim().is_empty()
+                    && binding.kind == crate::ai::specs::skills::PromptSkillKind::PromptSkill
+            })
             .collect();
         let prompt_skill_section = if active_prompt_skills.is_empty() {
             String::new()
@@ -376,7 +407,7 @@ Workspace ID: {}
 Allowed Filesystem Scope: {}
 
 Capabilities:
-{}{}{}{}
+{}{}{}{}{}
 
 Memory:
 - strategy: {}
@@ -398,6 +429,7 @@ Rules:
             capability_lines,
             workflow_section,
             behavior_section,
+            workspace_instruction_section,
             prompt_skill_section,
             spec.memory_config.strategy,
             spec.memory_config.effective_retention_days(),

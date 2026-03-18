@@ -87,6 +87,10 @@ function formatScope(scope: DiscoveredPromptSkill["scope"]) {
   return "Project";
 }
 
+function formatKind(kind: DiscoveredPromptSkill["kind"]) {
+  return kind === "workspace_instruction" ? "Instruction" : "Skill";
+}
+
 function createBinding(skill: DiscoveredPromptSkill): PromptSkillBinding {
   return {
     id: skill.id,
@@ -95,6 +99,7 @@ function createBinding(skill: DiscoveredPromptSkill): PromptSkillBinding {
     content: skill.bodyMarkdown,
     source_path: skill.sourcePath,
     scope: skill.scope,
+    kind: skill.kind,
     source_hash: skill.sourceHash,
     enabled: true,
     last_synced_at: Math.floor(Date.now() / 1000),
@@ -253,9 +258,9 @@ export function SkillsEditor({
       <section className="space-y-4 rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h4 className={sectionTitleClass}>Detected Prompt Skills</h4>
+            <h4 className={sectionTitleClass}>Detected Skills And Instructions</h4>
             <p className="text-sm text-muted-foreground mt-1">
-              `skills.sh`-compatible `SKILL.md` folders detected across the current project and global paths.
+              `SKILL.md` skills and workspace instruction files detected across the current project and global paths.
             </p>
           </div>
           <Button
@@ -310,6 +315,9 @@ export function SkillsEditor({
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-foreground">
                           {skill.name}
+                        </span>
+                        <span className="rounded-full border border-border/30 bg-background/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {formatKind(skill.kind)}
                         </span>
                         <span className="rounded-full border border-border/30 bg-background/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                           {formatScope(skill.scope)}

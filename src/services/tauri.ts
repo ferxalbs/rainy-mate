@@ -2200,7 +2200,8 @@ export interface DiscoveredPromptSkill {
   bodyMarkdown: string;
   sourcePath: string;
   scope: "project" | "global" | "mate_managed";
-  sourceKind: "direct" | "plugin_manifest";
+  kind: "prompt_skill" | "workspace_instruction";
+  sourceKind: "direct" | "plugin_manifest" | "instruction_file";
   sourceHash: string;
   discoveredAt: number;
   valid: boolean;

@@ -9,6 +9,13 @@ pub enum PromptSkillScope {
     MateManaged,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptSkillKind {
+    PromptSkill,
+    WorkspaceInstruction,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PromptSkillBinding {
     pub id: String,
@@ -17,6 +24,8 @@ pub struct PromptSkillBinding {
     pub content: String,
     pub source_path: String,
     pub scope: PromptSkillScope,
+    #[serde(default)]
+    pub kind: PromptSkillKind,
     pub source_hash: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -27,6 +36,12 @@ pub struct PromptSkillBinding {
 impl Default for PromptSkillScope {
     fn default() -> Self {
         Self::Project
+    }
+}
+
+impl Default for PromptSkillKind {
+    fn default() -> Self {
+        Self::PromptSkill
     }
 }
 

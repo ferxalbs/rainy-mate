@@ -1,5 +1,5 @@
-use crate::ai::specs::{PromptSkillBinding, PromptSkillScope};
-use super::parser::parse_prompt_skill;
+use crate::ai::specs::{PromptSkillBinding, PromptSkillKind, PromptSkillScope};
+use super::parser::{parse_instruction_skill, parse_prompt_skill};
 use super::registry::{
     now_ts, DiscoveredPromptSkill, PromptSkillRegistry, PromptSkillSourceKind,
 };
@@ -9,6 +9,11 @@ use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
 const ROOT_FILES: &[&str] = &["SKILL.md"];
+const ROOT_INSTRUCTION_FILES: &[(&str, &str, &str)] = &[
+    ("CLAUDE.md", "claude-md", "Project instructions from CLAUDE.md. Use as repository-specific operating guidance."),
+    ("AGENTS.md", "agents-md", "Project instructions from AGENTS.md. Use as repository-specific operating guidance."),
+    ("GEMINI.md", "gemini-md", "Project instructions from GEMINI.md. Use as repository-specific operating guidance."),
+];
 const PROJECT_DIRS: &[&str] = &[
     "skills",
     "skills/.curated",
@@ -57,6 +62,17 @@ impl PromptSkillDiscoveryService {
         let mut skills = Vec::new();
 
         if let Some(workspace_path) = workspace_path {
+            for path in collect_root_instruction_candidates(workspace_path) {
+                if let Some(skill) = self.load_instruction_candidate(
+                    &path,
+                    workspace_scope(&path, workspace_path),
+                    &project_entries,
+                    &mut seen,
+                ) {
+                    skills.push(skill);
+                }
+            }
+
             for path in collect_workspace_candidates(workspace_path)? {
                 if let Some(skill) = self.load_candidate(
                     &path,
@@ -98,11 +114,74 @@ impl PromptSkillDiscoveryService {
         Ok(skills)
     }
 
+    fn load_instruction_candidate(
+        &self,
+        path: &Path,
+        scope: PromptSkillScope,
+        registry_entries: &std::collections::HashMap<String, super::registry::PromptSkillRegistryEntry>,
+        seen: &mut HashSet<String>,
+    ) -> Option<DiscoveredPromptSkill> {
+        let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let key = canonical.to_string_lossy().to_string();
+        if !seen.insert(key.clone()) {
+            return None;
+        }
+
+        let file_name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("INSTRUCTIONS.md");
+        let (entry_name, description) = match file_name {
+            "CLAUDE.md" => ("claude-md", "Project instructions from CLAUDE.md. Use as repository-specific operating guidance."),
+            "AGENTS.md" => ("agents-md", "Project instructions from AGENTS.md. Use as repository-specific operating guidance."),
+            "GEMINI.md" => ("gemini-md", "Project instructions from GEMINI.md. Use as repository-specific operating guidance."),
+            _ => ("workspace-instructions", "Project instructions."),
+        };
+
+        match parse_instruction_skill(&canonical, entry_name, description) {
+            Ok(parsed) => Some(DiscoveredPromptSkill {
+                id: parsed.id,
+                name: parsed.name,
+                description: parsed.description,
+                body_markdown: parsed.body_markdown,
+                source_path: parsed.source_path.to_string_lossy().to_string(),
+                scope,
+                kind: PromptSkillKind::WorkspaceInstruction,
+                source_kind: PromptSkillSourceKind::InstructionFile,
+                source_hash: parsed.source_hash,
+                discovered_at: now_ts(),
+                valid: true,
+                parse_error: None,
+                scripts: Vec::new(),
+                references: Vec::new(),
+                all_agents_enabled: registry_entries
+                    .get(&key)
+                    .map(|entry| entry.all_agents_enabled)
+                    .unwrap_or(true),
+            }),
+            Err(error) => Some(DiscoveredPromptSkill {
+                id: format!("invalid-{}", short_hash(&key)),
+                name: entry_name.to_string(),
+                description: String::new(),
+                body_markdown: String::new(),
+                source_path: key,
+                scope,
+                kind: PromptSkillKind::WorkspaceInstruction,
+                source_kind: PromptSkillSourceKind::InstructionFile,
+                source_hash: short_hash(&canonical.to_string_lossy()),
+                discovered_at: now_ts(),
+                valid: false,
+                parse_error: Some(error),
+                scripts: Vec::new(),
+                references: Vec::new(),
+                all_agents_enabled: false,
+            }),
+        }
+    }
+
     pub fn refresh_binding(
         &self,
         workspace_path: Option<&Path>,
         source_path: &Path,
     ) -> Result<PromptSkillBinding, String> {
+        let file_name = source_path.file_name().and_then(|value| value.to_str()).unwrap_or_default();
         let scope = if let Some(workspace_path) = workspace_path {
             if source_path.starts_with(workspace_path.join(".rainy-mate")) {
                 PromptSkillScope::MateManaged
@@ -115,7 +194,16 @@ impl PromptSkillDiscoveryService {
             global_scope(source_path, &self.app_data_dir)
         };
 
-        let parsed = parse_prompt_skill(source_path)?;
+        let (parsed, kind) = if matches!(file_name, "CLAUDE.md" | "AGENTS.md" | "GEMINI.md") {
+            let (entry_name, description) = match file_name {
+                "CLAUDE.md" => ("claude-md", "Project instructions from CLAUDE.md. Use as repository-specific operating guidance."),
+                "AGENTS.md" => ("agents-md", "Project instructions from AGENTS.md. Use as repository-specific operating guidance."),
+                _ => ("gemini-md", "Project instructions from GEMINI.md. Use as repository-specific operating guidance."),
+            };
+            (parse_instruction_skill(source_path, entry_name, description)?, PromptSkillKind::WorkspaceInstruction)
+        } else {
+            (parse_prompt_skill(source_path)?, PromptSkillKind::PromptSkill)
+        };
         Ok(DiscoveredPromptSkill {
             id: parsed.id,
             name: parsed.name,
@@ -123,6 +211,7 @@ impl PromptSkillDiscoveryService {
             body_markdown: parsed.body_markdown,
             source_path: parsed.source_path.to_string_lossy().to_string(),
             scope,
+            kind,
             source_kind: PromptSkillSourceKind::Direct,
             source_hash: parsed.source_hash,
             discovered_at: now_ts(),
@@ -157,6 +246,7 @@ impl PromptSkillDiscoveryService {
                 body_markdown: parsed.body_markdown,
                 source_path: parsed.source_path.to_string_lossy().to_string(),
                 scope,
+                kind: PromptSkillKind::PromptSkill,
                 source_kind,
                 source_hash: parsed.source_hash,
                 discovered_at: now_ts(),
@@ -180,6 +270,7 @@ impl PromptSkillDiscoveryService {
                 body_markdown: String::new(),
                 source_path: key.clone(),
                 scope,
+                kind: PromptSkillKind::PromptSkill,
                 source_kind,
                 source_hash: short_hash(&key),
                 discovered_at: now_ts(),
@@ -205,10 +296,18 @@ fn collect_workspace_candidates(workspace_path: &Path) -> Result<Vec<PathBuf>, S
         let path = workspace_path.join(dir);
         candidates.extend(scan_skill_dirs(&path, 4)?);
     }
-    if candidates.is_empty() {
-        candidates.extend(scan_skill_dirs(workspace_path, 6)?);
-    }
     Ok(candidates)
+}
+
+fn collect_root_instruction_candidates(workspace_path: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for (name, _, _) in ROOT_INSTRUCTION_FILES {
+        let path = workspace_path.join(name);
+        if path.exists() {
+            out.push(path);
+        }
+    }
+    out
 }
 
 fn collect_global_candidates(app_data_dir: &Path) -> Result<Vec<PathBuf>, String> {
@@ -284,7 +383,10 @@ fn scan_skill_dirs(root: &Path, max_depth: usize) -> Result<Vec<PathBuf>, String
         .into_iter()
         .filter_entry(keep_entry)
     {
-        let entry = entry.map_err(|e| format!("Failed to walk {}: {}", root.display(), e))?;
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
         if entry.file_type().is_file() && entry.file_name().to_string_lossy() == "SKILL.md" {
             if let Some(parent) = entry.path().parent() {
                 out.push(parent.to_path_buf());

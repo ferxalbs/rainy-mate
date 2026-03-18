@@ -1,4 +1,4 @@
-use crate::ai::specs::{PromptSkillBinding, PromptSkillScope};
+use crate::ai::specs::{PromptSkillBinding, PromptSkillKind, PromptSkillScope};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 pub enum PromptSkillSourceKind {
     Direct,
     PluginManifest,
+    InstructionFile,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +21,7 @@ pub struct DiscoveredPromptSkill {
     pub body_markdown: String,
     pub source_path: String,
     pub scope: PromptSkillScope,
+    pub kind: PromptSkillKind,
     pub source_kind: PromptSkillSourceKind,
     pub source_hash: String,
     pub discovered_at: i64,
@@ -39,6 +41,7 @@ impl DiscoveredPromptSkill {
             content: self.body_markdown.clone(),
             source_path: self.source_path.clone(),
             scope: self.scope.clone(),
+            kind: self.kind.clone(),
             source_hash: self.source_hash.clone(),
             enabled: true,
             last_synced_at: now_ts(),
