@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useStreaming } from "./useStreaming";
 import { useTauriTask } from "./useTauriTask";
 import type {
@@ -22,12 +22,15 @@ type RuntimeAgentEvent = {
   data: any;
 };
 
-export function useAgentChat() {
+export function useAgentChat(
+  initialChatScopeId?: string | null,
+  onSessionChanged?: () => void | Promise<void>,
+) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isPlanning, setIsPlanning] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<TaskPlan | null>(null);
-  const [chatScopeId, setChatScopeId] = useState<string | null>(null);
+  const [chatScopeId, setChatScopeId] = useState<string | null>(initialChatScopeId ?? null);
   const [chatSession, setChatSession] = useState<tauri.ChatSession | null>(null);
   const [chatTitleStatus, setChatTitleStatus] = useState<
     "idle" | "generating" | "ready" | "fallback"
@@ -104,12 +107,28 @@ export function useAgentChat() {
   );
 
   const ensureChatScope = useCallback(async () => {
-    // Check state but don't depend on it in the outer useCallback if possible
-    // Actually, we can just use the value from a ref or just call the service.
+    if (chatScopeId) return chatScopeId;
+    if (initialChatScopeId) {
+      setChatScopeId(initialChatScopeId);
+      return initialChatScopeId;
+    }
     const scope = await tauri.getDefaultChatScope();
     setChatScopeId(scope);
     return scope;
-  }, []); // No dependency on chatScopeId to avoid recreation loop
+  }, [chatScopeId, initialChatScopeId]);
+
+  useEffect(() => {
+    if (!initialChatScopeId || initialChatScopeId === chatScopeId) return;
+    setChatScopeId(initialChatScopeId);
+    setMessages([]);
+    setCurrentPlan(null);
+    setHistoryCursorRowid(null);
+    setHasMoreHistory(false);
+    setChatTitleStatus("idle");
+    setChatSession(null);
+    hasHydratedRef.current = false;
+    isHydratingRef.current = false;
+  }, [chatScopeId, initialChatScopeId]);
 
   const refreshChatSession = useCallback(
     async (scopeOverride?: string) => {
@@ -118,13 +137,14 @@ export function useAgentChat() {
         const session = await tauri.getChatSession(scope);
         setChatSession(session);
         setChatTitleStatus(session.title?.trim() ? "ready" : "idle");
+        await onSessionChanged?.();
         return session;
       } catch (error) {
         console.error("Failed to load chat session:", error);
         return null;
       }
     },
-    [ensureChatScope],
+    [ensureChatScope, onSessionChanged],
   );
 
   const clearMessagesAndContext = useCallback(async (chatId: string) => {
@@ -187,10 +207,41 @@ export function useAgentChat() {
       setIsHydratingHistory(false);
     }
   }, [
+    chatScopeId,
     ensureChatScope,
     mapPersistedRoleToUiType,
     refreshChatSession,
   ]);
+
+  const switchChat = useCallback(async (newChatId: string) => {
+    setChatScopeId(newChatId);
+    setMessages([]);
+    setCurrentPlan(null);
+    setHistoryCursorRowid(null);
+    setHasMoreHistory(false);
+    setChatTitleStatus("idle");
+    hasHydratedRef.current = false;
+    isHydratingRef.current = false;
+  }, []);
+
+  const refreshActiveChat = useCallback(async () => {
+    const scope = await ensureChatScope();
+    setMessages([]);
+    setCurrentPlan(null);
+    setHistoryCursorRowid(null);
+    setHasMoreHistory(false);
+    setChatTitleStatus("idle");
+    setChatSession(null);
+    hasHydratedRef.current = false;
+    isHydratingRef.current = false;
+    await hydrateLongChatHistory();
+    return scope;
+  }, [ensureChatScope, hydrateLongChatHistory]);
+
+  useEffect(() => {
+    if (!chatScopeId) return;
+    void hydrateLongChatHistory();
+  }, [chatScopeId, hydrateLongChatHistory]);
 
   const loadOlderHistory = useCallback(async () => {
     if (!hasMoreHistory || historyCursorRowid == null || isHydratingHistory) return;
@@ -718,8 +769,8 @@ export function useAgentChat() {
       reasoningEffort?: string,
     ) => {
       const resolvedChatScopeId = await ensureChatScope().catch((error) => {
-        console.error("Failed to resolve chat scope, using fallback:", error);
-        return "global:long_chat:v1";
+        console.error("Failed to resolve chat scope:", error);
+        throw error;
       });
       const clientRunId = crypto.randomUUID();
       const userMsg: AgentMessage = {
@@ -1203,6 +1254,7 @@ export function useAgentChat() {
             setChatTitleStatus(
               titleResult.status === "fallback" ? "fallback" : "ready",
             );
+            await onSessionChanged?.();
           } catch (titleError) {
             console.error("Failed to ensure chat title:", titleError);
             const refreshed = await refreshChatSession(resolvedChatScopeId);
@@ -1260,7 +1312,7 @@ export function useAgentChat() {
         if (unlisten) unlisten();
       }
     },
-    [captureForgeStep, createTraceEntry, ensureChatScope, refreshChatSession],
+    [captureForgeStep, createTraceEntry, ensureChatScope, onSessionChanged, refreshChatSession],
   );
 
   const stopAgentRun = useCallback(async (messageId: string) => {
@@ -1320,6 +1372,7 @@ export function useAgentChat() {
     executeToolCalls,
     clearMessages,
     clearMessagesAndContext,
+    refreshActiveChat,
     runNativeAgent,
     stopAgentRun,
     retryAgentRun,
@@ -1328,5 +1381,7 @@ export function useAgentChat() {
     loadOlderHistory,
     hasMoreHistory,
     isHydratingHistory,
+    switchChat,
+    setChatScopeId,
   };
 }

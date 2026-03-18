@@ -2373,6 +2373,14 @@ export async function createChatSession(
   });
 }
 
+export async function createOrReuseEmptyChatSession(
+  workspaceId: string,
+): Promise<ChatSession> {
+  return invoke<ChatSession>("create_or_reuse_empty_chat_session", {
+    workspaceId,
+  });
+}
+
 export async function deleteChatSession(
   chatId: string,
 ): Promise<void> {

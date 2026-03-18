@@ -11,6 +11,7 @@ import { MemoryExplorerPanel } from "./components/memory/MemoryExplorerPanel";
 import { Toaster } from "sonner";
 import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
+import { useChatSessions } from "./hooks/useChatSessions";
 import type { Folder } from "./types";
 import type { AgentSpec } from "./types/agent-spec";
 import * as tauri from "./services/tauri";
@@ -43,6 +44,17 @@ function App() {
   >(undefined);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const {
+    sessionsByWorkspace,
+    activeChatId,
+    createNewChat,
+    switchToChat,
+    deleteChat,
+    refreshWorkspaceSessions,
+  } = useChatSessions({
+    activeWorkspaceId: activeFolder?.path || "default",
+  });
 
   // Inspector State Removed
 
@@ -103,6 +115,21 @@ function App() {
     handleNavigate("settings-models");
   }, [handleNavigate]);
 
+  const handleSelectChatForFolder = useCallback(async (folder: Folder, chatId: string) => {
+    if (activeFolder?.id !== folder.id) {
+      await handleFolderSelect(folder);
+    }
+    switchToChat(chatId);
+  }, [activeFolder?.id, handleFolderSelect, switchToChat]);
+
+  const handleCreateNewChat = useCallback(async () => {
+    const workspaceId = activeFolder?.path || "default";
+    const chat = await createNewChat(workspaceId);
+    if (chat) {
+      switchToChat(chat.id);
+    }
+  }, [activeFolder?.path, createNewChat, switchToChat]);
+
   // Check if we're in Settings section
   const isSettingsSection = activeSection.startsWith("settings-");
   const settingsTab = isSettingsSection
@@ -127,6 +154,12 @@ function App() {
           activeSection !== "research" &&
           activeSection !== "atm-bootstrap"
         }
+        chatSessionsByWorkspace={sessionsByWorkspace}
+        activeWorkspacePath={activeFolder?.path}
+        activeChatId={activeChatId}
+        onSelectChatForFolder={handleSelectChatForFolder}
+        onRefreshWorkspaceChats={(workspaceId) => void refreshWorkspaceSessions(workspaceId)}
+        onDeleteChat={deleteChat}
       >
         {/* Main Content Area - Dynamic based on section */}
         <div className="h-full w-full flex flex-col">
@@ -230,12 +263,18 @@ function App() {
             <div className="flex-1 h-full min-h-0">
               {activeFolder ? (
                 <AgentChatPanel
+                  key={activeChatId || activeFolder.path}
                   workspacePath={activeFolder.path}
                   folders={folders}
                   activeFolderId={activeFolder.id}
                   onSelectWorkspace={handleFolderSelect}
                   onAddWorkspace={addFolder}
                   onOpenSettings={handleSettingsClick}
+                  chatScopeId={activeChatId}
+                  onNewChat={handleCreateNewChat}
+                  onRefreshSessions={async () => {
+                    await refreshWorkspaceSessions(activeFolder?.path || "default");
+                  }}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full">

@@ -232,14 +232,6 @@ impl MemoryManager {
         vault.delete_by_id(id).await.map_err(MemoryError::Other)
     }
 
-    pub async fn clear_workspace_memory(&self, workspace_id: &str) -> Result<(), MemoryError> {
-        let vault = self.ensure_vault().await?;
-        vault
-            .delete_workspace(workspace_id)
-            .await
-            .map_err(MemoryError::Other)
-    }
-
     /// Delete vault entries older than `retention_days` for a workspace.
     /// No-op when `retention_days` is 0. Spawned as a background task by the agent runtime.
     pub async fn prune_expired(

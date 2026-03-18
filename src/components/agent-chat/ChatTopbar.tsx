@@ -1,10 +1,10 @@
 import {
   ChevronDown,
   Compass,
-  Eraser,
   FolderPlus,
+  RefreshCw,
   Settings2,
-  Trash2,
+  SquarePen,
 } from "lucide-react";
 
 import type { ChatSession } from "../../services/tauri";
@@ -24,7 +24,7 @@ interface ChatTopbarProps {
   onSelectFolder?: (folder: Folder) => void;
   onAddFolder?: () => void;
   onNewChat: () => void;
-  onClearUi: () => void;
+  onRefreshChat: () => void;
   onOpenSettings?: () => void;
 }
 
@@ -48,7 +48,7 @@ export function ChatTopbar({
   onSelectFolder,
   onAddFolder,
   onNewChat,
-  onClearUi,
+  onRefreshChat,
   onOpenSettings,
 }: ChatTopbarProps) {
   const workspaceName = getWorkspaceName(workspacePath);
@@ -135,27 +135,27 @@ export function ChatTopbar({
                   <button
                     type="button"
                     className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
-                    onClick={onClearUi}
+                    onClick={onRefreshChat}
                   />
                 }
               >
-                <Eraser className="size-4" />
+                <RefreshCw className="size-4" />
               </TooltipTrigger>
-              <TooltipContent>Clear UI only</TooltipContent>
+              <TooltipContent>Refresh active chat</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger
                 render={
                   <button
                     type="button"
-                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
                     onClick={onNewChat}
                   />
                 }
               >
-                <Trash2 className="size-4" />
+                <SquarePen className="size-4" />
               </TooltipTrigger>
-              <TooltipContent>Delete persisted context</TooltipContent>
+              <TooltipContent>New chat</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           {onOpenSettings && (

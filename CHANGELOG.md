@@ -5,9 +5,23 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-17 - INTELLIGENT MEMORY DISTILLATION & CHAT PERFORMANCE AND MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING & SUB-AGENT EXPANSION & PERSISTENT MEMORY TOOLS
+## [Unreleased] - 2026-03-18 - INTELLIGENT MEMORY DISTILLATION & CHAT PERFORMANCE AND MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING & SUB-AGENT EXPANSION & PERSISTENT MEMORY TOOLS & MULTI-CHAT HISTORY
 
 ### Added
+
+- **Multi-chat history system** — replaces the single `global:long_chat:v1` scope with workspace-scoped independent conversation threads:
+  - DB migration `20260318000000_add_chat_workspace_id.sql` adds `workspace_id` column + index to `chats` table; existing data migrates to `"default"` workspace
+  - `AgentManager` gains `list_chat_sessions`, `create_chat_session` (UUID-based), `delete_chat_session` (cascade), `get_latest_workspace_chat`, and `ensure_chat_session_with_workspace` methods
+  - New Tauri commands: `list_chat_sessions`, `create_chat_session`, `delete_chat_session`, `get_or_create_workspace_chat`
+  - `ChatSessionDto` now includes `workspace_id` field
+  - `tauri.ts` adds `listChatSessions`, `createChatSession`, `deleteChatSession`, `getOrCreateWorkspaceChat` service wrappers
+  - `useChatSessions` hook (`src/hooks/useChatSessions.ts`) manages per-workspace thread lists with create/switch/delete/refresh
+  - `useAgentChat` hook refactored to accept external `chatScopeId` parameter + `switchChat()` for dynamic chat switching
+  - `ChatThreadList` component (`src/components/layout/ChatThreadList.tsx`) — sidebar thread list with time-ago labels, active highlight, hover-delete, and "New chat" button
+  - `AppSidebar` now shows a "Threads" section (chat threads) above a "Projects" section (workspace folders)
+  - `TahoeLayout` passes chat session props through to sidebar
+  - `App.tsx` orchestrates everything via `useChatSessions` hook, routing `chatScopeId` to `AgentChatPanel`
+  - Auto-compaction at 80k tokens continues per-chat (each chat has its own `chat_compaction_state` row)
 
 - **Memory distillation pipeline** — replaces raw conversation dumping with LLM-based fact extraction:
   - `MemoryDistiller` (`src-tauri/src/services/memory_vault/distiller.rs`) extracts structured facts from conversation turns via cheap LLM call (temperature 0.1, 1024 tokens)
@@ -18,6 +32,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Importance scoring** — each distilled memory gets a 0.0–1.0 importance score stored as `_importance`; floors enforced (Preference ≥0.7, Correction ≥0.8)
 - **Category-aware retrieval scoring** — hybrid and vector-only search formulas now include `_importance` (12%) and `category_boost` (10–15%) weights; preferences and corrections rank highest
 - **Memory Explorer UI enhancements** — category badge (colored per type), importance bar (thin progress), and category filter dropdown in `MemoryExplorerPanel.tsx`
+- **`skills.sh`-compatible prompt skill discovery and agent binding** — added a new markdown-based prompt-skill path that is separate from the Wasm skill sandbox:
+  - `src-tauri/src/services/prompt_skills/` adds `SKILL.md` parsing, compatibility-path discovery, source hashing, and per-project/global registry metadata for `all_agents_enabled`
+  - `src-tauri/src/commands/skills.rs` adds `list_prompt_skills`, `set_prompt_skill_all_agents_enabled`, and `refresh_prompt_skill_snapshot`
+  - `src-tauri/src/commands/agent_builder.rs` materializes detected prompt-skill snapshots into saved/deployed `AgentSpec` payloads so ATM never needs direct filesystem access
+  - `src-tauri/src/ai/specs/skills.rs`, `src/types/agent-spec.ts`, and `src/components/agents/builder/specDefaults.ts` add `prompt_skills` bindings to the agent spec shape
+  - `src/components/agents/builder/SkillsEditor.tsx`, `src/components/agents/builder/AgentBuilder.tsx`, `src/components/agents/store/AgentStorePage.tsx`, `src/App.tsx`, and `src/services/tauri.ts` now surface detected prompt skills in Agent Builder with per-agent/all-agent toggles and refresh-on-drift
+  - `src-tauri/src/ai/agent/runtime.rs` injects bound prompt skills into the local runtime prompt, while `rainy-atm/src/services/agent-spec-migration.ts` and `rainy-atm/src/services/agent-runtime-config.ts` preserve and render embedded prompt-skill snapshots in cloud execution
+- **Workspace accordion chat shell** — the sidebar now groups chat history under project/workspace accordions instead of a flat thread list:
+  - `src/components/layout/AppSidebar.tsx`, `src/components/layout/ChatThreadList.tsx`, `src/components/layout/TahoeLayout.tsx`, and `src/App.tsx`
+  - active workspace opens by default, chat lists scroll inside the shared sidebar, and the active chat can be refreshed without leaving the conversation view
+- **Idempotent empty-draft chat creation** — repeated `New Chat` presses now reuse the newest empty draft instead of spawning duplicate blank chats:
+  - backend guard in `src-tauri/src/ai/agent/manager.rs` + `src-tauri/src/commands/agent.rs`
+  - frontend in-flight/draft reuse guard in `src/hooks/useChatSessions.ts`
+  - Tauri wrapper added in `src/services/tauri.ts`
 
 ### Fixed
 
@@ -94,8 +122,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/components/agent-chat/MarkdownRenderer.tsx`
   - `src/components/agent-chat/MessageBubble.tsx`
   - `src/components/agent-chat/AgentChatPanel.tsx`
+- **Multi-chat session bleed and destructive chat clearing**:
+  - `New Chat` now fully switches to a clean session immediately instead of showing the previous transcript until refresh (`src/App.tsx`, `src/hooks/useAgentChat.ts`, `src/components/agent-chat/AgentChatPanel.tsx`)
+  - clearing or deleting a chat no longer clears workspace memory; only chat transcript/compaction/telemetry data are removed (`src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/services/memory/memory_manager.rs`)
 
 ### Changed
+
+- **Chat controls simplified** — removed the obsolete `Clear UI` action and reduced chat creation to a single visible `New Chat` button in the topbar (`src/components/agent-chat/ChatTopbar.tsx`, `src/components/layout/AppSidebar.tsx`, `src/components/layout/TahoeLayout.tsx`, `src/App.tsx`)
 
 - `max_tokens_per_day` removed from `AirlockRateLimits` everywhere — field was unimplementable and misleading:
   - `src-tauri/src/ai/specs/manifest.rs`
@@ -164,6 +197,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pnpm exec tsc --noEmit` → pass (chat transcript virtualization + user markdown bubble updates)
 - `cargo check -q` → pass (chat transcript virtualization + user markdown bubble updates)
 - `npx -y react-doctor@latest . --verbose --diff` → 100/100 (no issues found after final chat rendering adjustments)
+- `cargo check -q` → pass (`skills.sh`-compatible prompt skill discovery + Agent Builder binding flow)
+- `cargo test -q prompt_skills --lib` → 2 tests pass
+- `pnpm exec tsc --noEmit` → pass (`skills.sh`-compatible prompt skill discovery + Agent Builder binding flow)
+- `bunx tsc --noEmit` (`rainy-atm`) → fails on pre-existing WhatsApp runtime type errors in `src/services/whatsapp-agent-runtime.ts` and `src/services/whatsapp-lane-queue.ts`; prompt-skill ATM changes compile within the touched files
 
 ### Fixed
 

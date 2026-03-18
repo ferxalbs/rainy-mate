@@ -1,9 +1,10 @@
-import { useReducer } from "react";
+import { useReducer, useState } from "react";
 import { Tooltip, Button, Separator } from "@heroui/react";
 import {
   FolderOpen,
   Download,
   FileCode,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   SquarePen,
@@ -17,14 +18,15 @@ import {
   RefreshCw,
   Check,
   AlertCircle,
-  FolderPlus,
-  ListFilter,
   BrainCircuit,
 } from "lucide-react";
+import { ChatThreadList } from "./ChatThreadList";
+import type { ChatSession } from "../../services/tauri";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { Folder } from "../../types";
 import { MandatoryUpdateOverlay } from "../updater/MandatoryUpdateOverlay";
+import { Collapsible, CollapsibleContent } from "../ui/collapsible";
 
 interface AppSidebarProps {
   folders?: Folder[];
@@ -34,12 +36,21 @@ interface AppSidebarProps {
   activeSection?: string;
   activeFolderId?: string;
 
+  // Multi-chat thread props
+  chatSessionsByWorkspace?: Record<string, ChatSession[]>;
+  activeWorkspacePath?: string;
+  activeChatId?: string | null;
+  onSelectChatForFolder?: (folder: Folder, chatId: string) => void;
+  onRefreshWorkspaceChats?: (workspaceId: string) => Promise<void> | void;
+  onDeleteChat?: (workspaceId: string, chatId: string) => void;
+
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onSettingsClick?: () => void;
 }
 
 const EMPTY_FOLDERS: Folder[] = [];
+const EMPTY_CHAT_SESSIONS_BY_WORKSPACE: Record<string, ChatSession[]> = {};
 
 const folderIcons: Record<string, any> = {
   Documents: FileText,
@@ -129,10 +140,18 @@ export function AppSidebar({
   onNavigate,
   activeSection = "running",
   activeFolderId,
+  chatSessionsByWorkspace = EMPTY_CHAT_SESSIONS_BY_WORKSPACE,
+  activeWorkspacePath,
+  activeChatId,
+  onSelectChatForFolder,
+  onRefreshWorkspaceChats,
+  onDeleteChat,
   isCollapsed = false,
   onToggleCollapse,
   onSettingsClick,
 }: AppSidebarProps) {
+  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({});
+
   type UpdateState = {
     status: UpdateStatus;
     version: string;
@@ -227,6 +246,17 @@ export function AppSidebar({
       ? Math.round((updater.progress.downloaded / updater.progress.total) * 100)
       : null;
 
+  const toggleWorkspace = (folder: Folder, nextOpen: boolean) => {
+    setExpandedWorkspaces((prev) => ({
+      ...prev,
+      [folder.path]: nextOpen,
+    }));
+
+    if (nextOpen) {
+      void onRefreshWorkspaceChats?.(folder.path);
+    }
+  };
+
   return (
     <>
       <aside
@@ -316,124 +346,145 @@ export function AppSidebar({
             />
           </div>
 
-          <Separator className="bg-border/20 mx-1" />
+          {folders.length > 0 && (
+            <>
+              <Separator className="bg-border/20 mx-1" />
 
-          {/* Threads Section */}
-          <div className="space-y-1">
-            {!isCollapsed && (
-              <div className="flex items-center justify-between px-3 py-1 mb-1">
-                <span className="text-[11px] font-semibold text-muted-foreground/70">
-                  Threads
-                </span>
-                <div className="flex items-center gap-0.5">
-                  <Tooltip delay={0}>
+              {/* Projects Section */}
+              <div className="space-y-1">
+                {!isCollapsed ? (
+                  <div className="mb-1 flex items-center justify-between px-3 py-1">
+                    <span className="text-[11px] font-semibold text-muted-foreground/70">
+                      Projects
+                    </span>
                     <Button
                       variant="ghost"
                       size="sm"
                       isIconOnly
-                      className="size-6 p-0 text-muted-foreground/40 hover:text-foreground hover:bg-white/5"
+                      className="size-7 rounded-xl text-muted-foreground/50 hover:bg-white/10 hover:text-foreground"
+                      onPress={onAddFolder}
                     >
-                      <FolderPlus className="size-3.5" />
+                      <Plus className="size-4" />
                     </Button>
-                    <Tooltip.Content placement="bottom">New project</Tooltip.Content>
-                  </Tooltip>
-                  <Tooltip delay={0}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      isIconOnly
-                      className="size-6 p-0 text-muted-foreground/40 hover:text-foreground hover:bg-white/5"
-                    >
-                      <ListFilter className="size-3.5" />
-                    </Button>
-                    <Tooltip.Content placement="bottom">Filter, sort, and organize threads</Tooltip.Content>
-                  </Tooltip>
-                </div>
-              </div>
-            )}
+                  </div>
+                ) : null}
 
-            {folders.length > 0 ? (
-              <div className="space-y-0.5">
-                {folders.map((folder) => {
-                  const isActive = folder.id === activeFolderId;
-                  const Icon = folderIcons[folder.name] || FolderOpen;
+                <div className="space-y-0.5">
+                  {folders.map((folder) => {
+                    const isActive = folder.id === activeFolderId;
+                    const Icon = folderIcons[folder.name] || FolderOpen;
+                    const isExpanded = expandedWorkspaces[folder.path] ??
+                      (folder.path === activeWorkspacePath || isActive);
+                    const sessions = chatSessionsByWorkspace[folder.path] || [];
 
-                  const folderBtn = (
-                    <Button
-                      key={folder.id}
-                      variant={isActive ? "secondary" : "ghost"}
-                      isIconOnly={isCollapsed}
-                      className={`transition-all duration-200 group relative ${
-                        isCollapsed
-                          ? "w-9 h-9 justify-center mx-auto rounded-xl"
-                          : "w-full justify-start gap-3 h-9 px-3 rounded-xl"
-                      } ${
-                        isActive
-                          ? "bg-primary/10 text-primary font-medium shadow-none"
-                          : "text-muted-foreground hover:text-foreground hover:bg-white/10"
-                      }`}
-                      onPress={() => onFolderSelect?.(folder)}
-                    >
-                      <div
-                        className={`flex items-center justify-center transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`}
-                      >
-                        <Icon className="size-4" />
-                      </div>
-                      {!isCollapsed && (
-                        <span className="truncate flex-1 text-left text-[13px]">
+                    return isCollapsed ? (
+                      <Tooltip key={folder.id} delay={0}>
+                        <Button
+                          variant={isActive ? "secondary" : "ghost"}
+                          isIconOnly
+                          className={`w-9 h-9 justify-center mx-auto rounded-xl transition-all duration-200 ${
+                            isActive
+                              ? "bg-primary/10 text-primary font-medium shadow-none"
+                              : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+                          }`}
+                          onPress={() => onFolderSelect?.(folder)}
+                        >
+                          <Icon className="size-4" />
+                        </Button>
+                        <Tooltip.Content placement="right">
                           {folder.name}
-                        </span>
-                      )}
+                        </Tooltip.Content>
+                      </Tooltip>
+                    ) : (
+                      <Collapsible
+                        key={folder.id}
+                        open={isExpanded}
+                        onOpenChange={(open) => toggleWorkspace(folder, open)}
+                      >
+                        <div className="rounded-2xl border border-white/6 bg-background/15">
+                          <div
+                            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${
+                              isActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                              onClick={() => void onFolderSelect?.(folder)}
+                            >
+                              <div className="flex items-center justify-center">
+                                <Icon className="size-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-[13px] font-medium">
+                                  {folder.name}
+                                </div>
+                                <div className="truncate text-[10px] text-muted-foreground/70">
+                                  {sessions.length} chat{sessions.length === 1 ? "" : "s"}
+                                </div>
+                              </div>
+                            </button>
+                            {isActive && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                isIconOnly
+                                className="size-7 rounded-xl text-muted-foreground/55 hover:bg-white/10 hover:text-foreground"
+                                onPress={() => void onRefreshWorkspaceChats?.(folder.path)}
+                              >
+                                <RefreshCw className="size-3.5" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              isIconOnly
+                              className="size-7 rounded-xl text-muted-foreground/55 hover:bg-white/10 hover:text-foreground"
+                              onPress={() => toggleWorkspace(folder, !isExpanded)}
+                            >
+                              <ChevronDown
+                                className={`size-4 shrink-0 transition-transform ${
+                                  isExpanded ? "rotate-180" : ""
+                                }`}
+                              />
+                            </Button>
+                          </div>
+
+                          <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+                            <div className="space-y-2 px-2 pb-2 pt-1">
+                              <ChatThreadList
+                                sessions={sessions}
+                                activeChatId={activeChatId ?? null}
+                                onSwitchChat={(chatId) => onSelectChatForFolder?.(folder, chatId)}
+                                onRefresh={isActive ? () => void onRefreshWorkspaceChats?.(folder.path) : undefined}
+                                onDeleteChat={onDeleteChat ? (chatId) => onDeleteChat(folder.path, chatId) : undefined}
+                                emptyLabel="No chats in this workspace"
+                                showRefresh={isActive}
+                              />
+                            </div>
+                          </CollapsibleContent>
+                        </div>
+                      </Collapsible>
+                    );
+                  })}
+
+                  {isCollapsed && (
+                    <Button
+                      variant="ghost"
+                      isIconOnly
+                      className="w-9 h-9 justify-center mx-auto rounded-xl text-muted-foreground/50 hover:text-foreground hover:bg-white/10"
+                      onPress={onAddFolder}
+                    >
+                      <Plus className="size-4 shrink-0" />
                     </Button>
-                  );
-
-                  return isCollapsed ? (
-                    <Tooltip key={folder.id} delay={0}>
-                      {folderBtn}
-                      <Tooltip.Content placement="right">
-                        {folder.name}
-                      </Tooltip.Content>
-                    </Tooltip>
-                  ) : (
-                    folderBtn
-                  );
-                })}
-
-                {/* Add project list item */}
-                <Button
-                  variant="ghost"
-                  isIconOnly={isCollapsed}
-                  className={`transition-all duration-200 ${
-                    isCollapsed
-                      ? "w-9 h-9 justify-center mx-auto rounded-xl"
-                      : "w-full justify-start gap-3 h-9 px-3 rounded-xl"
-                  } text-muted-foreground/50 hover:text-foreground hover:bg-white/10`}
-                  onPress={onAddFolder}
-                >
-                  <Plus className="size-4 shrink-0" />
-                  {!isCollapsed && (
-                    <span className="truncate text-[13px] font-medium">Add project</span>
                   )}
-                </Button>
-              </div>
-            ) : (
-              !isCollapsed && (
-                <div className="px-3 py-4 text-center rounded-xl border border-dashed border-border/50 bg-muted/20">
-                  <p className="text-[10px] text-muted-foreground mb-2">
-                    No projects yet
-                  </p>
-                  <Button
-                    size="sm"
-                    onPress={onAddFolder}
-                    className="h-7 text-[10px] bg-background/30 backdrop-blur-md border border-white/10 hover:bg-white/10 text-foreground"
-                  >
-                    Add First
-                  </Button>
                 </div>
-              )
-            )}
+              </div>
+            </>
+          )}
           </div>
-        </div>
 
         <div className="mt-auto p-2.5 space-y-1">
           <Separator className="bg-border/20 mx-1" />

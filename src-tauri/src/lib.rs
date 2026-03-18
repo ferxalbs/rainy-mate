@@ -667,6 +667,7 @@ pub fn run() {
             commands::agent::get_chat_session,
             commands::agent::list_chat_sessions,
             commands::agent::create_chat_session,
+            commands::agent::create_or_reuse_empty_chat_session,
             commands::agent::delete_chat_session,
             commands::agent::update_chat_title,
             commands::agent::ensure_chat_title,

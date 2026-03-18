@@ -538,7 +538,7 @@ pub async fn run_agent_workflow(
 
     // 0. Ensure Chat Session Exists (Persist Metadata)
     let _ = agent_manager
-        .ensure_chat_session(&chat_id, "Rainy Agent")
+        .ensure_chat_session_with_workspace(&chat_id, "Rainy Agent", &workspace_path)
         .await
         .map_err(|e| format!("Failed to initialize chat session: {}", e))?;
 
@@ -658,7 +658,7 @@ pub async fn run_agent_workflow(
 
     let options = RuntimeOptions {
         model: Some(selected_model_id),
-        workspace_id: chat_id.clone(),
+        workspace_id: workspace_path.clone(),
         max_steps: None,
         allowed_paths: if derived_allowed_paths.is_empty() {
             None
@@ -685,7 +685,7 @@ pub async fn run_agent_workflow(
     let vault = memory_manager.0.get_vault().await;
     let memory_obj =
         crate::ai::agent::memory::AgentMemory::new(
-            &chat_id,
+            &workspace_path,
             app_data_dir,
             memory_manager.0.clone(),
             Some(router.0.clone()),
@@ -899,6 +899,65 @@ pub async fn get_chat_session(
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Chat session '{}' was not found after initialization", chat_id))
+}
+
+#[tauri::command]
+pub async fn list_chat_sessions(
+    agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
+    workspace_id: String,
+) -> Result<Vec<crate::ai::agent::manager::ChatSessionDto>, String> {
+    let ws = if workspace_id.trim().is_empty() {
+        "default".to_string()
+    } else {
+        workspace_id
+    };
+    agent_manager
+        .list_chat_sessions(&ws)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_chat_session(
+    agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
+    workspace_id: String,
+) -> Result<crate::ai::agent::manager::ChatSessionDto, String> {
+    let ws = if workspace_id.trim().is_empty() {
+        "default".to_string()
+    } else {
+        workspace_id
+    };
+    agent_manager
+        .create_chat_session(&ws)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_or_reuse_empty_chat_session(
+    agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
+    workspace_id: String,
+) -> Result<crate::ai::agent::manager::ChatSessionDto, String> {
+    let ws = if workspace_id.trim().is_empty() {
+        "default".to_string()
+    } else {
+        workspace_id
+    };
+    agent_manager
+        .create_or_reuse_empty_chat_session(&ws)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_chat_session(
+    agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
+    chat_id: String,
+) -> Result<(), String> {
+    agent_manager
+        .delete_chat_session(&chat_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

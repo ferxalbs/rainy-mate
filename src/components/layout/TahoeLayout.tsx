@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { BackgroundManager } from "../backgrounds/BackgroundManager";
 import { AppSidebar } from "./AppSidebar";
 import { AnimatedThemeToggler } from "../ui/animated-theme-toggler";
 import { Maximize2, Minus, X, FolderOpen, Cloud, CloudOff } from "lucide-react";
 import type { Folder } from "../../types";
+import type { ChatSession } from "../../services/tauri";
 import { useTheme } from "../../hooks/useTheme";
 import { useCloudBridgeStatus } from "../../hooks/useCloudBridgeStatus";
 import { Badge } from "../ui/badge";
@@ -25,6 +26,14 @@ interface TahoeLayoutProps {
     running: number;
     queued: number;
   };
+
+  // Multi-chat thread props
+  chatSessionsByWorkspace?: Record<string, ChatSession[]>;
+  activeWorkspacePath?: string;
+  activeChatId?: string | null;
+  onSelectChatForFolder?: (folder: Folder, chatId: string) => void;
+  onRefreshWorkspaceChats?: (workspaceId: string) => Promise<void> | void;
+  onDeleteChat?: (workspaceId: string, chatId: string) => void;
 }
 
 export function TahoeLayout({
@@ -38,17 +47,17 @@ export function TahoeLayout({
   onSettingsClick,
   activeSection,
   isImmersive,
+  chatSessionsByWorkspace,
+  activeWorkspacePath,
+  activeChatId,
+  onSelectChatForFolder,
+  onRefreshWorkspaceChats,
+  onDeleteChat,
 }: TahoeLayoutProps & { isImmersive?: boolean }) {
   const { mode } = useTheme();
-  const [isWindows, setIsWindows] = useState(false);
+  const [isWindows] = useState(() => navigator.platform.toLowerCase().includes("win"));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const cloudStatus = useCloudBridgeStatus();
-
-  useEffect(() => {
-    // Detect OS
-    const platform = navigator.platform.toLowerCase();
-    setIsWindows(platform.includes("win"));
-  }, []);
 
   const isDark = mode === "dark";
 
@@ -69,6 +78,12 @@ export function TahoeLayout({
         activeSection={activeSection}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        chatSessionsByWorkspace={chatSessionsByWorkspace}
+        activeWorkspacePath={activeWorkspacePath}
+        activeChatId={activeChatId}
+        onSelectChatForFolder={onSelectChatForFolder}
+        onRefreshWorkspaceChats={onRefreshWorkspaceChats}
+        onDeleteChat={onDeleteChat}
       />
 
       {/* 2nd Column Wrapper (Inspector Removed) */}

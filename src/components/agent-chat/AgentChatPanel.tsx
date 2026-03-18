@@ -23,6 +23,11 @@ interface AgentChatPanelProps {
   onClose?: () => void;
   onOpenSettings?: () => void;
   className?: string;
+
+  // Multi-chat props
+  chatScopeId?: string | null;
+  onNewChat?: () => void;
+  onRefreshSessions?: () => Promise<void>;
 }
 
 const PROMPTS = [
@@ -141,6 +146,10 @@ export function AgentChatPanel({
   onAddWorkspace,
   onOpenSettings,
   className,
+  chatScopeId: externalChatScopeId,
+  onNewChat: externalOnNewChat,
+  // @RESERVED — will be used for sidebar title refresh after auto-title generation
+  onRefreshSessions: _onRefreshSessions,
 }: AgentChatPanelProps) {
   const [input, setInput] = useState("");
   const [currentModelId, setCurrentModelId] = useState("");
@@ -162,13 +171,14 @@ export function AgentChatPanel({
     runNativeAgent,
     stopAgentRun,
     retryAgentRun,
-    clearMessages,
     clearMessagesAndContext,
-    hydrateLongChatHistory,
+    refreshActiveChat,
     loadOlderHistory,
     hasMoreHistory,
     isHydratingHistory,
-  } = useAgentChat();
+    // @RESERVED — will be used for in-panel chat tab switching
+    switchChat: _switchChat,
+  } = useAgentChat(externalChatScopeId, _onRefreshSessions);
 
   const isProcessing = isPlanning || isExecuting;
   const reasoningOptions = useMemo(() => getReasoningOptions(selectedModel), [selectedModel]);
@@ -213,10 +223,6 @@ export function AgentChatPanel({
     }).catch((error) => console.error("Failed to load saved agents", error));
     return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => {
-    void hydrateLongChatHistory();
-  }, [hydrateLongChatHistory]);
 
   // Derive reasoning effort from options + user override — no effect needed
   const reasoningEffort = useMemo(() => {
@@ -264,8 +270,16 @@ export function AgentChatPanel({
   }, [handleSubmit]);
 
   const handleNewChat = useCallback(() => {
-    void clearMessagesAndContext(workspacePath);
-  }, [clearMessagesAndContext, workspacePath]);
+    if (externalOnNewChat) {
+      void externalOnNewChat();
+    } else {
+      void clearMessagesAndContext(workspacePath);
+    }
+  }, [externalOnNewChat, clearMessagesAndContext, workspacePath]);
+
+  const handleRefreshChat = useCallback(() => {
+    void refreshActiveChat();
+  }, [refreshActiveChat]);
 
   const handleComposerSubmit = useCallback(() => {
     void handleSubmit();
@@ -303,7 +317,7 @@ export function AgentChatPanel({
         onSelectFolder={onSelectWorkspace}
         onAddFolder={onAddWorkspace}
         onNewChat={handleNewChat}
-        onClearUi={clearMessages}
+        onRefreshChat={handleRefreshChat}
         onOpenSettings={onOpenSettings}
       />
 
@@ -326,13 +340,13 @@ export function AgentChatPanel({
 
               <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
                 <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
-                  Single persistent scope
+                  Multi-thread workspace
                 </Badge>
                 <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
-                  GPT-5 Nano titles
+                  Auto-titled sessions
                 </Badge>
                 <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
-                  Dynamic chats next
+                  80k auto-compaction
                 </Badge>
               </div>
 
