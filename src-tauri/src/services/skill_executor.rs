@@ -390,7 +390,40 @@ impl SkillExecutor {
         let empty_params = serde_json::Value::Object(serde_json::Map::new());
         let params = params.as_ref().unwrap_or(&empty_params);
 
+        // Explicit agent memory tools (save_memory / recall_memory) always use a
+        // stable cross-chat namespace so facts persist across sessions and threads.
+        // workspace-scoped search_memory continues to respect the originating scope.
+        const USER_GLOBAL_NS: &str = "user:global";
+
         match method {
+            "recall_memory" => {
+                let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+
+                // Search user:global first, then current workspace, deduplicate by id.
+                let mut combined = Vec::new();
+                let mut seen_ids = std::collections::HashSet::new();
+
+                for ns in &[USER_GLOBAL_NS, workspace_id] {
+                    if let Ok(hits) = mm.search(ns, query, limit).await {
+                        for entry in hits {
+                            if seen_ids.insert(entry.id.clone()) {
+                                combined.push(entry);
+                            }
+                        }
+                    }
+                }
+
+                combined.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                combined.truncate(limit);
+
+                CommandResult {
+                    success: true,
+                    output: Some(serde_json::to_string(&combined).unwrap_or_default()),
+                    error: None,
+                    exit_code: Some(0),
+                }
+            }
             "search_memory" => {
                 let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
                 let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
@@ -405,7 +438,46 @@ impl SkillExecutor {
                     Err(e) => self.error(&e.to_string()),
                 }
             }
-            // Add "add_memory" later if needed
+            "save_memory" => {
+                let content = match params.get("content").and_then(|v| v.as_str()) {
+                    Some(c) if !c.trim().is_empty() => c.to_string(),
+                    _ => return self.error("save_memory requires a non-empty 'content' field"),
+                };
+                let tags: Vec<String> = params
+                    .get("tags")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|t| t.as_str())
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                let preview = content[..content.len().min(120)].to_string();
+                // Always persist explicit user facts to the global namespace so
+                // they are retrievable from any chat, thread, or workspace.
+                match mm.store_workspace_memory(
+                    USER_GLOBAL_NS,
+                    uuid::Uuid::new_v4().to_string(),
+                    content,
+                    "agent".to_string(),
+                    tags,
+                    std::collections::HashMap::new(),
+                    chrono::Utc::now().timestamp(),
+                    crate::services::memory_vault::MemorySensitivity::Internal,
+                )
+                .await
+                {
+                    Ok(()) => CommandResult {
+                        success: true,
+                        output: Some(format!("Memory saved: {}", preview)),
+                        error: None,
+                        exit_code: Some(0),
+                    },
+                    Err(e) => self.error(&e.to_string()),
+                }
+            }
             _ => self.error(&format!("Unknown memory method: {}", method)),
         }
     }

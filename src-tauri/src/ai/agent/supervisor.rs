@@ -68,6 +68,26 @@ impl SupervisorAgent {
         .any(|needle| input.contains(needle))
     }
 
+    fn should_use_memory_scribe(input: &str) -> bool {
+        let input = input.to_ascii_lowercase();
+        [
+            "remember",
+            "recall",
+            "save",
+            "my name",
+            "my preference",
+            "note that",
+            "don't forget",
+            "keep in mind",
+            "store",
+            "memorize",
+            "what do you know",
+            "what did i tell",
+        ]
+        .iter()
+        .any(|needle| input.contains(needle))
+    }
+
     fn should_gate_executor_on_research(input: &str) -> bool {
         let input = input.to_ascii_lowercase();
         [
@@ -91,7 +111,9 @@ impl SupervisorAgent {
         let mut steps = vec!["Assess the request and allocate specialist roles".to_string()];
         let mut base_assignments = Vec::new();
 
-        let use_research = Self::should_use_research(input) || !Self::should_use_executor(input);
+        let use_memory_scribe = Self::should_use_memory_scribe(input);
+        let use_research = Self::should_use_research(input)
+            || (!Self::should_use_executor(input) && !use_memory_scribe);
         let use_executor = Self::should_use_executor(input);
 
         if use_research {
@@ -126,10 +148,21 @@ impl SupervisorAgent {
             });
         }
 
+        if use_memory_scribe {
+            base_assignments.push(SpecialistAssignment {
+                agent_id: "memory-scribe-1".to_string(),
+                role: SpecialistRole::MemoryScribe,
+                title: "Persist or recall memory facts".to_string(),
+                instructions: "Identify every fact, name, preference, or piece of user context explicitly stated in this request. Save each one with save_memory and appropriate tags. If retrieval was requested, use recall_memory and return the results.".to_string(),
+                depends_on: vec![],
+            });
+            steps.push("Memory Scribe persists facts and user context to long-term memory".to_string());
+        }
+
         let has_executor = base_assignments
             .iter()
             .any(|assignment| assignment.role == SpecialistRole::Executor);
-        let max_specialists = runtime.max_specialists.clamp(1, 3) as usize;
+        let max_specialists = runtime.max_specialists.clamp(1, 4) as usize;
         let verification_required = runtime.verification_required
             && has_executor
             && max_specialists >= 2;
@@ -547,7 +580,7 @@ impl SupervisorAgent {
         let mut completed_outcomes: HashMap<String, SpecialistOutcome> = HashMap::new();
         let mut failures: Vec<LaneFailure> = Vec::new();
         let mut failed_agent_ids: HashSet<String> = HashSet::new();
-        let max_parallel = self.spec.runtime.max_specialists.clamp(1, 3) as usize;
+        let max_parallel = self.spec.runtime.max_specialists.clamp(1, 4) as usize;
 
         if let Some(registry) = self.runtime_registry.as_ref() {
             registry.update_supervisor_status(&run_id, "running").await;

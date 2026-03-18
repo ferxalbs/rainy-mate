@@ -42,6 +42,7 @@ pub struct ToolUsageByRole {
     pub research: u64,
     pub executor: u64,
     pub verifier: u64,
+    pub memory_scribe: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Default)]
@@ -189,6 +190,7 @@ impl RuntimeRegistry {
             SpecialistRole::Research => state.tool_usage_by_role.research += 1,
             SpecialistRole::Executor => state.tool_usage_by_role.executor += 1,
             SpecialistRole::Verifier => state.tool_usage_by_role.verifier += 1,
+            SpecialistRole::MemoryScribe => state.tool_usage_by_role.memory_scribe += 1,
         }
     }
 

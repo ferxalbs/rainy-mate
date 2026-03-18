@@ -9,6 +9,7 @@ import {
   MousePointer,
   Radio,
   Trash2,
+  BookMarked,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,6 +23,7 @@ export type NeuralState =
   | "browsing"
   | "communicating"
   | "pruning"
+  | "remembering"
   | "idle";
 
 // Tool to State Mapping
@@ -78,6 +80,10 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   install_skill_from_atm: "communicating",
   set_installed_skill_enabled: "creating",
   remove_installed_skill: "pruning",
+
+  // Memory tools
+  save_memory: "remembering",
+  recall_memory: "remembering",
 };
 
 /** Human-readable display names for raw tool function names */
@@ -112,6 +118,8 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   install_skill_from_atm: "Installing Skill From ATM",
   set_installed_skill_enabled: "Updating Skill State",
   remove_installed_skill: "Removing Installed Skill",
+  save_memory: "Saving to Memory",
+  recall_memory: "Recalling Memory",
 };
 
 /** Resolves a function name to a human-readable display name */
@@ -167,6 +175,13 @@ export const getNeuralStateConfig = (state: NeuralState): NeuralStateConfig => {
         text: "Pruning Obsolete Data...",
         color: "text-red-500",
         bgColor: "bg-red-500/10",
+      };
+    case "remembering":
+      return {
+        icon: BookMarked,
+        text: "Writing to Long-Term Memory...",
+        color: "text-violet-500",
+        bgColor: "bg-violet-500/10",
       };
     case "reading":
       return {

@@ -5,7 +5,7 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-17 - INTELLIGENT MEMORY DISTILLATION & CHAT PERFORMANCE AND MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING
+## [Unreleased] - 2026-03-17 - INTELLIGENT MEMORY DISTILLATION & CHAT PERFORMANCE AND MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING & SUB-AGENT EXPANSION & PERSISTENT MEMORY TOOLS
 
 ### Added
 
@@ -122,11 +122,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/types/agent.ts`
   - `src/types/neural.ts`
 
+### Added — Sub-Agent Expansion & Persistent Memory Tools (2026-03-17)
+
+- **`MemoryScribe` — 4th specialist role** with dedicated long-term memory tools:
+  - `src-tauri/src/ai/agent/protocol.rs` — `SpecialistRole::MemoryScribe` variant with `display_name: "Memory Scribe"`
+  - `src-tauri/src/ai/agent/specialist.rs` — allowed tools: `save_memory`, `recall_memory`, `read_file`, `search_files`, `ingest_document`; role prompt instructs exact fact preservation with typed tags
+  - `src-tauri/src/ai/agent/runtime_registry.rs` — `tool_usage_by_role.memory_scribe` counter; `record_tool_use` match exhaustiveness updated
+- **`save_memory` and `recall_memory` agent tools** — explicit long-term memory read/write surface for agents:
+  - `src-tauri/src/services/skill_executor/args.rs` — `SaveMemoryArgs` (`content`, `tags`), `RecallMemoryArgs` (`query`, `limit`)
+  - `src-tauri/src/services/skill_executor/registry.rs` — both tools registered and visible to the LLM
+  - `src-tauri/src/services/skill_executor.rs` — `save_memory` writes to encrypted MemoryVault; `recall_memory` merges results from `user:global` + current workspace with dedup by ID; `search_memory` retains existing workspace-scoped behavior
+  - `src-tauri/src/services/tool_policy.rs` — `ToolSkill::Memory` variant added; `recall_memory` → L0 Safe, `save_memory` → L1 Sensitive
+- **Supervisor planning upgraded — MemoryScribe lane**:
+  - `src-tauri/src/ai/agent/supervisor.rs` — `should_use_memory_scribe()` trigger detects memory-intent phrases ("remember", "my name", "save", "recall", "note that", "don't forget", etc.); MemoryScribe assigned with no dependencies (parallel, non-blocking); `max_specialists` clamp raised `1..3 → 1..4`
+- **Default agent upgraded to Supervisor mode**:
+  - `src-tauri/src/ai/agent/manager.rs` — `build_default_agent_spec_json()` serialises a full `AgentSpec` with `RuntimeMode::Supervisor`, `max_specialists: 4`, `verification_required: true`, and rich `soul_content` instructing the agent to always delegate memory operations to the Memory Scribe; `DEFAULT_AGENT_SOUL` const documents the four specialist roles and memory delegation contract; stored as `spec_json` on first `ensure_chat_session`
+- **`remembering` neural state** for memory tool activity:
+  - `src/components/agent-chat/neural-config.ts` — `"remembering"` state (violet / `BookMarked` icon / "Writing to Long-Term Memory..."); `save_memory` and `recall_memory` mapped to it
+
+### Fixed — Cross-Chat Memory Recall (2026-03-17)
+
+- **`save_memory` / `recall_memory` were chat-scoped, not user-scoped** — facts saved in one chat were invisible in any other chat or thread because the vault `workspace_id` was set to `chat_id`:
+  - `save_memory` now always writes to the stable `"user:global"` namespace, independent of active chat, thread, or workspace
+  - `recall_memory` now searches both `"user:global"` and the current workspace scope, deduplicates results by entry ID, and returns merged hits sorted by recency — user facts are always retrievable regardless of where they were saved
+  - `search_memory` (internal tool) retains workspace-scoped behaviour unchanged
+  - `src-tauri/src/services/skill_executor.rs`
+- **Clarified trash-button scope** — `clear_history` only deletes `messages`, `agent_entities`, `chat_compaction_state`, and `chat_runtime_telemetry`; `memory_vault_entries` are never touched by clearing a chat
+
 ### Validation
 
 - `cargo check -q` → pass (zero warnings)
 - `cargo test -q memory --lib` → 21 tests pass
-- `cargo test -q agent --lib` → 49 tests pass
+- `cargo test -q agent --lib` → 53 tests pass
+- `cargo test -q every_registered_tool_has_explicit_policy_entry --lib` → pass
 - `pnpm exec tsc --noEmit` → pass
 - `bun test` (rainy-atm/v0.1.16) → 50 tests pass
 - `cargo test -q airlock --lib` → 11 tests pass

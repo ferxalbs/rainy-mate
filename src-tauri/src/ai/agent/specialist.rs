@@ -104,6 +104,14 @@ impl SpecialistAgent {
                 "read_web_page",
                 "http_get_json",
                 "http_get_text",
+                "recall_memory",
+            ],
+            SpecialistRole::MemoryScribe => &[
+                "save_memory",
+                "recall_memory",
+                "read_file",
+                "search_files",
+                "ingest_document",
             ],
         }
     }
@@ -118,6 +126,9 @@ impl SpecialistAgent {
             }
             SpecialistRole::Verifier => {
                 "You are the Verifier Agent. Validate outputs using read-only tools. Never claim success without direct evidence from tool results."
+            }
+            SpecialistRole::MemoryScribe => {
+                "You are the Memory Scribe. Your sole job is to persist important facts, preferences, and user details to long-term memory using save_memory, and to surface relevant context using recall_memory. Be precise and factual — save exactly what was stated, with appropriate tags like [\"user\", \"preference\"] or [\"project\", \"context\"]."
             }
         }
     }

@@ -8,6 +8,63 @@ use tauri::State;
 
 pub const DEFAULT_LONG_CHAT_SCOPE_ID: &str = "global:long_chat:v1";
 
+const DEFAULT_AGENT_SOUL: &str = r#"# Rainy — Default Agent
+
+You are Rainy, a powerful multi-specialist AI agent. You have access to a team of sub-agents that you orchestrate:
+
+- **Research Agent** — gathers web/file context before execution
+- **Executor Agent** — implements code and filesystem changes precisely
+- **Verifier Agent** — validates results with read-only checks after writes
+- **Memory Scribe** — persists important facts and user preferences to long-term memory
+
+## Memory
+- When users share their name, preferences, or any important fact, ALWAYS delegate to the Memory Scribe to save it.
+- Before answering questions about the user's history, use `recall_memory` to surface relevant context.
+- The Memory Scribe uses `save_memory` with descriptive tags like ["user", "name"] or ["project", "preference"].
+
+## Behavior
+- Be concise and precise. Never speculate — use tools to verify.
+- For complex tasks, spawn the appropriate specialists in parallel.
+- Always respect the user's stated preferences and remembered context.
+"#;
+
+fn build_default_agent_spec_json(id: &str, name: &str) -> String {
+    use crate::ai::specs::manifest::{
+        AgentSpec, AirlockConfig, ConnectorsConfig, MemoryConfig, RuntimeConfig, RuntimeMode,
+    };
+    use crate::ai::specs::skills::AgentSkills;
+    use crate::ai::specs::soul::AgentSoul;
+
+    let spec = AgentSpec {
+        id: id.to_string(),
+        version: "3.0.0".to_string(),
+        soul: AgentSoul {
+            name: name.to_string(),
+            description: "Default Rainy agent — spawns Research, Executor, Verifier, and Memory Scribe sub-agents".to_string(),
+            version: "3.0.0".to_string(),
+            personality: "Helpful".to_string(),
+            tone: "Professional".to_string(),
+            soul_content: DEFAULT_AGENT_SOUL.to_string(),
+            embedding: None,
+        },
+        skills: AgentSkills::default(),
+        airlock: AirlockConfig::default(),
+        memory_config: MemoryConfig::default(),
+        connectors: ConnectorsConfig::default(),
+        runtime: RuntimeConfig {
+            mode: RuntimeMode::Supervisor,
+            max_specialists: 4,
+            verification_required: true,
+        },
+        model: None,
+        temperature: None,
+        max_tokens: None,
+        provider: None,
+        signature: None,
+    };
+    serde_json::to_string(&spec).unwrap_or_default()
+}
+
 #[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AgentEntity {
     pub id: String,
@@ -441,19 +498,19 @@ impl AgentManager {
         chat_id: &str,
         agent_name: &str,
     ) -> Result<(), sqlx::Error> {
-        // ... (existing code)
-        // 1. Ensure a default agent exists for this runtime context
-        // prevent duplicate key error by using INSERT OR IGNORE
         let default_agent_id = "rainy-agent-v1";
-        // Need to create a default Spec to insert if missing
-        // For now, simpler query just to satisfy the constraint
+        let default_soul = DEFAULT_AGENT_SOUL;
+        let default_spec_json = build_default_agent_spec_json(default_agent_id, agent_name);
+
         sqlx::query(
-            "INSERT INTO agents (id, name, description, soul) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+            "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
         )
         .bind(default_agent_id)
         .bind(agent_name)
-        .bind("Default system agent")
-        .bind("System agent for workspace operations")
+        .bind("Default Rainy agent — spawns Research, Executor, Verifier, and Memory Scribe sub-agents")
+        .bind(default_soul)
+        .bind(&default_spec_json)
+        .bind("3.0.0")
         .execute(&*self.db)
         .await?;
 

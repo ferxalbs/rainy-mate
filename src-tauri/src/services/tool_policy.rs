@@ -6,6 +6,7 @@ pub enum ToolSkill {
     Browser,
     Shell,
     Web,
+    Memory,
 }
 
 impl ToolSkill {
@@ -15,6 +16,7 @@ impl ToolSkill {
             Self::Browser => "browser",
             Self::Shell => "shell",
             Self::Web => "web",
+            Self::Memory => "memory",
         }
     }
 }
@@ -99,6 +101,16 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
         "delete_file" | "move_file" => ToolPolicy {
             skill: ToolSkill::Filesystem,
             airlock_level: AirlockLevel::Dangerous,
+        },
+
+        // Memory tools — L0 (safe reads) / L1 (writes to encrypted vault)
+        "recall_memory" => ToolPolicy {
+            skill: ToolSkill::Memory,
+            airlock_level: AirlockLevel::Safe,
+        },
+        "save_memory" => ToolPolicy {
+            skill: ToolSkill::Memory,
+            airlock_level: AirlockLevel::Sensitive,
         },
 
         _ => return None,

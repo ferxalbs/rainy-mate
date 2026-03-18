@@ -6,6 +6,8 @@ pub enum SpecialistRole {
     Research,
     Executor,
     Verifier,
+    /// Dedicated sub-agent for explicit memory read/write operations (save facts, recall context)
+    MemoryScribe,
 }
 
 impl SpecialistRole {
@@ -14,6 +16,7 @@ impl SpecialistRole {
             SpecialistRole::Research => "research",
             SpecialistRole::Executor => "executor",
             SpecialistRole::Verifier => "verifier",
+            SpecialistRole::MemoryScribe => "memory_scribe",
         }
     }
 
@@ -22,6 +25,7 @@ impl SpecialistRole {
             SpecialistRole::Research => "Research Agent",
             SpecialistRole::Executor => "Executor Agent",
             SpecialistRole::Verifier => "Verifier Agent",
+            SpecialistRole::MemoryScribe => "Memory Scribe",
         }
     }
 }

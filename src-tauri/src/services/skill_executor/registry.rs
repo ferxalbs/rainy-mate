@@ -157,6 +157,16 @@ pub fn registered_tool_definitions() -> Vec<Tool> {
             "Move or rename a file or directory",
             schema_for!(MoveFileArgs),
         ),
+        tool(
+            "save_memory",
+            "Persist a fact, preference, or user detail to long-term memory so it can be recalled in future sessions",
+            schema_for!(SaveMemoryArgs),
+        ),
+        tool(
+            "recall_memory",
+            "Search long-term memory with a natural language query and return the most relevant stored facts",
+            schema_for!(RecallMemoryArgs),
+        ),
     ]
 }
 

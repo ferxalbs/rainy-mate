@@ -249,3 +249,19 @@ pub struct ListFilesDetailedArgs {
     /// Maximum number of entries to return (default 200, max 2000)
     pub limit: Option<usize>,
 }
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct SaveMemoryArgs {
+    /// The fact or knowledge to persist (e.g. "User's name is Fernando")
+    pub content: String,
+    /// Optional descriptive tags for retrieval (e.g. ["user", "preference", "name"])
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct RecallMemoryArgs {
+    /// Natural language query to search long-term memory
+    pub query: String,
+    /// Maximum number of results to return (default 5, max 20)
+    pub limit: Option<u64>,
+}
