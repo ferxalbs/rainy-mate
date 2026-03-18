@@ -88,6 +88,8 @@ jobs:
       - name: Install dependencies (windows only)
         if: matrix.platform == 'windows-latest'
         run: vcpkg install sqlite3:x64-windows
+        env:
+          VCPKG_ROOT: C:\vcpkg
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -123,6 +125,7 @@ jobs:
         run: pnpm run tauri build ${{ matrix.args }} --config "{\`"bundle\`":{\`"createUpdaterArtifacts\`":false}}"
         env:
           VCPKGRS_DYNAMIC: 1
+          VCPKG_ROOT: C:\vcpkg
 
       - name: Tauri Build (macOS)
         if: matrix.platform == 'macos-latest'
