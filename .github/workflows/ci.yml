@@ -114,16 +114,16 @@ jobs:
 
       - name: Tauri Build (Linux)
         if: matrix.platform == 'ubuntu-22.04'
-        run: pnpm run tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: pnpm run tauri build ${{ matrix.args }} --config "{\"bundle\":{\"createUpdaterArtifacts\":false}}"
         env:
           LIBSQLITE3_SYS_USE_PKG_CONFIG: 1
 
       - name: Tauri Build (Windows)
         if: matrix.platform == 'windows-latest'
-        run: pnpm run tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: pnpm run tauri build ${{ matrix.args }} --config "{\`"bundle\`":{\`"createUpdaterArtifacts\`":false}}"
         env:
           VCPKGRS_DYNAMIC: 1
 
       - name: Tauri Build (macOS)
         if: matrix.platform == 'macos-latest'
-        run: pnpm run tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: pnpm run tauri build ${{ matrix.args }} --config "{\"bundle\":{\"createUpdaterArtifacts\":false}}"
