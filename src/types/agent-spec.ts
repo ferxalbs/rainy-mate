@@ -29,6 +29,7 @@ export interface AgentSkills {
   workflows: SkillWorkflow[];
   tool_preferences: ToolPreference[];
   behaviors: SkillBehavior[];
+  prompt_skills: PromptSkillBinding[];
 
   // @deprecated Compatibility bridge for current Rust AgentSpec v2.
   capabilities?: Capability[];
@@ -56,6 +57,20 @@ export interface SkillBehavior {
   name: string;
   instruction: string;
   enabled: boolean;
+}
+
+export type PromptSkillScope = "project" | "global" | "mate_managed";
+
+export interface PromptSkillBinding {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  source_path: string;
+  scope: PromptSkillScope;
+  source_hash: string;
+  enabled: boolean;
+  last_synced_at: number;
 }
 
 export interface Capability {

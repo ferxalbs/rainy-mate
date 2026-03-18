@@ -2064,8 +2064,18 @@ export async function listAgentSpecs(): Promise<any[]> {
   return invoke("list_agent_specs");
 }
 
-export async function deployAgentSpec(spec: any): Promise<any> {
-  return invoke("deploy_agent_spec", { spec });
+export async function saveAgentSpecWithWorkspace(
+  spec: any,
+  workspacePath?: string,
+): Promise<string> {
+  return invoke("save_agent_spec", { spec, workspacePath });
+}
+
+export async function deployAgentSpec(
+  spec: any,
+  workspacePath?: string,
+): Promise<any> {
+  return invoke("deploy_agent_spec", { spec, workspacePath });
 }
 
 export interface AgentKnowledgeFile {
@@ -2183,8 +2193,50 @@ export interface InstalledSkillRecord {
   methods: InstalledSkillMethod[];
 }
 
+export interface DiscoveredPromptSkill {
+  id: string;
+  name: string;
+  description: string;
+  bodyMarkdown: string;
+  sourcePath: string;
+  scope: "project" | "global" | "mate_managed";
+  sourceKind: "direct" | "plugin_manifest";
+  sourceHash: string;
+  discoveredAt: number;
+  valid: boolean;
+  parseError?: string | null;
+  scripts: string[];
+  references: string[];
+  allAgentsEnabled: boolean;
+}
+
 export async function listInstalledSkills(): Promise<InstalledSkillRecord[]> {
   return invoke<InstalledSkillRecord[]>("list_installed_skills");
+}
+
+export async function listPromptSkills(
+  workspacePath?: string,
+): Promise<DiscoveredPromptSkill[]> {
+  return invoke<DiscoveredPromptSkill[]>("list_prompt_skills", {
+    workspacePath,
+  });
+}
+
+export async function setPromptSkillAllAgentsEnabled(input: {
+  sourcePath: string;
+  enabled: boolean;
+  workspacePath?: string;
+}): Promise<void> {
+  return invoke<void>("set_prompt_skill_all_agents_enabled", {
+    req: input,
+  });
+}
+
+export async function refreshPromptSkillSnapshot(input: {
+  sourcePath: string;
+  workspacePath?: string;
+}): Promise<import("../types/agent-spec").PromptSkillBinding> {
+  return invoke("refresh_prompt_skill_snapshot", { req: input });
 }
 
 export async function installLocalSkill(input: {
@@ -2264,6 +2316,7 @@ export interface ChatRuntimeTelemetry {
 export interface ChatSession {
   id: string;
   title: string | null;
+  workspace_id: string;
   created_at: string;
   updated_at: string;
   message_count: number;
@@ -2301,6 +2354,38 @@ export async function getChatSession(
 ): Promise<ChatSession> {
   return invoke<ChatSession>("get_chat_session", {
     chatScopeId,
+  });
+}
+
+export async function listChatSessions(
+  workspaceId: string,
+): Promise<ChatSession[]> {
+  return invoke<ChatSession[]>("list_chat_sessions", {
+    workspaceId,
+  });
+}
+
+export async function createChatSession(
+  workspaceId: string,
+): Promise<ChatSession> {
+  return invoke<ChatSession>("create_chat_session", {
+    workspaceId,
+  });
+}
+
+export async function deleteChatSession(
+  chatId: string,
+): Promise<void> {
+  return invoke<void>("delete_chat_session", {
+    chatId,
+  });
+}
+
+export async function getOrCreateWorkspaceChat(
+  workspaceId: string,
+): Promise<string> {
+  return invoke<string>("get_or_create_workspace_chat", {
+    workspaceId,
   });
 }
 

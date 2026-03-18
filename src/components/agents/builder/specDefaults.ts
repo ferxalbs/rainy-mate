@@ -20,6 +20,7 @@ export function createDefaultAgentSpec(id: string = crypto.randomUUID()): AgentS
       workflows: [],
       tool_preferences: [],
       behaviors: [],
+      prompt_skills: [],
     },
     airlock: {
       tool_policy: {
@@ -93,6 +94,9 @@ export function normalizeAgentSpec(raw: any): AgentSpec {
         : [],
       behaviors: Array.isArray(source.skills?.behaviors)
         ? source.skills.behaviors
+        : [],
+      prompt_skills: Array.isArray(source.skills?.prompt_skills)
+        ? source.skills.prompt_skills
         : [],
     },
     airlock: {

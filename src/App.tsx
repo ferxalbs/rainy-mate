@@ -185,6 +185,7 @@ function App() {
               <AgentBuilder
                 onBack={() => handleNavigate("agent-chat")}
                 initialSpec={agentBuilderInitialSpec}
+                workspacePath={activeFolder?.path}
               />
             </div>
           )}
@@ -193,6 +194,7 @@ function App() {
           {activeSection === "agent-store" && (
             <div className="flex-1 h-full min-h-0">
               <AgentStorePage
+                workspacePath={activeFolder?.path}
                 onCreateAgent={() => handleOpenAgentBuilder()}
                 onEditInBuilder={(spec) => handleOpenAgentBuilder(spec)}
               />

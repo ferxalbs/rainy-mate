@@ -19,6 +19,7 @@ import {
 type StoreTab = "review" | "edit" | "json";
 
 interface AgentStorePageProps {
+  workspacePath?: string;
   onCreateAgent: () => void;
   onEditInBuilder: (spec: AgentSpec) => void;
 }
@@ -77,6 +78,7 @@ const RawTextArea = ({
 );
 
 export function AgentStorePage({
+  workspacePath,
   onCreateAgent,
   onEditInBuilder,
 }: AgentStorePageProps) {
@@ -176,7 +178,7 @@ export function AgentStorePage({
 
     setIsSaving(true);
     try {
-      await tauri.saveAgentSpec(draft);
+      await tauri.saveAgentSpecWithWorkspace(draft, workspacePath);
       toast.success("Agent updated");
       await loadAgents();
     } catch (error) {
@@ -197,7 +199,7 @@ export function AgentStorePage({
           "Rainy-ATM is not authenticated. Configure ATM credentials first.",
         );
       }
-      const result = await tauri.deployAgentSpec(draft);
+      const result = await tauri.deployAgentSpec(draft, workspacePath);
       const action =
         result && typeof result === "object" && "action" in result
           ? String((result as { action?: unknown }).action || "")

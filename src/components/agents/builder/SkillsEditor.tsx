@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Input,
@@ -6,16 +7,31 @@ import {
   Switch,
   TextArea,
 } from "@heroui/react";
-import { Cpu } from "lucide-react";
+import {
+  Cpu,
+  RefreshCw,
+  Sparkles,
+  TriangleAlert,
+  Wand2,
+} from "lucide-react";
+import { toast } from "sonner";
 import type {
   AgentSkills,
+  PromptSkillBinding,
   SkillBehavior,
   SkillWorkflow,
   ToolPreference,
 } from "../../../types/agent-spec";
+import {
+  listPromptSkills,
+  refreshPromptSkillSnapshot,
+  setPromptSkillAllAgentsEnabled,
+  type DiscoveredPromptSkill,
+} from "../../../services/tauri";
 
 interface SkillsEditorProps {
   skills: AgentSkills;
+  workspacePath?: string;
   onChange: (skills: AgentSkills) => void;
 }
 
@@ -65,7 +81,35 @@ function createBehavior(): SkillBehavior {
   };
 }
 
-export function SkillsEditor({ skills, onChange }: SkillsEditorProps) {
+function formatScope(scope: DiscoveredPromptSkill["scope"]) {
+  if (scope === "mate_managed") return "MaTE";
+  if (scope === "global") return "Global";
+  return "Project";
+}
+
+function createBinding(skill: DiscoveredPromptSkill): PromptSkillBinding {
+  return {
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    content: skill.bodyMarkdown,
+    source_path: skill.sourcePath,
+    scope: skill.scope,
+    source_hash: skill.sourceHash,
+    enabled: true,
+    last_synced_at: Math.floor(Date.now() / 1000),
+  };
+}
+
+export function SkillsEditor({
+  skills,
+  workspacePath,
+  onChange,
+}: SkillsEditorProps) {
+  const [promptSkills, setPromptSkills] = useState<DiscoveredPromptSkill[]>([]);
+  const [loadingPromptSkills, setLoadingPromptSkills] = useState(false);
+  const [busySourcePath, setBusySourcePath] = useState<string | null>(null);
+
   const updateWorkflows = (workflows: SkillWorkflow[]) => {
     onChange({ ...skills, workflows });
   };
@@ -76,6 +120,118 @@ export function SkillsEditor({ skills, onChange }: SkillsEditorProps) {
 
   const updateBehaviors = (behaviors: SkillBehavior[]) => {
     onChange({ ...skills, behaviors });
+  };
+
+  const updatePromptBindings = (prompt_skills: PromptSkillBinding[]) => {
+    onChange({ ...skills, prompt_skills });
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingPromptSkills(true);
+    listPromptSkills(workspacePath)
+      .then((items) => {
+        if (!cancelled) {
+          setPromptSkills(items);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load prompt skills:", error);
+        if (!cancelled) {
+          toast.error("Failed to load detected prompt skills");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingPromptSkills(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspacePath]);
+
+  const promptBindingsByPath = useMemo(
+    () =>
+      new Map(
+        skills.prompt_skills
+          .filter((binding) => binding.enabled)
+          .map((binding) => [binding.source_path, binding]),
+      ),
+    [skills.prompt_skills],
+  );
+
+  const handleTogglePromptSkill = (
+    skill: DiscoveredPromptSkill,
+    enabled: boolean,
+  ) => {
+    if (!skill.valid) return;
+    if (enabled) {
+      const next = [...skills.prompt_skills.filter((item) => item.source_path !== skill.sourcePath), createBinding(skill)];
+      updatePromptBindings(next);
+      return;
+    }
+
+    updatePromptBindings(
+      skills.prompt_skills.filter((item) => item.source_path !== skill.sourcePath),
+    );
+  };
+
+  const handleToggleAllAgents = async (
+    skill: DiscoveredPromptSkill,
+    enabled: boolean,
+  ) => {
+    setBusySourcePath(skill.sourcePath);
+    try {
+      await setPromptSkillAllAgentsEnabled({
+        sourcePath: skill.sourcePath,
+        enabled,
+        workspacePath,
+      });
+      setPromptSkills((prev) =>
+        prev.map((item) =>
+          item.sourcePath === skill.sourcePath
+            ? { ...item, allAgentsEnabled: enabled }
+            : item,
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to update prompt skill visibility:", error);
+      toast.error("Failed to update all-agents prompt skill toggle");
+    } finally {
+      setBusySourcePath(null);
+    }
+  };
+
+  const handleRefreshPromptSkill = async (skill: DiscoveredPromptSkill) => {
+    setBusySourcePath(skill.sourcePath);
+    try {
+      const refreshed = await refreshPromptSkillSnapshot({
+        sourcePath: skill.sourcePath,
+        workspacePath,
+      });
+      updatePromptBindings([
+        ...skills.prompt_skills.filter((item) => item.source_path !== skill.sourcePath),
+        refreshed,
+      ]);
+      setPromptSkills((prev) =>
+        prev.map((item) =>
+          item.sourcePath === skill.sourcePath
+            ? {
+                ...item,
+                bodyMarkdown: refreshed.content,
+                sourceHash: refreshed.source_hash,
+              }
+            : item,
+        ),
+      );
+      toast.success(`Refreshed "${skill.name}" from source`);
+    } catch (error) {
+      console.error("Failed to refresh prompt skill:", error);
+      toast.error("Failed to refresh prompt skill from source");
+    } finally {
+      setBusySourcePath(null);
+    }
   };
 
   return (
@@ -89,10 +245,179 @@ export function SkillsEditor({ skills, onChange }: SkillsEditorProps) {
             Skills
           </h3>
           <p className="text-muted-foreground text-sm">
-            Define workflows, tool preferences, and behavior rules.
+            Combine detected prompt skills with workflows, tool preferences, and behavior rules.
           </p>
         </div>
       </div>
+
+      <section className="space-y-4 rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h4 className={sectionTitleClass}>Detected Prompt Skills</h4>
+            <p className="text-sm text-muted-foreground mt-1">
+              `skills.sh`-compatible `SKILL.md` folders detected across the current project and global paths.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            className={softButtonClass}
+            onPress={() => {
+              setLoadingPromptSkills(true);
+              listPromptSkills(workspacePath)
+                .then(setPromptSkills)
+                .catch((error) => {
+                  console.error("Failed to reload prompt skills:", error);
+                  toast.error("Failed to refresh detected prompt skills");
+                })
+                .finally(() => setLoadingPromptSkills(false));
+            }}
+          >
+            <RefreshCw className={`size-3.5 ${loadingPromptSkills ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
+
+        {!workspacePath && (
+          <div className="rounded-xl border border-dashed border-border/30 bg-card/20 px-4 py-3 text-sm text-muted-foreground">
+            Select a workspace to detect project prompt skills. Global prompt skills still load.
+          </div>
+        )}
+
+        {loadingPromptSkills ? (
+          <div className="rounded-xl border border-dashed border-border/30 bg-card/20 px-4 py-6 text-sm text-muted-foreground">
+            Detecting prompt skills…
+          </div>
+        ) : promptSkills.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border/30 bg-card/20 px-4 py-6 text-sm text-muted-foreground">
+            No `SKILL.md` prompt skills detected yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {promptSkills.map((skill) => {
+              const binding = promptBindingsByPath.get(skill.sourcePath);
+              const isOutOfSync =
+                !!binding && binding.source_hash !== skill.sourceHash;
+              const isBusy = busySourcePath === skill.sourcePath;
+
+              return (
+                <div
+                  key={skill.sourcePath}
+                  className="rounded-2xl border border-border/20 bg-card/30 backdrop-blur-md p-4"
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-2 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground">
+                          {skill.name}
+                        </span>
+                        <span className="rounded-full border border-border/30 bg-background/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {formatScope(skill.scope)}
+                        </span>
+                        {skill.sourceKind === "plugin_manifest" && (
+                          <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            Plugin
+                          </span>
+                        )}
+                        {skill.allAgentsEnabled && (
+                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
+                            All Agents
+                          </span>
+                        )}
+                        {isOutOfSync && (
+                          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+                            Out of Sync
+                          </span>
+                        )}
+                        {!skill.valid && (
+                          <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-400">
+                            Invalid
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {skill.description || "No description"}
+                      </p>
+                      <div className="space-y-1 text-xs text-muted-foreground/80">
+                        <div className="font-mono break-all">{skill.sourcePath}</div>
+                        {(skill.scripts.length > 0 || skill.references.length > 0) && (
+                          <div className="flex flex-wrap gap-3">
+                            {skill.scripts.length > 0 && (
+                              <span>{skill.scripts.length} scripts</span>
+                            )}
+                            {skill.references.length > 0 && (
+                              <span>{skill.references.length} references</span>
+                            )}
+                          </div>
+                        )}
+                        {!skill.valid && skill.parseError && (
+                          <div className="flex items-center gap-2 text-red-400">
+                            <TriangleAlert className="size-3.5" />
+                            <span>{skill.parseError}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-[260px]">
+                      <div className="rounded-xl border border-border/20 bg-background/40 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="size-3.5 text-primary" />
+                            <span className="text-xs font-medium text-foreground">
+                              This Agent
+                            </span>
+                          </div>
+                          <Switch
+                            size="sm"
+                            isDisabled={!skill.valid}
+                            isSelected={!!binding}
+                            onChange={(enabled) =>
+                              handleTogglePromptSkill(skill, enabled)
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-border/20 bg-background/40 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <Wand2 className="size-3.5 text-primary" />
+                            <span className="text-xs font-medium text-foreground">
+                              All Agents
+                            </span>
+                          </div>
+                          <Switch
+                            size="sm"
+                            isDisabled={!skill.valid || isBusy}
+                            isSelected={skill.allAgentsEnabled}
+                            onChange={(enabled) =>
+                              void handleToggleAllAgents(skill, enabled)
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      {isOutOfSync && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className={`sm:col-span-2 ${softButtonClass}`}
+                          isDisabled={isBusy}
+                          onPress={() => void handleRefreshPromptSkill(skill)}
+                        >
+                          <RefreshCw className={`size-3.5 ${isBusy ? "animate-spin" : ""}`} />
+                          Refresh Snapshot
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <section className="space-y-4 rounded-2xl border border-border/20 bg-card/35 backdrop-blur-md p-5">
         <div className="flex items-center justify-between">

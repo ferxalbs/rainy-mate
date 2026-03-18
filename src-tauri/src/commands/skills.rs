@@ -3,13 +3,13 @@ use crate::models::neural::{
 };
 use crate::services::{
     skill_installer::{verify_downloaded_bundle_signature, write_temp_downloaded_skill},
-    SkillExecutor, SkillInstaller,
+    PromptSkillDiscoveryService, PromptSkillRegistry, SkillExecutor, SkillInstaller,
 };
 use crate::services::ThirdPartySkillRegistry;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
 /// Execute a skill directly from the frontend (local Deep Mode execution).
@@ -124,6 +124,13 @@ struct SkillPublicKeyResponse {
     pub algorithm: String,
     pub public_key_hex: String,
     pub key_id: String,
+}
+
+fn app_data_dir(app_handle: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))
 }
 
 #[tauri::command]
@@ -256,4 +263,71 @@ pub async fn install_skill_from_atm(
     let temp_dir = write_temp_downloaded_skill(&bundle.skill_id, &bundle.manifest_toml, &wasm_bytes)?;
     let installer = SkillInstaller::new()?;
     installer.install_from_downloaded_bundle(&temp_dir, Some(&public_key.public_key_hex))
+}
+
+#[tauri::command]
+pub async fn list_prompt_skills(
+    app_handle: AppHandle,
+    workspace_path: Option<String>,
+) -> Result<Vec<crate::services::DiscoveredPromptSkill>, String> {
+    let service = PromptSkillDiscoveryService::new(app_data_dir(&app_handle)?);
+    let workspace_path = workspace_path
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(std::path::Path::new);
+    service.discover(workspace_path)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetPromptSkillAllAgentsEnabledRequest {
+    pub source_path: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+}
+
+#[tauri::command]
+pub async fn set_prompt_skill_all_agents_enabled(
+    app_handle: AppHandle,
+    req: SetPromptSkillAllAgentsEnabledRequest,
+) -> Result<(), String> {
+    let workspace_path = req
+        .workspace_path
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(std::path::Path::new);
+    let registry = if let Some(workspace_path) = workspace_path {
+        let source_path = std::path::Path::new(&req.source_path);
+        if source_path.starts_with(workspace_path) {
+            PromptSkillRegistry::project(workspace_path)?
+        } else {
+            PromptSkillRegistry::global(&app_data_dir(&app_handle)?)?
+        }
+    } else {
+        PromptSkillRegistry::global(&app_data_dir(&app_handle)?)?
+    };
+    registry.set_all_agents_enabled(&req.source_path, req.enabled)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshPromptSkillSnapshotRequest {
+    pub source_path: String,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+}
+
+#[tauri::command]
+pub async fn refresh_prompt_skill_snapshot(
+    app_handle: AppHandle,
+    req: RefreshPromptSkillSnapshotRequest,
+) -> Result<crate::services::PromptSkillBinding, String> {
+    let service = PromptSkillDiscoveryService::new(app_data_dir(&app_handle)?);
+    let workspace_path = req
+        .workspace_path
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(std::path::Path::new);
+    service.refresh_binding(workspace_path, std::path::Path::new(&req.source_path))
 }

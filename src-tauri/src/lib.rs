@@ -654,14 +654,20 @@ pub fn run() {
             // Skill Commands (Direct Local Execution)
             commands::execute_skill,
             commands::list_installed_skills,
+            commands::list_prompt_skills,
             commands::install_local_skill,
             commands::install_skill_from_atm,
             commands::set_installed_skill_enabled,
+            commands::set_prompt_skill_all_agents_enabled,
+            commands::refresh_prompt_skill_snapshot,
             commands::remove_installed_skill,
             // Agent Workflow (Native Rust)
             commands::agent::run_agent_workflow,
             commands::agent::cancel_agent_run,
             commands::agent::get_chat_session,
+            commands::agent::list_chat_sessions,
+            commands::agent::create_chat_session,
+            commands::agent::delete_chat_session,
             commands::agent::update_chat_title,
             commands::agent::ensure_chat_title,
             // Workflow Factory (THE FORGE foundation)
@@ -688,6 +694,7 @@ pub fn run() {
             manager::get_chat_history,
             manager::get_chat_history_window,
             manager::get_default_chat_scope,
+            manager::get_or_create_workspace_chat,
             manager::get_chat_compaction_state,
             manager::get_chat_runtime_telemetry,
             manager::clear_chat_history,

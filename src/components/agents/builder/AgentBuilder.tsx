@@ -24,6 +24,7 @@ import { useTheme } from "../../../hooks/useTheme";
 interface AgentBuilderProps {
   onBack: () => void;
   initialSpec?: AgentSpec;
+  workspacePath?: string;
 }
 
 const NavItem = ({
@@ -73,7 +74,11 @@ const NavItem = ({
   );
 };
 
-export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
+export function AgentBuilder({
+  onBack,
+  initialSpec,
+  workspacePath,
+}: AgentBuilderProps) {
   const [spec, setSpec] = useState<AgentSpec>(() =>
     initialSpec ? normalizeAgentSpec(initialSpec) : createDefaultAgentSpec(),
   );
@@ -92,7 +97,7 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await tauri.saveAgentSpec(spec);
+      await tauri.saveAgentSpecWithWorkspace(spec, workspacePath);
       toast.success("Agent saved successfully!");
     } catch (error) {
       console.error("Failed to save agent:", error);
@@ -120,7 +125,7 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
         );
       }
 
-      const result = await tauri.deployAgentSpec(spec);
+      const result = await tauri.deployAgentSpec(spec, workspacePath);
       const action =
         result && typeof result === "object" && "action" in result
           ? String((result as { action?: unknown }).action || "")
@@ -263,6 +268,7 @@ export function AgentBuilder({ onBack, initialSpec }: AgentBuilderProps) {
             {activeTab === "skills" && (
               <SkillsEditor
                 skills={spec.skills}
+                workspacePath={workspacePath}
                 onChange={(s) => updateSpec({ skills: s })}
               />
             )}

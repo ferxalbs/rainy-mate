@@ -62,7 +62,7 @@ pub async fn import_atm_workspace_shared_agent(
     agent_id: String,
 ) -> Result<crate::services::atm_client::WorkspaceSharedAgentSpecResponse, String> {
     let imported = client.get_workspace_shared_agent_spec(agent_id).await?;
-    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone()).await?;
+    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone(), None).await?;
     Ok(imported)
 }
 
@@ -105,7 +105,7 @@ pub async fn import_atm_marketplace_agent(
     marketplace_id: String,
 ) -> Result<crate::services::atm_client::MarketplaceAgentSpecResponse, String> {
     let imported = client.get_marketplace_agent_spec(marketplace_id).await?;
-    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone()).await?;
+    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone(), None).await?;
     Ok(imported)
 }
 

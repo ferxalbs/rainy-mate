@@ -27,6 +27,7 @@ pub mod memory;
 pub mod memory_vault;
 pub mod neural_service;
 pub mod persistent_scheduler;
+pub mod prompt_skills;
 pub mod security;
 pub mod settings;
 pub mod skill_executor;
@@ -56,6 +57,7 @@ pub use managed_research::ManagedResearchService;
 pub use mcp_service::McpService;
 pub use memory::MemoryManager;
 pub use neural_service::NeuralService;
+pub use prompt_skills::{DiscoveredPromptSkill, PromptSkillBinding, PromptSkillDiscoveryService, PromptSkillRegistry};
 pub use security::NodeAuthenticator;
 pub use skill_executor::SkillExecutor;
 

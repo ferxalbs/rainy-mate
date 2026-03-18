@@ -1,6 +1,35 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptSkillScope {
+    Project,
+    Global,
+    MateManaged,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PromptSkillBinding {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub content: String,
+    pub source_path: String,
+    pub scope: PromptSkillScope,
+    pub source_hash: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub last_synced_at: i64,
+}
+
+impl Default for PromptSkillScope {
+    fn default() -> Self {
+        Self::Project
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentSkills {
     // v3 fields
@@ -10,6 +39,8 @@ pub struct AgentSkills {
     pub tool_preferences: Vec<ToolPreference>,
     #[serde(default)]
     pub behaviors: Vec<SkillBehavior>,
+    #[serde(default)]
+    pub prompt_skills: Vec<PromptSkillBinding>,
 
     // v2 fields kept for backward-compat deserialization of old on-disk specs
     // skipped on serialization when empty so new specs don't emit them

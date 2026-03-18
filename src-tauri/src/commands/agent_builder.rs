@@ -1,5 +1,6 @@
 use crate::ai::specs::AgentSpec;
-use crate::services::ATMClient;
+use crate::services::{ATMClient, PromptSkillDiscoveryService};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
@@ -11,8 +12,49 @@ fn specs_dir(app_handle: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_dir.join("agent_specs"))
 }
 
+fn materialize_prompt_skills(
+    app_handle: &AppHandle,
+    workspace_path: Option<&str>,
+    mut spec: AgentSpec,
+) -> Result<AgentSpec, String> {
+    let Some(workspace_path) = workspace_path.filter(|value| !value.trim().is_empty()) else {
+        return Ok(spec);
+    };
+
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    let service = PromptSkillDiscoveryService::new(app_dir);
+    let discovered = service.discover(Some(std::path::Path::new(workspace_path)))?;
+
+    let mut merged: BTreeMap<String, crate::ai::specs::PromptSkillBinding> = spec
+        .skills
+        .prompt_skills
+        .into_iter()
+        .filter(|binding| binding.enabled)
+        .map(|binding| (binding.source_path.clone(), binding))
+        .collect();
+
+    for skill in discovered.into_iter().filter(|skill| skill.valid && skill.all_agents_enabled) {
+        merged
+            .entry(skill.source_path.clone())
+            .or_insert_with(|| skill.to_binding());
+    }
+
+    spec.skills.prompt_skills = merged.into_values().collect();
+    spec.skills
+        .prompt_skills
+        .sort_by(|a, b| a.name.cmp(&b.name).then(a.source_path.cmp(&b.source_path)));
+    Ok(spec)
+}
+
 #[tauri::command]
-pub async fn save_agent_spec(app_handle: AppHandle, spec: AgentSpec) -> Result<String, String> {
+pub async fn save_agent_spec(
+    app_handle: AppHandle,
+    spec: AgentSpec,
+    workspace_path: Option<String>,
+) -> Result<String, String> {
     if spec.id.trim().is_empty() {
         return Err("Agent spec id is required".to_string());
     }
@@ -21,6 +63,7 @@ pub async fn save_agent_spec(app_handle: AppHandle, spec: AgentSpec) -> Result<S
         return Err("Agent name is required".to_string());
     }
 
+    let spec = materialize_prompt_skills(&app_handle, workspace_path.as_deref(), spec)?;
     let dir = specs_dir(&app_handle)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create spec dir: {}", e))?;
 
@@ -77,7 +120,9 @@ pub async fn deploy_agent_spec(
     app_handle: AppHandle,
     client: State<'_, ATMClient>,
     spec: AgentSpec,
+    workspace_path: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    save_agent_spec(app_handle, spec.clone()).await?;
-    client.deploy_agent(spec).await
+    let materialized = materialize_prompt_skills(&app_handle, workspace_path.as_deref(), spec)?;
+    save_agent_spec(app_handle, materialized.clone(), workspace_path).await?;
+    client.deploy_agent(materialized).await
 }
