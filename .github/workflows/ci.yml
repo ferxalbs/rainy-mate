@@ -83,7 +83,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsqlite3-dev pkg-config
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -108,5 +108,20 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install SQLite (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: brew install sqlite pkg-config
+
+      - name: Install SQLite (Windows)
+        if: matrix.platform == 'windows-latest'
+        env:
+          VCPKG_ROOT: 'C:\vcpkg'
+        run: vcpkg install sqlite3:x64-windows
+
       - name: Tauri Build
-        run: pnpm run tauri build ${{ matrix.args }}
+        run: pnpm run tauri build ${{ matrix.args }} --config "{\"bundle\":{\"createUpdaterArtifacts\":false}}"
+        shell: bash
+        env:
+          LIBSQLITE3_SYS_USE_PKG_CONFIG: 1
+          VCPKGRS_DYNAMIC: 1
+          VCPKG_ROOT: 'C:\vcpkg'
