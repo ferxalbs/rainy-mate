@@ -330,7 +330,8 @@ export const MessageBubble = React.memo(
 // Re-export with a name hint for the parent to avoid confusion
 export { MessageBubble as MemoizedMessageBubble };
 
-function SupervisorRail({
+// Performance optimization: Memoize SupervisorRail to prevent re-renders on token stream updates
+const SupervisorRail = React.memo(function SupervisorRail({
   summary,
   steps,
   specialists,
@@ -447,9 +448,10 @@ function SupervisorRail({
       )}
     </div>
   );
-}
+});
 
-function TraceAccordion({
+// Performance optimization: Memoize TraceAccordion to prevent re-renders on token stream updates
+const TraceAccordion = React.memo(function TraceAccordion({
   trace,
   runState,
   stats,
@@ -550,9 +552,10 @@ function TraceAccordion({
       </div>
     </details>
   );
-}
+});
 
-function PlanCard({
+// Performance optimization: Memoize PlanCard to prevent re-renders on token stream updates
+const PlanCard = React.memo(function PlanCard({
   plan,
   onExecute,
   isExecuting,
@@ -612,7 +615,7 @@ function PlanCard({
       </div>
     </Card>
   );
-}
+});
 
 // Neural Status Component — CSS animations only
 const NeuralStatus = React.memo(({
