@@ -114,13 +114,17 @@ jobs:
           VCPKG_ROOT: 'C:\vcpkg'
         run: |
           vcpkg install sqlite3:x64-windows
-          echo "C:\vcpkg\installed\x64-windows\bin" >> $GITHUB_PATH
+          echo 'C:\vcpkg\installed\x64-windows\bin' >> $GITHUB_PATH
+          echo 'VCPKGRS_DYNAMIC=1' >> $GITHUB_ENV
+          echo 'VCPKG_ROOT=C:\vcpkg' >> $GITHUB_ENV
+        shell: bash
+
+      - name: Install SQLite (Ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          echo 'LIBSQLITE3_SYS_USE_PKG_CONFIG=1' >> $GITHUB_ENV
         shell: bash
 
       - name: Tauri Build
         run: pnpm run tauri build ${{ matrix.args }} --config "{\"bundle\":{\"createUpdaterArtifacts\":false}}"
         shell: bash
-        env:
-          LIBSQLITE3_SYS_USE_PKG_CONFIG: ${{ matrix.platform == 'ubuntu-22.04' && '1' || '' }}
-          VCPKGRS_DYNAMIC: ${{ matrix.platform == 'windows-latest' && '1' || '' }}
-          VCPKG_ROOT: 'C:\vcpkg'
