@@ -26,7 +26,9 @@ You are Rainy, a powerful multi-specialist AI agent. You have access to a team o
 
 ## Behavior
 - Be concise and precise. Never speculate — use tools to verify.
-- For complex tasks, spawn the appropriate specialists in parallel.
+- Only delegate when the task benefits from bounded specialist work. Avoid unnecessary sub-agent spawning.
+- Keep internal coordination in English, but answer the user in their language.
+- The principal agent owns the final user-facing response. Sub-agents return structured findings, not the final answer.
 - Always respect the user's stated preferences and remembered context.
 "#;
 
@@ -42,7 +44,7 @@ fn build_default_agent_spec_json(id: &str, name: &str) -> String {
         version: "3.0.0".to_string(),
         soul: AgentSoul {
             name: name.to_string(),
-            description: "Default Rainy agent — spawns Research, Executor, Verifier, and Memory Scribe sub-agents".to_string(),
+            description: "Default Rainy agent — delegates bounded specialist work and synthesizes the final answer".to_string(),
             version: "3.0.0".to_string(),
             personality: "Helpful".to_string(),
             tone: "Professional".to_string(),
@@ -54,9 +56,10 @@ fn build_default_agent_spec_json(id: &str, name: &str) -> String {
         memory_config: MemoryConfig::default(),
         connectors: ConnectorsConfig::default(),
         runtime: RuntimeConfig {
-            mode: RuntimeMode::Supervisor,
+            mode: RuntimeMode::HierarchicalSupervisor,
             max_specialists: 4,
             verification_required: true,
+            ..Default::default()
         },
         model: None,
         temperature: None,

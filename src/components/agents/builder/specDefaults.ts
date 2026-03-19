@@ -59,6 +59,14 @@ export function createDefaultAgentSpec(id: string = crypto.randomUUID()): AgentS
       mode: "single",
       max_specialists: 3,
       verification_required: true,
+      delegation_policy: "conservative",
+      max_depth: 2,
+      max_threads: 4,
+      max_parallel_subagents: 2,
+      job_max_runtime_seconds: 300,
+      final_synthesis_required: true,
+      internal_coordination_language: "en",
+      final_response_language_mode: "user",
     },
   };
 }
@@ -70,6 +78,7 @@ export function normalizeAgentSpec(raw: any): AgentSpec {
   const sourceRetrieval = sourceMemory.retrieval ?? {};
   const sourcePersistence = sourceMemory.persistence ?? {};
   const sourceKnowledge = sourceMemory.knowledge ?? {};
+  const sourceRuntime = source.runtime ?? {};
   const sourceId =
     typeof source.id === "string" && source.id.trim().length > 0
       ? source.id.trim()
@@ -167,16 +176,56 @@ export function normalizeAgentSpec(raw: any): AgentSpec {
       },
     },
     runtime: {
+      ...defaults.runtime,
+      ...sourceRuntime,
       mode:
-        source.runtime?.mode === "supervisor" ? "supervisor" : "single",
+        sourceRuntime?.mode === "supervisor" ||
+        sourceRuntime?.mode === "hierarchical_supervisor"
+          ? sourceRuntime.mode
+          : "single",
       max_specialists:
-        typeof source.runtime?.max_specialists === "number"
-          ? Math.max(1, Math.min(3, Math.round(source.runtime.max_specialists)))
+        typeof sourceRuntime?.max_specialists === "number"
+          ? Math.max(1, Math.min(4, Math.round(sourceRuntime.max_specialists)))
           : defaults.runtime?.max_specialists,
       verification_required:
-        typeof source.runtime?.verification_required === "boolean"
-          ? source.runtime.verification_required
+        typeof sourceRuntime?.verification_required === "boolean"
+          ? sourceRuntime.verification_required
           : defaults.runtime?.verification_required,
+      delegation_policy:
+        typeof sourceRuntime?.delegation_policy === "string" &&
+        sourceRuntime.delegation_policy.trim().length > 0
+          ? sourceRuntime.delegation_policy.trim()
+          : defaults.runtime?.delegation_policy,
+      max_depth:
+        typeof sourceRuntime?.max_depth === "number"
+          ? Math.max(1, Math.round(sourceRuntime.max_depth))
+          : defaults.runtime?.max_depth,
+      max_threads:
+        typeof sourceRuntime?.max_threads === "number"
+          ? Math.max(1, Math.round(sourceRuntime.max_threads))
+          : defaults.runtime?.max_threads,
+      max_parallel_subagents:
+        typeof sourceRuntime?.max_parallel_subagents === "number"
+          ? Math.max(1, Math.round(sourceRuntime.max_parallel_subagents))
+          : defaults.runtime?.max_parallel_subagents,
+      job_max_runtime_seconds:
+        typeof sourceRuntime?.job_max_runtime_seconds === "number"
+          ? Math.max(1, Math.round(sourceRuntime.job_max_runtime_seconds))
+          : defaults.runtime?.job_max_runtime_seconds,
+      final_synthesis_required:
+        typeof sourceRuntime?.final_synthesis_required === "boolean"
+          ? sourceRuntime.final_synthesis_required
+          : defaults.runtime?.final_synthesis_required,
+      internal_coordination_language:
+        typeof sourceRuntime?.internal_coordination_language === "string" &&
+        sourceRuntime.internal_coordination_language.trim().length > 0
+          ? sourceRuntime.internal_coordination_language.trim()
+          : defaults.runtime?.internal_coordination_language,
+      final_response_language_mode:
+        typeof sourceRuntime?.final_response_language_mode === "string" &&
+        sourceRuntime.final_response_language_mode.trim().length > 0
+          ? sourceRuntime.final_response_language_mode.trim()
+          : defaults.runtime?.final_response_language_mode,
     },
     model:
       typeof source.model === "string" && source.model.trim().length > 0

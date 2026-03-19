@@ -2,6 +2,7 @@
 // Manages state, history, memory persistence, and the Think→Act execution loop.
 use crate::ai::agent::context_window::ContextWindow;
 use crate::ai::agent::events::AgentEvent;
+use crate::ai::agent::hierarchical_supervisor::HierarchicalSupervisorAgent;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::ai::agent::supervisor::SupervisorAgent;
@@ -156,6 +157,22 @@ pub struct AgentImageUrl {
 }
 
 impl AgentRuntime {
+    fn detect_user_language(input: &str) -> &'static str {
+        let lower = format!(" {} ", input.to_ascii_lowercase());
+        let spanish_markers = [
+            " el ", " la ", " los ", " las ", " una ", " para ", " con ", " que ", " por ",
+            " quiero ", " puedes ", " revisar ", " implementar ", " respuesta ", " agente ",
+        ];
+        if input.contains('¿')
+            || input.contains('¡')
+            || spanish_markers.iter().any(|marker| lower.contains(marker))
+        {
+            "spanish"
+        } else {
+            "english"
+        }
+    }
+
     fn runtime_truthfulness_appendix() -> &'static str {
         "\n\nRuntime Safety Rules (Non-negotiable):\n\
 - Tool outputs are the source of truth.\n\
@@ -163,6 +180,22 @@ impl AgentRuntime {
 - If a tool fails, times out, or is blocked by policy, explicitly report the failure and limitation.\n\
 - Do not fabricate command output, file hashes, file contents, diffs, or scan findings.\n\
 - If no permitted tool can complete a step, ask the user for input or propose a permitted alternative.\n"
+    }
+
+    fn language_policy_appendix(&self, input: &str) -> String {
+        let policy = &self.spec.runtime.language_policy;
+        let user_language = Self::detect_user_language(input);
+        format!(
+            "\n\nLanguage Policy:\n\
+- Internal coordination language: {}.\n\
+- Final response language mode: {}.\n\
+- Detected user language for this turn: {}.\n\
+- Keep internal coordination, delegation prompts, and task handoffs in the internal coordination language.\n\
+- The final user-facing answer must follow the final response language mode.\n",
+            policy.internal_coordination_language,
+            policy.final_response_language_mode,
+            user_language
+        )
     }
 
     pub fn new(
@@ -507,6 +540,19 @@ Rules:
             };
             return supervisor.run(input, on_event).await;
         }
+        if self.spec.runtime.mode == RuntimeMode::HierarchicalSupervisor {
+            let supervisor = HierarchicalSupervisorAgent {
+                spec: self.spec.clone(),
+                options: self.options.clone(),
+                router: self.router.clone(),
+                skills: self.skills.clone(),
+                memory: self.memory.clone(),
+                airlock_service: self.airlock_service.clone(),
+                kill_switch: self.kill_switch.clone(),
+                runtime_registry: self.runtime_registry.clone(),
+            };
+            return supervisor.run(input, on_event).await;
+        }
         self.run_single(input, on_event).await
     }
 
@@ -552,10 +598,16 @@ Rules:
             self.kill_switch.clone(),
         );
 
+        let system_prompt = format!(
+            "{}{}",
+            self.generate_system_prompt(&self.skills).await,
+            self.language_policy_appendix(input)
+        );
+
         // Add System Message to State
         state.messages.push(AgentMessage {
             role: "system".to_string(),
-            content: AgentContent::text(self.generate_system_prompt(&self.skills).await),
+            content: AgentContent::text(system_prompt.clone()),
             tool_calls: None,
             tool_call_id: None,
         });
@@ -674,7 +726,7 @@ Rules:
             } else {
                 state.messages[0].content = AgentContent::text(format!(
                     "{}{}",
-                    self.generate_system_prompt(&self.skills).await,
+                    system_prompt,
                     appended_context
                 ));
             }

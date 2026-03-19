@@ -47,6 +47,7 @@ pub enum RuntimeMode {
     #[default]
     Single,
     Supervisor,
+    HierarchicalSupervisor,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +59,10 @@ pub struct RuntimeConfig {
     pub max_specialists: u8,
     #[serde(default = "default_verification_required")]
     pub verification_required: bool,
+    #[serde(default)]
+    pub delegation: DelegationConfig,
+    #[serde(default)]
+    pub language_policy: LanguagePolicyConfig,
 }
 
 fn default_max_specialists() -> u8 {
@@ -68,12 +73,79 @@ fn default_verification_required() -> bool {
     true
 }
 
+fn default_max_depth() -> u8 {
+    2
+}
+
+fn default_max_threads() -> u8 {
+    4
+}
+
+fn default_job_max_runtime_seconds() -> u32 {
+    900
+}
+
+fn default_internal_coordination_language() -> String {
+    "english".to_string()
+}
+
+fn default_final_response_language_mode() -> String {
+    "user".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationConfig {
+    #[serde(default = "default_max_depth")]
+    pub max_depth: u8,
+    #[serde(default = "default_max_threads")]
+    pub max_threads: u8,
+    #[serde(default = "default_max_specialists")]
+    pub max_parallel_subagents: u8,
+    #[serde(default = "default_job_max_runtime_seconds")]
+    pub job_max_runtime_seconds: u32,
+    #[serde(default)]
+    pub final_synthesis_required: bool,
+}
+
+impl Default for DelegationConfig {
+    fn default() -> Self {
+        Self {
+            max_depth: default_max_depth(),
+            max_threads: default_max_threads(),
+            max_parallel_subagents: default_max_specialists(),
+            job_max_runtime_seconds: default_job_max_runtime_seconds(),
+            final_synthesis_required: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguagePolicyConfig {
+    #[serde(default = "default_internal_coordination_language")]
+    pub internal_coordination_language: String,
+    #[serde(default = "default_final_response_language_mode")]
+    pub final_response_language_mode: String,
+}
+
+impl Default for LanguagePolicyConfig {
+    fn default() -> Self {
+        Self {
+            internal_coordination_language: default_internal_coordination_language(),
+            final_response_language_mode: default_final_response_language_mode(),
+        }
+    }
+}
+
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
             mode: RuntimeMode::Single,
             max_specialists: default_max_specialists(),
             verification_required: default_verification_required(),
+            delegation: DelegationConfig::default(),
+            language_policy: LanguagePolicyConfig::default(),
         }
     }
 }

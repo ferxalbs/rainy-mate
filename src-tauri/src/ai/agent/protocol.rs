@@ -51,6 +51,14 @@ pub struct SpecialistAssignment {
     pub title: String,
     pub instructions: String,
     #[serde(default)]
+    pub parent_agent_id: Option<String>,
+    #[serde(default)]
+    pub branch_id: Option<String>,
+    #[serde(default)]
+    pub spawn_reason: Option<String>,
+    #[serde(default)]
+    pub depth: u8,
+    #[serde(default)]
     pub depends_on: Vec<String>,
 }
 
@@ -71,6 +79,14 @@ pub struct SpecialistOutcome {
     pub status: SpecialistStatus,
     pub summary: String,
     pub response: String,
+    #[serde(default)]
+    pub parent_agent_id: Option<String>,
+    #[serde(default)]
+    pub branch_id: Option<String>,
+    #[serde(default)]
+    pub spawn_reason: Option<String>,
+    #[serde(default)]
+    pub depth: u8,
     #[serde(default)]
     pub depends_on: Vec<String>,
     pub used_write_like_tools: bool,

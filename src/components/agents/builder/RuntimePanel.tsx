@@ -7,14 +7,14 @@ interface RuntimePanelProps {
   model: string;
   temperature: number;
   maxTokens: number;
-  runtimeMode: "single" | "supervisor";
+  runtimeMode: "single" | "supervisor" | "hierarchical_supervisor";
   maxSpecialists: number;
   verificationRequired: boolean;
   onChange: (updates: {
     model?: string;
     temperature?: number;
     maxTokens?: number;
-    runtimeMode?: "single" | "supervisor";
+    runtimeMode?: "single" | "supervisor" | "hierarchical_supervisor";
     maxSpecialists?: number;
     verificationRequired?: boolean;
   }) => void;
@@ -105,9 +105,23 @@ export function RuntimePanel({
               >
                 Supervisor
               </Button>
+              <Button
+                size="sm"
+                variant={
+                  runtimeMode === "hierarchical_supervisor"
+                    ? "primary"
+                    : "ghost"
+                }
+                className="rounded-full"
+                onPress={() =>
+                  onChange({ runtimeMode: "hierarchical_supervisor" })
+                }
+              >
+                Hierarchical
+              </Button>
             </div>
             <p className="mt-2 text-xs text-muted-foreground/90">
-              Supervisor mode activates specialist orchestration, dependency-aware execution, and optional verifier passes.
+              Hierarchical mode keeps the principal agent in charge of the final answer and uses bounded sub-agent chains only when delegation is necessary.
             </p>
           </Field>
 
@@ -179,7 +193,7 @@ export function RuntimePanel({
                 maxValue={3}
                 step={1}
                 value={maxSpecialists}
-                isDisabled={runtimeMode !== "supervisor"}
+                isDisabled={runtimeMode === "single"}
                 onChange={(value) =>
                   onChange({
                     maxSpecialists: Array.isArray(value)
@@ -197,9 +211,9 @@ export function RuntimePanel({
               <div className="flex items-center justify-between text-xs">
                 <span className="font-mono text-primary">{maxSpecialists}</span>
                 <span className="text-muted-foreground">
-                  {runtimeMode === "supervisor"
-                    ? "Parallel specialist budget"
-                    : "Single mode only uses one lane"}
+                  {runtimeMode === "single"
+                    ? "Single mode only uses one lane"
+                    : "Specialist budget"}
                 </span>
               </div>
             </div>
@@ -210,7 +224,7 @@ export function RuntimePanel({
               <Button
                 size="sm"
                 variant={verificationRequired ? "primary" : "ghost"}
-                isDisabled={runtimeMode !== "supervisor"}
+                isDisabled={runtimeMode === "single"}
                 className="rounded-full"
                 onPress={() => onChange({ verificationRequired: true })}
               >
@@ -219,7 +233,7 @@ export function RuntimePanel({
               <Button
                 size="sm"
                 variant={!verificationRequired ? "primary" : "ghost"}
-                isDisabled={runtimeMode !== "supervisor"}
+                isDisabled={runtimeMode === "single"}
                 className="rounded-full"
                 onPress={() => onChange({ verificationRequired: false })}
               >

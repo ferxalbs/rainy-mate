@@ -258,6 +258,10 @@ impl SpecialistAgent {
             status: SpecialistStatus::Completed,
             summary: assignment.title,
             response: response.clone(),
+            parent_agent_id: assignment.parent_agent_id,
+            branch_id: assignment.branch_id,
+            spawn_reason: assignment.spawn_reason,
+            depth: assignment.depth,
             depends_on,
             used_write_like_tools: used_write_like_tools
                 .lock()

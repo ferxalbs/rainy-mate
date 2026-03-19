@@ -152,6 +152,13 @@ export interface AgentMessage {
     summary: string;
     steps: string[];
     verificationRequired?: boolean;
+    mode?: string;
+    delegationPolicy?: string;
+    maxDepth?: number;
+    maxThreads?: number;
+    maxParallelSubagents?: number;
+    internalCoordinationLanguage?: string;
+    finalResponseLanguageMode?: string;
   };
   specialists?: SpecialistRunState[];
   ragTelemetry?: {
@@ -196,7 +203,7 @@ export interface AgentTraceEntry {
 
 export interface SpecialistRunState {
   agentId: string;
-  role: "research" | "executor" | "verifier";
+  role: string;
   status:
     | "pending"
     | "planning"
@@ -216,4 +223,8 @@ export interface SpecialistRunState {
   finishedAtMs?: number;
   toolCount?: number;
   writeLikeUsed?: boolean;
+  parentAgentId?: string;
+  depth?: number;
+  branchId?: string;
+  spawnReason?: string;
 }

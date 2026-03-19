@@ -38,7 +38,7 @@ fn default_runtime_mode_for_chat(agent_spec_id: Option<&str>) -> RuntimeMode {
     if agent_spec_id.is_some() {
         RuntimeMode::Single
     } else {
-        RuntimeMode::Supervisor
+        RuntimeMode::HierarchicalSupervisor
     }
 }
 
@@ -940,6 +940,10 @@ pub async fn run_agent_workflow(
         spec.runtime.mode = default_runtime_mode_for_chat(None);
         spec.runtime.max_specialists = spec.runtime.max_specialists.clamp(2, 3);
         spec.runtime.verification_required = true;
+        spec.runtime.delegation.max_depth = spec.runtime.delegation.max_depth.clamp(1, 2);
+        spec.runtime.delegation.max_threads = spec.runtime.delegation.max_threads.clamp(2, 6);
+        spec.runtime.delegation.max_parallel_subagents =
+            spec.runtime.delegation.max_parallel_subagents.clamp(1, 3);
     }
 
     let skill_resolution =

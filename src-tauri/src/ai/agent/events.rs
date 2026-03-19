@@ -9,6 +9,14 @@ pub struct SpecialistEventPayload {
     pub agent_id: String,
     pub role: SpecialistRole,
     pub status: SpecialistStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spawn_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depth: Option<u8>,
     #[serde(default)]
     pub depends_on: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,6 +41,14 @@ pub struct SpecialistCompletedPayload {
     pub role: SpecialistRole,
     pub summary: String,
     pub response_preview: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spawn_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depth: Option<u8>,
     #[serde(default)]
     pub depends_on: Vec<String>,
     pub tool_count: u32,
@@ -48,6 +64,14 @@ pub struct SpecialistFailedPayload {
     pub agent_id: String,
     pub role: SpecialistRole,
     pub error: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spawn_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depth: Option<u8>,
     #[serde(default)]
     pub depends_on: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

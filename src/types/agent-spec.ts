@@ -1,6 +1,8 @@
 import type { AirlockConfig } from "./airlock";
 import type { MemoryConfig } from "./memory";
 
+export type RuntimeMode = "single" | "supervisor" | "hierarchical_supervisor";
+
 export interface AgentSpec {
   id: string;
   version: string;
@@ -91,7 +93,15 @@ export const Permission = {
 export type Permission = typeof Permission[keyof typeof Permission];
 
 export interface RuntimeConfig {
-  mode?: "single" | "supervisor";
+  mode?: RuntimeMode;
   max_specialists?: number;
   verification_required?: boolean;
+  delegation_policy?: string;
+  max_depth?: number;
+  max_threads?: number;
+  max_parallel_subagents?: number;
+  job_max_runtime_seconds?: number;
+  final_synthesis_required?: boolean;
+  internal_coordination_language?: string;
+  final_response_language_mode?: string;
 }

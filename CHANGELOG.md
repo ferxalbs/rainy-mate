@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Hierarchical supervisor runtime** — added a bounded delegation path where the principal agent decides whether to spawn sub-agents, supports `principal -> sub-agent -> sub-agent` chains up to depth 2, and always synthesizes the final user-facing response itself:
+  - `src-tauri/src/ai/agent/hierarchical_supervisor.rs` adds the new orchestrator with structured branch artifacts, partial-failure degradation, and principal final synthesis
+  - `src-tauri/src/ai/specs/manifest.rs`, `src-tauri/src/ai/agent/runtime.rs`, and `src-tauri/src/commands/agent.rs` add `RuntimeMode::HierarchicalSupervisor`, delegation budgets, and language policy support
+  - `src-tauri/src/ai/agent/events.rs`, `src-tauri/src/ai/agent/protocol.rs`, `src-tauri/src/ai/agent/runtime_registry.rs`, and `src-tauri/src/ai/agent/specialist.rs` now carry hierarchical metadata (`parent_agent_id`, `branch_id`, `spawn_reason`, `depth`) end-to-end
+  - `src/types/agent-spec.ts`, `src/types/agent.ts`, `src/hooks/useAgentChat.ts`, `src/components/agents/builder/specDefaults.ts`, `src/components/agents/builder/RuntimePanel.tsx`, and `src/components/agents/builder/AgentBuilder.tsx` expose the new runtime mode and hierarchical specialist state in the frontend
+
 - **Multi-chat history system** — replaces the single `global:long_chat:v1` scope with workspace-scoped independent conversation threads:
   - DB migration `20260318000000_add_chat_workspace_id.sql` adds `workspace_id` column + index to `chats` table; existing data migrates to `"default"` workspace
   - `AgentManager` gains `list_chat_sessions`, `create_chat_session` (UUID-based), `delete_chat_session` (cascade), `get_latest_workspace_chat`, and `ensure_chat_session_with_workspace` methods
@@ -135,6 +141,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default local agent orchestration upgraded** — the default agent now prefers hierarchical supervision over the legacy flat supervisor so delegation only happens when necessary and the principal agent owns the final answer (`src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/commands/agent.rs`)
+
 - **Chat controls simplified** — removed the obsolete `Clear UI` action and reduced chat creation to a single visible `New Chat` button in the topbar (`src/components/agent-chat/ChatTopbar.tsx`, `src/components/layout/AppSidebar.tsx`, `src/components/layout/TahoeLayout.tsx`, `src/App.tsx`)
 
 - `max_tokens_per_day` removed from `AirlockRateLimits` everywhere — field was unimplementable and misleading:
@@ -211,6 +219,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cargo check -q` → pass (manual skill invocation + workspace instruction layer)
 - `cargo test -q prompt_skills --lib` → 2 tests pass (manual skill invocation + workspace instruction layer)
 - `pnpm exec tsc --noEmit` → pass (manual skill invocation + workspace instruction layer)
+- `cargo check -q` → pass (`hierarchical_supervisor` runtime + builder/runtime integration)
+- `cargo test -q supervisor --lib` → 9 tests pass
+- `cargo test -q runtime_registry --lib` → 1 test pass
+- `cargo test -q hierarchical_supervisor --lib` → 4 tests pass
+- `pnpm exec tsc --noEmit` → pass (`hierarchical_supervisor` runtime + builder/runtime integration)
 
 ### Fixed
 

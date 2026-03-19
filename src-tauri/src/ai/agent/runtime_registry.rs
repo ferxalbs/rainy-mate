@@ -10,6 +10,14 @@ pub struct SpecialistRunSnapshot {
     pub agent_id: String,
     pub role: SpecialistRole,
     pub status: SpecialistStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spawn_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depth: Option<u8>,
     #[serde(default)]
     pub depends_on: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,6 +67,10 @@ pub struct RuntimeStatsSnapshot {
 struct ActiveSpecialistRun {
     role: SpecialistRole,
     status: SpecialistStatus,
+    parent_agent_id: Option<String>,
+    branch_id: Option<String>,
+    spawn_reason: Option<String>,
+    depth: Option<u8>,
     depends_on: Vec<String>,
     detail: Option<String>,
     active_tool: Option<String>,
@@ -73,6 +85,10 @@ impl Default for ActiveSpecialistRun {
         Self {
             role: SpecialistRole::Research,
             status: SpecialistStatus::Pending,
+            parent_agent_id: None,
+            branch_id: None,
+            spawn_reason: None,
+            depth: None,
             depends_on: Vec::new(),
             detail: None,
             active_tool: None,
@@ -101,12 +117,47 @@ pub struct RuntimeRegistry {
     state: Arc<RwLock<RuntimeRegistryState>>,
 }
 
+#[derive(Clone)]
+pub struct RuntimeRegistryAssignment {
+    pub agent_id: String,
+    pub role: SpecialistRole,
+    pub depends_on: Vec<String>,
+    pub parent_agent_id: Option<String>,
+    pub branch_id: Option<String>,
+    pub spawn_reason: Option<String>,
+    pub depth: Option<u8>,
+}
+
 impl RuntimeRegistry {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub async fn start_supervisor_run(&self, run_id: &str, assignments: &[(String, SpecialistRole, Vec<String>)]) {
+    pub async fn start_supervisor_run(
+        &self,
+        run_id: &str,
+        assignments: &[(String, SpecialistRole, Vec<String>)],
+    ) {
+        let normalized: Vec<RuntimeRegistryAssignment> = assignments
+            .iter()
+            .map(|(agent_id, role, depends_on)| RuntimeRegistryAssignment {
+                agent_id: agent_id.clone(),
+                role: role.clone(),
+                depends_on: depends_on.clone(),
+                parent_agent_id: None,
+                branch_id: None,
+                spawn_reason: None,
+                depth: Some(1),
+            })
+            .collect();
+        self.start_hierarchical_run(run_id, &normalized).await;
+    }
+
+    pub async fn start_hierarchical_run(
+        &self,
+        run_id: &str,
+        assignments: &[RuntimeRegistryAssignment],
+    ) {
         let mut state = self.state.write().await;
         state.supervisors.insert(
             run_id.to_string(),
@@ -114,13 +165,17 @@ impl RuntimeRegistry {
                 status: "planning".to_string(),
                 specialists: assignments
                     .iter()
-                    .map(|(agent_id, role, depends_on)| {
+                    .map(|assignment| {
                         (
-                            agent_id.clone(),
+                            assignment.agent_id.clone(),
                             ActiveSpecialistRun {
-                                role: role.clone(),
+                                role: assignment.role.clone(),
                                 status: SpecialistStatus::Pending,
-                                depends_on: depends_on.clone(),
+                                parent_agent_id: assignment.parent_agent_id.clone(),
+                                branch_id: assignment.branch_id.clone(),
+                                spawn_reason: assignment.spawn_reason.clone(),
+                                depth: assignment.depth,
+                                depends_on: assignment.depends_on.clone(),
                                 ..Default::default()
                             },
                         )
@@ -151,6 +206,45 @@ impl RuntimeRegistry {
         tool_count: Option<u32>,
         write_like_used: Option<bool>,
     ) {
+        self.update_specialist_status_with_hierarchy(
+            run_id,
+            agent_id,
+            role,
+            status,
+            None,
+            None,
+            None,
+            None,
+            depends_on,
+            detail,
+            active_tool,
+            started_at_ms,
+            finished_at_ms,
+            tool_count,
+            write_like_used,
+        )
+        .await;
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_specialist_status_with_hierarchy(
+        &self,
+        run_id: &str,
+        agent_id: &str,
+        role: &SpecialistRole,
+        status: &SpecialistStatus,
+        parent_agent_id: Option<String>,
+        branch_id: Option<String>,
+        spawn_reason: Option<String>,
+        depth: Option<u8>,
+        depends_on: &[String],
+        detail: Option<String>,
+        active_tool: Option<String>,
+        started_at_ms: Option<i64>,
+        finished_at_ms: Option<i64>,
+        tool_count: Option<u32>,
+        write_like_used: Option<bool>,
+    ) {
         let mut state = self.state.write().await;
         if let Some(run) = state.supervisors.get_mut(run_id) {
             let specialist = run
@@ -158,11 +252,27 @@ impl RuntimeRegistry {
                 .entry(agent_id.to_string())
                 .or_insert_with(|| ActiveSpecialistRun {
                     role: role.clone(),
+                    parent_agent_id: parent_agent_id.clone(),
+                    branch_id: branch_id.clone(),
+                    spawn_reason: spawn_reason.clone(),
+                    depth,
                     depends_on: depends_on.to_vec(),
                     ..Default::default()
                 });
             specialist.role = role.clone();
             specialist.status = status.clone();
+            if parent_agent_id.is_some() {
+                specialist.parent_agent_id = parent_agent_id;
+            }
+            if branch_id.is_some() {
+                specialist.branch_id = branch_id;
+            }
+            if spawn_reason.is_some() {
+                specialist.spawn_reason = spawn_reason;
+            }
+            if depth.is_some() {
+                specialist.depth = depth;
+            }
             specialist.depends_on = depends_on.to_vec();
             specialist.detail = detail;
             specialist.active_tool = active_tool;
@@ -251,6 +361,10 @@ impl RuntimeRegistry {
                             agent_id: agent_id.clone(),
                             role: specialist.role.clone(),
                             status: specialist.status.clone(),
+                            parent_agent_id: specialist.parent_agent_id.clone(),
+                            branch_id: specialist.branch_id.clone(),
+                            spawn_reason: specialist.spawn_reason.clone(),
+                            depth: specialist.depth,
                             depends_on: specialist.depends_on.clone(),
                             detail: specialist.detail.clone(),
                             active_tool: specialist.active_tool.clone(),

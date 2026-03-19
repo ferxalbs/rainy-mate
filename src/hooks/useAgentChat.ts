@@ -15,12 +15,71 @@ import {
 } from "../components/agent-chat/neural-config";
 import { updateMessageById } from "./agent-chat/messageState";
 
-type RuntimeAgentEvent = {
-  runId?: string;
-  timestampMs?: number;
-  type: string;
-  data: any;
+type RuntimeAgentEventData = {
+  [key: string]: unknown;
+  summary?: string;
+  steps?: string[];
+  verificationRequired?: boolean;
+  mode?: string;
+  delegationPolicy?: string;
+  maxDepth?: number;
+  maxThreads?: number;
+  maxParallelSubagents?: number;
+  internalCoordinationLanguage?: string;
+  finalResponseLanguageMode?: string;
+  agentId?: string;
+  role?: string;
+  status?: SpecialistRunState["status"];
+  detail?: string;
+  activeTool?: string;
+  dependsOn?: string[];
+  startedAtMs?: number;
+  finishedAtMs?: number;
+  toolCount?: number;
+  writeLikeUsed?: boolean;
+  parentAgentId?: string;
+  depth?: number;
+  branchId?: string;
+  spawnReason?: string;
+  error?: string;
+  responsePreview?: string;
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
+  id?: string;
+  result?: string;
+  history_source?: string;
+  retrieval_mode?: string;
+  embedding_profile?: string;
+  applied?: boolean;
+  trigger_tokens?: number;
 };
+
+type RuntimeAgentEvent =
+  | {
+      runId?: string;
+      timestampMs?: number;
+      type:
+        | "supervisor_plan_created"
+        | "specialist_spawned"
+        | "specialist_status_changed"
+        | "specialist_completed"
+        | "specialist_failed"
+        | "supervisor_summary"
+        | "status"
+        | "thought"
+        | "stream_chunk"
+        | "tool_call"
+        | "tool_result";
+      data?: RuntimeAgentEventData;
+    }
+  | {
+      runId?: string;
+      timestampMs?: number;
+      type: string;
+      data?: RuntimeAgentEventData;
+    };
 
 export function useAgentChat(
   initialChatScopeId?: string | null,
@@ -838,16 +897,31 @@ export function useAgentChat(
         ): SpecialistRunState[] => {
           const current = specialists ? [...specialists] : [];
           const idx = current.findIndex((item) => item.agentId === next.agentId);
-          const merged = {
-            ...(idx >= 0 ? current[idx] : {}),
-            ...next,
-          } as SpecialistRunState;
+          const merged = mergeDefinedFields(
+            idx >= 0 ? current[idx] : ({} as SpecialistRunState),
+            next,
+          ) as SpecialistRunState;
           if (idx >= 0) {
             current[idx] = merged;
           } else {
             current.push(merged);
           }
           return current;
+        };
+
+        const mergeDefinedFields = <T,>(
+          current: T,
+          next: Partial<T>,
+        ): T => {
+          const merged = { ...(current as Record<string, unknown>) };
+          for (const [key, value] of Object.entries(
+            next as Record<string, unknown>,
+          )) {
+            if (value !== undefined) {
+              merged[key] = value;
+            }
+          }
+          return merged as T;
         };
 
         applyRuntimeEventToMessage = (
@@ -884,6 +958,15 @@ export function useAgentChat(
                     : [],
                   verificationRequired:
                     payload.data?.verificationRequired || false,
+                  mode: payload.data?.mode,
+                  delegationPolicy: payload.data?.delegationPolicy,
+                  maxDepth: payload.data?.maxDepth,
+                  maxThreads: payload.data?.maxThreads,
+                  maxParallelSubagents: payload.data?.maxParallelSubagents,
+                  internalCoordinationLanguage:
+                    payload.data?.internalCoordinationLanguage,
+                  finalResponseLanguageMode:
+                    payload.data?.finalResponseLanguageMode,
                 },
               };
             }
@@ -914,9 +997,9 @@ export function useAgentChat(
                     ? getToolDisplayName(activeTool)
                     : undefined,
                 specialists: upsertSpecialist(message.specialists, {
-                  agentId: payload.data?.agentId,
-                  role: payload.data?.role,
-                  status: payload.data?.status,
+                  agentId: payload.data?.agentId ?? "unknown",
+                  role: payload.data?.role ?? "specialist",
+                  status: payload.data?.status ?? "planning",
                   detail: payload.data?.detail,
                   activeTool,
                   dependsOn: payload.data?.dependsOn || [],
@@ -924,6 +1007,10 @@ export function useAgentChat(
                   finishedAtMs: payload.data?.finishedAtMs,
                   toolCount: payload.data?.toolCount,
                   writeLikeUsed: payload.data?.writeLikeUsed,
+                  parentAgentId: payload.data?.parentAgentId,
+                  depth: payload.data?.depth,
+                  branchId: payload.data?.branchId,
+                  spawnReason: payload.data?.spawnReason,
                 }),
               };
             }
@@ -944,8 +1031,8 @@ export function useAgentChat(
                 ],
                 activeToolName: undefined,
                 specialists: upsertSpecialist(message.specialists, {
-                  agentId: payload.data?.agentId,
-                  role: payload.data?.role,
+                  agentId: payload.data?.agentId ?? "unknown",
+                  role: payload.data?.role ?? "specialist",
                   status: "completed",
                   summary: payload.data?.summary,
                   responsePreview: payload.data?.responsePreview,
@@ -954,6 +1041,10 @@ export function useAgentChat(
                   finishedAtMs: payload.data?.finishedAtMs,
                   toolCount: payload.data?.toolCount,
                   writeLikeUsed: payload.data?.writeLikeUsed,
+                  parentAgentId: payload.data?.parentAgentId,
+                  depth: payload.data?.depth,
+                  branchId: payload.data?.branchId,
+                  spawnReason: payload.data?.spawnReason,
                 }),
               };
             }
@@ -980,8 +1071,8 @@ export function useAgentChat(
                 ],
                 activeToolName: undefined,
                 specialists: upsertSpecialist(message.specialists, {
-                  agentId: payload.data?.agentId,
-                  role: payload.data?.role,
+                  agentId: payload.data?.agentId ?? "unknown",
+                  role: payload.data?.role ?? "specialist",
                   status: "failed",
                   error: payload.data?.error,
                   dependsOn: payload.data?.dependsOn || [],
@@ -989,6 +1080,10 @@ export function useAgentChat(
                   finishedAtMs: payload.data?.finishedAtMs,
                   toolCount: payload.data?.toolCount,
                   writeLikeUsed: payload.data?.writeLikeUsed,
+                  parentAgentId: payload.data?.parentAgentId,
+                  depth: payload.data?.depth,
+                  branchId: payload.data?.branchId,
+                  spawnReason: payload.data?.spawnReason,
                 }),
               };
             }

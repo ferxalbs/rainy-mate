@@ -299,7 +299,13 @@ export function AgentBuilder({
                 maxTokens={
                   typeof spec.maxTokens === "number" ? spec.maxTokens : 4096
                 }
-                runtimeMode={spec.runtime?.mode === "supervisor" ? "supervisor" : "single"}
+                runtimeMode={
+                  spec.runtime?.mode === "hierarchical_supervisor"
+                    ? "hierarchical_supervisor"
+                    : spec.runtime?.mode === "supervisor"
+                      ? "supervisor"
+                      : "single"
+                }
                 maxSpecialists={spec.runtime?.max_specialists ?? 3}
                 verificationRequired={spec.runtime?.verification_required ?? true}
                 onChange={(updates) =>

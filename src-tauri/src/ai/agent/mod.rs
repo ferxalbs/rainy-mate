@@ -2,6 +2,7 @@ pub mod context_budget;
 pub mod context_window;
 pub mod error;
 pub mod events;
+pub mod hierarchical_supervisor;
 pub mod manager;
 pub mod memory;
 pub mod protocol;
