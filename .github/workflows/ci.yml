@@ -127,7 +127,6 @@ jobs:
         env:
           VCPKGRS_DYNAMIC: '1'
           VCPKG_ROOT: 'C:\vcpkg'
-          RUSTFLAGS: "-C target-feature=+crt-static"
         run: |
           $env:VCPKGRS_DYNAMIC="1"
           $env:VCPKG_ROOT="C:\vcpkg"
