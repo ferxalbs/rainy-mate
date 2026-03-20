@@ -54,13 +54,9 @@ jobs:
 
       - name: Build Rust
         run: cd src-tauri && cargo build --lib
-        env:
-          LIBSQLITE3_SYS_USE_PKG_CONFIG: ${{ matrix.platform == 'ubuntu-22.04' && '1' || '' }}
 
       - name: Run Rust Tests
         run: cd src-tauri && cargo test --lib
-        env:
-          LIBSQLITE3_SYS_USE_PKG_CONFIG: ${{ matrix.platform == 'ubuntu-22.04' && '1' || '' }}
 
   tauri-build:
     permissions:
@@ -120,13 +116,19 @@ jobs:
 
       - name: Tauri Build (macOS / Ubuntu)
         if: matrix.platform != 'windows-latest'
-        env:
-          LIBSQLITE3_SYS_USE_PKG_CONFIG: ${{ matrix.platform == 'ubuntu-22.04' && '1' || '' }}
-        run: pnpm run tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: |
+          if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
+            export LIBSQLITE3_SYS_USE_PKG_CONFIG=1
+          fi
+          pnpm run tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - name: Tauri Build (Windows)
         if: matrix.platform == 'windows-latest'
         env:
           VCPKGRS_DYNAMIC: '1'
           VCPKG_ROOT: 'C:\vcpkg'
-        run: pnpm run tauri build ${{ matrix.args }} --config "{\`"bundle\`":{\`"createUpdaterArtifacts\`":false}}"
+          RUSTFLAGS: "-C target-feature=+crt-static"
+        run: |
+          $env:VCPKGRS_DYNAMIC="1"
+          $env:VCPKG_ROOT="C:\vcpkg"
+          pnpm run tauri build ${{ matrix.args }} --config "{\`"bundle\`":{\`"createUpdaterArtifacts\`":false}}"
