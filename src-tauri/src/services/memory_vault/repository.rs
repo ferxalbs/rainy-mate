@@ -33,7 +33,7 @@ pub struct MemoryVaultRepository {
 impl MemoryVaultRepository {
     pub async fn new(app_data_dir: PathBuf) -> Result<Self, String> {
         let _ = std::fs::create_dir_all(&app_data_dir);
-        let db_path = app_data_dir.join("rainy_cowork_v2.db");
+        let db_path = app_data_dir.join("rainy_mate_v2.db");
         
         #[cfg(test)]
         if db_path.exists() {

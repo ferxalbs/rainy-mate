@@ -5,7 +5,7 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-18 - INTELLIGENT MEMORY DISTILLATION & CHAT PERFORMANCE AND MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING & SUB-AGENT EXPANSION & PERSISTENT MEMORY TOOLS & MULTI-CHAT HISTORY
+## [0.5.97] - 2026-03-18 - INTELLIGENT MEMORY DISTILLATION & CHAT PERFORMANCE AND MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING & SUB-AGENT EXPANSION & PERSISTENT MEMORY TOOLS & MULTI-CHAT HISTORY
 
 ### Added
 
@@ -154,6 +154,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Final Rainy MaTE identity migration** — removed the remaining `rainy-cowork` branding/runtime compatibility paths and standardized the desktop app around the `Rainy MaTE` canon only:
+  - `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/src/main.rs` now use the `Rainy MaTE` app identity (`com.enosislabs.rainymate`, `rainy-mate`, `rainy_mate_lib`) without legacy updater fallbacks
+  - `src-tauri/src/services/app_identity.rs`, `src-tauri/src/services/settings.rs`, `src-tauri/src/services/agent_library.rs`, `src-tauri/src/services/third_party_skill_registry.rs`, `src-tauri/src/services/workspace.rs`, `src-tauri/src/services/file_operations.rs`, and `src-tauri/src/commands/mcp.rs` now resolve storage/config paths only through the new `rainy-mate` namespace
+  - `src-tauri/src/ai/keychain.rs`, `src-tauri/src/ai/providers/rainy_sdk.rs`, and `src-tauri/src/services/skill_executor/web.rs` now emit only `Rainy MaTE` service/user-agent identifiers
+  - `src-tauri/src/ai/agent/memory.rs`, `src-tauri/src/db/mod.rs`, and `src-tauri/src/services/memory_vault/repository.rs` now use `rainy_mate_v2.db`
+  - `src/lib/appIdentity.ts`, `src/providers/ThemeProvider.tsx`, `src/lib/theme-utils.ts`, and `src/config/themes.config.ts` now persist frontend preferences exclusively under `rainy-mate-*` storage keys
+  - `src-tauri/src/services/command_poller.rs` removes the stale `payload.peer` path and uses the current connector user identity flow (`user_id`)
+
 - **Default local agent orchestration upgraded** — the default agent now prefers hierarchical supervision over the legacy flat supervisor so delegation only happens when necessary and the principal agent owns the final answer (`src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/commands/agent.rs`)
 - **Default local multi-agent behavior now prefers parallel supervisor for explicit parallel requests** — the local runtime keeps ordinary chats on the main agent unless the prompt explicitly asks for delegation, while the dedicated parallel mode uses bounded 2-lane specialist execution and English final responses for demo/review flows (`src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/ai/agent/supervisor.rs`, `src/components/agents/builder/RuntimePanel.tsx`)
 
@@ -236,6 +244,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cargo test -q supervisor --lib` → 20 tests pass
 - `cargo test -q hierarchical_supervisor --lib` → 7 tests pass
 - `pnpm exec tsc --noEmit` → pass (parallel supervisor builder/runtime wiring + transcript rail cleanup)
+- `cargo check -q` → pass (final Rainy MaTE identity migration)
+- `pnpm exec tsc --noEmit` → pass (final Rainy MaTE identity migration)
 - `pnpm exec tsc --noEmit` → pass (manual skill invocation + workspace instruction layer)
 - `cargo check -q` → pass (`hierarchical_supervisor` runtime + builder/runtime integration)
 - `cargo test -q supervisor --lib` → 9 tests pass
@@ -2426,7 +2436,7 @@ All passed with no new Rust warnings in these runs.
 
 ### Technical
 
-- Folders persist in `~/.tauri/com.enosislabs.rainycowork/user_folders.json`
+- Folders persist in `~/.tauri/com.enosislabs.rainymate/user_folders.json`
 - macOS/Windows folder picker handled via Tauri dialog plugin
 - Existing `dialog:allow-open` capability already configured
 

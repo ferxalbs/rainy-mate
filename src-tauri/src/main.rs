@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    rainy_cowork_lib::run()
+    rainy_mate_lib::run()
 }

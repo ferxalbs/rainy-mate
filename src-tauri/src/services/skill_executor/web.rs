@@ -168,7 +168,7 @@ impl SkillExecutor {
 
         let client = match reqwest::Client::builder()
             .timeout(tokio::time::Duration::from_millis(timeout_ms))
-            .user_agent("rainy-cowork-agent/1.0")
+            .user_agent("rainy-mate-agent/1.0")
             .build()
         {
             Ok(c) => c,
@@ -278,7 +278,7 @@ impl SkillExecutor {
 
         let client = match reqwest::Client::builder()
             .timeout(tokio::time::Duration::from_millis(timeout_ms))
-            .user_agent("rainy-cowork-agent/1.0")
+            .user_agent("rainy-mate-agent/1.0")
             .build()
         {
             Ok(c) => c,

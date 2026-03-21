@@ -1,4 +1,4 @@
-// Rainy Cowork - macOS Keychain Integration
+// Rainy MaTE - macOS Keychain Integration
 // Secure storage for API keys using security-framework
 
 #[cfg(test)]
@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 #[cfg(all(not(test), target_os = "macos"))]
-const SERVICE_NAME: &str = "com.enosislabs.rainycowork";
+const SERVICE_NAME: &str = crate::services::app_identity::CURRENT_BUNDLE_ID;
 
 #[cfg(test)]
 fn test_store() -> &'static Mutex<HashMap<String, String>> {

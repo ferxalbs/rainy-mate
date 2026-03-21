@@ -67,10 +67,10 @@ pub struct ThirdPartySkillRegistry {
 
 impl ThirdPartySkillRegistry {
     pub fn new() -> Result<Self, String> {
-        let data_dir = dirs::data_dir()
-            .ok_or_else(|| "Could not resolve data directory".to_string())?
-            .join("rainy-cowork")
-            .join("third_party_skills");
+        let data_dir = crate::services::app_identity::resolve_child_dir(
+            dirs::data_dir().ok_or_else(|| "Could not resolve data directory".to_string())?,
+            "third_party_skills",
+        )?;
         Self::new_with_root(data_dir)
     }
 

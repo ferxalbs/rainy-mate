@@ -13,7 +13,7 @@ impl Database {
         let app_dir = app_handle.path().app_data_dir()?;
         fs::create_dir_all(&app_dir)?;
 
-        let db_path = app_dir.join("rainy_cowork_v2.db");
+        let db_path = app_dir.join("rainy_mate_v2.db");
         let db_url = format!("sqlite://{}", db_path.to_string_lossy());
 
         if !db_path.exists() {

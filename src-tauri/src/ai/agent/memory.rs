@@ -100,7 +100,7 @@ impl AgentMemory {
         vault: Option<Arc<crate::services::memory_vault::MemoryVaultService>>,
     ) -> Self {
         let _ = std::fs::create_dir_all(&app_data_dir);
-        let db_path = app_data_dir.join("rainy_cowork_v2.db");
+        let db_path = app_data_dir.join("rainy_mate_v2.db");
         if !db_path.exists() {
             let _ = std::fs::File::create(&db_path);
         }

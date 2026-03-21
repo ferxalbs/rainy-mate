@@ -19,13 +19,11 @@ pub struct AgentLibraryService {
 
 impl AgentLibraryService {
     pub fn new_default() -> Result<Self, String> {
-        let app_data = dirs::data_dir()
-            .ok_or_else(|| "Failed to locate data dir".to_string())?
-            .join("com.enosislabs.rainy-cowork")
-            .join("agent-library");
-        fs::create_dir_all(&app_data)
-            .map_err(|e| format!("Failed to create agent library dir: {}", e))?;
-        Ok(Self { root: app_data })
+        let root = crate::services::app_identity::resolve_namespaced_child_dir(
+            dirs::data_dir().ok_or_else(|| "Failed to locate data dir".to_string())?,
+            "agent-library",
+        )?;
+        Ok(Self { root })
     }
 
     pub fn save_spec(&self, spec: &AgentSpec) -> Result<AgentLibraryEntry, String> {

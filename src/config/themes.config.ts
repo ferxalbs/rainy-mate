@@ -4,6 +4,7 @@
  */
 
 import type { ThemeName, ThemeMode } from '../types/theme';
+import { CURRENT_STORAGE_KEYS } from '../lib/appIdentity';
 
 export const THEME_CONFIG = {
   /**
@@ -21,8 +22,8 @@ export const THEME_CONFIG = {
    * Storage keys for localStorage
    */
   storage: {
-    theme: 'rainy-cowork-theme',
-    mode: 'rainy-cowork-mode',
+    theme: CURRENT_STORAGE_KEYS.theme,
+    mode: CURRENT_STORAGE_KEYS.mode,
   },
 
   /**

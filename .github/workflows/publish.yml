@@ -139,7 +139,7 @@ jobs:
           echo "::error::Release workflow failed!"
           echo ""
           echo "🔧 To fix this issue:"
-          echo "1. Go to https://github.com/ferxalbs/rainy-cowork/settings/secrets/actions"
+          echo "1. Go to https://github.com/${{ github.repository }}/settings/secrets/actions"
           echo "2. Add the following secrets:"
           echo "   - TAURI_SIGNING_PRIVATE_KEY: Your base64-encoded signing private key"
           echo "   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD: Your key password"

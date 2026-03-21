@@ -14,12 +14,13 @@ use crate::services::settings::SettingsManager;
 use crate::services::skill_executor::SkillExecutor;
 use crate::services::tool_manifest::build_skill_manifest_from_runtime;
 use crate::services::MemoryManager;
+use crate::services::session_coordinator::SessionCoordinator;
 use rand::Rng;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, Mutex, Notify, RwLock};
+use tokio::sync::{mpsc, Mutex, Notify, RwLock, Semaphore};
 use tokio::time::sleep;
 
 const ACTIVE_POLL_INTERVAL: Duration = Duration::from_secs(2);
@@ -271,6 +272,8 @@ pub struct AgentRuntimeContext {
     pub agent_manager: Arc<AgentManager>,
     pub runtime_registry: Arc<RuntimeRegistry>,
     pub memory_manager: Arc<MemoryManager>,
+    pub app_handle: tauri::AppHandle,
+    pub session_coordinator: Arc<SessionCoordinator>,
 }
 
 #[derive(Clone)]
@@ -284,6 +287,7 @@ pub struct CommandPoller {
     notify: Arc<Notify>,
     kill_switch: AgentKillSwitch,
     audit_emitter: AuditEmitter,
+    concurrent_runs: Arc<Semaphore>,
 }
 
 impl CommandPoller {
@@ -302,6 +306,7 @@ impl CommandPoller {
             notify: Arc::new(Notify::new()),
             kill_switch: AgentKillSwitch::new(),
             audit_emitter: AuditEmitter::new(),
+            concurrent_runs: Arc::new(Semaphore::new(3)),
         }
     }
 
@@ -341,6 +346,8 @@ impl CommandPoller {
         agent_manager: Arc<AgentManager>,
         runtime_registry: Arc<RuntimeRegistry>,
         memory_manager: Arc<MemoryManager>,
+        app_handle: tauri::AppHandle,
+        session_coordinator: Arc<SessionCoordinator>,
     ) {
         let mut lock = self.agent_context.write().await;
         *lock = Some(AgentRuntimeContext {
@@ -349,6 +356,8 @@ impl CommandPoller {
             agent_manager,
             runtime_registry,
             memory_manager,
+            app_handle,
+            session_coordinator,
         });
     }
 
@@ -503,7 +512,15 @@ impl CommandPoller {
                 // 2. Process commands if any
                 let command_count = commands.len();
                 for command in commands {
-                    self.process_command(command).await?;
+                    let permit = self.concurrent_runs.clone().acquire_owned().await
+                        .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error>)?;
+                    let poller = self.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = poller.process_command(command).await {
+                            eprintln!("[CommandPoller] process_command error: {}", e);
+                        }
+                        drop(permit);
+                    });
                 }
                 Ok(command_count)
             }
@@ -869,6 +886,32 @@ impl CommandPoller {
                         .map(|s| s.trim().to_string())
                         .filter(|s| !s.is_empty());
 
+                    // Extract optional desktop chat_id (for Telegram continuity)
+                    let incoming_chat_id = command_for_execution
+                        .payload
+                        .params
+                        .as_ref()
+                        .and_then(|p| p.get("chatId").or_else(|| p.get("chat_id")))
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.trim().is_empty())
+                        .map(|s| s.to_string());
+
+                    // Extract session peer (Telegram chatId / Discord channel)
+                    let session_peer = command_for_execution
+                        .payload
+                        .params
+                        .as_ref()
+                        .and_then(|p| p.get("sessionPeer").or_else(|| p.get("peer")))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .or_else(|| command.payload.user_id.clone());
+
+                    let connector_id_for_session = command
+                        .payload
+                        .connector_id
+                        .clone()
+                        .unwrap_or_else(|| "remote".to_string());
+
                     println!(
                             "[CommandPoller] Routing to AgentRuntime: agent='{}' (model: {}, workspace: {})",
                             agent_name, model, workspace_id
@@ -1041,6 +1084,25 @@ GUIDELINES:
                             Some(ctx.runtime_registry.clone()),
                         );
 
+                        // Start session via SessionCoordinator (creates chat, saves user message, emits session://started)
+                        let session_coordinator = ctx.session_coordinator.clone();
+                        let (session_chat_id, session_run_id) = session_coordinator
+                            .start_remote_session(
+                                incoming_chat_id.clone(),
+                                &workspace_id,
+                                prompt,
+                                &connector_id_for_session,
+                                session_peer.as_deref().unwrap_or("unknown"),
+                                Some(command.id.clone()),
+                            )
+                            .await
+                            .unwrap_or_else(|e| {
+                                eprintln!("[CommandPoller] SessionCoordinator.start_remote_session failed: {}", e);
+                                (uuid::Uuid::new_v4().to_string(), uuid::Uuid::new_v4().to_string())
+                            });
+                        let session_coordinator_for_events = session_coordinator.clone();
+                        let session_run_id_for_events = session_run_id.clone();
+
                         // Run the agent with bounded event streaming to avoid ATM overload under heavy loops.
                         let neural_service = self.neural_service.clone();
                         let command_id = command.id.clone();
@@ -1095,6 +1157,9 @@ GUIDELINES:
                                 if callback_tx.try_send((message, data)).is_err() {
                                     callback_dropped_events.fetch_add(1, Ordering::Relaxed);
                                 }
+
+                                // Emit to frontend for live streaming
+                                session_coordinator_for_events.emit_agent_event(&session_run_id_for_events, event.clone());
 
                                 match event {
                                     AgentEvent::ToolCall(ref call) => {
@@ -1182,9 +1247,18 @@ GUIDELINES:
                                         command.id, e
                                     );
                                 }
+                                // Finish session: save assistant message, emit session://finished
+                                let _ = session_coordinator
+                                    .finish_remote_session(&session_chat_id, &response, prompt)
+                                    .await;
+                                // Include chatId in output for ATM continuity
+                                let output_with_chat_id = serde_json::json!({
+                                    "response": response,
+                                    "chatId": session_chat_id,
+                                }).to_string();
                                 CommandResult {
                                     success: true,
-                                    output: Some(response),
+                                    output: Some(output_with_chat_id),
                                     error: None,
                                     exit_code: Some(0),
                                 }
@@ -1197,6 +1271,7 @@ GUIDELINES:
                                         command.id, join_err
                                     );
                                 }
+                                session_coordinator.unregister(&session_chat_id);
                                 CommandResult {
                                     success: false,
                                     output: None,

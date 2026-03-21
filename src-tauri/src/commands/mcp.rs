@@ -133,7 +133,8 @@ fn default_mcp_json_path() -> PathBuf {
     let base = dirs::config_dir()
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."));
-    base.join("rainy-cowork").join("mcp").join("servers.json")
+    crate::services::app_identity::resolve_child_file(base, "mcp/servers.json")
+    .unwrap_or_else(|_| PathBuf::from(".").join("rainy-mate").join("mcp").join("servers.json"))
 }
 
 fn default_mcp_json_template() -> String {

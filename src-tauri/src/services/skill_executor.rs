@@ -673,14 +673,14 @@ mod tests {
 
     #[test]
     fn normalize_absolute_path_collapses_dot_segments() {
-        let normalized = SkillExecutor::normalize_absolute_path(Path::new(
-            "/Users/fer/Projects/../Projects/rainy-cowork/./src-tauri",
-        ))
-        .expect("expected valid absolute path");
+        let temp_root = std::env::temp_dir().join("rainy-mate-normalize");
+        let input = temp_root.join("../rainy-mate-normalize/./src-tauri");
+        let normalized =
+            SkillExecutor::normalize_absolute_path(&input).expect("expected valid absolute path");
 
         assert_eq!(
             normalized.to_string_lossy(),
-            "/Users/fer/Projects/rainy-cowork/src-tauri"
+            temp_root.join("src-tauri").to_string_lossy()
         );
     }
 
@@ -721,12 +721,11 @@ mod tests {
 
     #[test]
     fn blocked_paths_reject_relative_and_absolute_matches() {
-        let target = PathBuf::from(
-            "/Users/fer/Projects/rainy-cowork/src-tauri/src/services/skill_executor.rs",
-        );
-        let allowed = vec!["/Users/fer/Projects/rainy-cowork".to_string()];
+        let project_root = std::env::temp_dir().join("rainy-mate-skill-executor");
+        let target = project_root.join("src-tauri/src/services/skill_executor.rs");
+        let allowed = vec![project_root.to_string_lossy().to_string()];
         let blocked_relative = vec!["src-tauri/src/services".to_string()];
-        let blocked_absolute = vec!["/Users/fer/Projects/rainy-cowork/src-tauri".to_string()];
+        let blocked_absolute = vec![project_root.join("src-tauri").to_string_lossy().to_string()];
 
         assert!(SkillExecutor::is_path_blocked(
             &target,

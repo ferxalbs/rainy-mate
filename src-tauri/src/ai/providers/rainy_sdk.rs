@@ -349,7 +349,7 @@ impl RainySDKProvider {
         sdk_request.top_p = request.top_p;
         sdk_request.max_output_tokens = request.max_tokens;
         sdk_request.tool_choice = Self::map_responses_tool_choice(request.tool_choice.as_ref());
-        sdk_request.user = Some("rainy-cowork".to_string());
+        sdk_request.user = Some("rainy-mate".to_string());
 
         if let Some(tools) = request.tools.as_ref() {
             let mapped_tools = tools

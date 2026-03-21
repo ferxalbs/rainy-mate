@@ -8,10 +8,15 @@ import {
 import { flushSync } from "react-dom";
 import type { ReactNode } from "react";
 import type { ThemeName, ThemeMode, ThemeConfig, Theme } from "../types/theme";
+import {
+  CURRENT_STORAGE_KEYS,
+  getStoredValue,
+  setStoredValue,
+} from "../lib/appIdentity";
 import { themes } from "../lib/themes";
 
-const THEME_STORAGE_KEY = "rainy-cowork-theme";
-const MODE_STORAGE_KEY = "rainy-cowork-mode";
+const THEME_STORAGE_KEY = CURRENT_STORAGE_KEYS.theme;
+const MODE_STORAGE_KEY = CURRENT_STORAGE_KEYS.mode;
 
 interface ThemeContextType {
   theme: ThemeName;
@@ -59,8 +64,8 @@ function applyThemeToDocument(themeName: ThemeName, themeMode: ThemeMode) {
   root.setAttribute("data-theme", themeName);
 
   // Store in localStorage
-  localStorage.setItem(THEME_STORAGE_KEY, themeName);
-  localStorage.setItem(MODE_STORAGE_KEY, themeMode);
+  setStoredValue(THEME_STORAGE_KEY, themeName);
+  setStoredValue(MODE_STORAGE_KEY, themeMode);
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -68,12 +73,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const hasAppliedInitial = useRef(false);
 
   const [theme, setThemeState] = useState<ThemeName>(() => {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    const stored = getStoredValue(THEME_STORAGE_KEY);
     return (stored as ThemeName) || "rainy-tahoe";
   });
 
   const [mode, setModeState] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(MODE_STORAGE_KEY);
+    const stored = getStoredValue(MODE_STORAGE_KEY);
     if (stored === "light" || stored === "dark") return stored;
     return window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
@@ -81,12 +86,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
 
   const [enableAnimations, setEnableAnimationsState] = useState<boolean>(() => {
-    const stored = localStorage.getItem("rainy-cowork-animations");
+    const stored = getStoredValue(CURRENT_STORAGE_KEYS.animations);
     return stored === "true";
   });
 
   const [enableCompactMode, setEnableCompactModeState] = useState<boolean>(() => {
-    const stored = localStorage.getItem("rainy-cowork-compact");
+    const stored = getStoredValue(CURRENT_STORAGE_KEYS.compact);
     return stored === "true";
   });
 
@@ -106,7 +111,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
     const handleChange = (e: MediaQueryListEvent) => {
-      const storedMode = localStorage.getItem(MODE_STORAGE_KEY);
+      const storedMode = getStoredValue(MODE_STORAGE_KEY);
       // Only auto-switch if user hasn't manually set a preference
       if (!storedMode) {
         setModeState(e.matches ? "dark" : "light");
@@ -127,12 +132,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setEnableAnimations = useCallback((enable: boolean) => {
     setEnableAnimationsState(enable);
-    localStorage.setItem("rainy-cowork-animations", String(enable));
+    setStoredValue(CURRENT_STORAGE_KEYS.animations, String(enable));
   }, []);
 
   const setEnableCompactMode = useCallback((enable: boolean) => {
     setEnableCompactModeState(enable);
-    localStorage.setItem("rainy-cowork-compact", String(enable));
+    setStoredValue(CURRENT_STORAGE_KEYS.compact, String(enable));
   }, []);
 
   const toggleMode = useCallback(() => {

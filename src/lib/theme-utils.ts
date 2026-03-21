@@ -1,4 +1,8 @@
 import type { Theme, ThemeColors, ThemeMode } from '../types/theme';
+import {
+  CURRENT_STORAGE_KEYS,
+  getStoredValue,
+} from './appIdentity';
 
 /**
  * Theme Utility Functions
@@ -107,24 +111,16 @@ export function applyThemeToDocument(colors: ThemeColors, mode: ThemeMode): void
  * Get theme from localStorage
  */
 export function getStoredTheme(): string | null {
-  try {
-    return localStorage.getItem('rainy-cowork-theme');
-  } catch {
-    return null;
-  }
+  return getStoredValue(CURRENT_STORAGE_KEYS.theme);
 }
 
 /**
  * Get mode from localStorage
  */
 export function getStoredMode(): ThemeMode | null {
-  try {
-    const stored = localStorage.getItem('rainy-cowork-mode');
-    if (stored === 'light' || stored === 'dark') return stored;
-    return null;
-  } catch {
-    return null;
-  }
+  const stored = getStoredValue(CURRENT_STORAGE_KEYS.mode);
+  if (stored === 'light' || stored === 'dark') return stored;
+  return null;
 }
 
 /**

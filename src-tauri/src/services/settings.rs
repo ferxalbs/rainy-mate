@@ -117,13 +117,15 @@ impl SettingsManager {
     }
 
     fn get_settings_path() -> PathBuf {
+        let fallback = PathBuf::from(".").join(crate::services::app_identity::CURRENT_BUNDLE_ID);
         let app_data = dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("com.enosislabs.rainy-cowork");
+            .map(|base| crate::services::app_identity::resolve_namespaced_data_dir(base))
+            .transpose()
+            .ok()
+            .flatten()
+            .unwrap_or(fallback);
 
-        // Ensure directory exists
         fs::create_dir_all(&app_data).ok();
-
         app_data.join("settings.json")
     }
 

@@ -95,7 +95,8 @@ pub struct WorkspaceManager {
 impl WorkspaceManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let app_data_dir = dirs::data_dir().ok_or("Could not find app data directory")?;
-        let workspaces_dir = app_data_dir.join("rainy-cowork").join("workspaces");
+        let workspaces_dir =
+            crate::services::app_identity::resolve_child_dir(app_data_dir, "workspaces")?;
 
         // Create the directory if it doesn't exist
         fs::create_dir_all(&workspaces_dir)?;
