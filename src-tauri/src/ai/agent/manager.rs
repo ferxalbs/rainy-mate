@@ -10,75 +10,8 @@ pub const DEFAULT_LONG_CHAT_SCOPE_ID: &str = "global:long_chat:v1";
 
 const DEFAULT_WORKSPACE_ID: &str = "default";
 
-const DEFAULT_AGENT_SOUL: &str = r#"# Rainy — Default Agent
-
-You are Rainy, a powerful multi-specialist AI agent. You have access to a team of sub-agents that you orchestrate:
-
-- **Research Agent** — gathers web/file context before execution
-- **Executor Agent** — implements code and filesystem changes precisely
-- **Verifier Agent** — validates results with read-only checks after writes
-- **Memory Scribe** — persists important facts and user preferences to long-term memory
-
-## Memory
-- When users share their name, preferences, or any important fact, ALWAYS delegate to the Memory Scribe to save it.
-- Before answering questions about the user's history, use `recall_memory` to surface relevant context.
-- The Memory Scribe uses `save_memory` with descriptive tags like ["user", "name"] or ["project", "preference"].
-
-## Behavior
-- Be concise and precise. Never speculate — use tools to verify.
-- Only delegate when the user explicitly asks for delegation/subagents/parallel specialist work.
-- Keep internal coordination in English.
-- When parallel supervisor mode is active, answer in English.
-- Otherwise answer in the user's language.
-- The principal agent owns the final user-facing response. Sub-agents return structured findings, not the final answer.
-- Always respect the user's stated preferences and remembered context.
-"#;
-
 fn build_default_agent_spec_json(id: &str, name: &str) -> String {
-    use crate::ai::specs::manifest::{
-        AgentSpec, AirlockConfig, ConnectorsConfig, DelegationPolicy, MemoryConfig, RuntimeConfig,
-        RuntimeMode,
-    };
-    use crate::ai::specs::skills::AgentSkills;
-    use crate::ai::specs::soul::AgentSoul;
-
-    let spec = AgentSpec {
-        id: id.to_string(),
-        version: "3.0.0".to_string(),
-        soul: AgentSoul {
-            name: name.to_string(),
-            description: "Default Rainy agent — parallel supervisor for bounded specialist work and principal final synthesis".to_string(),
-            version: "3.0.0".to_string(),
-            personality: "Helpful".to_string(),
-            tone: "Professional".to_string(),
-            soul_content: DEFAULT_AGENT_SOUL.to_string(),
-            embedding: None,
-        },
-        skills: AgentSkills::default(),
-        airlock: AirlockConfig::default(),
-        memory_config: MemoryConfig::default(),
-        connectors: ConnectorsConfig::default(),
-        runtime: RuntimeConfig {
-            mode: RuntimeMode::ParallelSupervisor,
-            max_specialists: 2,
-            verification_required: true,
-            delegation: crate::ai::specs::manifest::DelegationConfig {
-                policy: DelegationPolicy::ExplicitOnly,
-                ..Default::default()
-            },
-            language_policy: crate::ai::specs::manifest::LanguagePolicyConfig {
-                internal_coordination_language: "english".to_string(),
-                final_response_language_mode: "english".to_string(),
-            },
-            ..Default::default()
-        },
-        model: None,
-        temperature: None,
-        max_tokens: None,
-        provider: None,
-        signature: None,
-    };
-    serde_json::to_string(&spec).unwrap_or_default()
+    crate::services::default_agent_spec::build_default_local_agent_spec_json(id, name)
 }
 
 #[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -531,7 +464,7 @@ impl AgentManager {
         workspace_id: &str,
     ) -> Result<ChatSessionDto, sqlx::Error> {
         let chat_id = uuid::Uuid::new_v4().to_string();
-        let default_agent_id = "rainy-agent-v1";
+        let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
 
         // Ensure default agent exists
         let default_spec_json = build_default_agent_spec_json(default_agent_id, "Rainy Agent");
@@ -547,7 +480,7 @@ impl AgentManager {
         .bind(default_agent_id)
         .bind("Rainy Agent")
         .bind("Default Rainy agent — spawns Research, Executor, Verifier, and Memory Scribe sub-agents")
-        .bind(DEFAULT_AGENT_SOUL)
+        .bind(crate::services::default_agent_spec::DEFAULT_AGENT_SOUL_MARKDOWN)
         .bind(&default_spec_json)
         .bind("3.0.0")
         .execute(&*self.db)
@@ -676,8 +609,8 @@ impl AgentManager {
         agent_name: &str,
         workspace_id: &str,
     ) -> Result<(), sqlx::Error> {
-        let default_agent_id = "rainy-agent-v1";
-        let default_soul = DEFAULT_AGENT_SOUL;
+        let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
+        let default_soul = crate::services::default_agent_spec::DEFAULT_AGENT_SOUL_MARKDOWN;
         let default_spec_json = build_default_agent_spec_json(default_agent_id, agent_name);
 
         sqlx::query(
@@ -700,6 +633,46 @@ impl AgentManager {
         .bind(default_agent_id)
         .bind(Option::<String>::None)
         .bind(workspace_id)
+        .execute(&*self.db)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn ensure_chat_session_with_source(
+        &self,
+        chat_id: &str,
+        workspace_id: &str,
+        source: &str,
+        connector_id: Option<&str>,
+        remote_session_peer: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
+        let default_soul = crate::services::default_agent_spec::DEFAULT_AGENT_SOUL_MARKDOWN;
+        let default_spec_json = build_default_agent_spec_json(default_agent_id, "Rainy Agent");
+
+        sqlx::query(
+            "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+        )
+        .bind(default_agent_id)
+        .bind("Rainy Agent")
+        .bind("Default Rainy agent — parallel supervisor")
+        .bind(default_soul)
+        .bind(&default_spec_json)
+        .bind("3.0.0")
+        .execute(&*self.db)
+        .await?;
+
+        sqlx::query(
+            "INSERT INTO chats (id, agent_id, title, workspace_id, source, connector_id, remote_session_peer) \
+             VALUES (?, ?, NULL, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+        )
+        .bind(chat_id)
+        .bind(default_agent_id)
+        .bind(workspace_id)
+        .bind(source)
+        .bind(connector_id)
+        .bind(remote_session_peer)
         .execute(&*self.db)
         .await?;
 

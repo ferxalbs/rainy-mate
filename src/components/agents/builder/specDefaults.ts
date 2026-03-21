@@ -4,7 +4,7 @@ export function createDefaultAgentSpec(id: string = crypto.randomUUID()): AgentS
   return {
     id,
     version: "3.0.0",
-    model: "openai/gpt-5-nano",
+    model: "openai/gpt-5.4-nano",
     temperature: 0.4,
     maxTokens: 4096,
     provider: "rainy",

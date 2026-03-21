@@ -31,6 +31,7 @@ interface TahoeLayoutProps {
   chatSessionsByWorkspace?: Record<string, ChatSession[]>;
   activeWorkspacePath?: string;
   activeChatId?: string | null;
+  activeRunChatIds?: Set<string>;
   onSelectChatForFolder?: (folder: Folder, chatId: string) => void;
   onRefreshWorkspaceChats?: (workspaceId: string) => Promise<void> | void;
   onDeleteChat?: (workspaceId: string, chatId: string) => void;
@@ -50,6 +51,7 @@ export function TahoeLayout({
   chatSessionsByWorkspace,
   activeWorkspacePath,
   activeChatId,
+  activeRunChatIds,
   onSelectChatForFolder,
   onRefreshWorkspaceChats,
   onDeleteChat,
@@ -81,6 +83,7 @@ export function TahoeLayout({
         chatSessionsByWorkspace={chatSessionsByWorkspace}
         activeWorkspacePath={activeWorkspacePath}
         activeChatId={activeChatId}
+        activeRunChatIds={activeRunChatIds}
         onSelectChatForFolder={onSelectChatForFolder}
         onRefreshWorkspaceChats={onRefreshWorkspaceChats}
         onDeleteChat={onDeleteChat}

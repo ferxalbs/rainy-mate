@@ -272,7 +272,6 @@ pub struct AgentRuntimeContext {
     pub agent_manager: Arc<AgentManager>,
     pub runtime_registry: Arc<RuntimeRegistry>,
     pub memory_manager: Arc<MemoryManager>,
-    pub app_handle: tauri::AppHandle,
     pub session_coordinator: Arc<SessionCoordinator>,
 }
 
@@ -346,7 +345,6 @@ impl CommandPoller {
         agent_manager: Arc<AgentManager>,
         runtime_registry: Arc<RuntimeRegistry>,
         memory_manager: Arc<MemoryManager>,
-        app_handle: tauri::AppHandle,
         session_coordinator: Arc<SessionCoordinator>,
     ) {
         let mut lock = self.agent_context.write().await;
@@ -356,7 +354,6 @@ impl CommandPoller {
             agent_manager,
             runtime_registry,
             memory_manager,
-            app_handle,
             session_coordinator,
         });
     }

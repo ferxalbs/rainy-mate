@@ -344,7 +344,11 @@ impl WorkflowStep for ThinkStep {
         // 1.5. Push user input to distillation buffer for intelligent extraction
         if let Some(last_user_msg) = state.messages.iter().rfind(|m| m.role == "user") {
             let user_text = last_user_msg.content.as_text();
-            if !user_text.is_empty() && user_text.len() > 10 {
+            if state.spec.memory_config.persistence.cross_session
+                && !user_text.is_empty()
+                && user_text.len() > 10
+                && !crate::services::memory_vault::distiller::MemoryDistiller::is_trivial_conversation_turn(&user_text)
+            {
                 state
                     .memory
                     .push_for_distillation(crate::services::memory_vault::types::RawMemoryTurn {
@@ -774,54 +778,9 @@ impl WorkflowStep for ActStep {
 
             // Persist web research results to long-term memory
             if matches!(function_name.as_str(), "web_search" | "read_web_page") {
-                let allowed = if let Some(airlock) = state.airlock_service.as_ref() {
-                    let cmd = crate::models::neural::QueuedCommand {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        intent: "memory_vault.write".to_string(),
-                        payload: crate::models::neural::RainyPayload {
-                            skill: Some("memory_vault".to_string()),
-                            method: Some("write".to_string()),
-                            params: None,
-                            content: None,
-                            allowed_paths: state.allowed_paths.clone(),
-                            blocked_paths: state.spec.airlock.scopes.blocked_paths.clone(),
-                            allowed_domains: state.spec.airlock.scopes.allowed_domains.clone(),
-                            blocked_domains: state.spec.airlock.scopes.blocked_domains.clone(),
-                            tool_access_policy: None,
-                            tool_access_policy_version: None,
-                            tool_access_policy_hash: None,
-                            ..Default::default()
-                        },
-                        status: crate::models::neural::CommandStatus::Pending,
-                        priority: crate::models::neural::CommandPriority::Normal,
-                        airlock_level: crate::models::neural::AirlockLevel::Sensitive, // Required for memory writes
-                        approval_timeout_secs: Some(0),
-                        created_at: Some(chrono::Utc::now().timestamp()),
-                        started_at: None,
-                        completed_at: None,
-                        result: None,
-                        workspace_id: Some(state.workspace_id.clone()),
-                        desktop_node_id: None,
-                        approved_by: None,
-                    };
-                    match airlock.check_permission(&cmd).await {
-                        Ok(true) => true,
-                        Ok(false) => {
-                            on_event(AgentEvent::Error(
-                                "Memory write (Web Research) blocked by Airlock".to_string(),
-                            ));
-                            false
-                        }
-                        Err(e) => {
-                            on_event(AgentEvent::Error(format!("Airlock error: {}", e)));
-                            false
-                        }
-                    }
-                } else {
-                    true
-                };
-
-                if allowed && !crate::services::memory_vault::distiller::MemoryDistiller::is_readonly_tool(&function_name) {
+                if state.spec.memory_config.persistence.cross_session
+                    && !crate::services::memory_vault::distiller::MemoryDistiller::is_readonly_tool(&function_name)
+                {
                     let content_preview: String = final_output.chars().take(2000).collect();
                     if !content_preview.is_empty() {
                         state

@@ -14,6 +14,7 @@ pub mod cloud_bridge;
 pub mod command_poller;
 pub mod document;
 pub mod embedder;
+pub mod default_agent_spec;
 pub mod file_manager;
 pub mod file_operations;
 pub mod fleet_control;
@@ -61,7 +62,6 @@ pub use memory::MemoryManager;
 pub use neural_service::NeuralService;
 pub use prompt_skills::{DiscoveredPromptSkill, PromptSkillBinding, PromptSkillDiscoveryService, PromptSkillRegistry};
 pub use security::NodeAuthenticator;
-pub use session_coordinator::SessionCoordinator;
 pub use skill_executor::SkillExecutor;
 
 pub use llm_client::LLMClient;

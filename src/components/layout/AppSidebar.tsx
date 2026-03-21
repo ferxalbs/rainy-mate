@@ -43,6 +43,7 @@ interface AppSidebarProps {
   onSelectChatForFolder?: (folder: Folder, chatId: string) => void;
   onRefreshWorkspaceChats?: (workspaceId: string) => Promise<void> | void;
   onDeleteChat?: (workspaceId: string, chatId: string) => void;
+  activeRunChatIds?: Set<string>;
 
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -146,6 +147,7 @@ export function AppSidebar({
   onSelectChatForFolder,
   onRefreshWorkspaceChats,
   onDeleteChat,
+  activeRunChatIds,
   isCollapsed = false,
   onToggleCollapse,
   onSettingsClick,
@@ -457,6 +459,7 @@ export function AppSidebar({
                               <ChatThreadList
                                 sessions={sessions}
                                 activeChatId={activeChatId ?? null}
+                                activeRunChatIds={activeRunChatIds}
                                 onSwitchChat={(chatId) => onSelectChatForFolder?.(folder, chatId)}
                                 onRefresh={isActive ? () => void onRefreshWorkspaceChats?.(folder.path) : undefined}
                                 onDeleteChat={onDeleteChat ? (chatId) => onDeleteChat(folder.path, chatId) : undefined}

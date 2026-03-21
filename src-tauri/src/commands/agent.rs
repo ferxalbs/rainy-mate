@@ -855,6 +855,7 @@ pub async fn run_agent_workflow(
     agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
     runtime_registry: State<'_, Arc<RuntimeRegistry>>,
     run_control: State<'_, Arc<AgentRunControl>>,
+    session_coordinator: State<'_, Arc<crate::services::session_coordinator::SessionCoordinator>>,
 ) -> Result<RunAgentWorkflowResponse, String> {
     crate::ai::model_catalog::ensure_supported_model_slug(&model_id)?;
     ensure_provider_ready_for_model(&model_id, &provider_registry, &router).await?;
@@ -895,6 +896,9 @@ pub async fn run_agent_workflow(
 
     let chat_id = chat_scope_id
         .unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
+
+    // Register with SessionCoordinator so this local run appears in list_active_sessions
+    session_coordinator.register_local(chat_id.clone(), run_id.clone());
 
     // 0. Ensure Chat Session Exists (Persist Metadata)
     let _ = agent_manager
@@ -1265,6 +1269,7 @@ pub async fn run_agent_workflow(
     }
 
     run_control.unregister_run(&run_id).await;
+    session_coordinator.unregister(&chat_id);
     let response = response_result?;
 
     // Persist final assistant response only (avoid noisy intermediate event spam).
@@ -1505,6 +1510,13 @@ pub async fn ensure_chat_title(
         })?;
 
     Ok(EnsureChatTitleResponse { chat, status })
+}
+
+#[tauri::command]
+pub async fn list_active_sessions(
+    session_coordinator: State<'_, Arc<crate::services::session_coordinator::SessionCoordinator>>,
+) -> Result<Vec<crate::services::session_coordinator::ActiveSessionInfo>, String> {
+    Ok(session_coordinator.list_active())
 }
 
 #[cfg(test)]

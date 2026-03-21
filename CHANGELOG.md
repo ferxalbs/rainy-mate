@@ -5,6 +5,80 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-20 - PARALLEL MULTI-SESSION AGENT SYSTEM
+
+### Added
+
+- **SessionCoordinator service** — new `src-tauri/src/services/session_coordinator.rs` unifies local and remote agent session lifecycle:
+  - `start_remote_session` creates a persistent chat in SQLite, saves the user message, emits `session://started` Tauri event, and tracks the run in a lock-free `DashMap`
+  - `emit_agent_event` forwards `AgentEvent` as `agent://event` to the desktop frontend so remote Telegram sessions stream live in the UI
+  - `finish_remote_session` saves the assistant response, generates a fallback title, emits `session://finished`, and cleans up the active map
+  - `register_local` / `unregister` allow local `run_agent_workflow` runs to appear in `list_active_sessions`
+  - `list_active` returns all in-progress runs (local + remote) for the frontend
+
+- **DB migration** `20260320000000_add_chat_source_metadata.sql` — adds `source` (default `'local'`), `connector_id`, and `remote_session_peer` columns to the `chats` table so Telegram threads are linked to their desktop chat session
+- `AgentManager::ensure_chat_session_with_source` — new method that sets the three new columns when creating remote sessions
+- **Parallel command execution** in `CommandPoller` — bounded `Semaphore(3)` replaces sequential `process_command` iteration; up to 3 agent runs can execute concurrently
+- `CommandPoller` `agent.run` handler now:
+  - Calls `SessionCoordinator.start_remote_session` before running the runtime (persists chat + emits live event)
+  - Dual-emits each `AgentEvent`: frontend via `agent://event` AND ATM via existing `progress_tx`/`NeuralService` channel
+  - Returns `{"response": "...", "chatId": "..."}` JSON so ATM can store the desktop chat ID for conversation continuity
+- **`list_active_sessions` Tauri command** — thin wrapper over `SessionCoordinator.list_active()`; returns `Vec<ActiveSessionInfo>` with `chatId`, `runId`, `source`, `connectorId`
+- `run_agent_workflow` registers/unregisters with `SessionCoordinator` so local runs appear in the active list
+- **Frontend session events** — `useChatSessions` subscribes to `session://started` and `session://finished` and auto-refreshes the sidebar thread list
+- **Active run indicator** in `ChatThreadList` — `activeRunChatIds?: Set<string>` prop; a pulsing primary-colored dot appears next to any chat with an in-progress agent run
+- **ATM chat continuity** in `telegram-agent-runtime.ts` — stores/retrieves the desktop `chatId` in Redis (`rainy:tg:desktop:{workspaceId}:{sessionPeer}`, 30-day TTL) and passes it in subsequent `agent.run` params so follow-up Telegram messages append to the same desktop chat thread
+- **Default cloud agent provisioning bridge** — desktop now owns an idempotent cloud bootstrap path for empty ATM workspaces:
+  - new shared spec factory `src-tauri/src/services/default_agent_spec.rs`
+  - `bootstrap_atm` auto-provisions the default cloud agent when the workspace has no active agents
+  - new Tauri command/wrapper `ensure_default_atm_agent` in `src-tauri/src/commands/atm.rs` and `src/services/tauri.ts`
+  - `ATMClient` now exposes typed workspace agent/model catalog lookups in `src-tauri/src/services/atm_client.rs`
+
+### Fixed
+
+- **`activeRunChatIds` never populated** — the pulsing active-run indicator in `ChatThreadList` was fully wired on the component side but never fed real data; patched the complete pipeline:
+  - `tauri.ts` gains `listActiveSessions()` wrapper and `ActiveSessionInfo` type
+  - `useChatSessions` seeds the `Set<string>` from `listActiveSessions()` on mount (catches already-running sessions), adds on `session://started`, removes on `session://finished`
+  - `activeRunChatIds` threaded through `App.tsx` → `TahoeLayout` → `AppSidebar` → `ChatThreadList`
+- **`session://finished` removed wrong ID** — listener was calling `refreshWorkspaceSessions(activeWorkspaceId)` to infer removal instead of reading `event.payload.chatId`; now deletes the exact `chatId` from the set
+- **Neural Link reconnect lifecycle** — reconnecting after `Disconnect` no longer leaves background runtime loops dead:
+  - new Tauri command `resume_neural_runtime` in `src-tauri/src/commands/neural.rs`
+  - `NeuralPanel` now restarts `CommandPoller` and `CloudBridge` during restore and manual reconnect in `src/components/neural/NeuralPanel.tsx`
+- **Neural node readiness gating** — the desktop no longer presents remote access as ready before ATM sees a live node:
+  - `NeuralPanel` now waits for `getAtmFleetStatus()` to report an `online`/`busy` node before treating the runtime as ready
+  - `NeuralDashboard` disables `Generate Session Code` while the node is still syncing
+- **Neural workspace reset ordering** — `reset_neural_workspace` now disconnects the node before deleting the workspace, preventing false `401 Unauthorized` disconnect noise during cleanup in `src-tauri/src/commands/atm.rs`
+- **Neural disconnect cleanup** — `NeuralService.disconnect()` now treats `401/404/409` as terminal cleanup states and clears the local `node_id` instead of surfacing a false hard failure in `src-tauri/src/services/neural_service.rs`
+- **Default agent model defaults** — desktop-side builder/default cloud provisioning now prefer `openai/gpt-5.4-nano` instead of the stale `openai/gpt-5-nano` fallback:
+  - `src/components/agents/builder/specDefaults.ts`
+  - `src-tauri/src/services/default_agent_spec.rs`
+- **Default cloud agent identity drift** — the auto-provisioned cloud fallback no longer inherits an onboarding-specific description; it now matches the local default Rainy identity, and `ensure_default_atm_agent` can repair the existing `rainy-cloud-agent-v1` logical spec instead of leaving the stale personality in place:
+  - `src-tauri/src/services/default_agent_spec.rs`
+  - `src-tauri/src/commands/atm.rs`
+- **Dynamic memory distillation gating** — automatic distillation no longer behaves like an explicit memory write per turn:
+  - removed the incorrect Airlock gate around automatic distillation in `src-tauri/src/ai/agent/runtime.rs` and `src-tauri/src/ai/agent/workflow.rs`
+  - trivial greetings/openers are now ignored by the distiller in `src-tauri/src/services/memory_vault/distiller.rs`
+  - unparsable distillation payloads now fail closed instead of falling back to storing generic observations
+- **Default cloud-agent provisioning reliability** — the desktop-side ATM bootstrap path was hardened so empty workspaces consistently receive a usable default cloud agent and already-provisioned stale fallback specs can be repaired in place:
+  - `src-tauri/src/services/default_agent_spec.rs`
+  - `src-tauri/src/commands/atm.rs`
+  - `src-tauri/src/services/atm_client.rs`
+  - `src/services/tauri.ts`
+- **Neural onboarding error visibility** — Neural Link and the remote-access dashboard now surface the real provisioning failure text instead of a generic fallback, making model-catalog and deploy issues diagnosable from the desktop UI:
+  - `src/components/neural/NeuralPanel.tsx`
+  - `src/components/neural/modules/NeuralDashboard.tsx`
+- **Neural reconnect warm-start path** — reconnecting after a disconnect now resumes runtime services and waits for ATM fleet readiness before exposing pairing, eliminating the transient “desktop connected locally but still offline remotely” window:
+  - `src-tauri/src/commands/neural.rs`
+  - `src-tauri/src/lib.rs`
+  - `src/services/tauri.ts`
+  - `src/components/neural/NeuralPanel.tsx`
+  - `src/components/neural/modules/NeuralDashboard.tsx`
+
+### Validation
+
+- `cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+
 ## [0.5.97] - 2026-03-18 - INTELLIGENT MEMORY DISTILLATION & CHAT PERFORMANCE AND MEMORY STRATEGY DISPATCH & AGENT RUNTIME HARDENING & SUB-AGENT EXPANSION & PERSISTENT MEMORY TOOLS & MULTI-CHAT HISTORY
 
 ### Added

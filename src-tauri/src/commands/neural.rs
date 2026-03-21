@@ -1,7 +1,7 @@
 use crate::models::neural::{DesktopNodeStatus, QueuedCommand};
 use crate::services::tool_manifest::build_skill_manifest_from_runtime;
 use crate::services::NeuralService;
-use tauri::{command, State};
+use tauri::{command, Manager, State};
 
 pub struct NeuralServiceState(pub NeuralService);
 
@@ -84,4 +84,19 @@ pub async fn get_neural_credentials_values(
     state: State<'_, NeuralServiceState>,
 ) -> Result<Option<(String, String)>, String> {
     Ok(state.0.get_credentials().await)
+}
+
+#[command]
+pub async fn resume_neural_runtime(
+    app_handle: tauri::AppHandle,
+    command_poller: State<'_, std::sync::Arc<crate::services::CommandPoller>>,
+) -> Result<(), String> {
+    command_poller.start().await;
+
+    if let Some(bridge) = app_handle.try_state::<crate::services::cloud_bridge::CloudBridge>() {
+        let bridge_ref: &crate::services::cloud_bridge::CloudBridge = bridge.inner();
+        bridge_ref.restart().await;
+    }
+
+    Ok(())
 }

@@ -48,6 +48,7 @@ function App() {
   const {
     sessionsByWorkspace,
     activeChatId,
+    activeRunChatIds,
     createNewChat,
     switchToChat,
     deleteChat,
@@ -157,6 +158,7 @@ function App() {
         chatSessionsByWorkspace={sessionsByWorkspace}
         activeWorkspacePath={activeFolder?.path}
         activeChatId={activeChatId}
+        activeRunChatIds={activeRunChatIds}
         onSelectChatForFolder={handleSelectChatForFolder}
         onRefreshWorkspaceChats={(workspaceId) => void refreshWorkspaceSessions(workspaceId)}
         onDeleteChat={deleteChat}

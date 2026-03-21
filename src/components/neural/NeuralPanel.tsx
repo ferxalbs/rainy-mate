@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   bootstrapAtm,
+  ensureDefaultAtmAgent,
+  getAtmFleetStatus,
   getNeuralCredentialsValues,
   hasAtmCredentials,
   loadNeuralCredentials,
   clearNeuralCredentials,
   registerNode,
+  resumeNeuralRuntime,
   resetNeuralWorkspace,
   setNeuralCredentials,
   setNeuralWorkspaceId,
@@ -112,12 +115,71 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showPlatformKey, setShowPlatformKey] = useState(false);
   const [showUserKey, setShowUserKey] = useState(false);
+  const [nodeReady, setNodeReady] = useState(false);
+  const [nodeStatusLabel, setNodeStatusLabel] = useState(
+    "Waiting for desktop heartbeat...",
+  );
 
   // Styles for native inputs in login form
   const loginInputClass =
     "w-full bg-background/40 backdrop-blur-sm border border-white/5 hover:border-white/10 focus:border-primary/50 transition-colors h-12 rounded-xl px-4 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/20";
   const labelClass =
     "block uppercase text-[10px] font-bold tracking-widest text-muted-foreground mb-1.5 ml-1";
+
+  const ensureWorkspaceDefaultAgent = async (silent = false) => {
+    try {
+      const result = await ensureDefaultAtmAgent();
+      if (!silent && result.status === "created") {
+        toast.success("Default cloud agent is ready for remote access");
+      }
+      return result;
+    } catch (error) {
+      console.error("Failed to ensure default ATM agent:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : JSON.stringify(error);
+      if (!silent) {
+        toast.error(
+          message?.trim().length
+            ? `Default cloud agent provisioning failed: ${message}`
+            : "Workspace connected, but default cloud agent provisioning failed.",
+        );
+      }
+      return null;
+    }
+  };
+
+  const waitForOnlineNode = async (workspaceId: string) => {
+    setNodeReady(false);
+    setNodeStatusLabel("Waiting for desktop heartbeat...");
+
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      try {
+        const fleet = await getAtmFleetStatus();
+        const onlineNode = fleet.nodes.find(
+          (node) =>
+            node.effectiveStatus === "online" || node.effectiveStatus === "busy",
+        );
+        if (fleet.workspaceId === workspaceId && onlineNode) {
+          setNodeReady(true);
+          setNodeStatusLabel("Desktop node is online.");
+          return true;
+        }
+      } catch (error) {
+        console.error("Failed to verify ATM fleet readiness:", error);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    setNodeReady(false);
+    setNodeStatusLabel("Desktop node is still syncing with ATM.");
+    return false;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -162,7 +224,9 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
             if (effectiveWorkspace) {
               setWorkspace(effectiveWorkspace);
               setState("connecting");
+              await ensureWorkspaceDefaultAgent(true);
               try {
+                await resumeNeuralRuntime();
                 await setNeuralWorkspaceId(effectiveWorkspace.id);
                 try {
                   await registerNode();
@@ -171,6 +235,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
                   await new Promise((resolve) => setTimeout(resolve, 500));
                   await registerNode();
                 }
+                await waitForOnlineNode(effectiveWorkspace.id);
                 if (!cancelled) {
                   setState("connected");
                 }
@@ -211,6 +276,8 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
         workspaceName.trim() || "Desktop Workspace",
       );
       await setNeuralCredentials(platformKey, userApiKey);
+      await ensureWorkspaceDefaultAgent(false);
+      await resumeNeuralRuntime();
       await setNeuralWorkspaceId(ws.id);
       try {
         await registerNode();
@@ -219,6 +286,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         await registerNode();
       }
+      await waitForOnlineNode(ws.id);
 
       setWorkspace(ws);
       writeStoredWorkspace(ws);
@@ -243,6 +311,8 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
         await clearNeuralCredentials().catch(() => {});
         setPlatformKey("");
         setUserApiKey("");
+        setNodeReady(false);
+        setNodeStatusLabel("Waiting for desktop heartbeat...");
         setWorkspace(null);
         setState("idle");
         clearStoredWorkspace();
@@ -420,9 +490,13 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
               {workspace?.name}
             </h2>
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-foreground/5 border border-foreground/5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  nodeReady ? "bg-emerald-500" : "bg-amber-400"
+                }`}
+              />
               <span className="text-xs text-muted-foreground font-mono">
-                Connected
+                {nodeReady ? "Connected" : "Syncing"}
               </span>
             </div>
           </div>
@@ -437,7 +511,11 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       }
     >
       {activeTab === "dashboard" && workspace && (
-        <NeuralDashboard workspace={workspace} />
+        <NeuralDashboard
+          workspace={workspace}
+          nodeReady={nodeReady}
+          nodeStatusLabel={nodeStatusLabel}
+        />
       )}
       {activeTab === "agents" && <NeuralAgents onNavigate={onNavigate} />}
       {activeTab === "activity" && <NeuralActivity />}

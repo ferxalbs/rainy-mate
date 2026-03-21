@@ -1,5 +1,58 @@
 use crate::services::atm_client::{ATMClient, CreateAgentParams};
+use serde::Serialize;
 use tauri::{command, Manager, State};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnsureDefaultAtmAgentResult {
+    pub status: String,
+    pub agent_id: String,
+    pub model: String,
+    pub message: String,
+}
+
+async fn ensure_default_cloud_agent(
+    client: &ATMClient,
+) -> Result<EnsureDefaultAtmAgentResult, String> {
+    let existing_agents = client.list_agent_summaries().await?;
+    if let Some(active) = existing_agents.iter().find(|agent| agent.status == "active") {
+        let is_default_cloud_agent = active
+            .logical_spec_id
+            .as_deref()
+            == Some(crate::services::default_agent_spec::DEFAULT_CLOUD_AGENT_ID);
+
+        if !is_default_cloud_agent {
+            return Ok(EnsureDefaultAtmAgentResult {
+                status: "already_exists".to_string(),
+                agent_id: active.id.clone(),
+                model: String::new(),
+                message: format!("Workspace already has an active agent: {}", active.name),
+            });
+        }
+    }
+
+    let models = client.list_workspace_models().await?;
+    let selected_model = crate::services::default_agent_spec::select_default_cloud_model_id(
+        models.iter().map(|model| model.id.as_str()),
+    )?;
+    let spec = crate::services::default_agent_spec::build_default_cloud_agent_spec(&selected_model);
+    let deploy_result = client.deploy_agent(spec).await?;
+    let agent_id = deploy_result
+        .get("id")
+        .and_then(|value| value.as_str())
+        .unwrap_or(crate::services::default_agent_spec::DEFAULT_CLOUD_AGENT_ID)
+        .to_string();
+
+    Ok(EnsureDefaultAtmAgentResult {
+        status: "created".to_string(),
+        agent_id,
+        model: selected_model.clone(),
+        message: format!(
+            "Default cloud agent was provisioned automatically with model '{}'.",
+            selected_model
+        ),
+    })
+}
 
 #[command]
 pub async fn bootstrap_atm(
@@ -24,7 +77,22 @@ pub async fn bootstrap_atm(
         .set_credentials(master_key, user_api_key)
         .await
         .map_err(|e| format!("Failed to set neural credentials: {}", e))?;
+
+    if let Err(error) = ensure_default_cloud_agent(&client).await {
+        tracing::warn!(
+            "[bootstrap_atm] Default cloud agent provisioning skipped: {}",
+            error
+        );
+    }
+
     Ok(auth)
+}
+
+#[command]
+pub async fn ensure_default_atm_agent(
+    client: State<'_, ATMClient>,
+) -> Result<EnsureDefaultAtmAgentResult, String> {
+    ensure_default_cloud_agent(&client).await
 }
 
 #[command]
@@ -356,16 +424,17 @@ pub async fn reset_neural_workspace(
         b.stop().await;
     }
 
-    // 2. Delete workspace on server
-    client.reset_workspace(master_key, user_api_key).await?;
-
-    // 3. Mark node offline (best-effort) before clearing credentials.
+    // 2. Mark node offline before deleting the workspace, otherwise the
+    // server may invalidate the node first and return 401 on disconnect.
     if let Err(e) = neural.0.disconnect().await {
         println!(
             "[reset_neural_workspace] Neural disconnect failed (continuing cleanup): {}",
             e
         );
     }
+
+    // 3. Delete workspace on server
+    client.reset_workspace(master_key, user_api_key).await?;
 
     // 4. Clear local credentials
     neural.0.clear_credentials().await?;

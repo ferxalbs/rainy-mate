@@ -856,74 +856,25 @@ Rules:
                 response_text =
                     "No final textual response was generated after tool execution.".to_string();
             }
-            if !response_text.is_empty() && response_text.len() > 20 {
-                // Airlock Gatekeeping: Check if Agent has permission to write memory.
-                // We construct a synthetic command representing a memory write.
-                let save_command = crate::models::neural::QueuedCommand {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    intent: "memory_vault.write".to_string(),
-                    payload: crate::models::neural::RainyPayload {
-                        skill: Some("memory_vault".to_string()),
-                        method: Some("write".to_string()),
-                        params: None,
-                        content: None,
-                        allowed_paths: self.options.allowed_paths.clone().unwrap_or_default(),
-                        blocked_paths: self.spec.airlock.scopes.blocked_paths.clone(),
-                        allowed_domains: self.spec.airlock.scopes.allowed_domains.clone(),
-                        blocked_domains: self.spec.airlock.scopes.blocked_domains.clone(),
-                        tool_access_policy: None,
-                        tool_access_policy_version: None,
-                        tool_access_policy_hash: None,
-                        ..Default::default()
-                    },
-                    status: crate::models::neural::CommandStatus::Pending,
-                    priority: crate::models::neural::CommandPriority::Normal,
-                    airlock_level: crate::models::neural::AirlockLevel::Sensitive, // Required for memory writes
-                    approval_timeout_secs: Some(0),
-                    created_at: Some(chrono::Utc::now().timestamp()),
-                    started_at: None,
-                    completed_at: None,
-                    result: None,
-                    workspace_id: Some(self.options.workspace_id.clone()),
-                    desktop_node_id: None,
-                    approved_by: None,
-                };
-
-                let allowed = if let Some(airlock) = self.airlock_service.as_ref() {
-                    match airlock.check_permission(&save_command).await {
-                        Ok(true) => true,
-                        Ok(false) => {
-                            on_event(AgentEvent::Error(
-                                "Memory write blocked by Airlock".to_string(),
-                            ));
-                            false
-                        }
-                        Err(e) => {
-                            on_event(AgentEvent::Error(format!("Airlock error: {}", e)));
-                            false
-                        }
-                    }
-                } else {
-                    // Failsafe open if no airlock connected, preserving legacy behavior config
-                    true
-                };
-
-                if allowed && self.spec.memory_config.persistence.cross_session {
-                    self.memory
-                        .push_for_distillation(
-                            crate::services::memory_vault::types::RawMemoryTurn {
-                                content: response_text.chars().take(2000).collect(),
-                                role: "assistant".to_string(),
-                                source: "agent_conversation".to_string(),
-                                workspace_id: effective_ws.clone(),
-                                timestamp: chrono::Utc::now().timestamp(),
-                            },
-                        )
-                        .await;
-                    on_event(AgentEvent::MemoryStored(
-                        "Response queued for distillation".to_string(),
-                    ));
-                }
+            if !response_text.is_empty()
+                && response_text.len() > 20
+                && self.spec.memory_config.persistence.cross_session
+                && !crate::services::memory_vault::distiller::MemoryDistiller::is_trivial_conversation_turn(&response_text)
+            {
+                self.memory
+                    .push_for_distillation(
+                        crate::services::memory_vault::types::RawMemoryTurn {
+                            content: response_text.chars().take(2000).collect(),
+                            role: "assistant".to_string(),
+                            source: "agent_conversation".to_string(),
+                            workspace_id: effective_ws.clone(),
+                            timestamp: chrono::Utc::now().timestamp(),
+                        },
+                    )
+                    .await;
+                on_event(AgentEvent::MemoryStored(
+                    "Response queued for distillation".to_string(),
+                ));
             }
             // Flush any remaining buffered turns for distillation
             self.memory.flush_remaining().await;

@@ -546,11 +546,20 @@ impl NeuralService {
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
-            return Err(format!("Disconnect failed: {}", res.status()));
+            let status = res.status();
+            if matches!(
+                status,
+                reqwest::StatusCode::UNAUTHORIZED
+                    | reqwest::StatusCode::NOT_FOUND
+                    | reqwest::StatusCode::CONFLICT
+            ) {
+                self.clear_node_id().await;
+                return Ok(());
+            }
+            return Err(format!("Disconnect failed: {}", status));
         }
 
-        let mut metadata = self.metadata.lock().await;
-        metadata.node_id = None;
+        self.clear_node_id().await;
 
         Ok(())
     }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import type { ChatSession } from "../services/tauri";
 import * as tauri from "../services/tauri";
 
@@ -22,6 +23,7 @@ export function useChatSessions({
   const [sessionsByWorkspace, setSessionsByWorkspace] = useState<SessionsByWorkspace>({});
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeRunChatIds, setActiveRunChatIds] = useState<Set<string>>(new Set());
   const creationInFlightRef = useRef<Record<string, Promise<ChatSession | null>>>({});
 
   const refreshWorkspaceSessions = useCallback(async (workspaceId: string) => {
@@ -72,6 +74,42 @@ export function useChatSessions({
       cancelled = true;
     };
   }, [activeWorkspaceId, ensureWorkspaceChat]);
+
+  // Seed active run IDs on mount
+  useEffect(() => {
+    tauri.listActiveSessions()
+      .then((sessions) => {
+        setActiveRunChatIds(new Set(sessions.map((s) => s.chatId)));
+      })
+      .catch(() => {/* non-critical */});
+  }, []);
+
+  // Listen for remote sessions started/finished
+  useEffect(() => {
+    let unlisten1: (() => void) | undefined;
+    let unlisten2: (() => void) | undefined;
+
+    void listen<{ chatId: string; workspaceId: string }>("session://started", (event) => {
+      const { chatId, workspaceId } = event.payload;
+      setActiveRunChatIds((prev) => new Set([...prev, chatId]));
+      void refreshWorkspaceSessions(workspaceId);
+    }).then((fn) => { unlisten1 = fn; });
+
+    void listen<{ chatId: string }>("session://finished", (event) => {
+      const { chatId } = event.payload;
+      setActiveRunChatIds((prev) => {
+        const next = new Set(prev);
+        next.delete(chatId);
+        return next;
+      });
+      void refreshWorkspaceSessions(activeWorkspaceId);
+    }).then((fn) => { unlisten2 = fn; });
+
+    return () => {
+      unlisten1?.();
+      unlisten2?.();
+    };
+  }, [activeWorkspaceId, refreshWorkspaceSessions]);
 
   const createNewChat = useCallback(async (workspaceId = activeWorkspaceId) => {
     if (!workspaceId) return null;
@@ -167,6 +205,7 @@ export function useChatSessions({
   return {
     sessionsByWorkspace,
     activeChatId,
+    activeRunChatIds,
     isLoading,
     createNewChat,
     switchToChat,

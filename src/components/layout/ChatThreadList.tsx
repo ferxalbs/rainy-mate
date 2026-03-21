@@ -11,6 +11,7 @@ interface ChatThreadListProps {
   onDeleteChat?: (chatId: string) => void;
   emptyLabel?: string;
   showRefresh?: boolean;
+  activeRunChatIds?: Set<string>;
 }
 
 function timeAgo(dateStr: string): string {
@@ -36,6 +37,7 @@ export function ChatThreadList({
   onDeleteChat,
   emptyLabel = "No chats yet",
   showRefresh = false,
+  activeRunChatIds = new Set<string>(),
 }: ChatThreadListProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -60,6 +62,7 @@ export function ChatThreadList({
     <div className="space-y-1">
       {sessions.map((session) => {
         const isActive = session.id === activeChatId;
+        const isRunning = activeRunChatIds.has(session.id);
         const title = session.title?.trim() || "New chat";
         const timeLabel = session.last_message_at
           ? timeAgo(session.last_message_at)
@@ -81,6 +84,9 @@ export function ChatThreadList({
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
+              {isRunning && (
+                <span className="inline-block h-2 w-2 flex-shrink-0 rounded-full bg-primary animate-pulse" />
+              )}
               <span className="truncate text-[13px] font-medium">{title}</span>
               {timeLabel && (
                 <span className="shrink-0 text-[10px] font-medium text-muted-foreground/55">

@@ -40,6 +40,21 @@ Categories:
 
 If nothing is worth remembering, return []."#;
 
+const TRIVIAL_TURN_PREFIXES: &[&str] = &[
+    "hi",
+    "hello",
+    "hey",
+    "hola",
+    "buenas",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "how can i help",
+    "how may i help",
+    "what can i help",
+    "what do you want to set up today",
+];
+
 pub struct MemoryDistiller {
     router: Arc<RwLock<IntelligentRouter>>,
 }
@@ -53,13 +68,41 @@ impl MemoryDistiller {
         READONLY_TOOLS.contains(&tool_name)
     }
 
+    pub fn is_trivial_conversation_turn(text: &str) -> bool {
+        let normalized = text.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            return true;
+        }
+
+        if normalized.len() <= 12
+            && normalized
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || ",.!?'".contains(c))
+        {
+            return true;
+        }
+
+        TRIVIAL_TURN_PREFIXES
+            .iter()
+            .any(|prefix| normalized.starts_with(prefix))
+    }
+
     pub async fn distill(&self, turns: Vec<RawMemoryTurn>) -> Result<Vec<DistilledMemory>, String> {
         if turns.is_empty() {
             return Ok(vec![]);
         }
 
+        let meaningful_turns: Vec<RawMemoryTurn> = turns
+            .into_iter()
+            .filter(|turn| !Self::is_trivial_conversation_turn(&turn.content))
+            .collect();
+
+        if meaningful_turns.is_empty() {
+            return Ok(vec![]);
+        }
+
         // Fast-path: skip if all turns are read-only tool results
-        let all_readonly = turns.iter().all(|t| {
+        let all_readonly = meaningful_turns.iter().all(|t| {
             if t.role != "tool_result" {
                 return false;
             }
@@ -75,7 +118,7 @@ impl MemoryDistiller {
 
         // Build extraction prompt from turns
         let mut input_block = String::with_capacity(4096);
-        for turn in &turns {
+        for turn in &meaningful_turns {
             input_block.push_str(&format!("[{}] ({}): {}\n\n", turn.role, turn.source, turn.content));
         }
 
@@ -102,21 +145,14 @@ impl MemoryDistiller {
         let response_text = response.content.unwrap_or_default();
         let mut memories = parse_distilled_json(&response_text);
 
-        // If parse failed, try fallback
+        // If parse failed, fail closed.
         if memories.is_empty() && !response_text.trim().is_empty() {
-            // Check if LLM returned empty array explicitly
             let trimmed = response_text.trim();
             if trimmed == "[]" {
                 return Ok(vec![]);
             }
-            // Fallback: extract first user turn as observation
-            if let Some(user_turn) = turns.iter().find(|t| t.role == "user") {
-                memories.push(DistilledMemory {
-                    content: user_turn.content.chars().take(500).collect(),
-                    category: MemoryCategory::Observation,
-                    importance: 0.3,
-                });
-            }
+            tracing::warn!("Memory distillation returned unparsable payload; skipping persistence");
+            return Ok(vec![]);
         }
 
         // Apply importance floors

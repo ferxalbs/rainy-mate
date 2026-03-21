@@ -9,7 +9,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { generatePairingCode } from "../../../services/tauri";
+import {
+  ensureDefaultAtmAgent,
+  generatePairingCode,
+} from "../../../services/tauri";
 import { NeuralChip } from "../shared/UiElements";
 
 interface NeuralDashboardProps {
@@ -17,25 +20,47 @@ interface NeuralDashboardProps {
     id: string;
     name: string;
   };
+  nodeReady: boolean;
+  nodeStatusLabel: string;
   isHeadless: boolean;
   onToggleHeadless: (enabled: boolean) => void;
 }
 
 export function NeuralDashboard({
   workspace,
+  nodeReady,
+  nodeStatusLabel,
 }: Omit<NeuralDashboardProps, "isHeadless" | "onToggleHeadless">) {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const handleGeneratePairingCode = async () => {
     try {
+      if (!nodeReady) {
+        toast.error(
+          "Desktop node is still syncing with ATM. Wait a moment and try again.",
+        );
+        return;
+      }
+      await ensureDefaultAtmAgent();
       const res = await generatePairingCode();
       if (res && res.code) {
         setPairingCode(res.code);
         setTimeout(() => setPairingCode(null), 5 * 60 * 1000); // Expire in 5m locally
       }
     } catch (err) {
-      toast.error("Failed to generate pairing code");
+      console.error("Failed to prepare remote access session:", err);
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : JSON.stringify(err);
+      toast.error(
+        message?.trim().length
+          ? `Failed to prepare remote access session: ${message}`
+          : "Failed to prepare remote access session",
+      );
     }
   };
 
@@ -178,11 +203,14 @@ export function NeuralDashboard({
                 <Button
                   className="w-full bg-blue-500/90 text-white hover:bg-blue-500 font-medium tracking-wide shadow-lg shadow-blue-500/20 transition-all"
                   onPress={handleGeneratePairingCode}
+                  isDisabled={!nodeReady}
                 >
                   Generate Session Code
                 </Button>
                 <p className="text-xs text-muted-foreground/50">
-                  Generate a temporary code to pair your device securely.
+                  {nodeReady
+                    ? "Generate a temporary code to pair your device securely."
+                    : nodeStatusLabel}
                 </p>
               </div>
             )}

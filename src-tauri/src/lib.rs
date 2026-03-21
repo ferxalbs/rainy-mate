@@ -371,6 +371,17 @@ pub fn run() {
             let runtime_registry_for_poller = runtime_registry.clone();
             let memory_manager_for_poller = memory_manager.clone();
 
+            // Create SessionCoordinator (unifies local + remote session lifecycle)
+            let session_coordinator = Arc::new(
+                crate::services::session_coordinator::SessionCoordinator::new(
+                    agent_manager_for_poller.clone(),
+                    app.handle().clone(),
+                )
+            );
+            app.manage(session_coordinator.clone());
+
+            let session_coordinator_for_poller = session_coordinator.clone();
+
             tauri::async_runtime::spawn(async move {
                 // Inject Airlock service
                 poller.set_airlock_service(airlock_for_poller).await;
@@ -383,6 +394,7 @@ pub fn run() {
                         agent_manager_for_poller,
                         runtime_registry_for_poller,
                         memory_manager_for_poller,
+                        session_coordinator_for_poller,
                     )
                     .await;
 
@@ -600,6 +612,7 @@ pub fn run() {
             commands::unified_chat_stream,
             // ATM Commands (Rainy ATM)
             commands::bootstrap_atm,
+            commands::ensure_default_atm_agent,
             commands::create_atm_agent,
             commands::list_atm_agents,
             commands::list_atm_workspace_shared_agents,
@@ -647,6 +660,7 @@ pub fn run() {
             commands::has_neural_credentials,
             commands::get_neural_credentials_values,
             commands::clear_neural_credentials,
+            commands::resume_neural_runtime,
             // Airlock Commands (Security)
             commands::respond_to_airlock,
             commands::get_pending_airlock_approvals,
@@ -671,6 +685,7 @@ pub fn run() {
             commands::agent::delete_chat_session,
             commands::agent::update_chat_title,
             commands::agent::ensure_chat_title,
+            commands::agent::list_active_sessions,
             // Workflow Factory (THE FORGE foundation)
             commands::start_workflow_recording,
             commands::record_workflow_step,

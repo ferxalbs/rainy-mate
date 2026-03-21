@@ -1493,6 +1493,10 @@ export async function getNeuralCredentialsValues(): Promise<
   return invoke("get_neural_credentials_values");
 }
 
+export async function resumeNeuralRuntime(): Promise<void> {
+  return invoke("resume_neural_runtime");
+}
+
 export async function clearNeuralCredentials(): Promise<void> {
   return invoke("clear_neural_credentials");
 }
@@ -2037,6 +2041,17 @@ export async function bootstrapAtm(
   return invoke("bootstrap_atm", { masterKey, userApiKey, name });
 }
 
+export interface EnsureDefaultAtmAgentResult {
+  status: "created" | "already_exists";
+  agentId: string;
+  model: string;
+  message: string;
+}
+
+export async function ensureDefaultAtmAgent(): Promise<EnsureDefaultAtmAgentResult> {
+  return invoke("ensure_default_atm_agent");
+}
+
 export async function generatePairingCode(): Promise<{
   code: string;
   expiresAt: number;
@@ -2531,4 +2546,17 @@ export async function clearWorkspaceVault(
   workspaceId: string,
 ): Promise<DeleteBatchResult> {
   return invoke<DeleteBatchResult>("clear_workspace_vault", { workspaceId });
+}
+
+// --- Session Coordinator ---
+
+export interface ActiveSessionInfo {
+  chatId: string;
+  runId: string;
+  source: "local" | "remote";
+  connectorId: string | null;
+}
+
+export async function listActiveSessions(): Promise<ActiveSessionInfo[]> {
+  return invoke<ActiveSessionInfo[]>("list_active_sessions");
 }

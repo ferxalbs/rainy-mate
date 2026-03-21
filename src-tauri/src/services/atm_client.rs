@@ -51,6 +51,40 @@ pub struct CreateAgentParams {
     pub config: serde_json::Value,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AtmAgentSummary {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub agent_type: String,
+    pub status: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub logical_spec_id: Option<String>,
+    pub is_duplicate_logical_spec: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AtmAgentListResponse {
+    pub agents: Vec<AtmAgentSummary>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AtmWorkspaceModel {
+    pub id: String,
+    pub name: String,
+    pub provider: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AtmWorkspaceModelCatalogResponse {
+    pub models: Vec<AtmWorkspaceModel>,
+    pub cached: bool,
+    pub fetched_at: i64,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PairingCodeResponse {
     pub code: String,
@@ -748,6 +782,69 @@ impl ATMClient {
         }
 
         res.json().await.map_err(|e| e.to_string())
+    }
+
+    pub async fn list_agent_summaries(&self) -> Result<Vec<AtmAgentSummary>, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let url = format!("{}/admin/agents", state.base_url);
+
+        let mut req = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key));
+
+        if let Some(pk) = state.platform_key.as_ref() {
+            req = req.header("x-rainy-platform-key", pk);
+        }
+        if let Some(user_api_key) = state.user_api_key.as_ref() {
+            req = req.header("x-rainy-api-key", user_api_key);
+        }
+
+        let res = req.send().await.map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!("List Agents failed: {}", err_text));
+        }
+
+        let response: AtmAgentListResponse = res.json().await.map_err(|e| e.to_string())?;
+        Ok(response.agents)
+    }
+
+    pub async fn list_workspace_models(&self) -> Result<Vec<AtmWorkspaceModel>, String> {
+        self.verify_authenticated_connection().await?;
+
+        let state = self.state.lock().await;
+        let api_key = state.api_key.as_ref().ok_or("Not authenticated")?;
+        let platform_key = state.platform_key.clone().ok_or("Missing platform key")?;
+        let user_api_key = state.user_api_key.clone().ok_or("Missing owner API key")?;
+        let url = format!("{}/admin/models/catalog", state.base_url);
+
+        let res = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("x-rainy-platform-key", platform_key)
+            .header("x-rainy-api-key", user_api_key)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let err_text = res.text().await.unwrap_or_default();
+            return Err(format!(
+                "Workspace model catalog lookup failed: {} - {}",
+                status, err_text
+            ));
+        }
+
+        let response: AtmWorkspaceModelCatalogResponse =
+            res.json().await.map_err(|e| e.to_string())?;
+        Ok(response.models)
     }
 
     pub async fn verify_authenticated_connection(&self) -> Result<(), String> {
