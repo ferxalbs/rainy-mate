@@ -65,12 +65,16 @@ pub async fn save_agent_spec(
 
     let spec = materialize_prompt_skills(&app_handle, workspace_path.as_deref(), spec)?;
     let dir = specs_dir(&app_handle)?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create spec dir: {}", e))?;
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| format!("Failed to create spec dir: {}", e))?;
 
     let path = dir.join(format!("{}.json", spec.id));
     let body = serde_json::to_string_pretty(&spec)
         .map_err(|e| format!("Failed to serialize agent spec: {}", e))?;
-    std::fs::write(&path, body).map_err(|e| format!("Failed to write spec file: {}", e))?;
+    tokio::fs::write(&path, body)
+        .await
+        .map_err(|e| format!("Failed to write spec file: {}", e))?;
 
     Ok(path.to_string_lossy().to_string())
 }
@@ -79,7 +83,7 @@ pub async fn save_agent_spec(
 pub async fn load_agent_spec(app_handle: AppHandle, id: String) -> Result<AgentSpec, String> {
     let dir = specs_dir(&app_handle)?;
     let path = dir.join(format!("{}.json", id));
-    let body = std::fs::read_to_string(&path).map_err(|e| {
+    let body = tokio::fs::read_to_string(&path).await.map_err(|e| {
         format!(
             "Failed to read agent spec {}: {}",
             path.to_string_lossy(),
@@ -97,14 +101,16 @@ pub async fn list_agent_specs(app_handle: AppHandle) -> Result<Vec<AgentSpec>, S
     }
 
     let mut specs = Vec::new();
-    let entries = std::fs::read_dir(&dir).map_err(|e| format!("Failed to list specs: {}", e))?;
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read spec entry: {}", e))?;
+    let mut entries = tokio::fs::read_dir(&dir)
+        .await
+        .map_err(|e| format!("Failed to list specs: {}", e))?;
+    while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let body = std::fs::read_to_string(&path)
+        let body = tokio::fs::read_to_string(&path)
+            .await
             .map_err(|e| format!("Failed to read {}: {}", path.to_string_lossy(), e))?;
         let spec: AgentSpec = serde_json::from_str(&body)
             .map_err(|e| format!("Invalid json in {}: {}", path.to_string_lossy(), e))?;
