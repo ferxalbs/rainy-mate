@@ -343,6 +343,7 @@ function SupervisorRail({
     research: "Research",
     executor: "Executor",
     verifier: "Verifier",
+    memory_scribe: "Memory Scribe",
   };
 
   const statusTone: Record<
@@ -431,11 +432,6 @@ function SupervisorRail({
                   {specialist.toolCount ? `${specialist.toolCount} tool${specialist.toolCount === 1 ? "" : "s"}` : "No tools yet"}
                   {formatDuration(specialist) ? ` · ${formatDuration(specialist)}` : ""}
                   {specialist.writeLikeUsed ? " · write-like actions" : ""}
-                </p>
-              )}
-              {specialist.responsePreview && (
-                <p className="mt-2 line-clamp-3 text-xs text-foreground/80">
-                  {specialist.responsePreview}
                 </p>
               )}
               {specialist.error && (

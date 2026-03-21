@@ -125,6 +125,13 @@ fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
                 "summary": plan.summary,
                 "steps": plan.steps,
                 "verificationRequired": plan.verification_required,
+                "mode": plan.mode,
+                "delegationPolicy": plan.delegation_policy,
+                "maxDepth": plan.max_depth,
+                "maxThreads": plan.max_threads,
+                "maxParallelSubagents": plan.max_parallel_subagents,
+                "internalCoordinationLanguage": plan.internal_coordination_language,
+                "finalResponseLanguageMode": plan.final_response_language_mode,
             }),
         ),
         AgentEvent::SpecialistSpawned(payload) => (

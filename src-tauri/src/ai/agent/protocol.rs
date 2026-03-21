@@ -69,6 +69,20 @@ pub struct SupervisorPlan {
     pub steps: Vec<String>,
     pub assignments: Vec<SpecialistAssignment>,
     pub verification_required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_depth: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_threads: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_parallel_subagents: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub internal_coordination_language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_response_language_mode: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

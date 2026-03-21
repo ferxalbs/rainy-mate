@@ -7,14 +7,14 @@ interface RuntimePanelProps {
   model: string;
   temperature: number;
   maxTokens: number;
-  runtimeMode: "single" | "supervisor" | "hierarchical_supervisor";
+  runtimeMode: "single" | "parallel_supervisor" | "hierarchical_supervisor";
   maxSpecialists: number;
   verificationRequired: boolean;
   onChange: (updates: {
     model?: string;
     temperature?: number;
     maxTokens?: number;
-    runtimeMode?: "single" | "supervisor" | "hierarchical_supervisor";
+    runtimeMode?: "single" | "parallel_supervisor" | "hierarchical_supervisor";
     maxSpecialists?: number;
     verificationRequired?: boolean;
   }) => void;
@@ -51,6 +51,7 @@ export function RuntimePanel({
   verificationRequired,
   onChange,
 }: RuntimePanelProps) {
+  const specialistMax = runtimeMode === "parallel_supervisor" ? 2 : 3;
   const tempLabel =
     temperature < 0.3
       ? "Precise"
@@ -99,11 +100,13 @@ export function RuntimePanel({
               </Button>
               <Button
                 size="sm"
-                variant={runtimeMode === "supervisor" ? "primary" : "ghost"}
+                variant={
+                  runtimeMode === "parallel_supervisor" ? "primary" : "ghost"
+                }
                 className="rounded-full"
-                onPress={() => onChange({ runtimeMode: "supervisor" })}
+                onPress={() => onChange({ runtimeMode: "parallel_supervisor" })}
               >
-                Supervisor
+                Parallel
               </Button>
               <Button
                 size="sm"
@@ -121,7 +124,7 @@ export function RuntimePanel({
               </Button>
             </div>
             <p className="mt-2 text-xs text-muted-foreground/90">
-              Hierarchical mode keeps the principal agent in charge of the final answer and uses bounded sub-agent chains only when delegation is necessary.
+              Parallel mode runs bounded specialist lanes concurrently. Hierarchical mode keeps the principal agent in charge of chained sub-agent work.
             </p>
           </Field>
 
@@ -190,7 +193,7 @@ export function RuntimePanel({
             <div className="space-y-3">
               <Slider
                 minValue={1}
-                maxValue={3}
+                maxValue={specialistMax}
                 step={1}
                 value={maxSpecialists}
                 isDisabled={runtimeMode === "single"}
@@ -213,7 +216,9 @@ export function RuntimePanel({
                 <span className="text-muted-foreground">
                   {runtimeMode === "single"
                     ? "Single mode only uses one lane"
-                    : "Specialist budget"}
+                    : runtimeMode === "parallel_supervisor"
+                      ? "Parallel lanes (CPU-safe cap)"
+                      : "Specialist budget"}
                 </span>
               </div>
             </div>

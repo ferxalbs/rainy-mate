@@ -1,6 +1,6 @@
 # Rainy MaTE — Agent Reference
 
-**Version**: 0.5.96 · **Stack**: Tauri 2 + Rust · Vite/React 19 · Bun (ATM)
+**Version**: 0.5.97 · **Stack**: Tauri 2 + Rust · Vite/React 19 · Bun (ATM)
 **Canonical truth**: `CHANGELOG.md` — read last 2–3 entries before touching anything.
 
 ---
@@ -377,6 +377,32 @@ cd rainy-atm && bun test
 - WCAG 2.1 AA contrast
 - Test readability against blur
 - Consider motion sensitivity
+
+---
+
+## 21. gstack — Browser & Skills
+
+Use the `/browse` skill from gstack for all web browsing tasks. **Never use `mcp__claude-in-chrome__*` tools.**
+
+### Available Skills
+
+| Skill | Description |
+|---|---|
+| `/office-hours` | Office hours assistant |
+| `/plan-ceo-review` | CEO/founder-mode plan review |
+| `/plan-eng-review` | Eng manager-mode plan review |
+| `/plan-design-review` | Designer's eye plan review |
+| `/design-consultation` | Full design system consultation |
+| `/review` | Pre-landing PR review |
+| `/ship` | Ship workflow (merge, test, PR) |
+| `/browse` | Headless browser for QA and dogfooding |
+| `/qa` | Systematic QA test + fix loop |
+| `/qa-only` | Report-only QA testing |
+| `/design-review` | Visual QA with fixes |
+| `/setup-browser-cookies` | Import real browser cookies |
+| `/retro` | Weekly engineering retrospective |
+| `/debug` | Systematic debugging assistant |
+| `/document-release` | Post-ship documentation update |
 
 ---
 

@@ -59,6 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - backend guard in `src-tauri/src/ai/agent/manager.rs` + `src-tauri/src/commands/agent.rs`
   - frontend in-flight/draft reuse guard in `src/hooks/useChatSessions.ts`
   - Tauri wrapper added in `src/services/tauri.ts`
+- **Parallel supervisor mode** — added a dedicated bounded parallel multi-agent path for explicit “parallel agents” requests, with English internal coordination/final synthesis defaults and conservative 2-lane execution:
+  - `src-tauri/src/ai/specs/manifest.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/ai/agent/runtime.rs`, and `src-tauri/src/ai/agent/manager.rs` formalize `parallel_supervisor`, nested delegation/language policy normalization, and safer default-agent/runtime invariants
+  - `src-tauri/src/ai/agent/supervisor.rs`, `src-tauri/src/ai/agent/protocol.rs`, `src-tauri/src/ai/agent/specialist.rs`, and `src-tauri/src/services/command_poller.rs` propagate planner metadata, enforce English specialist coordination, and support principal-agent synthesis over structured specialist artifacts
+  - `src/types/agent-spec.ts`, `src/components/agents/builder/specDefaults.ts`, `src/components/agents/builder/RuntimePanel.tsx`, and `src/components/agents/builder/AgentBuilder.tsx` expose parallel mode cleanly in the builder with a CPU-safe lane cap and backward-compatible spec normalization
+- **Universal macOS release path** — CI and publish workflows now build and verify universal macOS artifacts for Apple Silicon + Intel:
+  - `.github/workflows/ci.yml` adds Intel smoke coverage, cross-target checks, and universal artifact verification
+  - `.github/workflows/publish.yml` now ships `universal-apple-darwin` builds with `lipo` verification
+  - `src-tauri/Cargo.toml` adds release-profile tuning (`lto=thin`, `codegen-units=1`, `strip=symbols`) for leaner desktop bundles
 
 ### Fixed
 
@@ -138,10 +146,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-chat session bleed and destructive chat clearing**:
   - `New Chat` now fully switches to a clean session immediately instead of showing the previous transcript until refresh (`src/App.tsx`, `src/hooks/useAgentChat.ts`, `src/components/agent-chat/AgentChatPanel.tsx`)
   - clearing or deleting a chat no longer clears workspace memory; only chat transcript/compaction/telemetry data are removed (`src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/services/memory/memory_manager.rs`)
+- **Supervisor delegation correctness and output quality**:
+  - `src-tauri/src/ai/agent/hierarchical_supervisor.rs` now enforces explicit delegation gating, preserves the principal as the final synthesizer, fixes the `research -> verifier` skip-path by restoring `research -> executor -> verifier`, and applies bounded per-branch runtime limits
+  - `src-tauri/src/ai/agent/supervisor.rs` no longer exposes raw specialist previews to the user-facing answer, falls back to the main agent when no explicit parallel delegation was requested, and now fans out Markdown/file-comparison review prompts into real parallel research lanes instead of collapsing them to one generic researcher
+  - `src/components/agent-chat/MessageBubble.tsx` hides raw sub-agent preview text from the transcript rail and adds the missing `Memory Scribe` role label
+  - `src/components/agent-chat/AgentChatPanel.tsx` updates the built-in demo prompt to a T3Code-focused parallel-agent example for faster demo validation
 
 ### Changed
 
 - **Default local agent orchestration upgraded** — the default agent now prefers hierarchical supervision over the legacy flat supervisor so delegation only happens when necessary and the principal agent owns the final answer (`src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/commands/agent.rs`)
+- **Default local multi-agent behavior now prefers parallel supervisor for explicit parallel requests** — the local runtime keeps ordinary chats on the main agent unless the prompt explicitly asks for delegation, while the dedicated parallel mode uses bounded 2-lane specialist execution and English final responses for demo/review flows (`src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/ai/agent/supervisor.rs`, `src/components/agents/builder/RuntimePanel.tsx`)
 
 - **Chat controls simplified** — removed the obsolete `Clear UI` action and reduced chat creation to a single visible `New Chat` button in the topbar (`src/components/agent-chat/ChatTopbar.tsx`, `src/components/layout/AppSidebar.tsx`, `src/components/layout/TahoeLayout.tsx`, `src/App.tsx`)
 
@@ -218,6 +232,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bunx tsc --noEmit` (`rainy-atm`) → fails on pre-existing WhatsApp runtime type errors in `src/services/whatsapp-agent-runtime.ts` and `src/services/whatsapp-lane-queue.ts`; prompt-skill ATM changes compile within the touched files
 - `cargo check -q` → pass (manual skill invocation + workspace instruction layer)
 - `cargo test -q prompt_skills --lib` → 2 tests pass (manual skill invocation + workspace instruction layer)
+- `cargo check -q` → pass (parallel supervisor mode + lead-agent synthesis + macOS universal pipeline updates)
+- `cargo test -q supervisor --lib` → 20 tests pass
+- `cargo test -q hierarchical_supervisor --lib` → 7 tests pass
+- `pnpm exec tsc --noEmit` → pass (parallel supervisor builder/runtime wiring + transcript rail cleanup)
 - `pnpm exec tsc --noEmit` → pass (manual skill invocation + workspace instruction layer)
 - `cargo check -q` → pass (`hierarchical_supervisor` runtime + builder/runtime integration)
 - `cargo test -q supervisor --lib` → 9 tests pass

@@ -46,6 +46,7 @@ pub struct AgentSpec {
 pub enum RuntimeMode {
     #[default]
     Single,
+    ParallelSupervisor,
     Supervisor,
     HierarchicalSupervisor,
 }
@@ -85,6 +86,10 @@ fn default_job_max_runtime_seconds() -> u32 {
     900
 }
 
+fn default_delegation_policy() -> DelegationPolicy {
+    DelegationPolicy::ExplicitOnly
+}
+
 fn default_internal_coordination_language() -> String {
     "english".to_string()
 }
@@ -96,6 +101,8 @@ fn default_final_response_language_mode() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegationConfig {
+    #[serde(default = "default_delegation_policy")]
+    pub policy: DelegationPolicy,
     #[serde(default = "default_max_depth")]
     pub max_depth: u8,
     #[serde(default = "default_max_threads")]
@@ -111,6 +118,7 @@ pub struct DelegationConfig {
 impl Default for DelegationConfig {
     fn default() -> Self {
         Self {
+            policy: default_delegation_policy(),
             max_depth: default_max_depth(),
             max_threads: default_max_threads(),
             max_parallel_subagents: default_max_specialists(),
@@ -118,6 +126,15 @@ impl Default for DelegationConfig {
             final_synthesis_required: true,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DelegationPolicy {
+    #[default]
+    ExplicitOnly,
+    HybridIntentGated,
+    AutoHeuristic,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,6 +164,39 @@ impl Default for RuntimeConfig {
             delegation: DelegationConfig::default(),
             language_policy: LanguagePolicyConfig::default(),
         }
+    }
+}
+
+impl DelegationConfig {
+    pub fn normalize(&mut self) {
+        self.max_depth = self.max_depth.clamp(1, 2);
+        self.max_threads = self.max_threads.clamp(1, 6);
+        self.max_parallel_subagents = self.max_parallel_subagents.clamp(1, 3);
+        self.job_max_runtime_seconds = self.job_max_runtime_seconds.clamp(30, 3600);
+        self.final_synthesis_required = true;
+    }
+}
+
+impl LanguagePolicyConfig {
+    pub fn normalize(&mut self) {
+        self.internal_coordination_language = "english".to_string();
+        let mode = self
+            .final_response_language_mode
+            .trim()
+            .to_ascii_lowercase();
+        self.final_response_language_mode =
+            if mode == "english" { "english" } else { "user" }.to_string();
+    }
+}
+
+impl RuntimeConfig {
+    pub fn normalize_for_execution(&mut self) {
+        if self.mode == RuntimeMode::Supervisor {
+            self.mode = RuntimeMode::ParallelSupervisor;
+        }
+        self.max_specialists = self.max_specialists.clamp(1, 4);
+        self.delegation.normalize();
+        self.language_policy.normalize();
     }
 }
 

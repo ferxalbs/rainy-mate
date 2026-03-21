@@ -45,8 +45,9 @@ const PROMPTS = [
   },
   {
     icon: Eraser,
-    title: "Create a plan to modernize the current workflow.",
-    prompt: "Create a plan to modernize the current workflow.",
+    title: "Use parallel agents to inspect T3Code editor state.",
+    prompt:
+      "Use parallel agents to inspect how T3Code manages editor state and open tabs. Return 3 concise findings with exact file paths. Answer in English.",
     accent: "text-amber-500",
   },
 ];

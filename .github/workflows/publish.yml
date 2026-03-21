@@ -67,12 +67,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS ARM64 (M1 and above)
+          # macOS Universal (arm64 + x86_64)
           - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
-          # macOS Intel x86_64
-          - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
+            args: "--target universal-apple-darwin"
           # @RESERVED Beta 2 — Linux and Windows targets
           # - platform: 'ubuntu-22.04'
           #   args: ''
@@ -122,6 +119,14 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
           includeUpdaterJson: true
+
+      - name: Verify Universal Binary
+        if: matrix.platform == 'macos-latest'
+        run: |
+          APP_BIN=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "Rainy MaTE" -type f | head -n 1)
+          test -n "$APP_BIN"
+          lipo -archs "$APP_BIN" | grep -E "arm64.*x86_64|x86_64.*arm64"
+          file "$APP_BIN"
 
   failure-notification:
     name: Notify on Failure

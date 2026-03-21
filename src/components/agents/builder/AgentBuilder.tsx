@@ -302,8 +302,9 @@ export function AgentBuilder({
                 runtimeMode={
                   spec.runtime?.mode === "hierarchical_supervisor"
                     ? "hierarchical_supervisor"
-                    : spec.runtime?.mode === "supervisor"
-                      ? "supervisor"
+                    : spec.runtime?.mode === "parallel_supervisor" ||
+                        spec.runtime?.mode === "supervisor"
+                      ? "parallel_supervisor"
                       : "single"
                 }
                 maxSpecialists={spec.runtime?.max_specialists ?? 3}
@@ -321,13 +322,20 @@ export function AgentBuilder({
                         ? updates.maxTokens
                         : spec.maxTokens,
                     runtime: {
+                      ...(spec.runtime ?? {}),
                       mode:
                         updates.runtimeMode !== undefined
                           ? updates.runtimeMode
                           : spec.runtime?.mode ?? "single",
                       max_specialists:
                         updates.maxSpecialists !== undefined
-                          ? Math.max(1, Math.min(3, updates.maxSpecialists))
+                          ? Math.max(
+                              1,
+                              Math.min(
+                                updates.runtimeMode === "parallel_supervisor" ? 2 : 3,
+                                updates.maxSpecialists,
+                              ),
+                            )
                           : spec.runtime?.max_specialists ?? 3,
                       verification_required:
                         updates.verificationRequired !== undefined

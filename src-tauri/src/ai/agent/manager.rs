@@ -26,15 +26,18 @@ You are Rainy, a powerful multi-specialist AI agent. You have access to a team o
 
 ## Behavior
 - Be concise and precise. Never speculate — use tools to verify.
-- Only delegate when the task benefits from bounded specialist work. Avoid unnecessary sub-agent spawning.
-- Keep internal coordination in English, but answer the user in their language.
+- Only delegate when the user explicitly asks for delegation/subagents/parallel specialist work.
+- Keep internal coordination in English.
+- When parallel supervisor mode is active, answer in English.
+- Otherwise answer in the user's language.
 - The principal agent owns the final user-facing response. Sub-agents return structured findings, not the final answer.
 - Always respect the user's stated preferences and remembered context.
 "#;
 
 fn build_default_agent_spec_json(id: &str, name: &str) -> String {
     use crate::ai::specs::manifest::{
-        AgentSpec, AirlockConfig, ConnectorsConfig, MemoryConfig, RuntimeConfig, RuntimeMode,
+        AgentSpec, AirlockConfig, ConnectorsConfig, DelegationPolicy, MemoryConfig, RuntimeConfig,
+        RuntimeMode,
     };
     use crate::ai::specs::skills::AgentSkills;
     use crate::ai::specs::soul::AgentSoul;
@@ -44,7 +47,7 @@ fn build_default_agent_spec_json(id: &str, name: &str) -> String {
         version: "3.0.0".to_string(),
         soul: AgentSoul {
             name: name.to_string(),
-            description: "Default Rainy agent — delegates bounded specialist work and synthesizes the final answer".to_string(),
+            description: "Default Rainy agent — parallel supervisor for bounded specialist work and principal final synthesis".to_string(),
             version: "3.0.0".to_string(),
             personality: "Helpful".to_string(),
             tone: "Professional".to_string(),
@@ -56,9 +59,17 @@ fn build_default_agent_spec_json(id: &str, name: &str) -> String {
         memory_config: MemoryConfig::default(),
         connectors: ConnectorsConfig::default(),
         runtime: RuntimeConfig {
-            mode: RuntimeMode::HierarchicalSupervisor,
-            max_specialists: 4,
+            mode: RuntimeMode::ParallelSupervisor,
+            max_specialists: 2,
             verification_required: true,
+            delegation: crate::ai::specs::manifest::DelegationConfig {
+                policy: DelegationPolicy::ExplicitOnly,
+                ..Default::default()
+            },
+            language_policy: crate::ai::specs::manifest::LanguagePolicyConfig {
+                internal_coordination_language: "english".to_string(),
+                final_response_language_mode: "english".to_string(),
+            },
             ..Default::default()
         },
         model: None,
@@ -255,14 +266,16 @@ impl AgentManager {
 
         let mut messages: Vec<ChatHistoryMessageDto> = rows
             .into_iter()
-            .map(|(cursor_rowid, id, chat_id, role, content, created_at)| ChatHistoryMessageDto {
-                id,
-                chat_scope_id: chat_id,
-                role,
-                content,
-                created_at,
-                cursor_rowid,
-            })
+            .map(
+                |(cursor_rowid, id, chat_id, role, content, created_at)| ChatHistoryMessageDto {
+                    id,
+                    chat_scope_id: chat_id,
+                    role,
+                    content,
+                    created_at,
+                    cursor_rowid,
+                },
+            )
             .collect();
         messages.reverse();
 
@@ -355,9 +368,7 @@ impl AgentManager {
         }
 
         let summary_id = uuid::Uuid::new_v4().to_string();
-        sqlx::query(
-            "INSERT INTO messages (id, chat_id, role, content) VALUES (?, ?, 'system', ?)",
-        )
+        sqlx::query("INSERT INTO messages (id, chat_id, role, content) VALUES (?, ?, 'system', ?)")
             .bind(summary_id)
             .bind(chat_id)
             .bind(format!("SESSION COMPACTION SUMMARY:\n{}", summary_content))
@@ -525,7 +536,13 @@ impl AgentManager {
         // Ensure default agent exists
         let default_spec_json = build_default_agent_spec_json(default_agent_id, "Rainy Agent");
         sqlx::query(
-            "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+            "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) \
+             ON CONFLICT(id) DO UPDATE SET \
+               name=excluded.name, \
+               description=excluded.description, \
+               soul=excluded.soul, \
+               spec_json=excluded.spec_json, \
+               version=excluded.version",
         )
         .bind(default_agent_id)
         .bind("Rainy Agent")
@@ -536,14 +553,12 @@ impl AgentManager {
         .execute(&*self.db)
         .await?;
 
-        sqlx::query(
-            "INSERT INTO chats (id, agent_id, title, workspace_id) VALUES (?, ?, NULL, ?)",
-        )
-        .bind(&chat_id)
-        .bind(default_agent_id)
-        .bind(workspace_id)
-        .execute(&*self.db)
-        .await?;
+        sqlx::query("INSERT INTO chats (id, agent_id, title, workspace_id) VALUES (?, ?, NULL, ?)")
+            .bind(&chat_id)
+            .bind(default_agent_id)
+            .bind(workspace_id)
+            .execute(&*self.db)
+            .await?;
 
         self.get_chat_session(&chat_id)
             .await?
@@ -651,7 +666,8 @@ impl AgentManager {
         chat_id: &str,
         agent_name: &str,
     ) -> Result<(), sqlx::Error> {
-        self.ensure_chat_session_with_workspace(chat_id, agent_name, DEFAULT_WORKSPACE_ID).await
+        self.ensure_chat_session_with_workspace(chat_id, agent_name, DEFAULT_WORKSPACE_ID)
+            .await
     }
 
     pub async fn ensure_chat_session_with_workspace(
@@ -880,7 +896,6 @@ pub async fn get_or_create_workspace_chat(
         .map_err(|e| e.to_string())?;
     Ok(chat.id)
 }
-
 
 #[tauri::command]
 pub async fn get_chat_history_window(

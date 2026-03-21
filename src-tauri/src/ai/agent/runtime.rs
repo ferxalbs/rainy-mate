@@ -160,8 +160,21 @@ impl AgentRuntime {
     fn detect_user_language(input: &str) -> &'static str {
         let lower = format!(" {} ", input.to_ascii_lowercase());
         let spanish_markers = [
-            " el ", " la ", " los ", " las ", " una ", " para ", " con ", " que ", " por ",
-            " quiero ", " puedes ", " revisar ", " implementar ", " respuesta ", " agente ",
+            " el ",
+            " la ",
+            " los ",
+            " las ",
+            " una ",
+            " para ",
+            " con ",
+            " que ",
+            " por ",
+            " quiero ",
+            " puedes ",
+            " revisar ",
+            " implementar ",
+            " respuesta ",
+            " agente ",
         ];
         if input.contains('¿')
             || input.contains('¡')
@@ -185,15 +198,22 @@ impl AgentRuntime {
     fn language_policy_appendix(&self, input: &str) -> String {
         let policy = &self.spec.runtime.language_policy;
         let user_language = Self::detect_user_language(input);
+        let final_response_mode = if policy
+            .final_response_language_mode
+            .eq_ignore_ascii_case("english")
+        {
+            "english"
+        } else {
+            "user"
+        };
         format!(
             "\n\nLanguage Policy:\n\
-- Internal coordination language: {}.\n\
+- Internal coordination language: english.\n\
 - Final response language mode: {}.\n\
 - Detected user language for this turn: {}.\n\
 - Keep internal coordination, delegation prompts, and task handoffs in the internal coordination language.\n\
 - The final user-facing answer must follow the final response language mode.\n",
-            policy.internal_coordination_language,
-            policy.final_response_language_mode,
+            final_response_mode,
             user_language
         )
     }
@@ -251,7 +271,11 @@ impl AgentRuntime {
             _ => {}
         }
 
-        if parts.len() == 1 { base.clone() } else { parts.join(":") }
+        if parts.len() == 1 {
+            base.clone()
+        } else {
+            parts.join(":")
+        }
     }
 
     /// Replace in-memory history for this runtime instance.
@@ -338,29 +362,26 @@ impl AgentRuntime {
         };
 
         // v3 workflows section
-        let active_workflows: Vec<&crate::ai::specs::skills::SkillWorkflow> = spec
-            .skills
-            .workflows
-            .iter()
-            .filter(|w| w.enabled)
-            .collect();
+        let active_workflows: Vec<&crate::ai::specs::skills::SkillWorkflow> =
+            spec.skills.workflows.iter().filter(|w| w.enabled).collect();
         let workflow_section = if active_workflows.is_empty() {
             String::new()
         } else {
             let lines: Vec<String> = active_workflows
                 .iter()
-                .map(|w| format!("- [Workflow: {}] trigger: \"{}\"\n  {}", w.name, w.trigger, w.steps))
+                .map(|w| {
+                    format!(
+                        "- [Workflow: {}] trigger: \"{}\"\n  {}",
+                        w.name, w.trigger, w.steps
+                    )
+                })
                 .collect();
             format!("\n\nWorkflows:\n{}", lines.join("\n"))
         };
 
         // v3 behaviors section
-        let active_behaviors: Vec<&crate::ai::specs::skills::SkillBehavior> = spec
-            .skills
-            .behaviors
-            .iter()
-            .filter(|b| b.enabled)
-            .collect();
+        let active_behaviors: Vec<&crate::ai::specs::skills::SkillBehavior> =
+            spec.skills.behaviors.iter().filter(|b| b.enabled).collect();
         let behavior_section = if active_behaviors.is_empty() {
             String::new()
         } else {
@@ -371,16 +392,17 @@ impl AgentRuntime {
             format!("\n\nBehavior Rules:\n{}", lines.join("\n"))
         };
 
-        let active_workspace_instructions: Vec<&crate::ai::specs::skills::PromptSkillBinding> = spec
-            .skills
-            .prompt_skills
-            .iter()
-            .filter(|binding| {
-                binding.enabled
-                    && !binding.content.trim().is_empty()
-                    && binding.kind == crate::ai::specs::skills::PromptSkillKind::WorkspaceInstruction
-            })
-            .collect();
+        let active_workspace_instructions: Vec<&crate::ai::specs::skills::PromptSkillBinding> =
+            spec.skills
+                .prompt_skills
+                .iter()
+                .filter(|binding| {
+                    binding.enabled
+                        && !binding.content.trim().is_empty()
+                        && binding.kind
+                            == crate::ai::specs::skills::PromptSkillKind::WorkspaceInstruction
+                })
+                .collect();
         let workspace_instruction_section = if active_workspace_instructions.is_empty() {
             String::new()
         } else {
@@ -389,9 +411,7 @@ impl AgentRuntime {
                 .map(|skill| {
                     format!(
                         "- [{}] {}\n{}",
-                        skill.name,
-                        skill.description,
-                        skill.content
+                        skill.name, skill.description, skill.content
                     )
                 })
                 .collect();
@@ -416,9 +436,7 @@ impl AgentRuntime {
                 .map(|skill| {
                     format!(
                         "- [{}] {}\n{}",
-                        skill.name,
-                        skill.description,
-                        skill.content
+                        skill.name, skill.description, skill.content
                     )
                 })
                 .collect();
@@ -527,7 +545,10 @@ Rules:
     where
         F: Fn(AgentEvent) + Send + Sync + 'static + Clone,
     {
-        if self.spec.runtime.mode == RuntimeMode::Supervisor {
+        if matches!(
+            self.spec.runtime.mode,
+            RuntimeMode::ParallelSupervisor | RuntimeMode::Supervisor
+        ) {
             let supervisor = SupervisorAgent {
                 spec: self.spec.clone(),
                 options: self.options.clone(),
@@ -566,7 +587,11 @@ Rules:
             let mut ts = self.request_timestamps.lock().await;
             let now = std::time::Instant::now();
             let window = std::time::Duration::from_secs(60);
-            while ts.front().map(|t| now.duration_since(*t) > window).unwrap_or(false) {
+            while ts
+                .front()
+                .map(|t| now.duration_since(*t) > window)
+                .unwrap_or(false)
+            {
                 ts.pop_front();
             }
             if ts.len() >= max_rpm as usize {
@@ -708,7 +733,8 @@ Rules:
                     entry
                 })
                 .collect();
-            appended_context = self.build_semantic_context_block(&context_window, &sanitized_result);
+            appended_context =
+                self.build_semantic_context_block(&context_window, &sanitized_result);
         }
         on_event(AgentEvent::Status(format!(
             "RAG_TELEMETRY:{}",
@@ -724,11 +750,8 @@ Rules:
             if let AgentContent::Text(ref mut sys_text) = state.messages[0].content {
                 sys_text.push_str(&appended_context);
             } else {
-                state.messages[0].content = AgentContent::text(format!(
-                    "{}{}",
-                    system_prompt,
-                    appended_context
-                ));
+                state.messages[0].content =
+                    AgentContent::text(format!("{}{}", system_prompt, appended_context));
             }
         }
         // -------------------------------------------
@@ -745,9 +768,7 @@ Rules:
         // can clearly identify the boundary of user-controlled text.
         state.messages.push(AgentMessage {
             role: "user".to_string(),
-            content: AgentContent::text(
-                crate::ai::agent::prompt_guard::wrap_user_turn(input)
-            ),
+            content: AgentContent::text(crate::ai::agent::prompt_guard::wrap_user_turn(input)),
             tool_calls: None,
             tool_call_id: None,
         });
@@ -889,13 +910,15 @@ Rules:
 
                 if allowed && self.spec.memory_config.persistence.cross_session {
                     self.memory
-                        .push_for_distillation(crate::services::memory_vault::types::RawMemoryTurn {
-                            content: response_text.chars().take(2000).collect(),
-                            role: "assistant".to_string(),
-                            source: "agent_conversation".to_string(),
-                            workspace_id: effective_ws.clone(),
-                            timestamp: chrono::Utc::now().timestamp(),
-                        })
+                        .push_for_distillation(
+                            crate::services::memory_vault::types::RawMemoryTurn {
+                                content: response_text.chars().take(2000).collect(),
+                                role: "assistant".to_string(),
+                                source: "agent_conversation".to_string(),
+                                workspace_id: effective_ws.clone(),
+                                timestamp: chrono::Utc::now().timestamp(),
+                            },
+                        )
                         .await;
                     on_event(AgentEvent::MemoryStored(
                         "Response queued for distillation".to_string(),
@@ -918,13 +941,14 @@ mod tests {
     use std::time::{Duration, Instant};
 
     /// Simulate the sliding-window rate limiter logic from run_single().
-    fn check_rate_limit(
-        timestamps: &mut VecDeque<Instant>,
-        max_rpm: usize,
-    ) -> bool {
+    fn check_rate_limit(timestamps: &mut VecDeque<Instant>, max_rpm: usize) -> bool {
         let now = Instant::now();
         let window = Duration::from_secs(60);
-        while timestamps.front().map(|t| now.duration_since(*t) > window).unwrap_or(false) {
+        while timestamps
+            .front()
+            .map(|t| now.duration_since(*t) > window)
+            .unwrap_or(false)
+        {
             timestamps.pop_front();
         }
         if timestamps.len() >= max_rpm {
@@ -942,7 +966,10 @@ mod tests {
         assert!(check_rate_limit(&mut ts, limit), "request 1 allowed");
         assert!(check_rate_limit(&mut ts, limit), "request 2 allowed");
         assert!(check_rate_limit(&mut ts, limit), "request 3 allowed");
-        assert!(!check_rate_limit(&mut ts, limit), "request 4 must be blocked");
+        assert!(
+            !check_rate_limit(&mut ts, limit),
+            "request 4 must be blocked"
+        );
     }
 
     #[test]
@@ -955,6 +982,9 @@ mod tests {
         ts.push_back(expired);
 
         // Window should evict all 3 expired entries, allowing a new request
-        assert!(check_rate_limit(&mut ts, 3), "should allow after window expires");
+        assert!(
+            check_rate_limit(&mut ts, 3),
+            "should allow after window expires"
+        );
     }
 }

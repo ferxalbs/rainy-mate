@@ -56,29 +56,36 @@ export function createDefaultAgentSpec(id: string = crypto.randomUUID()): AgentS
       },
     },
     runtime: {
-      mode: "single",
-      max_specialists: 3,
+      mode: "parallel_supervisor",
+      max_specialists: 2,
       verification_required: true,
-      delegation_policy: "conservative",
-      max_depth: 2,
-      max_threads: 4,
-      max_parallel_subagents: 2,
-      job_max_runtime_seconds: 300,
-      final_synthesis_required: true,
-      internal_coordination_language: "en",
-      final_response_language_mode: "user",
+      delegation: {
+        policy: "explicit_only",
+        max_depth: 2,
+        max_threads: 4,
+        max_parallel_subagents: 2,
+        job_max_runtime_seconds: 300,
+        final_synthesis_required: true,
+      },
+      language_policy: {
+        internal_coordination_language: "english",
+        final_response_language_mode: "english",
+      },
     },
   };
 }
 
 export function normalizeAgentSpec(raw: any): AgentSpec {
   const defaults = createDefaultAgentSpec("");
+  const runtimeDefaults = defaults.runtime!;
   const source = raw ?? {};
   const sourceMemory = source.memory_config ?? {};
   const sourceRetrieval = sourceMemory.retrieval ?? {};
   const sourcePersistence = sourceMemory.persistence ?? {};
   const sourceKnowledge = sourceMemory.knowledge ?? {};
   const sourceRuntime = source.runtime ?? {};
+  const sourceRuntimeDelegation = sourceRuntime.delegation ?? {};
+  const sourceRuntimeLanguagePolicy = sourceRuntime.language_policy ?? {};
   const sourceId =
     typeof source.id === "string" && source.id.trim().length > 0
       ? source.id.trim()
@@ -176,13 +183,16 @@ export function normalizeAgentSpec(raw: any): AgentSpec {
       },
     },
     runtime: {
-      ...defaults.runtime,
+      ...runtimeDefaults,
       ...sourceRuntime,
       mode:
+        sourceRuntime?.mode === "parallel_supervisor" ||
         sourceRuntime?.mode === "supervisor" ||
         sourceRuntime?.mode === "hierarchical_supervisor"
-          ? sourceRuntime.mode
-          : "single",
+          ? sourceRuntime.mode === "supervisor"
+            ? "parallel_supervisor"
+            : sourceRuntime.mode
+          : "parallel_supervisor",
       max_specialists:
         typeof sourceRuntime?.max_specialists === "number"
           ? Math.max(1, Math.min(4, Math.round(sourceRuntime.max_specialists)))
@@ -190,42 +200,60 @@ export function normalizeAgentSpec(raw: any): AgentSpec {
       verification_required:
         typeof sourceRuntime?.verification_required === "boolean"
           ? sourceRuntime.verification_required
-          : defaults.runtime?.verification_required,
-      delegation_policy:
-        typeof sourceRuntime?.delegation_policy === "string" &&
-        sourceRuntime.delegation_policy.trim().length > 0
-          ? sourceRuntime.delegation_policy.trim()
-          : defaults.runtime?.delegation_policy,
-      max_depth:
-        typeof sourceRuntime?.max_depth === "number"
-          ? Math.max(1, Math.round(sourceRuntime.max_depth))
-          : defaults.runtime?.max_depth,
-      max_threads:
-        typeof sourceRuntime?.max_threads === "number"
-          ? Math.max(1, Math.round(sourceRuntime.max_threads))
-          : defaults.runtime?.max_threads,
-      max_parallel_subagents:
-        typeof sourceRuntime?.max_parallel_subagents === "number"
-          ? Math.max(1, Math.round(sourceRuntime.max_parallel_subagents))
-          : defaults.runtime?.max_parallel_subagents,
-      job_max_runtime_seconds:
-        typeof sourceRuntime?.job_max_runtime_seconds === "number"
-          ? Math.max(1, Math.round(sourceRuntime.job_max_runtime_seconds))
-          : defaults.runtime?.job_max_runtime_seconds,
-      final_synthesis_required:
-        typeof sourceRuntime?.final_synthesis_required === "boolean"
-          ? sourceRuntime.final_synthesis_required
-          : defaults.runtime?.final_synthesis_required,
-      internal_coordination_language:
-        typeof sourceRuntime?.internal_coordination_language === "string" &&
-        sourceRuntime.internal_coordination_language.trim().length > 0
-          ? sourceRuntime.internal_coordination_language.trim()
-          : defaults.runtime?.internal_coordination_language,
-      final_response_language_mode:
-        typeof sourceRuntime?.final_response_language_mode === "string" &&
-        sourceRuntime.final_response_language_mode.trim().length > 0
-          ? sourceRuntime.final_response_language_mode.trim()
-          : defaults.runtime?.final_response_language_mode,
+          : runtimeDefaults.verification_required,
+      delegation: {
+        ...runtimeDefaults.delegation,
+        ...sourceRuntimeDelegation,
+        policy:
+          sourceRuntimeDelegation?.policy === "hybrid_intent_gated" ||
+          sourceRuntimeDelegation?.policy === "auto_heuristic" ||
+          sourceRuntimeDelegation?.policy === "explicit_only"
+            ? sourceRuntimeDelegation.policy
+            : "explicit_only",
+        max_depth:
+          typeof sourceRuntimeDelegation?.max_depth === "number"
+            ? Math.max(1, Math.round(sourceRuntimeDelegation.max_depth))
+            : typeof sourceRuntime?.max_depth === "number"
+              ? Math.max(1, Math.round(sourceRuntime.max_depth))
+              : runtimeDefaults.delegation?.max_depth,
+        max_threads:
+          typeof sourceRuntimeDelegation?.max_threads === "number"
+            ? Math.max(1, Math.round(sourceRuntimeDelegation.max_threads))
+            : typeof sourceRuntime?.max_threads === "number"
+              ? Math.max(1, Math.round(sourceRuntime.max_threads))
+              : runtimeDefaults.delegation?.max_threads,
+        max_parallel_subagents:
+          typeof sourceRuntimeDelegation?.max_parallel_subagents === "number"
+            ? Math.max(1, Math.round(sourceRuntimeDelegation.max_parallel_subagents))
+            : typeof sourceRuntime?.max_parallel_subagents === "number"
+              ? Math.max(1, Math.round(sourceRuntime.max_parallel_subagents))
+              : runtimeDefaults.delegation?.max_parallel_subagents,
+        job_max_runtime_seconds:
+          typeof sourceRuntimeDelegation?.job_max_runtime_seconds === "number"
+            ? Math.max(1, Math.round(sourceRuntimeDelegation.job_max_runtime_seconds))
+            : typeof sourceRuntime?.job_max_runtime_seconds === "number"
+              ? Math.max(1, Math.round(sourceRuntime.job_max_runtime_seconds))
+              : runtimeDefaults.delegation?.job_max_runtime_seconds,
+        final_synthesis_required:
+          typeof sourceRuntimeDelegation?.final_synthesis_required === "boolean"
+            ? sourceRuntimeDelegation.final_synthesis_required
+            : typeof sourceRuntime?.final_synthesis_required === "boolean"
+              ? sourceRuntime.final_synthesis_required
+              : runtimeDefaults.delegation?.final_synthesis_required,
+      },
+      language_policy: {
+        ...runtimeDefaults.language_policy,
+        ...sourceRuntimeLanguagePolicy,
+        internal_coordination_language: "english",
+        final_response_language_mode:
+          sourceRuntime?.mode === "parallel_supervisor" ||
+          sourceRuntime?.mode === "supervisor" ||
+          sourceRuntimeLanguagePolicy?.final_response_language_mode === "english"
+            ? "english"
+            : sourceRuntime?.final_response_language_mode === "english"
+                ? "english"
+                : "user",
+      },
     },
     model:
       typeof source.model === "string" && source.model.trim().length > 0

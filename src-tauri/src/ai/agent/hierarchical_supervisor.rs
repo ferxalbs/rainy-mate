@@ -2,19 +2,22 @@ use super::events::{
     AgentEvent, SpecialistCompletedPayload, SpecialistEventPayload, SpecialistFailedPayload,
     SupervisorSummaryPayload,
 };
-use super::protocol::{SpecialistAssignment, SpecialistOutcome, SpecialistRole, SpecialistStatus, SupervisorPlan};
+use super::protocol::{
+    SpecialistAssignment, SpecialistOutcome, SpecialistRole, SpecialistStatus, SupervisorPlan,
+};
 use super::runtime::{AgentRuntime, RuntimeOptions};
 use super::runtime_registry::{RuntimeRegistry, RuntimeRegistryAssignment};
 use super::specialist::SpecialistAgent;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::router::IntelligentRouter;
-use crate::ai::specs::manifest::{AgentSpec, RuntimeConfig, RuntimeMode};
+use crate::ai::specs::manifest::{AgentSpec, DelegationPolicy, RuntimeConfig, RuntimeMode};
 use crate::services::{agent_kill_switch::AgentKillSwitch, airlock::AirlockService, SkillExecutor};
 use chrono::Utc;
 use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tokio::task::JoinSet;
+use tokio::time::{timeout, Duration};
 
 pub struct HierarchicalSupervisorAgent {
     pub spec: AgentSpec,
@@ -38,7 +41,6 @@ struct HierarchicalPlan {
     summary: String,
     should_delegate: bool,
     roots: Vec<BranchNode>,
-    final_synthesis_required: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -84,16 +86,16 @@ impl HierarchicalSupervisorAgent {
     fn should_use_executor(input: &str) -> bool {
         let input = input.to_ascii_lowercase();
         [
+            "execute",
             "implement",
             "fix",
-            "update",
-            "create",
-            "write",
             "refactor",
-            "add",
             "remove",
             "delete",
             "patch",
+            "change code",
+            "modify file",
+            "edit code",
         ]
         .iter()
         .any(|needle| input.contains(needle))
@@ -132,43 +134,68 @@ impl HierarchicalSupervisorAgent {
         .any(|needle| input.contains(needle))
     }
 
+    fn should_delegate_explicitly(input: &str) -> bool {
+        let input = format!(" {} ", input.to_ascii_lowercase());
+        [
+            " subagent ",
+            " subagents ",
+            " sub-agent ",
+            " sub-agents ",
+            " delegate ",
+            " delegation ",
+            " spawn ",
+            " parallel ",
+            " specialist ",
+            " specialists ",
+            " research agent ",
+            " executor agent ",
+            " verifier agent ",
+            " memory scribe ",
+            " memory-scribe ",
+            " team of agents ",
+        ]
+        .iter()
+        .any(|needle| input.contains(needle))
+    }
+
+    fn can_spawn_level_two(runtime: &RuntimeConfig) -> bool {
+        runtime.delegation.max_depth >= 2
+    }
+
     fn build_plan_for_runtime(runtime: &RuntimeConfig, input: &str) -> HierarchicalPlan {
         let use_memory = Self::should_use_memory_scribe(input);
         let use_research = Self::should_use_research(input);
         let use_executor = Self::should_use_executor(input);
         let needs_verification = runtime.verification_required && use_executor;
-        let should_delegate = use_memory || (use_research && use_executor) || needs_verification;
+        let should_delegate = match runtime.delegation.policy {
+            DelegationPolicy::ExplicitOnly => {
+                Self::should_delegate_explicitly(input)
+                    && (use_memory || use_executor || use_research || needs_verification)
+            }
+            DelegationPolicy::HybridIntentGated => {
+                (use_memory || (use_research && use_executor) || needs_verification)
+                    && (Self::should_delegate_explicitly(input)
+                        || (use_research
+                            && use_executor
+                            && Self::should_gate_executor_on_research(input)))
+            }
+            DelegationPolicy::AutoHeuristic => {
+                use_memory || (use_research && use_executor) || needs_verification
+            }
+        };
 
         if !should_delegate {
             return HierarchicalPlan {
                 summary: "Hierarchical supervisor stayed on the main agent".to_string(),
                 should_delegate: false,
                 roots: Vec::new(),
-                final_synthesis_required: false,
             };
         }
 
         let mut roots = Vec::new();
+        let can_chain = Self::can_spawn_level_two(runtime);
 
         if use_research && use_executor {
-            let sequential = Self::should_gate_executor_on_research(input);
-            let child_role = if needs_verification && !sequential {
-                SpecialistRole::Verifier
-            } else {
-                SpecialistRole::Executor
-            };
-            let child_title = match child_role {
-                SpecialistRole::Verifier => "Verify the resulting state",
-                _ => "Implement after the investigation",
-            };
-            let child_instructions = match child_role {
-                SpecialistRole::Verifier => {
-                    "Validate the parent branch using read-only checks. Report mismatches and residual risks."
-                }
-                _ => {
-                    "Use the parent branch findings as your primary context. Carry out the requested changes with the minimum necessary edits and verify critical writes."
-                }
-            };
             roots.push(BranchNode {
                 assignment: SpecialistAssignment {
                     agent_id: "research-1".to_string(),
@@ -177,39 +204,43 @@ impl HierarchicalSupervisorAgent {
                     instructions: "Gather evidence, inspect the current implementation, and return concise findings for the next branch.".to_string(),
                     parent_agent_id: None,
                     branch_id: Some("research".to_string()),
-                    spawn_reason: Some(if sequential {
-                        "research_required_before_execution".to_string()
-                    } else {
-                        "research_and_execution_split".to_string()
-                    }),
+                    spawn_reason: Some("research_required_before_execution".to_string()),
                     depth: 1,
                     depends_on: vec![],
                 },
-                child: Some(Box::new(BranchNode {
-                    assignment: SpecialistAssignment {
-                        agent_id: match child_role {
-                            SpecialistRole::Verifier => "verifier-2".to_string(),
-                            _ => "executor-2".to_string(),
+                child: if can_chain {
+                    Some(Box::new(BranchNode {
+                        assignment: SpecialistAssignment {
+                            agent_id: "executor-2".to_string(),
+                            role: SpecialistRole::Executor,
+                            title: "Implement after the investigation".to_string(),
+                            instructions: "Use the parent branch findings as your primary context. Carry out the requested changes with the minimum necessary edits and verify critical writes.".to_string(),
+                            parent_agent_id: Some("research-1".to_string()),
+                            branch_id: Some("research>executor".to_string()),
+                            spawn_reason: Some("delegated_from_parent_research".to_string()),
+                            depth: 2,
+                            depends_on: vec!["research-1".to_string()],
                         },
-                        role: child_role,
-                        title: child_title.to_string(),
-                        instructions: child_instructions.to_string(),
-                        parent_agent_id: Some("research-1".to_string()),
-                        branch_id: Some(if sequential {
-                            "research>executor".to_string()
-                        } else {
-                            "research>verifier".to_string()
-                        }),
-                        spawn_reason: Some(if sequential {
-                            "delegated_from_parent_research".to_string()
-                        } else {
-                            "verification_child_requested".to_string()
-                        }),
-                        depth: 2,
-                        depends_on: vec!["research-1".to_string()],
-                    },
-                    child: None,
-                })),
+                        child: None,
+                    }))
+                } else {
+                    None
+                },
+            });
+        } else if use_research {
+            roots.push(BranchNode {
+                assignment: SpecialistAssignment {
+                    agent_id: "research-1".to_string(),
+                    role: SpecialistRole::Research,
+                    title: "Investigate the requested topic".to_string(),
+                    instructions: "Gather evidence, inspect the current implementation, and return concise findings.".to_string(),
+                    parent_agent_id: None,
+                    branch_id: Some("research".to_string()),
+                    spawn_reason: Some("research_required".to_string()),
+                    depth: 1,
+                    depends_on: vec![],
+                },
+                child: None,
             });
         } else if use_executor {
             roots.push(BranchNode {
@@ -224,7 +255,7 @@ impl HierarchicalSupervisorAgent {
                     depth: 1,
                     depends_on: vec![],
                 },
-                child: if needs_verification {
+                child: if needs_verification && can_chain {
                     Some(Box::new(BranchNode {
                         assignment: SpecialistAssignment {
                             agent_id: "verifier-2".to_string(),
@@ -262,11 +293,18 @@ impl HierarchicalSupervisorAgent {
             });
         }
 
+        if roots.is_empty() {
+            return HierarchicalPlan {
+                summary: "Hierarchical supervisor stayed on the main agent".to_string(),
+                should_delegate: false,
+                roots: Vec::new(),
+            };
+        }
+
         HierarchicalPlan {
             summary: "Hierarchical delegation plan activated".to_string(),
             should_delegate: true,
             roots,
-            final_synthesis_required: runtime.delegation.final_synthesis_required,
         }
     }
 
@@ -316,10 +354,18 @@ impl HierarchicalSupervisorAgent {
                 .roots
                 .iter()
                 .any(|node| node.assignment.role == SpecialistRole::Verifier)
-                || plan
-                    .roots
-                    .iter()
-                    .any(|node| node.child.as_ref().is_some_and(|child| child.assignment.role == SpecialistRole::Verifier)),
+                || plan.roots.iter().any(|node| {
+                    node.child
+                        .as_ref()
+                        .is_some_and(|child| child.assignment.role == SpecialistRole::Verifier)
+                }),
+            mode: Some("hierarchical_supervisor".to_string()),
+            delegation_policy: Some("explicit_only".to_string()),
+            max_depth: Some(2),
+            max_threads: None,
+            max_parallel_subagents: None,
+            internal_coordination_language: Some("english".to_string()),
+            final_response_language_mode: Some("user".to_string()),
         }
     }
 
@@ -339,27 +385,34 @@ impl HierarchicalSupervisorAgent {
         )
     }
 
-    fn emit_status<F>(&self, on_event: &F, assignment: &SpecialistAssignment, status: SpecialistStatus, detail: Option<String>)
-    where
+    fn emit_status<F>(
+        &self,
+        on_event: &F,
+        assignment: &SpecialistAssignment,
+        status: SpecialistStatus,
+        detail: Option<String>,
+    ) where
         F: Fn(AgentEvent) + Send + Sync + 'static + Clone,
     {
-        on_event(AgentEvent::SpecialistStatusChanged(SpecialistEventPayload {
-            run_id: "hierarchical".to_string(),
-            agent_id: assignment.agent_id.clone(),
-            role: assignment.role.clone(),
-            status,
-            parent_agent_id: assignment.parent_agent_id.clone(),
-            branch_id: assignment.branch_id.clone(),
-            spawn_reason: assignment.spawn_reason.clone(),
-            depth: Some(assignment.depth),
-            depends_on: assignment.depends_on.clone(),
-            detail,
-            active_tool: None,
-            started_at_ms: None,
-            finished_at_ms: None,
-            tool_count: Some(0),
-            write_like_used: Some(false),
-        }));
+        on_event(AgentEvent::SpecialistStatusChanged(
+            SpecialistEventPayload {
+                run_id: "hierarchical".to_string(),
+                agent_id: assignment.agent_id.clone(),
+                role: assignment.role.clone(),
+                status,
+                parent_agent_id: assignment.parent_agent_id.clone(),
+                branch_id: assignment.branch_id.clone(),
+                spawn_reason: assignment.spawn_reason.clone(),
+                depth: Some(assignment.depth),
+                depends_on: assignment.depends_on.clone(),
+                detail,
+                active_tool: None,
+                started_at_ms: None,
+                finished_at_ms: None,
+                tool_count: Some(0),
+                write_like_used: Some(false),
+            },
+        ));
     }
 
     async fn emit_branch_messages<F>(
@@ -373,9 +426,7 @@ impl HierarchicalSupervisorAgent {
     {
         while let Some(message) = rx.recv().await {
             match message {
-                super::protocol::SupervisorMessage::SpecialistStarted {
-                    started_at_ms, ..
-                } => {
+                super::protocol::SupervisorMessage::SpecialistStarted { started_at_ms, .. } => {
                     if let Some(registry) = runtime_registry.as_ref() {
                         registry
                             .update_specialist_status_with_hierarchy(
@@ -449,23 +500,25 @@ impl HierarchicalSupervisorAgent {
                             registry.record_tool_use(&assignment.role).await;
                         }
                     }
-                    on_event(AgentEvent::SpecialistStatusChanged(SpecialistEventPayload {
-                        run_id: run_id.clone(),
-                        agent_id: assignment.agent_id.clone(),
-                        role: assignment.role.clone(),
-                        status,
-                        parent_agent_id: assignment.parent_agent_id.clone(),
-                        branch_id: assignment.branch_id.clone(),
-                        spawn_reason: assignment.spawn_reason.clone(),
-                        depth: Some(assignment.depth),
-                        depends_on: assignment.depends_on.clone(),
-                        detail,
-                        active_tool,
-                        started_at_ms,
-                        finished_at_ms,
-                        tool_count,
-                        write_like_used,
-                    }));
+                    on_event(AgentEvent::SpecialistStatusChanged(
+                        SpecialistEventPayload {
+                            run_id: run_id.clone(),
+                            agent_id: assignment.agent_id.clone(),
+                            role: assignment.role.clone(),
+                            status,
+                            parent_agent_id: assignment.parent_agent_id.clone(),
+                            branch_id: assignment.branch_id.clone(),
+                            spawn_reason: assignment.spawn_reason.clone(),
+                            depth: Some(assignment.depth),
+                            depends_on: assignment.depends_on.clone(),
+                            detail,
+                            active_tool,
+                            started_at_ms,
+                            finished_at_ms,
+                            tool_count,
+                            write_like_used,
+                        },
+                    ));
                 }
                 _ => {}
             }
@@ -483,7 +536,12 @@ impl HierarchicalSupervisorAgent {
         F: Fn(AgentEvent) + Send + Sync + 'static + Clone,
     {
         let assignment = assignment.clone();
-        self.emit_status(on_event, &assignment, SpecialistStatus::Pending, Some("Queued for execution".to_string()));
+        self.emit_status(
+            on_event,
+            &assignment,
+            SpecialistStatus::Pending,
+            Some("Queued for execution".to_string()),
+        );
 
         let specialist = SpecialistAgent::new(
             assignment.role.clone(),
@@ -505,9 +563,16 @@ impl HierarchicalSupervisorAgent {
             self.runtime_registry.clone(),
         ));
 
-        let outcome = specialist
-            .run(run_id, assignment.clone(), input, tx)
-            .await;
+        let outcome = specialist.run(run_id, assignment.clone(), input, tx);
+        let timeout_seconds = self.spec.runtime.delegation.job_max_runtime_seconds;
+        let outcome = match timeout(Duration::from_secs(timeout_seconds as u64), outcome).await {
+            Ok(outcome) => outcome,
+            Err(_) => Err(format!(
+                "{} timed out after {} seconds",
+                assignment.role.display_name(),
+                timeout_seconds
+            )),
+        };
         let _ = emitter.await;
 
         match outcome {
@@ -533,22 +598,24 @@ impl HierarchicalSupervisorAgent {
                         )
                         .await;
                 }
-                on_event(AgentEvent::SpecialistCompleted(SpecialistCompletedPayload {
-                    run_id: run_id.to_string(),
-                    agent_id: outcome.agent_id.clone(),
-                    role: outcome.role.clone(),
-                    summary: outcome.summary.clone(),
-                    response_preview: outcome.response.chars().take(240).collect(),
-                    parent_agent_id: outcome.parent_agent_id.clone(),
-                    branch_id: outcome.branch_id.clone(),
-                    spawn_reason: outcome.spawn_reason.clone(),
-                    depth: Some(outcome.depth),
-                    depends_on: outcome.depends_on.clone(),
-                    tool_count: outcome.tool_count,
-                    write_like_used: outcome.used_write_like_tools,
-                    started_at_ms: outcome.started_at_ms,
-                    finished_at_ms: outcome.finished_at_ms,
-                }));
+                on_event(AgentEvent::SpecialistCompleted(
+                    SpecialistCompletedPayload {
+                        run_id: run_id.to_string(),
+                        agent_id: outcome.agent_id.clone(),
+                        role: outcome.role.clone(),
+                        summary: outcome.summary.clone(),
+                        response_preview: outcome.response.chars().take(240).collect(),
+                        parent_agent_id: outcome.parent_agent_id.clone(),
+                        branch_id: outcome.branch_id.clone(),
+                        spawn_reason: outcome.spawn_reason.clone(),
+                        depth: Some(outcome.depth),
+                        depends_on: outcome.depends_on.clone(),
+                        tool_count: outcome.tool_count,
+                        write_like_used: outcome.used_write_like_tools,
+                        started_at_ms: outcome.started_at_ms,
+                        finished_at_ms: outcome.finished_at_ms,
+                    },
+                ));
 
                 Ok(outcome)
             }
@@ -800,12 +867,12 @@ Return one complete, precise answer for the user.\n\
             registry.update_supervisor_status(&run_id, "running").await;
         }
 
-        let max_parallel = self
-            .spec
-            .runtime
-            .delegation
-            .max_parallel_subagents
-            .clamp(1, self.spec.runtime.delegation.max_threads.max(1)) as usize;
+        let max_parallel =
+            self.spec
+                .runtime
+                .delegation
+                .max_parallel_subagents
+                .clamp(1, self.spec.runtime.delegation.max_threads.max(1)) as usize;
 
         let mut join_set: JoinSet<Result<BranchArtifact, String>> = JoinSet::new();
         let mut roots_iter = plan.roots.iter();
@@ -819,13 +886,15 @@ Return one complete, precise answer for the user.\n\
                 let on_event_clone = on_event.clone();
                 let run_id_clone = run_id.clone();
                 join_set.spawn(async move {
-                    this.execute_branch(&run_id_clone, &root, input, &on_event_clone).await
+                    this.execute_branch(&run_id_clone, &root, input, &on_event_clone)
+                        .await
                 });
             }
         }
 
         while let Some(joined) = join_set.join_next().await {
-            let artifact = joined.map_err(|e| format!("Hierarchical branch join failure: {}", e))??;
+            let artifact =
+                joined.map_err(|e| format!("Hierarchical branch join failure: {}", e))??;
             artifacts.push(artifact);
             if let Some(root) = roots_iter.next() {
                 let root = root.clone();
@@ -834,21 +903,15 @@ Return one complete, precise answer for the user.\n\
                 let on_event_clone = on_event.clone();
                 let run_id_clone = run_id.clone();
                 join_set.spawn(async move {
-                    this.execute_branch(&run_id_clone, &root, input, &on_event_clone).await
+                    this.execute_branch(&run_id_clone, &root, input, &on_event_clone)
+                        .await
                 });
             }
         }
 
-        let summary = if plan.final_synthesis_required {
-            self.synthesize_with_main_agent(input, &artifacts, on_event.clone())
-                .await?
-        } else {
-            artifacts
-                .iter()
-                .map(|artifact| format!("[{}] {}", artifact.role, artifact.summary))
-                .collect::<Vec<_>>()
-                .join("\n")
-        };
+        let summary = self
+            .synthesize_with_main_agent(input, &artifacts, on_event.clone())
+            .await?;
 
         on_event(AgentEvent::SupervisorSummary(SupervisorSummaryPayload {
             run_id: run_id.clone(),
@@ -856,7 +919,10 @@ Return one complete, precise answer for the user.\n\
         }));
 
         if let Some(registry) = self.runtime_registry.as_ref() {
-            let final_status = if artifacts.iter().all(|artifact| artifact.status == "completed") {
+            let final_status = if artifacts
+                .iter()
+                .all(|artifact| artifact.status == "completed")
+            {
                 "completed"
             } else {
                 "failed"
@@ -909,7 +975,7 @@ mod tests {
     fn plan_builds_research_to_executor_chain_when_ordered() {
         let plan = HierarchicalSupervisorAgent::build_plan_for_runtime(
             &runtime_config(),
-            "Investigate the root cause first and implement the fix",
+            "Delegate to subagents: investigate the root cause first and implement the fix",
         );
         assert!(plan.should_delegate);
         assert_eq!(plan.roots.len(), 1);
@@ -924,7 +990,7 @@ mod tests {
     fn plan_builds_executor_to_verifier_chain_for_execution_only() {
         let plan = HierarchicalSupervisorAgent::build_plan_for_runtime(
             &runtime_config(),
-            "Implement the patch and update the file",
+            "Delegate this to a specialist sub-agent and implement the patch",
         );
         assert!(plan.should_delegate);
         assert_eq!(plan.roots.len(), 1);
@@ -938,11 +1004,45 @@ mod tests {
     fn plan_for_events_flattens_hierarchy() {
         let plan = HierarchicalSupervisorAgent::build_plan_for_runtime(
             &runtime_config(),
-            "Investigate first and implement the fix",
+            "Use subagents and investigate first, then implement the fix",
         );
         let event_plan = HierarchicalSupervisorAgent::plan_for_events(&plan);
         assert_eq!(event_plan.assignments.len(), 2);
         assert_eq!(event_plan.assignments[0].depth, 1);
         assert_eq!(event_plan.assignments[1].depth, 2);
+    }
+
+    #[test]
+    fn plan_does_not_delegate_without_explicit_request_even_if_execution_words_exist() {
+        let plan = HierarchicalSupervisorAgent::build_plan_for_runtime(
+            &runtime_config(),
+            "Implement the fix in this file",
+        );
+        assert!(!plan.should_delegate);
+    }
+
+    #[test]
+    fn plan_respects_depth_limit_of_one() {
+        let mut runtime = runtime_config();
+        runtime.delegation.max_depth = 1;
+        let plan = HierarchicalSupervisorAgent::build_plan_for_runtime(
+            &runtime,
+            "Use subagents and investigate first, then implement the fix",
+        );
+        assert!(plan.should_delegate);
+        assert_eq!(plan.roots.len(), 1);
+        assert!(plan.roots[0].child.is_none());
+    }
+
+    #[test]
+    fn plan_builds_research_only_branch_for_explicit_research_request() {
+        let plan = HierarchicalSupervisorAgent::build_plan_for_runtime(
+            &runtime_config(),
+            "Delegate to subagents and research the current hierarchical supervisor behavior",
+        );
+        assert!(plan.should_delegate);
+        assert_eq!(plan.roots.len(), 1);
+        assert_eq!(plan.roots[0].assignment.role, SpecialistRole::Research);
+        assert!(plan.roots[0].child.is_none());
     }
 }

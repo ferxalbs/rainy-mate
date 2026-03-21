@@ -58,6 +58,26 @@ jobs:
       - name: Run Rust Tests
         run: cd src-tauri && cargo test --lib
 
+      - name: Cross-target Check (Apple Silicon)
+        run: cd src-tauri && cargo check --target aarch64-apple-darwin
+
+      - name: Cross-target Check (Intel)
+        run: cd src-tauri && cargo check --target x86_64-apple-darwin
+
+  macos-intel-smoke:
+    permissions:
+      contents: read
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Rust Tests (Intel)
+        run: cd src-tauri && cargo test --lib
+
   tauri-build:
     permissions:
       contents: read
@@ -66,9 +86,7 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin'
+            args: '--target universal-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
           - platform: 'windows-latest'
@@ -110,3 +128,11 @@ jobs:
 
       - name: Tauri Build
         run: pnpm run tauri build ${{ matrix.args }}
+
+      - name: Verify Universal Binary
+        if: matrix.platform == 'macos-latest'
+        run: |
+          APP_BIN=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "Rainy MaTE" -type f | head -n 1)
+          test -n "$APP_BIN"
+          lipo -archs "$APP_BIN" | grep -E "arm64.*x86_64|x86_64.*arm64"
+          file "$APP_BIN"

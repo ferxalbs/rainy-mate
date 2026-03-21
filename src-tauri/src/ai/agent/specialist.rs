@@ -142,6 +142,13 @@ impl SpecialistAgent {
             .map(|tool| (*tool).to_string())
             .collect();
         spec.airlock.tool_policy.deny.clear();
+        if matches!(
+            self.spec.runtime.mode,
+            RuntimeMode::ParallelSupervisor | RuntimeMode::Supervisor
+        ) {
+            spec.runtime.language_policy.internal_coordination_language = "english".to_string();
+            spec.runtime.language_policy.final_response_language_mode = "english".to_string();
+        }
         spec
     }
 
@@ -162,7 +169,7 @@ impl SpecialistAgent {
         let depends_on = assignment.depends_on.clone();
         let started_at_ms = Utc::now().timestamp_millis();
         let role_prompt = format!(
-            "{}\n\nAssignment: {}\nInstructions: {}",
+            "{}\n\nAssignment: {}\nInstructions: {}\nOutput language: English.",
             self.role_prompt(),
             assignment.title,
             assignment.instructions

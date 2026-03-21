@@ -1,6 +1,6 @@
 use crate::ai::agent::runtime::{AgentContent, AgentMessage, AgentRuntime, RuntimeOptions};
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
-use crate::ai::specs::manifest::RuntimeMode;
+use crate::ai::specs::manifest::{DelegationPolicy, RuntimeMode};
 use crate::ai::specs::{AgentSpec, PromptSkillBinding, PromptSkillKind};
 use crate::ai::{
     agent::context_window::ContextWindow,
@@ -8,12 +8,14 @@ use crate::ai::{
     agent::manager::ChatCompactionStateDto,
     keychain::KeychainManager,
     provider_trait::{AIProviderFactory, ProviderWithStats},
-    provider_types::{ChatCompletionRequest, ChatMessage, ProviderConfig, ProviderId, ProviderType},
+    provider_types::{
+        ChatCompletionRequest, ChatMessage, ProviderConfig, ProviderId, ProviderType,
+    },
     providers::{GeminiProviderFactory, RainySDKProviderFactory},
 };
+use crate::commands::agent_frontend_events::{FrontendAgentEvent, FrontendEventProjector};
 use crate::commands::ai_providers::ProviderRegistryState;
 use crate::commands::airlock::AirlockServiceState;
-use crate::commands::agent_frontend_events::{FrontendAgentEvent, FrontendEventProjector};
 use crate::commands::memory::MemoryManagerState;
 use crate::commands::router::IntelligentRouterState;
 use crate::services::agent_kill_switch::AgentKillSwitch;
@@ -38,7 +40,30 @@ fn default_runtime_mode_for_chat(agent_spec_id: Option<&str>) -> RuntimeMode {
     if agent_spec_id.is_some() {
         RuntimeMode::Single
     } else {
-        RuntimeMode::HierarchicalSupervisor
+        RuntimeMode::ParallelSupervisor
+    }
+}
+
+fn normalize_runtime_invariants(spec: &mut AgentSpec) {
+    spec.runtime.normalize_for_execution();
+    if spec.runtime.mode == RuntimeMode::HierarchicalSupervisor {
+        spec.runtime.delegation.policy = DelegationPolicy::ExplicitOnly;
+        spec.runtime.delegation.final_synthesis_required = true;
+        spec.runtime.language_policy.internal_coordination_language = "english".to_string();
+        if spec.runtime.language_policy.final_response_language_mode != "english" {
+            spec.runtime.language_policy.final_response_language_mode = "user".to_string();
+        }
+    }
+    if matches!(
+        spec.runtime.mode,
+        RuntimeMode::ParallelSupervisor | RuntimeMode::Supervisor
+    ) {
+        spec.runtime.mode = RuntimeMode::ParallelSupervisor;
+        spec.runtime.max_specialists = spec.runtime.max_specialists.clamp(1, 2);
+        spec.runtime.delegation.max_parallel_subagents =
+            spec.runtime.delegation.max_parallel_subagents.clamp(1, 2);
+        spec.runtime.language_policy.internal_coordination_language = "english".to_string();
+        spec.runtime.language_policy.final_response_language_mode = "english".to_string();
     }
 }
 
@@ -52,8 +77,14 @@ enum ResolvedSkillSelection {
     None,
     Forced(Vec<PromptSkillBinding>),
     ListResponse(String),
-    NotFound { query: String, available: Vec<String> },
-    Ambiguous { query: String, matches: Vec<String> },
+    NotFound {
+        query: String,
+        available: Vec<String>,
+    },
+    Ambiguous {
+        query: String,
+        matches: Vec<String>,
+    },
 }
 
 fn merge_runtime_prompt_skills(
@@ -116,7 +147,11 @@ fn parse_skill_invocation_intent(prompt: &str) -> SkillInvocationIntent {
     let lower = trimmed.to_lowercase();
     if matches!(
         lower.as_str(),
-        "/skills" | "list my skills" | "list your skills" | "list me your skills" | "what skills are available here?"
+        "/skills"
+            | "list my skills"
+            | "list your skills"
+            | "list me your skills"
+            | "what skills are available here?"
     ) || lower.starts_with("what skills are available")
         || lower.starts_with("show my skills")
         || lower.starts_with("show available skills")
@@ -167,8 +202,10 @@ fn render_skill_registry_response(
         return "No prompt skills or workspace instruction files were detected for the current workspace.".to_string();
     }
 
-    let attached_paths: std::collections::HashSet<&str> =
-        attached.iter().map(|skill| skill.source_path.as_str()).collect();
+    let attached_paths: std::collections::HashSet<&str> = attached
+        .iter()
+        .map(|skill| skill.source_path.as_str())
+        .collect();
     let mut lines = vec!["Available workspace skills:".to_string()];
     for skill in discovered {
         let kind = match skill.kind {
@@ -211,9 +248,9 @@ fn resolve_manual_skill_selection(
 ) -> ResolvedSkillSelection {
     match parse_skill_invocation_intent(prompt) {
         SkillInvocationIntent::None => ResolvedSkillSelection::None,
-        SkillInvocationIntent::ListSkills => {
-            ResolvedSkillSelection::ListResponse(render_skill_registry_response(discovered, attached))
-        }
+        SkillInvocationIntent::ListSkills => ResolvedSkillSelection::ListResponse(
+            render_skill_registry_response(discovered, attached),
+        ),
         SkillInvocationIntent::ForceSkill { query } => {
             let query_lc = query.trim().to_lowercase();
             let mut exact = Vec::new();
@@ -245,7 +282,11 @@ fn resolve_manual_skill_selection(
             } else {
                 return ResolvedSkillSelection::NotFound {
                     query,
-                    available: discovered.iter().filter(|skill| skill.valid).map(|skill| skill.name.clone()).collect(),
+                    available: discovered
+                        .iter()
+                        .filter(|skill| skill.valid)
+                        .map(|skill| skill.name.clone())
+                        .collect(),
                 };
             };
 
@@ -258,7 +299,9 @@ fn select_relevant_prompt_skills(
     prompt: &str,
     skills: Vec<PromptSkillBinding>,
 ) -> Vec<PromptSkillBinding> {
-    let mut pinned = auto_apply_instruction(&skills).into_iter().collect::<Vec<_>>();
+    let mut pinned = auto_apply_instruction(&skills)
+        .into_iter()
+        .collect::<Vec<_>>();
     let candidates = skills
         .into_iter()
         .filter(|skill| skill.kind != PromptSkillKind::WorkspaceInstruction)
@@ -269,7 +312,10 @@ fn select_relevant_prompt_skills(
     }
 
     let prompt_lc = prompt.to_lowercase();
-    let explicitly_requests_skills = !matches!(parse_skill_invocation_intent(prompt), SkillInvocationIntent::None);
+    let explicitly_requests_skills = !matches!(
+        parse_skill_invocation_intent(prompt),
+        SkillInvocationIntent::None
+    );
     if explicitly_requests_skills {
         let mut out = pinned;
         out.extend(candidates);
@@ -283,7 +329,11 @@ fn select_relevant_prompt_skills(
     let mut scored = candidates
         .into_iter()
         .map(|skill| {
-            let haystack = format!("{} {}", skill.name.to_lowercase(), skill.description.to_lowercase());
+            let haystack = format!(
+                "{} {}",
+                skill.name.to_lowercase(),
+                skill.description.to_lowercase()
+            );
             let mut score = 0usize;
             for token in &prompt_tokens {
                 if haystack.contains(token) {
@@ -300,17 +350,24 @@ fn select_relevant_prompt_skills(
     let has_positive = scored.iter().any(|(score, _)| *score > 0);
     if !has_positive {
         let mut out = pinned;
-        out.extend(scored.into_iter().take(3usize.saturating_sub(out.len())).map(|(_, skill)| skill));
+        out.extend(
+            scored
+                .into_iter()
+                .take(3usize.saturating_sub(out.len()))
+                .map(|(_, skill)| skill),
+        );
         return out;
     }
 
     scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.name.cmp(&b.1.name)));
     let mut out = pinned;
-    out.extend(scored
-        .into_iter()
-        .filter(|(score, _)| *score > 0)
-        .take(3usize.saturating_sub(out.len()))
-        .map(|(_, skill)| skill));
+    out.extend(
+        scored
+            .into_iter()
+            .filter(|(score, _)| *score > 0)
+            .take(3usize.saturating_sub(out.len()))
+            .map(|(_, skill)| skill),
+    );
     out
 }
 
@@ -331,7 +388,9 @@ fn materialize_runtime_prompt_skills(
     let merged = merge_runtime_prompt_skills(existing, discovered);
     spec.skills.prompt_skills = match &manual {
         ResolvedSkillSelection::Forced(skills) => {
-            let mut selected = auto_apply_instruction(&merged).into_iter().collect::<Vec<_>>();
+            let mut selected = auto_apply_instruction(&merged)
+                .into_iter()
+                .collect::<Vec<_>>();
             selected.extend(skills.clone());
             dedupe_bindings(selected)
         }
@@ -475,8 +534,7 @@ fn truncate_text(input: &str, max_chars: usize) -> String {
 }
 
 fn build_runtime_history(rows: Vec<(String, String, String)>) -> Vec<AgentMessage> {
-    rows
-        .into_iter()
+    rows.into_iter()
         .filter_map(|(_, role, content)| {
             if role != "user" && role != "assistant" && role != "system" {
                 return None;
@@ -602,11 +660,7 @@ Output sections exactly:
         .await
         .map_err(|e| format!("Compaction summary request failed: {}", e))?;
 
-    let summary = response
-        .content
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let summary = response.content.unwrap_or_default().trim().to_string();
     if summary.is_empty() {
         return Err("Compaction summary returned empty content".to_string());
     }
@@ -639,7 +693,10 @@ async fn maybe_compact_chat_history(
     let summary = match generate_compaction_summary(router, model_id, &transcript, prompt).await {
         Ok(text) => text,
         Err(e) => {
-            eprintln!("[AgentWorkflow] Compaction summary model request failed: {}", e);
+            eprintln!(
+                "[AgentWorkflow] Compaction summary model request failed: {}",
+                e
+            );
             fallback_compaction_summary(rows_to_summarize, prompt)
         }
     };
@@ -693,27 +750,22 @@ async fn ensure_provider_ready_for_model(
     let keychain = KeychainManager::new();
     let normalized_model = crate::ai::model_catalog::normalize_model_slug(model_id).to_string();
 
-    let (provider_id, provider_factory_kind, key_aliases): (
-        &str,
-        &str,
-        &[&str],
-    ) = if crate::ai::model_catalog::requires_rainy_provider(model_id) {
-        ("rainy_api", "rainy", &["rainy_api", "rainyapi"])
-    } else if crate::ai::model_catalog::is_explicit_gemini_model(model_id)
-        || crate::ai::model_catalog::is_unprefixed_gemini_model(model_id)
-    {
-        ("gemini_byok", "gemini", &["gemini"])
-    } else {
-        return Ok(());
-    };
+    let (provider_id, provider_factory_kind, key_aliases): (&str, &str, &[&str]) =
+        if crate::ai::model_catalog::requires_rainy_provider(model_id) {
+            ("rainy_api", "rainy", &["rainy_api", "rainyapi"])
+        } else if crate::ai::model_catalog::is_explicit_gemini_model(model_id)
+            || crate::ai::model_catalog::is_unprefixed_gemini_model(model_id)
+        {
+            ("gemini_byok", "gemini", &["gemini"])
+        } else {
+            return Ok(());
+        };
 
     if registry.0.get(&ProviderId::new(provider_id)).is_err() {
         let api_key = key_aliases
             .iter()
             .find_map(|alias| keychain.get_key(alias).ok().flatten())
-            .filter(|key| {
-                provider_factory_kind != "rainy" || is_valid_rainy_api_key(key)
-            });
+            .filter(|key| provider_factory_kind != "rainy" || is_valid_rainy_api_key(key));
 
         let api_key = api_key.ok_or_else(|| {
             if provider_factory_kind == "rainy" {
@@ -741,7 +793,11 @@ async fn ensure_provider_ready_for_model(
             model: normalized_model,
             params: std::collections::HashMap::new(),
             enabled: true,
-            priority: if provider_factory_kind == "rainy" { 10 } else { 20 },
+            priority: if provider_factory_kind == "rainy" {
+                10
+            } else {
+                20
+            },
             rate_limit: None,
             timeout: 120,
         };
@@ -769,10 +825,12 @@ async fn ensure_provider_ready_for_model(
         .any(|p| p.provider().id().as_str() == provider_id);
 
     if !already_present {
-        let provider = registry
-            .0
-            .get(&ProviderId::new(provider_id))
-            .map_err(|e| format!("Provider '{}' not available after registration: {}", provider_id, e))?;
+        let provider = registry.0.get(&ProviderId::new(provider_id)).map_err(|e| {
+            format!(
+                "Provider '{}' not available after registration: {}",
+                provider_id, e
+            )
+        })?;
         router_guard.add_provider(Arc::new(ProviderWithStats::new(provider.provider.clone())));
     }
 
@@ -828,13 +886,15 @@ pub async fn run_agent_workflow(
 
     // Validate the original workspace_path for filesystem operations
     // Reject if it contains invalid UTF-8 or dangerous characters before using for paths
-    if workspace_path.contains('\0') || workspace_path.contains('\r') || workspace_path.contains('\n') {
+    if workspace_path.contains('\0')
+        || workspace_path.contains('\r')
+        || workspace_path.contains('\n')
+    {
         return Err("Invalid workspace path: contains forbidden characters".to_string());
     }
 
-    let chat_id = chat_scope_id.unwrap_or_else(|| {
-        crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string()
-    });
+    let chat_id = chat_scope_id
+        .unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
 
     // 0. Ensure Chat Session Exists (Persist Metadata)
     let _ = agent_manager
@@ -938,13 +998,16 @@ pub async fn run_agent_workflow(
 
     if selected_spec_id.is_none() {
         spec.runtime.mode = default_runtime_mode_for_chat(None);
-        spec.runtime.max_specialists = spec.runtime.max_specialists.clamp(2, 3);
+        spec.runtime.max_specialists = spec.runtime.max_specialists.clamp(1, 2);
         spec.runtime.verification_required = true;
         spec.runtime.delegation.max_depth = spec.runtime.delegation.max_depth.clamp(1, 2);
         spec.runtime.delegation.max_threads = spec.runtime.delegation.max_threads.clamp(2, 6);
         spec.runtime.delegation.max_parallel_subagents =
-            spec.runtime.delegation.max_parallel_subagents.clamp(1, 3);
+            spec.runtime.delegation.max_parallel_subagents.clamp(1, 2);
+        spec.runtime.delegation.policy = DelegationPolicy::ExplicitOnly;
     }
+
+    normalize_runtime_invariants(&mut spec);
 
     let skill_resolution =
         materialize_runtime_prompt_skills(&app_handle, &workspace_path, &prompt, &mut spec)?;
@@ -958,7 +1021,10 @@ pub async fn run_agent_workflow(
         let response = match skill_resolution {
             ResolvedSkillSelection::ListResponse(text) => text,
             ResolvedSkillSelection::NotFound { query, available } => {
-                let mut out = format!("No skill named \"{}\" was found in the current workspace.", query);
+                let mut out = format!(
+                    "No skill named \"{}\" was found in the current workspace.",
+                    query
+                );
                 if !available.is_empty() {
                     out.push_str("\n\nAvailable skills:\n");
                     for name in available {
@@ -969,8 +1035,10 @@ pub async fn run_agent_workflow(
                 out
             }
             ResolvedSkillSelection::Ambiguous { query, matches } => {
-                let mut out =
-                    format!("The skill request \"{}\" is ambiguous. Matching skills:", query);
+                let mut out = format!(
+                    "The skill request \"{}\" is ambiguous. Matching skills:",
+                    query
+                );
                 for name in matches {
                     out.push_str(&format!("\n- {}", name));
                 }
@@ -1016,7 +1084,7 @@ pub async fn run_agent_workflow(
         custom_system_prompt: None,
         streaming_enabled: Some(false),
         reasoning_effort: crate::ai::agent::prompt_guard::validate_reasoning_effort(
-            reasoning_effort.as_deref()
+            reasoning_effort.as_deref(),
         ),
         temperature: spec.temperature,
         max_tokens: spec.max_tokens,
@@ -1031,15 +1099,14 @@ pub async fn run_agent_workflow(
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
     let vault = memory_manager.0.get_vault().await;
-    let memory_obj =
-        crate::ai::agent::memory::AgentMemory::new(
-            &workspace_path,
-            app_data_dir,
-            memory_manager.0.clone(),
-            Some(router.0.clone()),
-            vault,
-        )
-            .await;
+    let memory_obj = crate::ai::agent::memory::AgentMemory::new(
+        &workspace_path,
+        app_data_dir,
+        memory_manager.0.clone(),
+        Some(router.0.clone()),
+        vault,
+    )
+    .await;
     let memory = Arc::new(memory_obj);
 
     let airlock_service = {
@@ -1065,14 +1132,8 @@ pub async fn run_agent_workflow(
 
     // Load persisted conversation history into runtime so local Native Runtime
     // preserves context across turns.
-    let compaction_state = maybe_compact_chat_history(
-        &agent_manager,
-        &router,
-        &chat_id,
-        &model_id,
-        &prompt,
-    )
-    .await?;
+    let compaction_state =
+        maybe_compact_chat_history(&agent_manager, &router, &chat_id, &model_id, &prompt).await?;
 
     if let Some(compaction) = compaction_state {
         let _ = app_handle.emit(
@@ -1234,8 +1295,8 @@ pub async fn get_chat_session(
     agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
     chat_scope_id: Option<String>,
 ) -> Result<crate::ai::agent::manager::ChatSessionDto, String> {
-    let chat_id =
-        chat_scope_id.unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
+    let chat_id = chat_scope_id
+        .unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
 
     agent_manager
         .ensure_chat_session(&chat_id, "Rainy Agent")
@@ -1246,7 +1307,12 @@ pub async fn get_chat_session(
         .get_chat_session(&chat_id)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Chat session '{}' was not found after initialization", chat_id))
+        .ok_or_else(|| {
+            format!(
+                "Chat session '{}' was not found after initialization",
+                chat_id
+            )
+        })
 }
 
 #[tauri::command]
@@ -1314,8 +1380,8 @@ pub async fn update_chat_title(
     chat_scope_id: Option<String>,
     title: Option<String>,
 ) -> Result<crate::ai::agent::manager::ChatSessionDto, String> {
-    let chat_id =
-        chat_scope_id.unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
+    let chat_id = chat_scope_id
+        .unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
 
     agent_manager
         .ensure_chat_session(&chat_id, "Rainy Agent")
@@ -1337,7 +1403,12 @@ pub async fn update_chat_title(
         .get_chat_session(&chat_id)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Chat session '{}' was not found after title update", chat_id))
+        .ok_or_else(|| {
+            format!(
+                "Chat session '{}' was not found after title update",
+                chat_id
+            )
+        })
 }
 
 #[tauri::command]
@@ -1349,8 +1420,8 @@ pub async fn ensure_chat_title(
     prompt: Option<String>,
     response: Option<String>,
 ) -> Result<EnsureChatTitleResponse, String> {
-    let chat_id =
-        chat_scope_id.unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
+    let chat_id = chat_scope_id
+        .unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
 
     agent_manager
         .ensure_chat_session(&chat_id, "Rainy Agent")
@@ -1410,7 +1481,10 @@ pub async fn ensure_chat_title(
         Ok(title) => (title, "generated".to_string()),
         Err(error) => {
             eprintln!("[AgentWorkflow] Chat title generation failed: {}", error);
-            (build_fallback_chat_title(&seed_prompt), "fallback".to_string())
+            (
+                build_fallback_chat_title(&seed_prompt),
+                "fallback".to_string(),
+            )
         }
     };
 
@@ -1423,7 +1497,12 @@ pub async fn ensure_chat_title(
         .get_chat_session(&chat_id)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Chat session '{}' was not found after title generation", chat_id))?;
+        .ok_or_else(|| {
+            format!(
+                "Chat session '{}' was not found after title generation",
+                chat_id
+            )
+        })?;
 
     Ok(EnsureChatTitleResponse { chat, status })
 }
@@ -1435,13 +1514,16 @@ mod tests {
     #[test]
     fn placeholder_titles_are_detected() {
         assert!(is_placeholder_chat_title("New thread"));
-        assert!(is_placeholder_chat_title("Workspace Session: global:long_chat:v1"));
+        assert!(is_placeholder_chat_title(
+            "Workspace Session: global:long_chat:v1"
+        ));
         assert!(!is_placeholder_chat_title("Refactor sidebar shell"));
     }
 
     #[test]
     fn fallback_title_compacts_prompt() {
-        let title = build_fallback_chat_title("   Modernize   the sidebar and topbar for chat history   ");
+        let title =
+            build_fallback_chat_title("   Modernize   the sidebar and topbar for chat history   ");
         assert_eq!(title, "Modernize the sidebar and topbar for chat history");
     }
 
