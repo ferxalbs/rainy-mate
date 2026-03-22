@@ -339,6 +339,566 @@
   .chat-markdown-user :where(code) {
     text-shadow: none;
   }
+
+  .docs-markdown :where(.docs-code-block) {
+    border: 1px solid color-mix(in oklch, var(--border) 76%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 70%, var(--background) 30%),
+        color-mix(in oklch, var(--muted) 70%, var(--card) 30%)
+      );
+    box-shadow:
+      0 16px 38px -30px color-mix(in oklch, var(--foreground) 18%, transparent),
+      inset 0 1px 0 color-mix(in oklch, white 55%, transparent);
+  }
+
+  .docs-markdown :where(.docs-code-toolbar) {
+    border-bottom: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--muted) 70%, var(--background) 30%),
+        color-mix(in oklch, var(--background) 70%, var(--card) 30%)
+      );
+  }
+
+  .docs-markdown :where(.docs-code-language) {
+    border: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
+    background: color-mix(in oklch, var(--background) 86%, var(--muted) 14%);
+    color: color-mix(in oklch, var(--foreground) 58%, var(--muted-foreground) 42%);
+  }
+
+  .docs-markdown :where(.docs-code-label) {
+    color: color-mix(in oklch, var(--muted-foreground) 82%, var(--foreground) 18%);
+  }
+
+  .docs-markdown :where(.docs-code-copy) {
+    color: color-mix(in oklch, var(--muted-foreground) 80%, var(--foreground) 20%);
+  }
+
+  .docs-markdown :where(.docs-code-copy:hover) {
+    background: color-mix(in oklch, var(--background) 74%, var(--muted) 26%);
+    color: color-mix(in oklch, var(--foreground) 92%, var(--primary) 8%);
+  }
+
+  .docs-markdown :where(.docs-code-content) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--background) 70%, var(--card) 30%),
+        color-mix(in oklch, var(--card) 70%, var(--background) 30%)
+      );
+  }
+
+  .docs-markdown :where(.docs-code-content code.hljs) {
+    display: block;
+    background: transparent;
+    color: color-mix(in oklch, var(--foreground) 90%, var(--muted-foreground) 10%);
+    padding: 1rem;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .docs-markdown :where(.docs-code-content .hljs-comment, .docs-code-content .hljs-quote) {
+    color: color-mix(in oklch, var(--muted-foreground) 86%, var(--background) 14%);
+    font-style: italic;
+  }
+
+  .docs-markdown :where(.docs-code-content .hljs-keyword, .docs-code-content .hljs-selector-tag, .docs-code-content .hljs-section, .docs-code-content .hljs-title) {
+    color: color-mix(in oklch, var(--primary) 58%, var(--foreground) 42%);
+  }
+
+  .docs-markdown :where(.docs-code-content .hljs-string, .docs-code-content .hljs-attr, .docs-code-content .hljs-attribute, .docs-code-content .hljs-selector-attr, .docs-code-content .hljs-template-variable) {
+    color: color-mix(in oklch, var(--accent) 36%, var(--foreground) 64%);
+  }
+
+  .docs-markdown :where(.docs-code-content .hljs-number, .docs-code-content .hljs-literal, .docs-code-content .hljs-variable, .docs-code-content .hljs-symbol, .docs-code-content .hljs-bullet) {
+    color: color-mix(in oklch, var(--destructive) 48%, var(--foreground) 52%);
+  }
+
+  .docs-markdown :where(.docs-code-content .hljs-built_in, .docs-code-content .hljs-type, .docs-code-content .hljs-class .hljs-title, .docs-code-content .hljs-function .hljs-title) {
+    color: color-mix(in oklch, var(--primary) 44%, var(--foreground) 56%);
+    font-weight: 600;
+  }
+
+  .docs-markdown :where(.docs-code-content .hljs-meta, .docs-code-content .hljs-doctag) {
+    color: color-mix(in oklch, var(--muted-foreground) 60%, var(--foreground) 40%);
+  }
+
+  .docs-markdown :where(.docs-table-shell) {
+    border: 1px solid color-mix(in oklch, var(--border) 76%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 70%, var(--background) 30%),
+        color-mix(in oklch, var(--muted) 70%, var(--card) 30%)
+      );
+    box-shadow:
+      0 16px 36px -30px color-mix(in oklch, var(--foreground) 14%, transparent),
+      inset 0 1px 0 color-mix(in oklch, white 50%, transparent);
+  }
+
+  .docs-markdown :where(.docs-table) {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .docs-markdown :where(.docs-table-head) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--muted) 70%, var(--background) 30%),
+        color-mix(in oklch, var(--background) 70%, var(--card) 30%)
+      );
+  }
+
+  .docs-markdown :where(.docs-table-th) {
+    border-bottom: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
+    color: color-mix(in oklch, var(--foreground) 72%, var(--muted-foreground) 28%);
+    background: transparent;
+  }
+
+  .docs-markdown :where(.docs-table-th:not(:last-child)) {
+    border-right: 1px solid color-mix(in oklch, var(--border) 52%, transparent);
+  }
+
+  .docs-markdown :where(.docs-table-td) {
+    background: color-mix(in oklch, var(--background) 70%, var(--card) 30%);
+    color: color-mix(in oklch, var(--foreground) 92%, var(--muted-foreground) 8%);
+  }
+
+  .docs-markdown :where(.docs-table tr:not(:last-child) .docs-table-td) {
+    border-bottom: 1px solid color-mix(in oklch, var(--border) 58%, transparent);
+  }
+
+  .docs-markdown :where(.docs-table-td:not(:last-child)) {
+    border-right: 1px solid color-mix(in oklch, var(--border) 46%, transparent);
+  }
+
+  .docs-markdown :where(.docs-table tbody tr:nth-child(even) .docs-table-td) {
+    background: color-mix(in oklch, var(--muted) 70%, var(--background) 30%);
+  }
+
+  .docs-markdown :where(.docs-table thead tr:first-child .docs-table-th:first-child) {
+    border-top-left-radius: 18px;
+  }
+
+  .docs-markdown :where(.docs-table thead tr:first-child .docs-table-th:last-child) {
+    border-top-right-radius: 18px;
+  }
+
+  .docs-markdown :where(.docs-table tbody tr:last-child .docs-table-td:first-child) {
+    border-bottom-left-radius: 18px;
+  }
+
+  .docs-markdown :where(.docs-table tbody tr:last-child .docs-table-td:last-child) {
+    border-bottom-right-radius: 18px;
+  }
+
+  .docs-markdown :where(.docs-table tbody tr:hover .docs-table-td) {
+    background: color-mix(in oklch, var(--primary) 7%, var(--background) 93%);
+  }
+
+  .chat-markdown-assistant :where(.chat-table-shell),
+  .chat-markdown-user :where(.chat-table-shell) {
+    position: relative;
+  }
+
+  .chat-markdown-assistant :where(.chat-table-shell-assistant) {
+    border: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 70%, var(--background) 30%),
+        color-mix(in oklch, var(--muted) 70%, var(--card) 30%)
+      );
+    box-shadow:
+      0 14px 34px -28px color-mix(in oklch, var(--foreground) 18%, transparent),
+      inset 0 1px 0 color-mix(in oklch, white 42%, transparent);
+  }
+
+  .chat-markdown-user :where(.chat-table-shell-user) {
+    border: 1px solid color-mix(in oklch, var(--primary-foreground) 14%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--primary) 15%, transparent),
+        color-mix(in oklch, var(--primary) 8%, transparent)
+      );
+    box-shadow:
+      0 14px 34px -28px color-mix(in oklch, var(--primary-foreground) 18%, transparent),
+      inset 0 1px 0 color-mix(in oklch, var(--primary-foreground) 10%, transparent);
+  }
+
+  .chat-markdown-assistant :where(.chat-table),
+  .chat-markdown-user :where(.chat-table) {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .chat-markdown-assistant :where(.chat-table-head-assistant) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--muted) 70%, var(--background) 30%),
+        color-mix(in oklch, var(--background) 70%, var(--card) 30%)
+      );
+  }
+
+  .chat-markdown-user :where(.chat-table-head-user) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--primary-foreground) 10%, transparent),
+        color-mix(in oklch, var(--primary-foreground) 6%, transparent)
+      );
+  }
+
+  .chat-markdown-assistant :where(.chat-table-th-assistant) {
+    border-bottom: 1px solid color-mix(in oklch, var(--border) 66%, transparent);
+    color: color-mix(in oklch, var(--foreground) 72%, var(--muted-foreground) 28%);
+  }
+
+  .chat-markdown-user :where(.chat-table-th-user) {
+    border-bottom: 1px solid color-mix(in oklch, var(--primary-foreground) 14%, transparent);
+    color: color-mix(in oklch, var(--primary-foreground) 82%, white 18%);
+  }
+
+  .chat-markdown-assistant :where(.chat-table-th:not(:last-child)) {
+    border-right: 1px solid color-mix(in oklch, var(--border) 48%, transparent);
+  }
+
+  .chat-markdown-user :where(.chat-table-th:not(:last-child)) {
+    border-right: 1px solid color-mix(in oklch, var(--primary-foreground) 10%, transparent);
+  }
+
+  .chat-markdown-assistant :where(.chat-table-td-assistant) {
+    background: color-mix(in oklch, var(--background) 70%, var(--card) 30%);
+  }
+
+  .chat-markdown-user :where(.chat-table-td-user) {
+    background: color-mix(in oklch, var(--primary-foreground) 5%, transparent);
+  }
+
+  .chat-markdown-assistant :where(.chat-table tr:not(:last-child) .chat-table-td-assistant) {
+    border-bottom: 1px solid color-mix(in oklch, var(--border) 54%, transparent);
+  }
+
+  .chat-markdown-user :where(.chat-table tr:not(:last-child) .chat-table-td-user) {
+    border-bottom: 1px solid color-mix(in oklch, var(--primary-foreground) 10%, transparent);
+  }
+
+  .chat-markdown-assistant :where(.chat-table-td-assistant:not(:last-child)) {
+    border-right: 1px solid color-mix(in oklch, var(--border) 42%, transparent);
+  }
+
+  .chat-markdown-user :where(.chat-table-td-user:not(:last-child)) {
+    border-right: 1px solid color-mix(in oklch, var(--primary-foreground) 8%, transparent);
+  }
+
+  .chat-markdown-assistant :where(.chat-table-row-assistant:nth-child(even) .chat-table-td-assistant) {
+    background: color-mix(in oklch, var(--muted) 70%, var(--background) 30%);
+  }
+
+  .chat-markdown-user :where(.chat-table-row-user:nth-child(even) .chat-table-td-user) {
+    background: color-mix(in oklch, var(--primary-foreground) 7%, transparent);
+  }
+
+  .chat-markdown-assistant :where(.chat-table thead tr:first-child .chat-table-th:first-child),
+  .chat-markdown-user :where(.chat-table thead tr:first-child .chat-table-th:first-child) {
+    border-top-left-radius: 18px;
+  }
+
+  .chat-markdown-assistant :where(.chat-table thead tr:first-child .chat-table-th:last-child),
+  .chat-markdown-user :where(.chat-table thead tr:first-child .chat-table-th:last-child) {
+    border-top-right-radius: 18px;
+  }
+
+  .chat-markdown-assistant :where(.chat-table tbody tr:last-child .chat-table-td:first-child),
+  .chat-markdown-user :where(.chat-table tbody tr:last-child .chat-table-td:first-child) {
+    border-bottom-left-radius: 18px;
+  }
+
+  .chat-markdown-assistant :where(.chat-table tbody tr:last-child .chat-table-td:last-child),
+  .chat-markdown-user :where(.chat-table tbody tr:last-child .chat-table-td:last-child) {
+    border-bottom-right-radius: 18px;
+  }
+
+  .chat-markdown-assistant :where(.chat-table tbody tr:hover .chat-table-td-assistant) {
+    background: color-mix(in oklch, var(--primary) 7%, var(--background) 93%);
+  }
+
+  .chat-markdown-user :where(.chat-table tbody tr:hover .chat-table-td-user) {
+    background: color-mix(in oklch, var(--primary-foreground) 10%, transparent);
+  }
+
+  .dark .docs-markdown :where(.docs-code-block) {
+    border-color: color-mix(in oklch, var(--border) 86%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%),
+        color-mix(in oklch, var(--muted) 35%, var(--card) 65%)
+      );
+    box-shadow:
+      0 18px 44px -32px color-mix(in oklch, black 72%, transparent),
+      inset 0 1px 0 color-mix(in oklch, white 6%, transparent);
+  }
+
+  .dark .docs-markdown :where(.docs-code-toolbar) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--muted) 35%, var(--card) 65%),
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%)
+      );
+  }
+
+  .dark .docs-markdown :where(.docs-code-content) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--background) 35%, var(--card) 65%),
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%)
+      );
+  }
+
+  .dark .docs-markdown :where(.docs-table-shell) {
+    border-color: color-mix(in oklch, var(--border) 84%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%),
+        color-mix(in oklch, var(--muted) 35%, var(--card) 65%)
+      );
+    box-shadow:
+      0 18px 42px -32px color-mix(in oklch, black 70%, transparent),
+      inset 0 1px 0 color-mix(in oklch, white 6%, transparent);
+  }
+
+  .dark .docs-markdown :where(.docs-table-head) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--muted) 35%, var(--card) 65%),
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%)
+      );
+  }
+
+  .dark .docs-markdown :where(.docs-table-td) {
+    background: color-mix(in oklch, var(--background) 35%, var(--card) 65%);
+  }
+
+  .dark .docs-markdown :where(.docs-table tbody tr:nth-child(even) .docs-table-td) {
+    background: color-mix(in oklch, var(--muted) 35%, var(--background) 65%);
+  }
+
+  .chat-markdown-assistant :where(.code-block-shell),
+  .chat-markdown-user :where(.code-block-shell) {
+    position: relative;
+    border: 1px solid color-mix(in oklch, var(--border) 74%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 70%, var(--background) 30%),
+        color-mix(in oklch, var(--muted) 70%, var(--card) 30%)
+      );
+    box-shadow:
+      0 14px 36px -28px color-mix(in oklch, var(--foreground) 22%, transparent),
+      inset 0 1px 0 color-mix(in oklch, var(--background) 70%, transparent);
+  }
+
+  .chat-markdown-assistant :where(.hljs),
+  .chat-markdown-user :where(.hljs) {
+    display: block;
+    background: transparent;
+    color: color-mix(in oklch, var(--foreground) 88%, var(--muted-foreground) 12%);
+  }
+
+  .chat-markdown-assistant :where(.hljs-comment, .hljs-quote),
+  .chat-markdown-user :where(.hljs-comment, .hljs-quote) {
+    color: color-mix(in oklch, var(--muted-foreground) 86%, var(--background) 14%);
+    font-style: italic;
+  }
+
+  .chat-markdown-assistant :where(.hljs-keyword, .hljs-selector-tag, .hljs-section, .hljs-title),
+  .chat-markdown-user :where(.hljs-keyword, .hljs-selector-tag, .hljs-section, .hljs-title) {
+    color: color-mix(in oklch, var(--primary) 56%, var(--foreground) 44%);
+  }
+
+  .chat-markdown-assistant :where(.hljs-string, .hljs-attr, .hljs-attribute, .hljs-selector-attr, .hljs-template-variable),
+  .chat-markdown-user :where(.hljs-string, .hljs-attr, .hljs-attribute, .hljs-selector-attr, .hljs-template-variable) {
+    color: color-mix(in oklch, var(--accent) 34%, var(--foreground) 66%);
+  }
+
+  .chat-markdown-assistant :where(.hljs-number, .hljs-literal, .hljs-variable, .hljs-symbol, .hljs-bullet),
+  .chat-markdown-user :where(.hljs-number, .hljs-literal, .hljs-variable, .hljs-symbol, .hljs-bullet) {
+    color: color-mix(in oklch, var(--destructive) 48%, var(--foreground) 52%);
+  }
+
+  .chat-markdown-assistant :where(.hljs-built_in, .hljs-type, .hljs-class .hljs-title, .hljs-function .hljs-title),
+  .chat-markdown-user :where(.hljs-built_in, .hljs-type, .hljs-class .hljs-title, .hljs-function .hljs-title) {
+    color: color-mix(in oklch, var(--primary) 42%, var(--foreground) 58%);
+    font-weight: 600;
+  }
+
+  .chat-markdown-assistant :where(.hljs-meta, .hljs-doctag),
+  .chat-markdown-user :where(.hljs-meta, .hljs-doctag) {
+    color: color-mix(in oklch, var(--muted-foreground) 58%, var(--foreground) 42%);
+  }
+
+  .chat-markdown-assistant :where(.code-block-toolbar),
+  .chat-markdown-user :where(.code-block-toolbar) {
+    border-bottom: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--muted) 70%, var(--background) 30%),
+        color-mix(in oklch, var(--background) 70%, var(--card) 30%)
+      );
+  }
+
+  .chat-markdown-assistant :where(.code-block-language),
+  .chat-markdown-user :where(.code-block-language) {
+    border: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
+    background: color-mix(in oklch, var(--background) 82%, var(--muted) 18%);
+    color: color-mix(in oklch, var(--foreground) 56%, var(--muted-foreground) 44%);
+  }
+
+  .chat-markdown-assistant :where(.code-block-label),
+  .chat-markdown-user :where(.code-block-label) {
+    color: color-mix(in oklch, var(--muted-foreground) 84%, var(--foreground) 16%);
+  }
+
+  .chat-markdown-assistant :where(.code-block-copy),
+  .chat-markdown-user :where(.code-block-copy) {
+    color: color-mix(in oklch, var(--muted-foreground) 80%, var(--foreground) 20%);
+  }
+
+  .chat-markdown-assistant :where(.code-block-copy:hover),
+  .chat-markdown-user :where(.code-block-copy:hover) {
+    background: color-mix(in oklch, var(--background) 72%, var(--muted) 28%);
+    color: color-mix(in oklch, var(--foreground) 92%, var(--primary) 8%);
+  }
+
+  .chat-markdown-assistant :where(.code-block-content),
+  .chat-markdown-user :where(.code-block-content) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--background) 70%, var(--card) 30%),
+        color-mix(in oklch, var(--card) 70%, var(--background) 30%)
+      );
+  }
+
+  .chat-markdown-user :where(.code-block-shell) {
+    border-color: color-mix(in oklch, var(--primary-foreground) 12%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--primary) 16%, transparent),
+        color-mix(in oklch, var(--primary) 8%, transparent)
+      );
+    box-shadow:
+      0 16px 40px -30px color-mix(in oklch, var(--primary-foreground) 24%, transparent),
+      inset 0 1px 0 color-mix(in oklch, var(--primary-foreground) 14%, transparent);
+  }
+
+  .chat-markdown-user :where(.code-block-toolbar) {
+    border-bottom-color: color-mix(in oklch, var(--primary-foreground) 12%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--primary-foreground) 10%, transparent),
+        color-mix(in oklch, var(--primary-foreground) 6%, transparent)
+      );
+  }
+
+  .chat-markdown-user :where(.code-block-language) {
+    border-color: color-mix(in oklch, var(--primary-foreground) 14%, transparent);
+    background: color-mix(in oklch, var(--primary-foreground) 10%, transparent);
+    color: color-mix(in oklch, var(--primary-foreground) 82%, white 18%);
+  }
+
+  .chat-markdown-user :where(.code-block-label),
+  .chat-markdown-user :where(.code-block-copy) {
+    color: color-mix(in oklch, var(--primary-foreground) 72%, transparent);
+  }
+
+  .chat-markdown-user :where(.code-block-copy:hover) {
+    background: color-mix(in oklch, var(--primary-foreground) 10%, transparent);
+    color: color-mix(in oklch, var(--primary-foreground) 92%, white 8%);
+  }
+
+  .chat-markdown-user :where(.code-block-content) {
+    background: color-mix(in oklch, black 18%, transparent);
+  }
+
+  .dark .chat-markdown-assistant :where(.code-block-shell) {
+    border-color: color-mix(in oklch, var(--border) 88%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%),
+        color-mix(in oklch, var(--muted) 35%, var(--card) 65%)
+      );
+    box-shadow:
+      0 18px 44px -32px color-mix(in oklch, black 70%, transparent),
+      inset 0 1px 0 color-mix(in oklch, white 6%, transparent);
+  }
+
+  .dark .chat-markdown-assistant :where(.code-block-toolbar) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--muted) 35%, var(--card) 65%),
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%)
+      );
+  }
+
+  .dark .chat-markdown-assistant :where(.code-block-content) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--background) 35%, var(--card) 65%),
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%)
+      );
+  }
+
+  .dark .chat-markdown-assistant :where(.chat-table-shell-assistant) {
+    border-color: color-mix(in oklch, var(--border) 84%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%),
+        color-mix(in oklch, var(--muted) 35%, var(--card) 65%)
+      );
+    box-shadow:
+      0 18px 40px -32px color-mix(in oklch, black 70%, transparent),
+      inset 0 1px 0 color-mix(in oklch, white 6%, transparent);
+  }
+
+  .dark .chat-markdown-assistant :where(.chat-table-head-assistant) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--muted) 35%, var(--card) 65%),
+        color-mix(in oklch, var(--card) 35%, var(--background) 65%)
+      );
+  }
+
+  .dark .chat-markdown-assistant :where(.chat-table-td-assistant) {
+    background: color-mix(in oklch, var(--background) 35%, var(--card) 65%);
+  }
+
+  .dark .chat-markdown-assistant :where(.chat-table-row-assistant:nth-child(even) .chat-table-td-assistant) {
+    background: color-mix(in oklch, var(--muted) 35%, var(--background) 65%);
+  }
+
+  .dark .chat-markdown-user :where(.code-block-content) {
+    background: color-mix(in oklch, black 26%, transparent);
+  }
 }
 
 /* ============================================

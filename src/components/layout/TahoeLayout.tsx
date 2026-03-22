@@ -9,7 +9,7 @@ import type { ChatSession } from "../../services/tauri";
 import { useTheme } from "../../hooks/useTheme";
 import { useCloudBridgeStatus } from "../../hooks/useCloudBridgeStatus";
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
+import { Button } from "@heroui/react";
 
 interface TahoeLayoutProps {
   children: ReactNode;
@@ -57,7 +57,9 @@ export function TahoeLayout({
   onDeleteChat,
 }: TahoeLayoutProps & { isImmersive?: boolean }) {
   const { mode } = useTheme();
-  const [isWindows] = useState(() => navigator.platform.toLowerCase().includes("win"));
+  const [isWindows] = useState(() =>
+    navigator.platform.toLowerCase().includes("win"),
+  );
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const cloudStatus = useCloudBridgeStatus();
 
@@ -145,23 +147,14 @@ export function TahoeLayout({
               {/* Windows Controls */}
               {isWindows && (
                 <div className="windows-controls flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Minimize"
-                  >
+                  <Button variant="ghost" aria-label="Minimize">
                     <Minus className="size-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Maximize"
-                  >
+                  <Button variant="ghost" aria-label="Maximize">
                     <Maximize2 className="size-4" />
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
                     aria-label="Close"
                     className="hover:bg-red-500 hover:text-white"
                   >

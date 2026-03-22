@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ChevronDown, Brain, Clock } from "lucide-react";
-import { Button } from "../ui/button";
+import { Button } from "@heroui/react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 
 interface ThoughtDisplayProps {
@@ -97,7 +97,6 @@ export const ThoughtDisplay = React.memo(function ThoughtDisplay({
 
         <CollapsibleTrigger>
           <Button
-            size="icon"
             variant="ghost"
             className="w-6 h-6 min-w-0 hover:bg-muted/50 text-muted-foreground cursor-pointer"
           >

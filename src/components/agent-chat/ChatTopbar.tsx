@@ -11,7 +11,7 @@ import type { ChatSession } from "../../services/tauri";
 import type { Folder } from "../../types";
 import { cn } from "../../lib/utils";
 import { AnimatedThemeToggler } from "../ui/animated-theme-toggler";
-import { Button } from "../ui/button";
+import { Button } from "@heroui/react";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 

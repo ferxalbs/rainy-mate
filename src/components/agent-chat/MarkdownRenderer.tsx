@@ -2,7 +2,8 @@ import React from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/atom-one-dark.css";
+import { Check, Copy } from "lucide-react";
+import { Button } from "@heroui/react";
 import { cn } from "../../lib/utils";
 
 interface MarkdownRendererProps {
@@ -13,6 +14,126 @@ interface MarkdownRendererProps {
 }
 
 const HIGHLIGHT_MAX_CONTENT_LENGTH = 12_000;
+const COPY_RESET_DELAY_MS = 1_800;
+
+function extractNodeText(node: React.ReactNode): string {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractNodeText).join("");
+  if (React.isValidElement(node)) {
+    return extractNodeText((node.props as { children?: React.ReactNode }).children);
+  }
+  return "";
+}
+
+function normalizeCodeText(value: string): string {
+  return value.replace(/\n$/, "");
+}
+
+function getCodeLanguage(className?: string): string | null {
+  const match = /language-([\w-]+)/.exec(className || "");
+  return match?.[1] ?? null;
+}
+
+interface CodeBlockFrameProps {
+  children: React.ReactNode;
+  className?: string;
+  tone: "assistant" | "user";
+}
+
+const CodeBlockFrame = React.memo(function CodeBlockFrame({
+  children,
+  className,
+  tone,
+}: CodeBlockFrameProps) {
+  const [isCopied, setIsCopied] = React.useState(false);
+  const codeText = React.useMemo(() => normalizeCodeText(extractNodeText(children)), [children]);
+  const language = React.useMemo(() => {
+    if (!React.isValidElement(children)) return null;
+    return getCodeLanguage((children.props as { className?: string }).className);
+  }, [children]);
+
+  React.useEffect(() => {
+    if (!isCopied) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setIsCopied(false);
+    }, COPY_RESET_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isCopied]);
+
+  const handleCopy = React.useCallback(async () => {
+    if (!codeText) return;
+
+    try {
+      await navigator.clipboard.writeText(codeText);
+      setIsCopied(true);
+    } catch (error) {
+      console.error("Failed to copy code block", error);
+    }
+  }, [codeText]);
+
+  const isUser = tone === "user";
+
+  return (
+    <div
+      data-tone={tone}
+      className={cn(
+        "code-block-shell not-prose my-4 overflow-hidden rounded-[22px] text-card-foreground backdrop-blur-md",
+        isUser ? "text-inherit" : "text-card-foreground",
+      )}
+    >
+      <div
+        className={cn(
+          "code-block-toolbar flex items-center justify-between gap-3 px-3 py-2",
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={cn(
+              "code-block-language rounded-full px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.18em]",
+            )}
+          >
+            {language ?? "text"}
+          </span>
+          <span
+            className={cn(
+              "code-block-label truncate text-[11px] font-medium tracking-[0.08em]",
+            )}
+          >
+            Code
+          </span>
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={cn(
+            "code-block-copy h-6 w-6 shrink-0 p-0 transition-colors",
+          )}
+          onClick={handleCopy}
+          aria-label={isCopied ? "Code copied" : "Copy code"}
+        >
+          {isCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        </Button>
+      </div>
+
+      <pre className="code-block-content m-0 max-w-full overflow-x-auto p-0">
+        <code
+          className={cn(
+            className,
+            "block min-w-full px-4 py-4 font-mono text-[13px] leading-6 font-normal",
+            isUser ? "text-inherit" : "text-foreground/92",
+          )}
+        >
+          {children}
+        </code>
+      </pre>
+    </div>
+  );
+});
 
 function createMarkdownComponents(
   tone: "assistant" | "user",
@@ -33,20 +154,14 @@ function createMarkdownComponents(
       )}
     />
   ),
-  pre: ({ node, ...props }) => (
-    <pre
-      {...props}
-      className={cn(
-        "max-w-full overflow-x-auto rounded-2xl border p-0 text-[13px] shadow-sm",
-        isUser
-          ? "border-primary-foreground/15 bg-black/10 text-inherit dark:bg-white/10"
-          : "border-border/50 bg-muted",
-      )}
-    />
+  pre: ({ children, className }) => (
+    <CodeBlockFrame className={className} tone={tone}>
+      {children}
+    </CodeBlockFrame>
   ),
   code: ({ node, className, children, ...props }: any) => {
-    const match = /language-(\w+)/.exec(className || "");
-    const isInline = !match && !String(children).includes("\n");
+    const isInline =
+      !getCodeLanguage(className) && !extractNodeText(children).includes("\n");
 
     return isInline ? (
       <code
@@ -66,7 +181,7 @@ function createMarkdownComponents(
         {...props}
         className={cn(
           className,
-          "block min-w-0 p-4 text-sm font-mono",
+          "hljs bg-transparent p-0 text-inherit",
           isUser ? "text-inherit" : "text-foreground/90",
         )}
       >
@@ -77,30 +192,30 @@ function createMarkdownComponents(
   table: ({ node, ...props }) => (
     <div
       className={cn(
-        "my-4 w-full max-w-full overflow-x-auto rounded-2xl border",
-        isUser ? "border-primary-foreground/15 bg-black/6 dark:bg-white/6" : "border-border/40",
+        "chat-table-shell not-prose my-5 w-full max-w-full overflow-hidden rounded-[24px]",
+        isUser ? "chat-table-shell-user" : "chat-table-shell-assistant",
       )}
     >
-      <table
-        {...props}
-        className="w-full min-w-[640px] border-collapse text-left text-xs"
-      />
+      <div className="chat-table-scroll overflow-x-auto">
+        <table
+          {...props}
+          className="chat-table w-full min-w-[640px] border-separate border-spacing-0 text-left text-xs"
+        />
+      </div>
     </div>
   ),
   thead: ({ node, ...props }) => (
     <thead
       {...props}
-      className={cn(isUser ? "bg-black/10 dark:bg-white/10" : "bg-background/80")}
+      className={cn("chat-table-head", isUser ? "chat-table-head-user" : "chat-table-head-assistant")}
     />
   ),
   th: ({ node, ...props }) => (
     <th
       {...props}
       className={cn(
-        "border-b border-r px-3 py-2 align-top font-semibold last:border-r-0",
-        isUser
-          ? "border-primary-foreground/15 text-inherit"
-          : "border-border/30 text-foreground",
+        "chat-table-th px-3 py-2.5 align-top font-semibold",
+        isUser ? "chat-table-th-user text-inherit" : "chat-table-th-assistant text-foreground",
       )}
     />
   ),
@@ -108,17 +223,15 @@ function createMarkdownComponents(
     <td
       {...props}
       className={cn(
-        "border-b border-r px-3 py-2 align-top last:border-r-0",
-        isUser
-          ? "border-primary-foreground/12 text-inherit/90"
-          : "border-border/20 text-foreground/90",
+        "chat-table-td px-3 py-2.5 align-top",
+        isUser ? "chat-table-td-user text-inherit/90" : "chat-table-td-assistant text-foreground/90",
       )}
     />
   ),
   tr: ({ node, ...props }) => (
     <tr
       {...props}
-      className={cn(isUser ? "odd:bg-black/6 dark:odd:bg-white/6" : "odd:bg-background/30")}
+      className={cn("chat-table-row", isUser ? "chat-table-row-user" : "chat-table-row-assistant")}
     />
   ),
   ul: ({ node, ...props }) => (
