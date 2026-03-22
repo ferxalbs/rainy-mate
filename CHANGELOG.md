@@ -5,63 +5,7 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0] - 2026-03-21 - PRODUCTION SESSION SYSTEM
-
-### Added
-
-- **Iron law enforcement — logic extracted from TypeScript to Rust:**
-  - `parse_tool_calls` Tauri command (`src-tauri/src/commands/skills.rs`) — regex tool-call parser moved from `useAgentChat.ts`; TS becomes a thin `invoke()` wrapper
-  - `execute_plan_from_content` Tauri command — plan execution orchestration extracted from TS; accepts workspace+content, returns `ExecutePlanResult`
-  - `classify_neural_error` Tauri command (`src-tauri/src/commands/neural.rs`) — error classification moved from `NeuralPanel.tsx`
-  - `get_neural_workspace_id` Tauri command — workspace ID read from NeuralService keychain state; removes redundant localStorage persistence
-  - `NeuralService::get_workspace_id` method added
-
-- **Module extraction — modules that exceeded 400 lines split into focused files:**
-  - `src-tauri/src/ai/agent/act_step.rs` — ActStep struct + `impl WorkflowStep for ActStep` (339 lines) extracted from `workflow.rs`; `is_tool_allowed_by_spec` and `truncate_to_max_bytes` made `pub(crate)` for shared use
-  - `src-tauri/src/ai/agent/chat_sessions.rs` — all Tauri command wrappers (11 commands) extracted from `manager.rs`; `lib.rs` updated to reference `chat_sessions::` prefix
-  - `src-tauri/src/services/command_poller_agent.rs` — `process_agent_run` free async function (710 lines) extracted from `command_poller.rs`; `progress_preview` and `MAX_PROGRESS_PREVIEW_CHARS` made `pub(crate)` for cross-module use; `command_poller.rs` reduced from 1397 → 718 lines
-
-- **Model ID normalization moved to Rust** — `normalize_model_id()` helper in `src-tauri/src/commands/task.rs` strips `rainy:` and `cowork:` prefixes before creating tasks; removed from `useAgentChat.ts`
-
-- **localStorage workspace persistence removed** — `NeuralPanel.tsx` no longer reads/writes `StoredWorkspace` to `localStorage`; workspace identity sourced exclusively from Rust keychain-backed `NeuralService` state
-
-### Fixed
-
-- **Web research distillation dead code** (`workflow.rs`) — `!MemoryDistiller::is_readonly_tool()` guard removed; web research results now correctly persist to long-term memory for `web_search` / `read_web_page` tools
-- **`ensure_default_cloud_agent` re-deploys every call** (`commands/atm.rs`) — added `else` branch returning `"already_exists"` when active agent is already the default; prevents duplicate re-deployments on every workspace connect
-- **Session leak on agent error path** (`services/command_poller.rs`) — on agent error, `session_coordinator.abort_session()` now called before returning `CommandResult`; frontend active-run indicator no longer sticks
-- **`delete_chat_session` non-transactional cascade** (`ai/agent/manager.rs`) — all four DELETEs wrapped in `sqlx::Transaction`; no orphaned rows on crash mid-deletion
-- **`NeuralPanel` polling loop not cancellable** — `waitForOnlineNode` now accepts an `AbortSignal`; all `setState` calls guarded; cleanup aborts controller on unmount
-- **`useChatSessions` event listener race condition** — `listen()` Promise resolved with `cancelled` flag check; unlisten functions stored only if not cancelled; no listener leaks
-- **Stale closure in `session://finished` handler** — Rust: `workspace_id` field added to `ActiveSession`, emitted in `session://finished` payload; TS: uses `event.payload.workspaceId` instead of closure-captured value
-- **Startup 5s hardcoded sleep replaced with `Notify`** (`lib.rs`) — `tokio::sync::Notify` signals `services_ready` after Database + AgentManager + SessionCoordinator init; `CommandPoller` and `CloudBridge` wait on signal instead of sleeping; saves 2-3s on cold start
-- **`AgentManager` double-Arc** (`lib.rs`) — `Arc::new(AgentManager::new(...))` upfront; poller and Tauri state share the same Arc
-- **`SettingsManager` instantiated per-command** — `Arc<Mutex<SettingsManager>>` field added to `CommandPoller`; constructed once and shared across all command executions
-- **Semaphore acquire moved inside spawn** (`command_poller.rs`) — `acquire_owned().await` moved inside `tokio::spawn`; poll loop no longer blocks heartbeat while waiting for a slot
-- **Command ID deduplication** (`command_poller.rs`) — `DashSet<String>` field `seen_commands` checks-and-inserts before spawning; duplicate command deliveries skipped
-- **`CloudBridge` managed synchronously** (`lib.rs`) — `Arc<RwLock<Option<CloudBridge>>>` managed at startup; inner value initialized by spawned task; no panic risk from `State<CloudBridge>` accessed before init
-- **`create_chat_session` overwrites default agent spec** (`manager.rs`) — agent upsert changed to `ON CONFLICT(id) DO NOTHING`; existing spec not clobbered
-- **`NeuralDashboard` setTimeout without cleanup** — timeout IDs stored in refs, cleared on unmount
-- **`App.tsx` effect re-fires every render** — `folders.map(...)` memoized with `useMemo` to stabilize dependency array
-- **Duplicate session protection** (`session_coordinator.rs`) — `entry()` API used for atomic check-before-insert; warning logged if session already active
-- **Metadata mutex held during keychain I/O** (`neural_service.rs`) — needed values cloned, mutex dropped, then keychain I/O performed outside critical section
-- **`ThirdPartySkillRegistry` instantiated twice per Wasm tool** (`workflow.rs`) — single `let registry = ThirdPartySkillRegistry::new()` at top of block, reused for both lookups
-- **Blind retry on destructive tools** (`act_step.rs`) — retry count set to 0 for L1/L2 (non-safe) airlock level tools; only L0 (read-only) tools retried
-
-### Changed
-
-- `workflow.rs` comment updated: ThinkStep lives here, ActStep in `act_step.rs`
-- `useAgentChat.ts` — `parseToolCalls`, `executeDiscussedPlan` internals replaced with Rust `invoke()` calls; hook is now pure view/state management
-- `NeuralPanel.tsx` — all localStorage helpers removed; error toast uses async `classifyNeuralError()` Rust command
-- `lib.rs` command handler updated: all 11 chat session commands now reference `chat_sessions::` module
-
-### Validation
-
-- `cargo check -q` → 0 warnings
-- `cargo test` → 185 passed, 0 failed
-- `pnpm exec tsc --noEmit` → 0 errors
-
-## [Unreleased] - 2026-03-20 - PARALLEL MULTI-SESSION AGENT SYSTEM
+## [0.6.0] - 2026-03-21 - PARALLEL MULTI-SESSION AGENT SYSTEM & PRODUCTION SESSION SYSTEM
 
 ### Added
 
@@ -89,6 +33,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `bootstrap_atm` auto-provisions the default cloud agent when the workspace has no active agents
   - new Tauri command/wrapper `ensure_default_atm_agent` in `src-tauri/src/commands/atm.rs` and `src/services/tauri.ts`
   - `ATMClient` now exposes typed workspace agent/model catalog lookups in `src-tauri/src/services/atm_client.rs`
+
+- **Iron law enforcement — logic extracted from TypeScript to Rust:**
+  - `parse_tool_calls` Tauri command (`src-tauri/src/commands/skills.rs`) — regex tool-call parser moved from `useAgentChat.ts`; TS becomes a thin `invoke()` wrapper
+  - `execute_plan_from_content` Tauri command — plan execution orchestration extracted from TS; accepts workspace+content, returns `ExecutePlanResult`
+  - `classify_neural_error` Tauri command (`src-tauri/src/commands/neural.rs`) — error classification moved from `NeuralPanel.tsx`
+  - `get_neural_workspace_id` Tauri command — workspace ID read from NeuralService keychain state; removes redundant localStorage persistence
+  - `NeuralService::get_workspace_id` method added
+
+- **Module extraction — modules that exceeded 400 lines split into focused files:**
+  - `src-tauri/src/ai/agent/act_step.rs` — ActStep struct + `impl WorkflowStep for ActStep` (339 lines) extracted from `workflow.rs`; `is_tool_allowed_by_spec` and `truncate_to_max_bytes` made `pub(crate)` for shared use
+  - `src-tauri/src/ai/agent/chat_sessions.rs` — all Tauri command wrappers (11 commands) extracted from `manager.rs`; `lib.rs` updated to reference `chat_sessions::` prefix
+  - `src-tauri/src/services/command_poller_agent.rs` — `process_agent_run` free async function (710 lines) extracted from `command_poller.rs`; `progress_preview` and `MAX_PROGRESS_PREVIEW_CHARS` made `pub(crate)` for cross-module use; `command_poller.rs` reduced from 1397 → 718 lines
+
+- **Model ID normalization moved to Rust** — `normalize_model_id()` helper in `src-tauri/src/commands/task.rs` strips `rainy:` and `cowork:` prefixes before creating tasks; removed from `useAgentChat.ts`
+- **localStorage workspace persistence removed** — `NeuralPanel.tsx` no longer reads/writes `StoredWorkspace` to `localStorage`; workspace identity sourced exclusively from Rust keychain-backed `NeuralService` state
 
 ### Fixed
 
@@ -129,6 +88,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/services/tauri.ts`
   - `src/components/neural/NeuralPanel.tsx`
   - `src/components/neural/modules/NeuralDashboard.tsx`
+
+- **Web research distillation dead code** (`workflow.rs`) — `!MemoryDistiller::is_readonly_tool()` guard removed; web research results now correctly persist to long-term memory for `web_search` / `read_web_page` tools
+- **`ensure_default_cloud_agent` re-deploys every call** (`commands/atm.rs`) — added `else` branch returning `"already_exists"` when active agent is already the default; prevents duplicate re-deployments on every workspace connect
+- **Session leak on agent error path** (`services/command_poller.rs`) — on agent error, `session_coordinator.abort_session()` now called before returning `CommandResult`; frontend active-run indicator no longer sticks
+- **`delete_chat_session` non-transactional cascade** (`ai/agent/manager.rs`) — all four DELETEs wrapped in `sqlx::Transaction`; no orphaned rows on crash mid-deletion
+- **`NeuralPanel` polling loop not cancellable** — `waitForOnlineNode` now accepts an `AbortSignal`; all `setState` calls guarded; cleanup aborts controller on unmount
+- **`useChatSessions` event listener race condition** — `listen()` Promise resolved with `cancelled` flag check; unlisten functions stored only if not cancelled; no listener leaks
+- **Stale closure in `session://finished` handler** — Rust: `workspace_id` field added to `ActiveSession`, emitted in `session://finished` payload; TS: uses `event.payload.workspaceId` instead of closure-captured value
+- **Startup 5s hardcoded sleep replaced with `Notify`** (`lib.rs`) — `tokio::sync::Notify` signals `services_ready` after Database + AgentManager + SessionCoordinator init; `CommandPoller` and `CloudBridge` wait on signal instead of sleeping; saves 2-3s on cold start
+- **`AgentManager` double-Arc** (`lib.rs`) — `Arc::new(AgentManager::new(...))` upfront; poller and Tauri state share the same Arc
+- **`SettingsManager` instantiated per-command** — `Arc<Mutex<SettingsManager>>` field added to `CommandPoller`; constructed once and shared across all command executions
+- **Semaphore acquire moved inside spawn** (`command_poller.rs`) — `acquire_owned().await` moved inside `tokio::spawn`; poll loop no longer blocks heartbeat while waiting for a slot
+- **Command ID deduplication** (`command_poller.rs`) — `DashSet<String>` field `seen_commands` checks-and-inserts before spawning; duplicate command deliveries skipped
+- **`CloudBridge` managed synchronously** (`lib.rs`) — `Arc<RwLock<Option<CloudBridge>>>` managed at startup; inner value initialized by spawned task; no panic risk from `State<CloudBridge>` accessed before init
+- **`create_chat_session` overwrites default agent spec** (`manager.rs`) — agent upsert changed to `ON CONFLICT(id) DO NOTHING`; existing spec not clobbered
+- **`NeuralDashboard` setTimeout without cleanup** — timeout IDs stored in refs, cleared on unmount
+- **`App.tsx` effect re-fires every render** — `folders.map(...)` memoized with `useMemo` to stabilize dependency array
+- **Duplicate session protection** (`session_coordinator.rs`) — `entry()` API used for atomic check-before-insert; warning logged if session already active
+- **Metadata mutex held during keychain I/O** (`neural_service.rs`) — needed values cloned, mutex dropped, then keychain I/O performed outside critical section
+- **`ThirdPartySkillRegistry` instantiated twice per Wasm tool** (`workflow.rs`) — single `let registry = ThirdPartySkillRegistry::new()` at top of block, reused for both lookups
+- **Blind retry on destructive tools** (`act_step.rs`) — retry count set to 0 for L1/L2 (non-safe) airlock level tools; only L0 (read-only) tools retried
+
+### Changed
+
+- `workflow.rs` comment updated: ThinkStep lives here, ActStep in `act_step.rs`
+- `useAgentChat.ts` — `parseToolCalls`, `executeDiscussedPlan` internals replaced with Rust `invoke()` calls; hook is now pure view/state management
+- `NeuralPanel.tsx` — all localStorage helpers removed; error toast uses async `classifyNeuralError()` Rust command
+- `lib.rs` command handler updated: all 11 chat session commands now reference `chat_sessions::` module
+
+### Validation
+
+- `cargo check -q` → pass
+- `cargo test` → pass
+- `pnpm exec tsc --noEmit` → pass
+rc/components/neural/modules/NeuralDashboard.tsx`
 
 ### Validation
 
