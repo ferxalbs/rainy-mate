@@ -100,3 +100,49 @@ pub async fn resume_neural_runtime(
 
     Ok(())
 }
+
+/// Classify a neural connection error string into a user-facing message.
+/// Centralises error classification in Rust, keeping the frontend purely display-only.
+#[command]
+pub fn classify_neural_error(error: String) -> String {
+    let lower = error.to_lowercase();
+
+    if lower.contains("duplicate workspace mapping") {
+        return "ATM has duplicate workspaces for this Platform Key. Reset/clean duplicate workspace records, then reconnect.".to_string();
+    }
+
+    if lower.contains("owner credentials mismatch")
+        || lower.contains("invalid credentials")
+        || lower.contains("validation failed")
+    {
+        return "Platform Key / Creator API Key are invalid for this ATM instance.".to_string();
+    }
+
+    if lower.contains("platformkey format")
+        || lower.contains("apikey format")
+        || lower.contains("rainy api key validation failed")
+        || lower.contains("missing required checks")
+    {
+        // Pass the original error through — it already contains actionable detail.
+        return error;
+    }
+
+    if lower.contains("db_not_ready")
+        || lower.contains("node_register_transient")
+        || lower.contains("service warming up")
+    {
+        return "Rainy ATM is still warming up after deploy. Wait a few seconds and retry."
+            .to_string();
+    }
+
+    "Connection failed. Please check your credentials.".to_string()
+}
+
+/// Retrieve the stored neural workspace ID from the keychain.
+/// Returns `None` if no workspace has been persisted yet.
+#[command]
+pub async fn get_neural_workspace_id(
+    state: State<'_, NeuralServiceState>,
+) -> Result<Option<String>, String> {
+    Ok(state.0.get_workspace_id().await)
+}

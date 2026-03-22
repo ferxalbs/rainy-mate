@@ -28,6 +28,14 @@ async fn ensure_default_cloud_agent(
                 model: String::new(),
                 message: format!("Workspace already has an active agent: {}", active.name),
             });
+        } else {
+            // Default cloud agent is already active — no re-deploy needed
+            return Ok(EnsureDefaultAtmAgentResult {
+                status: "already_exists".to_string(),
+                agent_id: active.id.clone(),
+                model: String::new(),
+                message: "Default cloud agent is already active.".to_string(),
+            });
         }
     }
 

@@ -6,6 +6,19 @@ use crate::services::TaskManager;
 use std::sync::Arc;
 use tauri::{ipc::Channel, State};
 
+/// Strip vendor prefixes that the frontend may attach to model IDs.
+/// `rainy:gemini/gemini-2.5-pro` → `gemini/gemini-2.5-pro`
+/// `cowork:openai/gpt-5` → `openai/gpt-5`
+fn normalize_model_id(model: String) -> String {
+    if let Some(stripped) = model.strip_prefix("rainy:") {
+        return stripped.to_string();
+    }
+    if let Some(stripped) = model.strip_prefix("cowork:") {
+        return stripped.to_string();
+    }
+    model
+}
+
 /// Create a new task with workspace validation
 #[tauri::command]
 pub async fn create_task(
@@ -15,6 +28,7 @@ pub async fn create_task(
     workspace_path: Option<String>,
     task_manager: State<'_, Arc<TaskManager>>,
 ) -> Result<Task, String> {
+    let model = normalize_model_id(model);
     let mut task = Task::new(description, provider, model);
     task.workspace_path = workspace_path.clone();
 

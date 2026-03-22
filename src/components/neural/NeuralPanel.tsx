@@ -1,9 +1,10 @@
 import { Button } from "@heroui/react";
 import { Shield, Sparkles, ExternalLink, Eye, EyeOff } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   bootstrapAtm,
+  classifyNeuralError,
   ensureDefaultAtmAgent,
   getAtmFleetStatus,
   getNeuralCredentialsValues,
@@ -27,84 +28,10 @@ import { NeuralMcp } from "./modules/NeuralMcp";
 
 type NeuralState = "idle" | "restored" | "connected" | "connecting";
 
-const NEURAL_WORKSPACE_STORAGE_KEY = "rainy-neural-workspace";
-
-type StoredWorkspace = {
-  id: string;
-  name: string;
-};
-
-const readStoredWorkspace = (): StoredWorkspace | null => {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(NEURAL_WORKSPACE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredWorkspace;
-    if (!parsed?.id || !parsed?.name) return null;
-    return parsed;
-  } catch (err) {
-    console.warn("Failed to parse stored Neural workspace:", err);
-    return null;
-  }
-};
-
-const writeStoredWorkspace = (workspace: WorkspaceAuth) => {
-  if (typeof window === "undefined") return;
-  try {
-    const stored: StoredWorkspace = { id: workspace.id, name: workspace.name };
-    localStorage.setItem(NEURAL_WORKSPACE_STORAGE_KEY, JSON.stringify(stored));
-  } catch (err) {
-    console.warn("Failed to persist Neural workspace:", err);
-  }
-};
-
-const clearStoredWorkspace = () => {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.removeItem(NEURAL_WORKSPACE_STORAGE_KEY);
-  } catch (err) {
-    console.warn("Failed to clear stored Neural workspace:", err);
-  }
-};
-
 interface NeuralPanelProps {
   onNavigate?: (section: string) => void;
 }
 
-function getNeuralConnectErrorMessage(error: unknown): string {
-  const text =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : JSON.stringify(error);
-
-  if (/Duplicate workspace mapping/i.test(text)) {
-    return "ATM has duplicate workspaces for this Platform Key. Reset/clean duplicate workspace records, then reconnect.";
-  }
-
-  if (
-    /Owner credentials mismatch|Invalid Credentials|Validation failed/i.test(
-      text,
-    )
-  ) {
-    return "Platform Key / Creator API Key are invalid for this ATM instance.";
-  }
-
-  if (
-    /platformKey format|apiKey format|Rainy API key validation failed|missing required checks/i.test(
-      text,
-    )
-  ) {
-    return text;
-  }
-
-  if (/DB_NOT_READY|NODE_REGISTER_TRANSIENT|Service warming up/i.test(text)) {
-    return "Rainy ATM is still warming up after deploy. Wait a few seconds and retry.";
-  }
-
-  return "Connection failed. Please check your credentials.";
-}
 
 export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
   const [state, setState] = useState<NeuralState>("idle");
@@ -119,6 +46,8 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
   const [nodeStatusLabel, setNodeStatusLabel] = useState(
     "Waiting for desktop heartbeat...",
   );
+  // AbortController for the connect flow so polling stops if component unmounts
+  const connectAbortRef = useRef<AbortController | null>(null);
 
   // Styles for native inputs in login form
   const loginInputClass =
@@ -152,14 +81,17 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
     }
   };
 
-  const waitForOnlineNode = async (workspaceId: string) => {
+  const waitForOnlineNode = async (workspaceId: string, signal: AbortSignal) => {
+    if (signal.aborted) return false;
     setNodeReady(false);
     setNodeStatusLabel("Waiting for desktop heartbeat...");
 
     const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
+      if (signal.aborted) return false;
       try {
         const fleet = await getAtmFleetStatus();
+        if (signal.aborted) return false;
         const onlineNode = fleet.nodes.find(
           (node) =>
             node.effectiveStatus === "online" || node.effectiveStatus === "busy",
@@ -170,18 +102,22 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
           return true;
         }
       } catch (error) {
+        if (signal.aborted) return false;
         console.error("Failed to verify ATM fleet readiness:", error);
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
+    if (signal.aborted) return false;
     setNodeReady(false);
     setNodeStatusLabel("Desktop node is still syncing with ATM.");
     return false;
   };
 
   useEffect(() => {
+    const abortController = new AbortController();
+    const { signal } = abortController;
     let cancelled = false;
     const init = async () => {
       try {
@@ -202,18 +138,16 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
             setPlatformKey(platform);
             setUserApiKey(userKey);
 
-            const storedWorkspace = readStoredWorkspace();
             let effectiveWorkspace: WorkspaceAuth | null = null;
 
             // Always refresh canonical workspace identity from ATM.
-            // Local storage is only a UI hint and may be stale after resets or key changes.
+            // Workspace name defaults to "Desktop Workspace" — ATM returns the real name.
             try {
               const ws = await bootstrapAtm(
                 platform,
                 userKey,
-                storedWorkspace?.name || "Desktop Workspace",
+                "Desktop Workspace",
               );
-              writeStoredWorkspace(ws);
               effectiveWorkspace = ws;
             } catch (err) {
               console.error("Failed to restore ATM admin key:", err);
@@ -235,7 +169,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
                   await new Promise((resolve) => setTimeout(resolve, 500));
                   await registerNode();
                 }
-                await waitForOnlineNode(effectiveWorkspace.id);
+                await waitForOnlineNode(effectiveWorkspace.id, signal);
                 if (!cancelled) {
                   setState("connected");
                 }
@@ -258,6 +192,8 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
     init();
     return () => {
       cancelled = true;
+      abortController.abort();
+      connectAbortRef.current?.abort();
     };
   }, []);
 
@@ -266,6 +202,10 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       toast.error("Credentials are required");
       return;
     }
+
+    const ac = new AbortController();
+    connectAbortRef.current?.abort();
+    connectAbortRef.current = ac;
 
     setState("connecting");
 
@@ -286,16 +226,23 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         await registerNode();
       }
-      await waitForOnlineNode(ws.id);
+      await waitForOnlineNode(ws.id, ac.signal);
+      if (ac.signal.aborted) return;
 
       setWorkspace(ws);
-      writeStoredWorkspace(ws);
       setState("connected");
       toast.success(`Neural Link Established! Welcome to ${ws.name}`);
     } catch (err: any) {
+      if (ac.signal.aborted) return;
       console.error("Connection failed:", err);
       setState("idle");
-      toast.error(getNeuralConnectErrorMessage(err));
+      const errorText =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : JSON.stringify(err);
+      void classifyNeuralError(errorText).then((msg) => toast.error(msg));
     }
   };
 
@@ -315,7 +262,6 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
         setNodeStatusLabel("Waiting for desktop heartbeat...");
         setWorkspace(null);
         setState("idle");
-        clearStoredWorkspace();
         toast.success("Succesfully disconnected");
       } catch (e: any) {
         toast.error(e?.message || "Logout failed");
@@ -373,7 +319,6 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
                   className="w-full text-muted-foreground hover:text-foreground bg-transparent hover:bg-foreground/5"
                   onPress={() => {
                     setState("idle");
-                    clearStoredWorkspace();
                     setWorkspace(null);
                   }}
                 >

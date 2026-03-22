@@ -12,6 +12,7 @@ pub mod audit_emitter;
 pub mod browser_controller;
 pub mod cloud_bridge;
 pub mod command_poller;
+pub mod command_poller_agent;
 pub mod document;
 pub mod embedder;
 pub mod default_agent_spec;

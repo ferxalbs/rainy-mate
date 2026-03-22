@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { UpdateChecker } from "./components/updater/UpdateChecker";
 import { TahoeLayout, AIDocumentPanel, AIResearchPanel } from "./components";
 import { SettingsPage } from "./components/settings";
@@ -29,13 +29,16 @@ function App() {
     refreshFolders,
   } = useFolderManager();
 
-  // Convert UserFolder to Folder type for sidebar
-  const folders: Folder[] = userFolders.map((uf) => ({
-    id: uf.id,
-    path: uf.path,
-    name: uf.name,
-    accessType: uf.accessType,
-  }));
+  // Convert UserFolder to Folder type for sidebar — memoized to stabilize effect dependencies
+  const folders: Folder[] = useMemo(
+    () => userFolders.map((uf) => ({
+      id: uf.id,
+      path: uf.path,
+      name: uf.name,
+      accessType: uf.accessType,
+    })),
+    [userFolders],
+  );
 
   const [activeSection, setActiveSection] = useState("agent-chat");
   const [activeFolder, setActiveFolder] = useState<Folder | null>(null);

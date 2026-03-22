@@ -159,25 +159,27 @@ impl NeuralService {
     }
 
     pub async fn set_workspace_id(&self, workspace_id: String) {
-        let mut metadata = self.metadata.lock().await;
-        metadata.workspace_id = workspace_id;
-        // Reset node_id to force re-registration with new workspace
-        metadata.node_id = None;
+        // Clone values needed for I/O, then drop the lock so keychain operations
+        // do not block other metadata reads (heartbeat, registration, etc.)
+        let (platform_key, user_api_key) = {
+            let mut metadata = self.metadata.lock().await;
+            metadata.workspace_id = workspace_id.clone();
+            // Reset node_id to force re-registration with new workspace
+            metadata.node_id = None;
+            (metadata.platform_key.clone(), metadata.user_api_key.clone())
+        };
 
-        // Persist workspace id for auto-reconnect across restarts
+        // Keychain I/O outside the lock
         let keychain = crate::ai::keychain::KeychainManager::new();
-        if let Err(e) = keychain.store_key("neural_workspace_id", &metadata.workspace_id) {
+        if let Err(e) = keychain.store_key("neural_workspace_id", &workspace_id) {
             eprintln!("Failed to persist neural workspace id: {}", e);
         }
 
-        if let (Some(platform_key), Some(user_api_key)) = (
-            metadata.platform_key.clone(),
-            metadata.user_api_key.clone(),
-        ) {
+        if let (Some(platform_key), Some(user_api_key)) = (platform_key, user_api_key) {
             let bundle = ATMOwnerAuthBundle {
                 platform_key,
                 user_api_key,
-                workspace_id: metadata.workspace_id.clone(),
+                workspace_id: workspace_id.clone(),
             };
             if let Err(e) = save_owner_auth_bundle(&bundle) {
                 eprintln!("Failed to persist ATM owner auth bundle: {}", e);
@@ -284,6 +286,17 @@ impl NeuralService {
         metadata.node_id.is_some()
     }
 
+    /// Retrieve the persisted workspace ID (for frontend to skip localStorage).
+    pub async fn get_workspace_id(&self) -> Option<String> {
+        let metadata = self.metadata.lock().await;
+        let id = metadata.workspace_id.trim().to_string();
+        if id.is_empty() || id == "pending-pairing" {
+            None
+        } else {
+            Some(id)
+        }
+    }
+
     /// Retrieve credentials (for session persistence in UI)
     pub async fn get_credentials(&self) -> Option<(String, String)> {
         let metadata = self.metadata.lock().await;
@@ -342,8 +355,8 @@ impl NeuralService {
                 "[NeuralService] Auth-context workspace mismatch. local={} server={}. Updating local workspace and clearing node_id.",
                 local_workspace_id, data.workspace_id
             );
+            // set_workspace_id already clears node_id — no need to call clear_node_id again
             self.set_workspace_id(data.workspace_id.clone()).await;
-            self.clear_node_id().await;
             return Ok(Some(data.workspace_id));
         }
 

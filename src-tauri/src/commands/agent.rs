@@ -898,7 +898,7 @@ pub async fn run_agent_workflow(
         .unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
 
     // Register with SessionCoordinator so this local run appears in list_active_sessions
-    session_coordinator.register_local(chat_id.clone(), run_id.clone());
+    session_coordinator.register_local(chat_id.clone(), run_id.clone(), workspace_path.clone());
 
     // 0. Ensure Chat Session Exists (Persist Metadata)
     let _ = agent_manager

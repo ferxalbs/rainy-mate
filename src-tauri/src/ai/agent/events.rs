@@ -102,6 +102,8 @@ pub enum AgentEvent {
         id: String,
         result: String,
     },
+    // @RESERVED: runtime error path not yet emitted but match arms handle it
+    #[allow(dead_code)]
     Error(String),
     MemoryStored(String),
     SupervisorPlanCreated(SupervisorPlan),

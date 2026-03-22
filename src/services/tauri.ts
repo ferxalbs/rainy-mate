@@ -2170,6 +2170,45 @@ export async function executeSkill(
   });
 }
 
+export interface ParsedToolCall {
+  skill: string;
+  method: string;
+  params: Record<string, any>;
+}
+
+export async function parseToolCalls(
+  content: string,
+): Promise<ParsedToolCall[]> {
+  return invoke<ParsedToolCall[]>("parse_tool_calls", { content });
+}
+
+export interface ExecutePlanResult {
+  success: boolean;
+  summary: string;
+  executedCount: number;
+  error?: string;
+}
+
+export async function executePlanFromContent(
+  workspaceId: string,
+  content: string,
+  workspacePath?: string,
+): Promise<ExecutePlanResult> {
+  return invoke<ExecutePlanResult>("execute_plan_from_content", {
+    workspaceId,
+    content,
+    workspacePath,
+  });
+}
+
+export async function classifyNeuralError(error: string): Promise<string> {
+  return invoke<string>("classify_neural_error", { error });
+}
+
+export async function getNeuralWorkspaceId(): Promise<string | null> {
+  return invoke<string | null>("get_neural_workspace_id");
+}
+
 export interface InstalledSkillPermissionFs {
   guestPath: string;
   hostPath: string;

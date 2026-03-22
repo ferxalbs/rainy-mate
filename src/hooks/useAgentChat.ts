@@ -338,70 +338,6 @@ export function useAgentChat(
     mapPersistedRoleToUiType,
   ]);
 
-  // Helper to parse tool calls from content
-  const parseToolCalls = useCallback((content: string) => {
-    const toolCalls: Array<{
-      skill: string;
-      method: string;
-      params: Record<string, any>;
-    }> = [];
-
-    // Pattern: write_file("path", "content")
-    const writeFileRegex =
-      /write_file\s*\(\s*["']([^"']+)["']\s*,\s*["']?([^)]*?)["']?\s*\)/gi;
-    let match;
-    while ((match = writeFileRegex.exec(content)) !== null) {
-      toolCalls.push({
-        skill: "filesystem",
-        method: "write_file",
-        params: { path: match[1], content: match[2] || "" },
-      });
-    }
-
-    // Pattern: append_file("path", "content")
-    const appendFileRegex =
-      /append_file\s*\(\s*["']([^"']+)["']\s*,\s*["']?([^)]*?)["']?\s*\)/gi;
-    while ((match = appendFileRegex.exec(content)) !== null) {
-      toolCalls.push({
-        skill: "filesystem",
-        method: "append_file",
-        params: { path: match[1], content: match[2] || "" },
-      });
-    }
-
-    // Pattern: read_file("path")
-    const readFileRegex = /read_file\s*\(\s*["']([^"']+)["']\s*\)/gi;
-    while ((match = readFileRegex.exec(content)) !== null) {
-      toolCalls.push({
-        skill: "filesystem",
-        method: "read_file",
-        params: { path: match[1] },
-      });
-    }
-
-    // Pattern: list_files("path")
-    const listFilesRegex = /list_files\s*\(\s*["']([^"']+)["']\s*\)/gi;
-    while ((match = listFilesRegex.exec(content)) !== null) {
-      toolCalls.push({
-        skill: "filesystem",
-        method: "list_files",
-        params: { path: match[1] },
-      });
-    }
-
-    // Pattern: search_files("query", "path")
-    const searchFilesRegex =
-      /search_files\s*\(\s*["']([^"']+)["']\s*(?:,\s*["']([^"']+)["'])?\s*\)/gi;
-    while ((match = searchFilesRegex.exec(content)) !== null) {
-      toolCalls.push({
-        skill: "filesystem",
-        method: "search_files",
-        params: { query: match[1], path: match[2] },
-      });
-    }
-
-    return toolCalls;
-  }, []);
 
   const streamChat = useCallback(
     async (instruction: string, modelId: string, hiddenContext?: string) => {
@@ -455,18 +391,11 @@ export function useAgentChat(
           (event) => {
             if (event.event === "chunk") {
               accumulatedContent += event.data.content;
-              const detectedTools = parseToolCalls(accumulatedContent);
 
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === agentMsgId
-                    ? {
-                        ...m,
-                        content: accumulatedContent,
-                        isLoading: false,
-                        toolCalls:
-                          detectedTools.length > 0 ? detectedTools : undefined,
-                      }
+                    ? { ...m, content: accumulatedContent, isLoading: false }
                     : m,
                 ),
               );
@@ -483,6 +412,20 @@ export function useAgentChat(
                 ),
               );
             } else if (event.event === "finished") {
+              // Parse tool calls from the completed response via Rust.
+              void tauri.parseToolCalls(accumulatedContent).then((detected) => {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === agentMsgId
+                      ? {
+                          ...m,
+                          isLoading: false,
+                          toolCalls: detected.length > 0 ? detected : undefined,
+                        }
+                      : m,
+                  ),
+                );
+              });
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === agentMsgId ? { ...m, isLoading: false } : m,
@@ -519,7 +462,7 @@ export function useAgentChat(
         );
       }
     },
-    [streamWithRouting, messages, parseToolCalls],
+    [streamWithRouting, messages],
   );
 
   const sendInstruction = useCallback(
@@ -534,20 +477,14 @@ export function useAgentChat(
 
       setIsPlanning(true);
 
-      let targetModel = modelId;
-      if (targetModel.startsWith("rainy:")) {
-        targetModel = targetModel.replace("rainy:", "");
-      } else if (targetModel.startsWith("cowork:")) {
-        targetModel = targetModel.replace("cowork:", "");
-      }
-
+      // Model ID prefix stripping (rainy:/cowork:) is handled in Rust's create_task.
       const targetProvider = "rainyapi";
 
       try {
         const task = await createTask(
           instruction,
           targetProvider as any,
-          targetModel,
+          modelId,
           workspacePath,
         );
 
@@ -618,89 +555,56 @@ export function useAgentChat(
     async (workspaceId: string, _modelId: string) => {
       if (messages.length === 0) return;
 
-      setIsExecuting(true);
-
       const lastAgentMessage = [...messages]
         .reverse()
         .find((m) => m.type === "agent" && !m.isLoading);
 
-      if (!lastAgentMessage) {
-        setIsExecuting(false);
-        return;
-      }
+      if (!lastAgentMessage) return;
 
-      const toolCalls = parseToolCalls(lastAgentMessage.content);
-
-      if (toolCalls.length === 0) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            type: "agent",
-            content:
-              "❌ Could not find any executable operations in the plan. Please ask the AI to use write_file, read_file, or list_files commands.",
-            isLoading: false,
-            timestamp: new Date(),
-          },
-        ]);
-        setIsExecuting(false);
-        return;
-      }
-
-      // Re-use executeToolCalls logic via direct execution since we are in a hook
+      setIsExecuting(true);
       const statusMsgId = crypto.randomUUID();
       setMessages((prev) => [
         ...prev,
         {
           id: statusMsgId,
           type: "agent",
-          content: `Executing ${toolCalls.length} operation(s)...`,
+          content: "Parsing and executing plan...",
           isLoading: true,
           timestamp: new Date(),
         },
       ]);
 
       try {
-        const results = [];
-        for (const call of toolCalls) {
+        const result = await tauri.executePlanFromContent(
+          workspaceId,
+          lastAgentMessage.content,
+        );
+
+        if (!result.success && !result.summary) {
+          // No operations found
           setMessages((prev) =>
             prev.map((m) =>
               m.id === statusMsgId
                 ? {
                     ...m,
-                    content: `⏳ ${call.method}("${call.params.path}")...`,
+                    content:
+                      "❌ Could not find any executable operations in the plan. Please ask the AI to use write_file, read_file, or list_files commands.",
+                    isLoading: false,
                   }
                 : m,
             ),
           );
-
-          const result = await tauri.executeSkill(
-            workspaceId,
-            call.skill,
-            call.method,
-            call.params,
-            workspaceId,
-          );
-
-          results.push({ call, result });
-
-          if (!result.success) {
-            throw new Error(
-              `Failed: ${call.method}("${call.params.path}"): ${result.error}`,
-            );
-          }
+          return;
         }
-
-        const successDetails = results
-          .map((r) => `✅ ${r.call.method}("${r.call.params.path}")`)
-          .join("\n");
 
         setMessages((prev) =>
           prev.map((m) =>
             m.id === statusMsgId
               ? {
                   ...m,
-                  content: `**Execution Complete**\n\n${successDetails}`,
+                  content: result.success
+                    ? result.summary
+                    : `❌ ${result.error ?? "Execution failed"}`,
                   isLoading: false,
                 }
               : m,
@@ -712,7 +616,7 @@ export function useAgentChat(
             m.id === statusMsgId
               ? {
                   ...m,
-                  content: `❌ ${err.message}`,
+                  content: `❌ ${err.message ?? String(err)}`,
                   isLoading: false,
                 }
               : m,
@@ -722,7 +626,7 @@ export function useAgentChat(
         setIsExecuting(false);
       }
     },
-    [messages, parseToolCalls],
+    [messages],
   );
 
   const executeToolCalls = useCallback(

@@ -331,3 +331,183 @@ pub async fn refresh_prompt_skill_snapshot(
         .map(std::path::Path::new);
     service.refresh_binding(workspace_path, std::path::Path::new(&req.source_path))
 }
+
+// ===== Plan Execution Commands =====
+
+/// A tool call parsed from agent response content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedToolCall {
+    pub skill: String,
+    pub method: String,
+    pub params: serde_json::Value,
+}
+
+/// Parse filesystem tool calls from agent response content.
+/// Extracts write_file / append_file / read_file / list_files / search_files
+/// call syntax that the agent may include in its responses.
+#[tauri::command]
+pub async fn parse_tool_calls(content: String) -> Result<Vec<ParsedToolCall>, String> {
+    Ok(parse_tool_calls_from_content(&content))
+}
+
+/// Internal helper — parse tool calls without async overhead, reusable from
+/// `execute_plan_from_content`.
+pub fn parse_tool_calls_from_content(content: &str) -> Vec<ParsedToolCall> {
+    use regex::Regex;
+    let mut calls: Vec<ParsedToolCall> = Vec::new();
+
+    let patterns: &[(&str, &str, &str)] = &[
+        // (method, skill, regex)
+        (
+            "write_file",
+            "filesystem",
+            r#"write_file\s*\(\s*["']([^"']+)["']\s*,\s*["']?([^)]*?)["']?\s*\)"#,
+        ),
+        (
+            "append_file",
+            "filesystem",
+            r#"append_file\s*\(\s*["']([^"']+)["']\s*,\s*["']?([^)]*?)["']?\s*\)"#,
+        ),
+        (
+            "read_file",
+            "filesystem",
+            r#"read_file\s*\(\s*["']([^"']+)["']\s*\)"#,
+        ),
+        (
+            "list_files",
+            "filesystem",
+            r#"list_files\s*\(\s*["']([^"']+)["']\s*\)"#,
+        ),
+    ];
+
+    for &(method, skill, pattern) in patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            for cap in re.captures_iter(content) {
+                let params = if method == "write_file" || method == "append_file" {
+                    serde_json::json!({ "path": cap[1].to_string(), "content": cap[2].to_string() })
+                } else {
+                    serde_json::json!({ "path": cap[1].to_string() })
+                };
+                calls.push(ParsedToolCall {
+                    skill: skill.to_string(),
+                    method: method.to_string(),
+                    params,
+                });
+            }
+        }
+    }
+
+    // search_files("query", optional "path")
+    if let Ok(re) = Regex::new(
+        r#"search_files\s*\(\s*["']([^"']+)["']\s*(?:,\s*["']([^"']+)["'])?\s*\)"#,
+    ) {
+        for cap in re.captures_iter(content) {
+            let path = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+            calls.push(ParsedToolCall {
+                skill: "filesystem".to_string(),
+                method: "search_files".to_string(),
+                params: serde_json::json!({ "query": cap[1].to_string(), "path": path }),
+            });
+        }
+    }
+
+    calls
+}
+
+/// Result of executing a plan extracted from agent response content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutePlanResult {
+    pub success: bool,
+    pub summary: String,
+    pub executed_count: usize,
+    pub error: Option<String>,
+}
+
+/// Parse and execute all filesystem tool calls found in agent response content.
+/// Returns a structured result with per-step details — keeps orchestration logic in Rust.
+#[tauri::command]
+pub async fn execute_plan_from_content(
+    skill_executor: State<'_, Arc<SkillExecutor>>,
+    workspace_id: String,
+    content: String,
+    workspace_path: Option<String>,
+) -> Result<ExecutePlanResult, String> {
+    let calls = parse_tool_calls_from_content(&content);
+
+    if calls.is_empty() {
+        return Ok(ExecutePlanResult {
+            success: false,
+            summary: String::new(),
+            executed_count: 0,
+            error: Some(
+                "No executable operations found in the plan.".to_string(),
+            ),
+        });
+    }
+
+    let allowed_paths = workspace_path
+        .map(|p| vec![p])
+        .unwrap_or_default();
+
+    let mut completed: Vec<String> = Vec::new();
+
+    for call in &calls {
+        let command = QueuedCommand {
+            id: Uuid::new_v4().to_string(),
+            workspace_id: Some(workspace_id.clone()),
+            desktop_node_id: Some("desktop-local".to_string()),
+            intent: format!("{}.{}", call.skill, call.method),
+            payload: RainyPayload {
+                skill: Some(call.skill.clone()),
+                method: Some(call.method.clone()),
+                params: Some(call.params.clone()),
+                content: None,
+                allowed_paths: allowed_paths.clone(),
+                blocked_paths: vec![],
+                allowed_domains: vec![],
+                blocked_domains: vec![],
+                tool_access_policy: None,
+                tool_access_policy_version: None,
+                tool_access_policy_hash: None,
+                ..Default::default()
+            },
+            priority: CommandPriority::Normal,
+            status: CommandStatus::Pending,
+            airlock_level: AirlockLevel::Safe,
+            approval_timeout_secs: None,
+            approved_by: Some("user".to_string()),
+            result: None,
+            created_at: Some(chrono::Utc::now().timestamp()),
+            started_at: Some(chrono::Utc::now().timestamp()),
+            completed_at: None,
+        };
+
+        let result = skill_executor.execute(&command).await;
+        let path = call.params.get("path").and_then(|v| v.as_str()).unwrap_or("");
+
+        if !result.success {
+            return Ok(ExecutePlanResult {
+                success: false,
+                summary: completed.join("\n"),
+                executed_count: completed.len(),
+                error: Some(format!(
+                    "Failed: {}(\"{}\"): {}",
+                    call.method,
+                    path,
+                    result.error.as_deref().unwrap_or("unknown error")
+                )),
+            });
+        }
+
+        completed.push(format!("✅ {}(\"{}\")", call.method, path));
+    }
+
+    Ok(ExecutePlanResult {
+        success: true,
+        summary: format!("**Execution Complete**\n\n{}", completed.join("\n")),
+        executed_count: completed.len(),
+        error: None,
+    })
+}

@@ -84,32 +84,45 @@ export function useChatSessions({
       .catch(() => {/* non-critical */});
   }, []);
 
-  // Listen for remote sessions started/finished
+  // Listen for remote sessions started/finished.
+  // Uses a cancelled flag + deferred-store pattern to avoid a race where the
+  // cleanup function runs before the listen() Promise resolves, which would
+  // leave the listener alive indefinitely.
   useEffect(() => {
-    let unlisten1: (() => void) | undefined;
-    let unlisten2: (() => void) | undefined;
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
 
     void listen<{ chatId: string; workspaceId: string }>("session://started", (event) => {
+      if (cancelled) return;
       const { chatId, workspaceId } = event.payload;
       setActiveRunChatIds((prev) => new Set([...prev, chatId]));
       void refreshWorkspaceSessions(workspaceId);
-    }).then((fn) => { unlisten1 = fn; });
+    }).then((fn) => {
+      if (cancelled) fn(); else unlisteners.push(fn);
+    });
 
-    void listen<{ chatId: string }>("session://finished", (event) => {
-      const { chatId } = event.payload;
+    void listen<{ chatId: string; workspaceId?: string }>("session://finished", (event) => {
+      if (cancelled) return;
+      const { chatId, workspaceId } = event.payload;
       setActiveRunChatIds((prev) => {
         const next = new Set(prev);
         next.delete(chatId);
         return next;
       });
-      void refreshWorkspaceSessions(activeWorkspaceId);
-    }).then((fn) => { unlisten2 = fn; });
+      // Use workspaceId from the event payload (set by Rust since v0.6.0).
+      // Avoids a stale closure over activeWorkspaceId captured at effect setup.
+      if (workspaceId) {
+        void refreshWorkspaceSessions(workspaceId);
+      }
+    }).then((fn) => {
+      if (cancelled) fn(); else unlisteners.push(fn);
+    });
 
     return () => {
-      unlisten1?.();
-      unlisten2?.();
+      cancelled = true;
+      unlisteners.forEach((fn) => fn());
     };
-  }, [activeWorkspaceId, refreshWorkspaceSessions]);
+  }, [refreshWorkspaceSessions]);
 
   const createNewChat = useCallback(async (workspaceId = activeWorkspaceId) => {
     if (!workspaceId) return null;

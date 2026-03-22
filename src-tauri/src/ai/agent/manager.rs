@@ -3,7 +3,6 @@ use crate::db::Database;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use std::sync::Arc;
-use tauri::State;
 
 /// @deprecated — kept only for backward-compatible migration of the legacy single-scope chat.
 pub const DEFAULT_LONG_CHAT_SCOPE_ID: &str = "global:long_chat:v1";
@@ -466,16 +465,11 @@ impl AgentManager {
         let chat_id = uuid::Uuid::new_v4().to_string();
         let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
 
-        // Ensure default agent exists
+        // Ensure default agent exists — DO NOTHING on conflict to preserve user customizations
         let default_spec_json = build_default_agent_spec_json(default_agent_id, "Rainy Agent");
         sqlx::query(
             "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(id) DO UPDATE SET \
-               name=excluded.name, \
-               description=excluded.description, \
-               soul=excluded.soul, \
-               spec_json=excluded.spec_json, \
-               version=excluded.version",
+             ON CONFLICT(id) DO NOTHING",
         )
         .bind(default_agent_id)
         .bind("Rainy Agent")
@@ -536,23 +530,25 @@ impl AgentManager {
     }
 
     pub async fn delete_chat_session(&self, chat_id: &str) -> Result<(), sqlx::Error> {
-        // Cascade: messages, compaction, telemetry, then chat itself
+        // Cascade inside a transaction so a mid-deletion crash leaves no orphaned rows
+        let mut tx = self.db.begin().await?;
         sqlx::query("DELETE FROM messages WHERE chat_id = ?")
             .bind(chat_id)
-            .execute(&*self.db)
+            .execute(&mut *tx)
             .await?;
         sqlx::query("DELETE FROM chat_compaction_state WHERE chat_id = ?")
             .bind(chat_id)
-            .execute(&*self.db)
+            .execute(&mut *tx)
             .await?;
         sqlx::query("DELETE FROM chat_runtime_telemetry WHERE chat_id = ?")
             .bind(chat_id)
-            .execute(&*self.db)
+            .execute(&mut *tx)
             .await?;
         sqlx::query("DELETE FROM chats WHERE id = ?")
             .bind(chat_id)
-            .execute(&*self.db)
+            .execute(&mut *tx)
             .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -727,158 +723,3 @@ impl AgentManager {
     }
 }
 
-// Commands to be exposed to Frontend
-#[tauri::command]
-pub async fn save_agent_to_db(
-    state: State<'_, AgentManager>,
-    id: String,
-    name: String,
-    description: Option<String>,
-    soul: Option<String>,
-) -> Result<String, String> {
-    use crate::ai::specs::skills::AgentSkills;
-    use crate::ai::specs::soul::AgentSoul;
-
-    let spec = AgentSpec {
-        id,
-        version: "3.0.0".to_string(),
-        soul: AgentSoul {
-            name,
-            description: description.unwrap_or_default(),
-            soul_content: soul.unwrap_or_default(),
-            ..Default::default()
-        },
-        skills: AgentSkills::default(),
-        airlock: Default::default(),
-        memory_config: Default::default(),
-        connectors: Default::default(),
-        runtime: Default::default(),
-        model: None,
-        temperature: None,
-        max_tokens: None,
-        provider: None,
-        signature: None,
-    };
-
-    state.create_agent(&spec).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn load_agents_from_db(
-    state: State<'_, AgentManager>,
-) -> Result<Vec<AgentEntity>, String> {
-    state.list_agents().await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn save_chat_message(
-    state: State<'_, AgentManager>,
-    chat_id: String,
-    role: String,
-    content: String,
-) -> Result<String, String> {
-    state
-        .save_message(&chat_id, &role, &content)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn get_chat_history(
-    state: State<'_, AgentManager>,
-    chat_id: String,
-) -> Result<Vec<(String, String, String)>, String> {
-    state.get_history(&chat_id).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn clear_chat_history(
-    state: State<'_, AgentManager>,
-    chat_id: String,
-) -> Result<(), String> {
-    state
-        .clear_history(&chat_id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn compact_session_cmd(
-    state: State<'_, AgentManager>,
-    chat_id: String,
-    summary_content: String,
-    keep_recent_count: usize,
-) -> Result<(), String> {
-    state
-        .compact_session(&chat_id, &summary_content, keep_recent_count)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn get_chat_compaction_state(
-    state: State<'_, AgentManager>,
-    chat_scope_id: String,
-) -> Result<Option<ChatCompactionStateDto>, String> {
-    state
-        .get_latest_chat_compaction(&chat_scope_id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn get_chat_runtime_telemetry(
-    state: State<'_, AgentManager>,
-    chat_scope_id: String,
-) -> Result<Option<ChatRuntimeTelemetryDto>, String> {
-    state
-        .get_chat_runtime_telemetry(&chat_scope_id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn get_default_chat_scope() -> Result<String, String> {
-    Ok(DEFAULT_LONG_CHAT_SCOPE_ID.to_string())
-}
-
-#[tauri::command]
-pub async fn get_or_create_workspace_chat(
-    state: State<'_, AgentManager>,
-    workspace_id: String,
-) -> Result<String, String> {
-    let ws = if workspace_id.trim().is_empty() {
-        DEFAULT_WORKSPACE_ID.to_string()
-    } else {
-        workspace_id
-    };
-
-    // Try to find the latest chat for this workspace
-    if let Some(chat) = state
-        .get_latest_workspace_chat(&ws)
-        .await
-        .map_err(|e| e.to_string())?
-    {
-        return Ok(chat.id);
-    }
-
-    // No existing chat — create one
-    let chat = state
-        .create_chat_session(&ws)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(chat.id)
-}
-
-#[tauri::command]
-pub async fn get_chat_history_window(
-    state: State<'_, AgentManager>,
-    chat_scope_id: String,
-    cursor_rowid: Option<i64>,
-    limit: Option<usize>,
-) -> Result<ChatHistoryWindowDto, String> {
-    state
-        .get_history_window(&chat_scope_id, cursor_rowid, limit.unwrap_or(100))
-        .await
-        .map_err(|e| e.to_string())
-}

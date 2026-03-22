@@ -26,9 +26,9 @@ pub enum SessionSource {
 
 struct ActiveSession {
     source: SessionSource,
-    #[allow(dead_code)]
     started_at: Instant,
     run_id: String,
+    workspace_id: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -38,6 +38,7 @@ pub struct ActiveSessionInfo {
     pub run_id: String,
     pub source: String,
     pub connector_id: Option<String>,
+    pub elapsed_secs: u64,
 }
 
 pub struct SessionCoordinator {
@@ -88,17 +89,26 @@ impl SessionCoordinator {
             .await
             .map_err(|e| format!("Failed to save user message: {}", e))?;
 
-        self.active_sessions.insert(
-            chat_id.clone(),
-            ActiveSession {
-                source: SessionSource::Remote {
-                    connector_id: connector_id.to_string(),
-                    session_peer: session_peer.to_string(),
+        // Guard against duplicate starts (e.g. rapid retries from the same Telegram message)
+        if self.active_sessions.contains_key(&chat_id) {
+            tracing::warn!(
+                "[SessionCoordinator] Session {} already active — ignoring duplicate start",
+                chat_id
+            );
+        } else {
+            self.active_sessions.insert(
+                chat_id.clone(),
+                ActiveSession {
+                    source: SessionSource::Remote {
+                        connector_id: connector_id.to_string(),
+                        session_peer: session_peer.to_string(),
+                    },
+                    started_at: Instant::now(),
+                    run_id: run_id.clone(),
+                    workspace_id: workspace_id.to_string(),
                 },
-                started_at: Instant::now(),
-                run_id: run_id.clone(),
-            },
-        );
+            );
+        }
 
         let _ = self.app_handle.emit(
             "session://started",
@@ -154,18 +164,18 @@ impl SessionCoordinator {
             }
         }
 
-        let run_id = self
+        let (run_id, workspace_id) = self
             .active_sessions
-            .get(chat_id)
-            .map(|e| e.run_id.clone())
+            .remove(chat_id)
+            .map(|(_, s)| (s.run_id, s.workspace_id))
             .unwrap_or_default();
-        self.active_sessions.remove(chat_id);
 
         let _ = self.app_handle.emit(
             "session://finished",
             serde_json::json!({
                 "chatId": chat_id,
                 "runId": run_id,
+                "workspaceId": workspace_id,
             }),
         );
 
@@ -173,18 +183,39 @@ impl SessionCoordinator {
     }
 
     /// Register a local session so it appears in `list_active_sessions`.
-    pub fn register_local(&self, chat_id: String, run_id: String) {
+    pub fn register_local(&self, chat_id: String, run_id: String, workspace_id: String) {
         self.active_sessions.insert(
             chat_id,
             ActiveSession {
                 source: SessionSource::Local,
                 started_at: Instant::now(),
                 run_id,
+                workspace_id,
             },
         );
     }
 
-    /// Unregister a session (local or remote).
+    /// Unregister a session (local or remote) and emit `session://finished` so the
+    /// frontend clears its active-run indicator. Use this on error paths where
+    /// `finish_remote_session` is not called.
+    pub fn abort_session(&self, chat_id: &str) {
+        let (run_id, workspace_id) = self
+            .active_sessions
+            .remove(chat_id)
+            .map(|(_, s)| (s.run_id, s.workspace_id))
+            .unwrap_or_default();
+        let _ = self.app_handle.emit(
+            "session://finished",
+            serde_json::json!({
+                "chatId": chat_id,
+                "runId": run_id,
+                "workspaceId": workspace_id,
+            }),
+        );
+    }
+
+    /// Unregister a session without emitting an event. Use only when the
+    /// session was never exposed to the frontend (e.g., failed before start).
     pub fn unregister(&self, chat_id: &str) {
         self.active_sessions.remove(chat_id);
     }
@@ -205,6 +236,7 @@ impl SessionCoordinator {
                     run_id: entry.value().run_id.clone(),
                     source,
                     connector_id,
+                    elapsed_secs: entry.value().started_at.elapsed().as_secs(),
                 }
             })
             .collect()

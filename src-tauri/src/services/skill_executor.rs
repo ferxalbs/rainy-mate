@@ -653,7 +653,7 @@ mod policy_tests {
 #[cfg(test)]
 mod tests {
     use super::SkillExecutor;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     #[test]
     fn shell_allowlist_matches_agents_policy() {

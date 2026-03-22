@@ -7,7 +7,7 @@ import {
   Smartphone,
   Check,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ensureDefaultAtmAgent,
@@ -33,6 +33,14 @@ export function NeuralDashboard({
 }: Omit<NeuralDashboardProps, "isHeadless" | "onToggleHeadless">) {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const pairingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Clear pending timeouts on unmount
+  useEffect(() => () => {
+    if (pairingTimeoutRef.current) clearTimeout(pairingTimeoutRef.current);
+    if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+  }, []);
 
   const handleGeneratePairingCode = async () => {
     try {
@@ -46,7 +54,8 @@ export function NeuralDashboard({
       const res = await generatePairingCode();
       if (res && res.code) {
         setPairingCode(res.code);
-        setTimeout(() => setPairingCode(null), 5 * 60 * 1000); // Expire in 5m locally
+        if (pairingTimeoutRef.current) clearTimeout(pairingTimeoutRef.current);
+        pairingTimeoutRef.current = setTimeout(() => setPairingCode(null), 5 * 60 * 1000);
       }
     } catch (err) {
       console.error("Failed to prepare remote access session:", err);
@@ -69,7 +78,8 @@ export function NeuralDashboard({
       await navigator.clipboard.writeText(pairingCode);
       setCopied(true);
       toast.success("Pairing code copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+      copiedTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     }
   };
 

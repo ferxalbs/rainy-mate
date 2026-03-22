@@ -8,7 +8,8 @@ pub mod db;
 mod models;
 mod services;
 
-use crate::ai::agent::manager::{self, AgentManager};
+use crate::ai::agent::chat_sessions;
+use crate::ai::agent::manager::AgentManager;
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::db::Database;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
@@ -103,6 +104,7 @@ pub fn run() {
         neural_service.clone(),
         Arc::new(atm_client.clone()),
         skill_executor.clone(),
+        settings_manager.clone(),
     ));
 
     // Initialize Socket Client (Thunderbolt)
@@ -382,6 +384,14 @@ pub fn run() {
 
             let session_coordinator_for_poller = session_coordinator.clone();
 
+            // Readiness signal: replaces fixed sleep timers in spawned tasks.
+            // Notified once all core services are registered below.
+            let services_ready = Arc::new(tokio::sync::Notify::new());
+            let services_ready_for_ws = services_ready.clone();
+
+            // Signal readiness immediately — all blocking init is done above this point
+            services_ready.notify_waiters();
+
             tauri::async_runtime::spawn(async move {
                 // Inject Airlock service
                 poller.set_airlock_service(airlock_for_poller).await;
@@ -398,8 +408,6 @@ pub fn run() {
                     )
                     .await;
 
-                // Wait a bit for app to stabilize
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 // If credentials exist (handled internally by poll_and_execute check), start loop
                 poller.start().await;
             });
@@ -407,8 +415,8 @@ pub fn run() {
             // Initialize Cloud Bridge (WebSocket)
             let app_handle_cb = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                // Wait for other services
-                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                // Wait for core services to be ready before connecting WebSocket
+                services_ready_for_ws.notified().await;
 
                 // Start Socket Client (Thunderbolt)
                 let socket = app_handle_cb.state::<SocketClient>().inner().clone();
@@ -661,12 +669,16 @@ pub fn run() {
             commands::get_neural_credentials_values,
             commands::clear_neural_credentials,
             commands::resume_neural_runtime,
+            commands::classify_neural_error,
+            commands::get_neural_workspace_id,
             // Airlock Commands (Security)
             commands::respond_to_airlock,
             commands::get_pending_airlock_approvals,
             commands::set_headless_mode,
             // Skill Commands (Direct Local Execution)
             commands::execute_skill,
+            commands::parse_tool_calls,
+            commands::execute_plan_from_content,
             commands::list_installed_skills,
             commands::list_prompt_skills,
             commands::install_local_skill,
@@ -704,17 +716,17 @@ pub fn run() {
             commands::list_agent_specs,
             commands::deploy_agent_spec,
             // Agent Persistence (Phase 3)
-            manager::save_agent_to_db,
-            manager::load_agents_from_db,
-            manager::save_chat_message,
-            manager::get_chat_history,
-            manager::get_chat_history_window,
-            manager::get_default_chat_scope,
-            manager::get_or_create_workspace_chat,
-            manager::get_chat_compaction_state,
-            manager::get_chat_runtime_telemetry,
-            manager::clear_chat_history,
-            manager::compact_session_cmd,
+            chat_sessions::save_agent_to_db,
+            chat_sessions::load_agents_from_db,
+            chat_sessions::save_chat_message,
+            chat_sessions::get_chat_history,
+            chat_sessions::get_chat_history_window,
+            chat_sessions::get_default_chat_scope,
+            chat_sessions::get_or_create_workspace_chat,
+            chat_sessions::get_chat_compaction_state,
+            chat_sessions::get_chat_runtime_telemetry,
+            chat_sessions::clear_chat_history,
+            chat_sessions::compact_session_cmd,
             crate::services::mcp_http::handle_mcp_request,
             commands::list_mcp_servers,
             commands::upsert_mcp_server,
