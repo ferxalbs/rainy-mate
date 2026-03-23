@@ -77,6 +77,11 @@ wasmtime-wasi = "41.0.3"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 anyhow = "1.0.102"
 cron = "0.12.0"
+printpdf = "0.9.1"
+rust_xlsxwriter = "0.79.4"
+calamine = "0.26.1"
+zip = "2.4.2"
+docx-rs = "0.4.18"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3.5.1"

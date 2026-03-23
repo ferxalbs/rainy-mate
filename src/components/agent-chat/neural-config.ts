@@ -84,6 +84,14 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   // Memory tools
   save_memory: "remembering",
   recall_memory: "remembering",
+
+  // IRONMILL — Document Generation (KINGFALL Phase 1)
+  pdf_create: "creating",
+  excel_write: "creating",
+  docx_create: "creating",
+  archive_create: "creating",
+  pdf_read: "observing",
+  excel_read: "observing",
 };
 
 /** Human-readable display names for raw tool function names */
@@ -120,6 +128,13 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   remove_installed_skill: "Removing Installed Skill",
   save_memory: "Saving to Memory",
   recall_memory: "Recalling Memory",
+  // IRONMILL — Document Generation (KINGFALL Phase 1)
+  pdf_create: "Generating PDF Document",
+  pdf_read: "Reading PDF Document",
+  excel_write: "Writing Spreadsheet",
+  excel_read: "Reading Spreadsheet",
+  docx_create: "Generating Word Document",
+  archive_create: "Bundling Archive",
 };
 
 /** Resolves a function name to a human-readable display name */

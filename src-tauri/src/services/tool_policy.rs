@@ -7,6 +7,8 @@ pub enum ToolSkill {
     Shell,
     Web,
     Memory,
+    /// IRONMILL — document generation and reading (KINGFALL Phase 1)
+    Documents,
 }
 
 impl ToolSkill {
@@ -17,6 +19,7 @@ impl ToolSkill {
             Self::Shell => "shell",
             Self::Web => "web",
             Self::Memory => "memory",
+            Self::Documents => "documents",
         }
     }
 }
@@ -110,6 +113,18 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
         },
         "save_memory" => ToolPolicy {
             skill: ToolSkill::Memory,
+            airlock_level: AirlockLevel::Sensitive,
+        },
+
+        // IRONMILL — Document tools (KINGFALL Phase 1)
+        // L0: Read-only document parsing
+        "pdf_read" | "excel_read" => ToolPolicy {
+            skill: ToolSkill::Documents,
+            airlock_level: AirlockLevel::Safe,
+        },
+        // L1: Document creation (writes new files, non-destructive)
+        "pdf_create" | "excel_write" | "docx_create" | "archive_create" => ToolPolicy {
+            skill: ToolSkill::Documents,
             airlock_level: AirlockLevel::Sensitive,
         },
 

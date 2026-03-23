@@ -265,3 +265,118 @@ pub struct RecallMemoryArgs {
     /// Maximum number of results to return (default 5, max 20)
     pub limit: Option<u64>,
 }
+
+// ── IRONMILL — Document Generation Args (KINGFALL Phase 1) ──────────────────
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct PdfSection {
+    /// Section heading (will be rendered as bold heading)
+    #[schemars(length(max = 200))]
+    pub heading: Option<String>,
+    /// Body text for this section
+    #[schemars(length(min = 1, max = 65535))]
+    pub body: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct PdfCreateArgs {
+    /// Output file name (e.g. "report.pdf"). Resolved inside the workspace.
+    #[schemars(length(min = 1, max = 255))]
+    pub filename: String,
+    /// Optional document title shown in metadata
+    #[schemars(length(max = 200))]
+    pub title: Option<String>,
+    /// Sections to include in the PDF
+    #[schemars(length(min = 1, max = 100))]
+    pub sections: Vec<PdfSection>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct PdfReadArgs {
+    /// Path to the PDF file to read
+    #[schemars(length(min = 1, max = 4096))]
+    pub path: String,
+    /// Maximum number of pages to extract (default: all, max: 200)
+    #[schemars(range(min = 1, max = 200))]
+    pub max_pages: Option<usize>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", tag = "type", content = "value")]
+pub enum ExcelCell {
+    /// Plain text value
+    Text(String),
+    /// Numeric value
+    Number(f64),
+    /// Boolean value
+    Bool(bool),
+    /// Excel formula (e.g. "=SUM(A1:A10)")
+    Formula(String),
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ExcelSheet {
+    /// Sheet tab name
+    #[schemars(length(min = 1, max = 31))]
+    pub name: String,
+    /// Header row (column labels)
+    #[schemars(length(max = 100), inner(length(min = 1, max = 255)))]
+    pub headers: Option<Vec<String>>,
+    /// Data rows — each row is a Vec of ExcelCell
+    #[schemars(length(max = 10000), inner(length(max = 100)))]
+    pub rows: Vec<Vec<ExcelCell>>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ExcelWriteArgs {
+    /// Output file name (e.g. "data.xlsx"). Resolved inside the workspace.
+    #[schemars(length(min = 1, max = 255))]
+    pub filename: String,
+    /// Sheets to write. At least one sheet is required.
+    #[schemars(length(min = 1, max = 20))]
+    pub sheets: Vec<ExcelSheet>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ExcelReadArgs {
+    /// Path to the .xlsx / .xls / .ods file to read
+    #[schemars(length(min = 1, max = 4096))]
+    pub path: String,
+    /// Maximum rows per sheet to return (default: 1000, max: 10000)
+    #[schemars(range(min = 1, max = 10000))]
+    pub max_rows: Option<usize>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct DocxParagraph {
+    /// Text content of this paragraph
+    #[schemars(length(min = 1, max = 32768))]
+    pub text: String,
+    /// Heading level: 1–6. Omit for normal body text.
+    #[schemars(range(min = 1, max = 6))]
+    pub heading_level: Option<u8>,
+    /// Bold text
+    pub bold: Option<bool>,
+    /// Italic text
+    pub italic: Option<bool>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct DocxCreateArgs {
+    /// Output file name (e.g. "document.docx"). Resolved inside the workspace.
+    #[schemars(length(min = 1, max = 255))]
+    pub filename: String,
+    /// Document paragraphs in order
+    #[schemars(length(min = 1, max = 200))]
+    pub paragraphs: Vec<DocxParagraph>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct ArchiveCreateArgs {
+    /// Output archive file name (e.g. "output.zip"). Resolved inside the workspace.
+    #[schemars(length(min = 1, max = 255))]
+    pub filename: String,
+    /// Absolute paths of files to include in the archive
+    #[schemars(length(min = 1, max = 100), inner(length(min = 1, max = 4096)))]
+    pub files: Vec<String>,
+}

@@ -5,6 +5,70 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-23 - PROJECT KINGFALL PHASE 1: IRONMILL — NATIVE DOCUMENT ENGINE
+
+### Added
+
+- **Native document generation engine** — Rainy MaTE now creates full-featured documents from scratch with zero external dependencies. This closes a significant capability gap versus cloud-only agents that can only read but not create documents.
+
+- **`pdf_create` tool** (Airlock L1 Sensitive) — generates structured multi-section PDF documents using `printpdf` (A4 portrait, built-in Helvetica/HelveticaBold fonts, automatic word-wrap, pagination, heading + body layout):
+  - Input: `title`, array of `{ heading?, body }` sections
+  - Output: absolute path of rendered `.pdf` file
+  - Registry: `skill_executor/registry.rs`; handler: `skill_executor/documents.rs`
+
+- **`pdf_read` tool** (Airlock L0 Safe) — extracts text from existing PDF files page-by-page using `pdf-extract` (previously available as a dependency, now exposed as an agent tool):
+  - Input: `path`, optional `max_pages` (default 200)
+  - Output: `{ page_count, pages: [{ page, text }] }`
+
+- **`excel_write` tool** (Airlock L1 Sensitive) — creates `.xlsx` spreadsheets with multiple sheets, typed cell values (`Text`, `Number`, `Bool`, `Formula`), bold headers, using `rust_xlsxwriter`:
+  - Input: `filename`, array of `{ name, headers?, rows: ExcelCell[][] }`
+
+- **`excel_read` tool** (Airlock L0 Safe) — reads `.xlsx` / `.xls` / `.ods` files via `calamine`, returning structured sheet data:
+  - Input: `path`, optional `max_rows` (default 1000, max 10 000)
+  - Output: `{ sheet_count, sheets: [{ name, row_count, rows }] }`
+
+- **`docx_create` tool** (Airlock L1 Sensitive) — creates Word `.docx` documents with paragraphs, headings (H1–H6), bold, italic via `docx-rs`:
+  - Input: `filename`, array of `{ text, heading_level?, bold?, italic? }`
+
+- **`archive_create` tool** (Airlock L1 Sensitive) — bundles multiple files into a `.zip` archive using Deflate compression (`zip` crate):
+  - Input: `filename`, array of absolute file paths
+
+- **`ToolSkill::Documents` variant** added to `tool_policy.rs` — all 6 document tools have explicit airlock policy entries; enforced by existing `every_registered_tool_has_explicit_policy_entry` test
+
+- **`skill_executor/documents/`** — IRONMILL document domain now lives in a split Rust module tree (`mod.rs`, `pdf.rs`, `excel.rs`, `docx.rs`, `archive.rs`, `limits.rs`) instead of a single monolith; blocking document work remains isolated via `tokio::task::spawn_blocking`
+
+- **IRONMILL neural state mappings** in `neural-config.ts`:
+  - Create tools (`pdf_create`, `excel_write`, `docx_create`, `archive_create`) → `"creating"` state
+  - Read tools (`pdf_read`, `excel_read`) → `"observing"` state
+  - Human-readable tool names added to `TOOL_DISPLAY_NAMES`
+
+### Changed
+
+- **IRONMILL schemas hardened in Rust** — `src-tauri/src/services/skill_executor/args.rs` now exposes real JSON-schema limits for filenames, paths, section counts, sheet counts, row caps, paragraph caps, heading ranges, and archive file counts so the tool contract matches the backend invariants
+
+- **Document tool descriptions now advertise bounded behavior** — `src-tauri/src/services/skill_executor/registry.rs` descriptions were tightened to reflect workspace-scoped outputs and hard caps instead of generic capability text
+
+- **Centralized IRONMILL limits + safety guards** — `src-tauri/src/services/skill_executor/documents/limits.rs` now owns extension enforcement, row/page clamping, oversized-cell rejection, duplicate archive entry rejection, and directory rejection for ZIP inputs
+
+### Dependencies Added (Cargo)
+
+```
+printpdf = "0.7"           # native PDF generation
+rust_xlsxwriter = "0.79"   # Excel .xlsx writer
+docx-rs = "0.4"            # Word .docx builder
+zip = "2"                  # ZIP archive creation (with Deflate)
+calamine = "0.26"          # Excel/ODS reader (dates feature enabled)
+```
+
+### Validation
+
+- ✅ `cargo check -q` — clean (0 errors)
+- ✅ `cargo test -q every_registered_tool_has_explicit_policy_entry --lib` — 1 passed
+- ✅ `cargo test -q documents --lib` — 13 passed (format handlers + IRONMILL limits/safety boundary tests)
+- ✅ `pnpm exec tsc --noEmit` — clean (0 errors)
+
+---
+
 ## [0.6.0] - 2026-03-21 - PARALLEL MULTI-SESSION AGENT SYSTEM & PRODUCTION SESSION SYSTEM
 
 ### Added

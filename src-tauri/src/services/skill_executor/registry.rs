@@ -167,6 +167,37 @@ pub fn registered_tool_definitions() -> Vec<Tool> {
             "Search long-term memory with a natural language query and return the most relevant stored facts",
             schema_for!(RecallMemoryArgs),
         ),
+        // ── IRONMILL — Document Generation Tools (KINGFALL Phase 1) ──────────
+        tool(
+            "pdf_create",
+            "Create a PDF document natively with titled sections. Bounded to 100 sections and workspace-scoped output.",
+            schema_for!(PdfCreateArgs),
+        ),
+        tool(
+            "pdf_read",
+            "Extract text content from a PDF file, page by page. Returns structured page data with a 200-page hard cap.",
+            schema_for!(PdfReadArgs),
+        ),
+        tool(
+            "excel_write",
+            "Create an Excel (.xlsx) spreadsheet with typed cells. Bounded to 20 sheets, 10k rows per sheet, and workspace-scoped output.",
+            schema_for!(ExcelWriteArgs),
+        ),
+        tool(
+            "excel_read",
+            "Read an Excel (.xlsx / .xls / .ods) file and return structured rows with a 10k-row hard cap per sheet.",
+            schema_for!(ExcelReadArgs),
+        ),
+        tool(
+            "docx_create",
+            "Create a Word (.docx) document with paragraphs, headings, bold, and italic formatting. Bounded to 200 paragraphs.",
+            schema_for!(DocxCreateArgs),
+        ),
+        tool(
+            "archive_create",
+            "Bundle workspace-scoped files into a .zip archive. Rejects directories and duplicate archive entry names.",
+            schema_for!(ArchiveCreateArgs),
+        ),
     ]
 }
 

@@ -1,5 +1,6 @@
 mod args;
 mod browser;
+mod documents;
 mod filesystem;
 mod registry;
 mod shell;
@@ -262,6 +263,16 @@ impl SkillExecutor {
             "memory" => self
                 .execute_memory(&workspace_id, method, &payload.params)
                 .await,
+            "documents" => {
+                self.execute_documents(
+                    workspace_id,
+                    method,
+                    &payload.params,
+                    allowed_paths,
+                    blocked_paths,
+                )
+                .await
+            }
             _ => self
                 .execute_third_party_skill(
                     command,
