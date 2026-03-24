@@ -25,6 +25,11 @@ import {
 import { ThoughtDisplay } from "./ThoughtDisplay";
 import type { SpecialistRunState } from "../../types/agent";
 
+// ⚡ Bolt Performance Optimization:
+// Use a stable reference for fallback arrays to prevent React.memo()
+// from failing due to referential inequality on every render.
+const EMPTY_ARRAY: any[] = [];
+
 // Map step types to icons
 const stepIcons: Record<string, React.ElementType> = {
   createFile: FileCode,
@@ -82,7 +87,7 @@ function MessageBubbleComponent({
   };
 
   const traceStats = useMemo(() => {
-    const trace = message.trace || [];
+    const trace = message.trace || EMPTY_ARRAY;
     let toolCalls = 0;
     let retries = 0;
     let errors = 0;
@@ -241,7 +246,7 @@ function MessageBubbleComponent({
 
         {!isUser && (message.trace?.length || message.isLoading) ? (
           <TraceAccordion
-            trace={message.trace || []}
+            trace={message.trace || EMPTY_ARRAY}
             runState={message.runState}
             stats={traceStats}
           />
@@ -252,8 +257,8 @@ function MessageBubbleComponent({
             (message.specialists && message.specialists.length > 0)) && (
             <SupervisorRail
               summary={message.supervisorPlan?.summary}
-              steps={message.supervisorPlan?.steps || []}
-              specialists={message.specialists || []}
+              steps={message.supervisorPlan?.steps || EMPTY_ARRAY}
+              specialists={message.specialists || EMPTY_ARRAY}
             />
           )}
 
@@ -330,7 +335,10 @@ export const MessageBubble = React.memo(
 // Re-export with a name hint for the parent to avoid confusion
 export { MessageBubble as MemoizedMessageBubble };
 
-function SupervisorRail({
+// ⚡ Bolt Performance Optimization:
+// Wrapped complex child components in React.memo() to prevent unnecessary
+// re-renders on every token stream update from the parent MessageBubble.
+const SupervisorRail = React.memo(function SupervisorRail({
   summary,
   steps,
   specialists,
@@ -443,9 +451,9 @@ function SupervisorRail({
       )}
     </div>
   );
-}
+});
 
-function TraceAccordion({
+const TraceAccordion = React.memo(function TraceAccordion({
   trace,
   runState,
   stats,
@@ -546,9 +554,9 @@ function TraceAccordion({
       </div>
     </details>
   );
-}
+});
 
-function PlanCard({
+const PlanCard = React.memo(function PlanCard({
   plan,
   onExecute,
   isExecuting,
@@ -608,7 +616,7 @@ function PlanCard({
       </div>
     </Card>
   );
-}
+});
 
 // Neural Status Component — CSS animations only
 const NeuralStatus = React.memo(({
