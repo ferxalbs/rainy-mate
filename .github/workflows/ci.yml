@@ -132,12 +132,18 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Linux Env
+        if: matrix.platform == 'ubuntu-22.04'
+        run: echo "LIBSQLITE3_SYS_USE_PKG_CONFIG=1" >> $GITHUB_ENV
+
+      - name: Configure Windows Env
+        if: matrix.platform == 'windows-latest'
+        run: |
+          echo "VCPKGRS_DYNAMIC=1" >> $GITHUB_ENV
+          echo "VCPKG_ROOT=C:\vcpkg" >> $GITHUB_ENV
+
       - name: Tauri Build
-        run: pnpm run tauri build ${{ matrix.args }}
-        env:
-          LIBSQLITE3_SYS_USE_PKG_CONFIG: ${{ matrix.platform == 'ubuntu-22.04' && '1' || '' }}
-          VCPKGRS_DYNAMIC: ${{ matrix.platform == 'windows-latest' && '1' || '' }}
-          VCPKG_ROOT: ${{ matrix.platform == 'windows-latest' && 'C:\vcpkg' || '' }}
+        run: pnpm exec tauri build ${{ matrix.args }}
 
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'
