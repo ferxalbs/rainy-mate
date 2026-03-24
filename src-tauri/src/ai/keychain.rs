@@ -25,6 +25,7 @@ impl KeychainManager {
 
     /// Store an API key in the Keychain
     pub fn store_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
+        #[allow(unused_variables)]
         let account = format!("api_key_{}", provider);
 
         #[cfg(test)]
@@ -58,6 +59,7 @@ impl KeychainManager {
 
     /// Retrieve an API key from the Keychain
     pub fn get_key(&self, provider: &str) -> Result<Option<String>, String> {
+        #[allow(unused_variables)]
         let account = format!("api_key_{}", provider);
 
         #[cfg(test)]
@@ -101,6 +103,7 @@ impl KeychainManager {
 
     /// Delete an API key from the Keychain
     pub fn delete_key(&self, provider: &str) -> Result<(), String> {
+        #[allow(unused_variables)]
         let account = format!("api_key_{}", provider);
 
         #[cfg(test)]
