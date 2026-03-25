@@ -417,11 +417,11 @@ pub async fn index_knowledge_file(
     }
 
     let path = PathBuf::from(file_path.clone());
-    if !path.exists() {
+    if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         return Err(format!("File does not exist: {}", file_path));
     }
 
-    let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+    let bytes = tokio::fs::read(&path).await.map_err(|e| format!("Failed to read file: {}", e))?;
     let text = String::from_utf8_lossy(&bytes).to_string();
     let chunks = split_text_into_chunks(&text, 1200, 150);
     if chunks.is_empty() {
