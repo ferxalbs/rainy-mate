@@ -138,21 +138,13 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set Tauri Build Args (Bash)
-        if: matrix.platform != 'windows-latest'
-        run: echo 'TAURI_BUILD_ARGS=--config "{\"bundle\":{\"createUpdaterArtifacts\":false}}"' >> $GITHUB_ENV
-
-      - name: Set Tauri Build Args (PowerShell)
-        if: matrix.platform == 'windows-latest'
-        run: echo "TAURI_BUILD_ARGS=--config `"{\`"bundle`":{\`"createUpdaterArtifacts`":false}}`"" >> $env:GITHUB_ENV
-
       - name: Tauri Build (Bash)
         if: matrix.platform != 'windows-latest'
-        run: pnpm exec tauri build ${{ matrix.args }} $TAURI_BUILD_ARGS
+        run: pnpm exec tauri build ${{ matrix.args }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - name: Tauri Build (PowerShell)
         if: matrix.platform == 'windows-latest'
-        run: pnpm exec tauri build ${{ matrix.args }} $env:TAURI_BUILD_ARGS
+        run: pnpm exec tauri build ${{ matrix.args }} --config `"{\`"bundle`":{\`"createUpdaterArtifacts`":false}}`"
 
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'

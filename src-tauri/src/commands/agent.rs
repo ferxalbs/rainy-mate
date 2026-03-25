@@ -935,6 +935,7 @@ pub async fn run_agent_workflow(
                     .join("agent_specs")
                     .join(format!("{}.json", spec_id));
 
+                // Use tokio::fs instead of std::fs to prevent Tokio executor thread starvation during blocking I/O
                 if tokio::fs::try_exists(&spec_path).await.unwrap_or(false) {
                     let body = tokio::fs::read_to_string(&spec_path).await
                         .map_err(|e| format!("Failed to read spec file: {}", e))?;

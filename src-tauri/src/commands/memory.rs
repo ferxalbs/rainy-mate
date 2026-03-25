@@ -417,6 +417,7 @@ pub async fn index_knowledge_file(
     }
 
     let path = PathBuf::from(file_path.clone());
+    // Use tokio::fs instead of std::fs to prevent Tokio executor thread starvation during blocking I/O
     if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         return Err(format!("File does not exist: {}", file_path));
     }
