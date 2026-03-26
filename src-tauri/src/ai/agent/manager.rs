@@ -140,7 +140,7 @@ impl AgentManager {
         chat_id: &str,
     ) -> Result<Vec<(String, String, String)>, sqlx::Error> {
         let messages = sqlx::query_as::<_, (String, String, String)>(
-            "SELECT id, role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
+            "SELECT id, role, content FROM messages WHERE chat_id = ? ORDER BY rowid ASC",
         )
         .bind(chat_id)
         .fetch_all(&*self.db)
@@ -704,5 +704,122 @@ impl AgentManager {
         } else {
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn setup_manager() -> AgentManager {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory sqlite pool");
+
+        sqlx::query(
+            "CREATE TABLE agents (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                soul TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                spec_json TEXT,
+                version TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create agents table");
+
+        sqlx::query(
+            "CREATE TABLE chats (
+                id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                title TEXT,
+                workspace_id TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create chats table");
+
+        sqlx::query(
+            "CREATE TABLE messages (
+                id TEXT PRIMARY KEY,
+                chat_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create messages table");
+
+        sqlx::query(
+            "CREATE TABLE chat_compaction_state (
+                chat_id TEXT PRIMARY KEY,
+                summary_content TEXT NOT NULL,
+                source_message_count INTEGER NOT NULL,
+                source_estimated_tokens INTEGER NOT NULL,
+                kept_recent_count INTEGER NOT NULL,
+                compression_model TEXT NOT NULL,
+                compaction_count INTEGER NOT NULL,
+                compressed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create compaction table");
+
+        sqlx::query(
+            "CREATE TABLE chat_runtime_telemetry (
+                chat_id TEXT PRIMARY KEY,
+                history_source TEXT NOT NULL,
+                retrieval_mode TEXT NOT NULL,
+                embedding_profile TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create telemetry table");
+
+        AgentManager::new(pool)
+    }
+
+    #[tokio::test]
+    async fn get_history_preserves_insert_order_for_same_second_messages() {
+        let manager = setup_manager().await;
+        let chat_id = "chat-history-order";
+
+        manager
+            .ensure_chat_session_with_workspace(chat_id, "Rainy Agent", "workspace")
+            .await
+            .expect("create chat");
+
+        manager
+            .save_message(chat_id, "user", "first")
+            .await
+            .expect("save first");
+        manager
+            .save_message(chat_id, "assistant", "second")
+            .await
+            .expect("save second");
+        manager
+            .save_message(chat_id, "user", "third")
+            .await
+            .expect("save third");
+
+        let history = manager.get_history(chat_id).await.expect("load history");
+        let contents: Vec<String> = history.into_iter().map(|(_, _, content)| content).collect();
+        assert_eq!(contents, vec!["first", "second", "third"]);
     }
 }

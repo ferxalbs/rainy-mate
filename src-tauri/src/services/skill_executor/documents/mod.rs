@@ -47,6 +47,10 @@ impl SkillExecutor {
                 self.handle_docx_create(workspace_id, params, allowed_paths, blocked_paths)
                     .await
             }
+            "docx_read" => {
+                self.handle_docx_read(workspace_id, params, allowed_paths, blocked_paths)
+                    .await
+            }
             "archive_create" => {
                 self.handle_archive_create(workspace_id, params, allowed_paths, blocked_paths)
                     .await

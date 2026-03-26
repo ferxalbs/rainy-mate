@@ -114,7 +114,7 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
 
         // IRONMILL — Document tools (KINGFALL Phase 1)
         // L0: Read-only document parsing
-        "pdf_read" | "excel_read" => ToolPolicy {
+        "pdf_read" | "excel_read" | "docx_read" => ToolPolicy {
             skill: ToolSkill::Documents,
             airlock_level: AirlockLevel::Safe,
         },

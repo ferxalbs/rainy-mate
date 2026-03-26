@@ -190,8 +190,13 @@ pub fn registered_tool_definitions() -> Vec<Tool> {
         ),
         tool(
             "docx_create",
-            "Create a Word (.docx) document with paragraphs, headings, bold, and italic formatting. Bounded to 200 paragraphs.",
+            "Create or overwrite a Word (.docx) document with paragraphs, headings, bold, and italic formatting. Bounded to 200 paragraphs.",
             schema_for!(DocxCreateArgs),
+        ),
+        tool(
+            "docx_read",
+            "Read a Word (.docx) document and extract paragraph text for revision workflows.",
+            schema_for!(DocxReadArgs),
         ),
         tool(
             "archive_create",

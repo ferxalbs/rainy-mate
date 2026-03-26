@@ -372,6 +372,13 @@ pub struct DocxCreateArgs {
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
+pub struct DocxReadArgs {
+    /// Path to the .docx file to read
+    #[schemars(length(min = 1, max = 4096))]
+    pub path: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ArchiveCreateArgs {
     /// Output archive file name (e.g. "output.zip"). Resolved inside the workspace.
     #[schemars(length(min = 1, max = 255))]

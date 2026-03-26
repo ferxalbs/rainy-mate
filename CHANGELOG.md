@@ -30,16 +30,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`docx_create` tool** (Airlock L1 Sensitive) — creates Word `.docx` documents with paragraphs, headings (H1–H6), bold, italic via `docx-rs`:
   - Input: `filename`, array of `{ text, heading_level?, bold?, italic? }`
 
+- **`docx_read` tool** (Airlock L0 Safe) — reads existing Word `.docx` files and extracts paragraph text for edit/rewrite workflows:
+  - Input: `path`
+  - Output: `{ path, paragraph_count, text, paragraphs }`
+
 - **`archive_create` tool** (Airlock L1 Sensitive) — bundles multiple files into a `.zip` archive using Deflate compression (`zip` crate):
   - Input: `filename`, array of absolute file paths
 
-- **`ToolSkill::Documents` variant** added to `tool_policy.rs` — all 6 document tools have explicit airlock policy entries; enforced by existing `every_registered_tool_has_explicit_policy_entry` test
+- **`ToolSkill::Documents` variant** added to `tool_policy.rs` — all 7 document tools have explicit airlock policy entries; enforced by existing `every_registered_tool_has_explicit_policy_entry` test
 
 - **`skill_executor/documents/`** — IRONMILL document domain now lives in a split Rust module tree (`mod.rs`, `pdf.rs`, `excel.rs`, `docx.rs`, `archive.rs`, `limits.rs`) instead of a single monolith; blocking document work remains isolated via `tokio::task::spawn_blocking`
 
 - **IRONMILL neural state mappings** in `neural-config.ts`:
   - Create tools (`pdf_create`, `excel_write`, `docx_create`, `archive_create`) → `"creating"` state
-  - Read tools (`pdf_read`, `excel_read`) → `"observing"` state
+  - Read tools (`pdf_read`, `excel_read`, `docx_read`) → `"observing"` state
   - Human-readable tool names added to `TOOL_DISPLAY_NAMES`
 
 - **Airlock message persistence store** — new `src-tauri/src/services/airlock_messages.rs` service persists Airlock message lifecycle (`pending`, `approved`, `rejected`, `timeout`, `acknowledged`) in SQLite.
@@ -82,6 +86,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TypeScript gate compatibility update** — `tsconfig.json` now includes `"ignoreDeprecations": "6.0"` to keep `pnpm exec tsc --noEmit` green with current TS deprecation enforcement.
 
 ### Fixed
+
+- **Chat history ordering instability across fast consecutive messages** — `src-tauri/src/ai/agent/manager.rs` now loads persisted history by insertion order (`rowid ASC`) instead of timestamp-only ordering (`created_at`), preventing context shuffle when multiple turns are saved within the same second.
+
+- **DOCX follow-up editing dead-end** — the documents runtime now supports read→revise flows by exposing `docx_read` end-to-end:
+  - `src-tauri/src/services/skill_executor/args.rs`
+  - `src-tauri/src/services/skill_executor/registry.rs`
+  - `src-tauri/src/services/skill_executor/documents/mod.rs`
+  - `src-tauri/src/services/skill_executor/documents/docx.rs`
+  - `src-tauri/src/services/tool_policy.rs`
+  - `src/components/agent-chat/neural-config.ts`
 
 - **ATM readiness endpoint now returns explicit warmup code/message** — `rainy-atm/src/routes/health.ts` `/health/ready` now reports `code: "DB_NOT_READY"` and a clear `message` while migrations are pending, instead of only raw checks.
 
@@ -132,6 +146,8 @@ calamine = "0.26"          # Excel/ODS reader (dates feature enabled)
 - ✅ `cd src-tauri && cargo build -q` — clean after native macOS notification bridge hardening
 - ✅ `pnpm exec tsc --noEmit` — clean after notification settings/status UI update
 - ✅ `target/debug/rainy-mate` launch probe — no new `~/Library/Logs/DiagnosticReports/rainy-mate-*.ips` crash report generated
+- ✅ `cd src-tauri && cargo test -q docx_read_extracts_paragraphs --lib` — pass (1 passed)
+- ✅ `cd src-tauri && cargo test -q get_history_preserves_insert_order_for_same_second_messages --lib` — pass (1 passed)
 
 ---
 

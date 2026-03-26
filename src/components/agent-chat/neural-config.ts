@@ -92,6 +92,7 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   archive_create: "creating",
   pdf_read: "observing",
   excel_read: "observing",
+  docx_read: "observing",
 };
 
 /** Human-readable display names for raw tool function names */
@@ -134,6 +135,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   excel_write: "Writing Spreadsheet",
   excel_read: "Reading Spreadsheet",
   docx_create: "Generating Word Document",
+  docx_read: "Reading Word Document",
   archive_create: "Bundling Archive",
 };
 
