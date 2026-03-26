@@ -3,7 +3,10 @@ use crate::commands::airlock::AirlockServiceState;
 #[cfg(target_os = "macos")]
 use std::ffi::{c_char, CStr, CString};
 #[cfg(target_os = "macos")]
-use std::sync::{atomic::{AtomicBool, Ordering}, OnceLock};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    OnceLock,
+};
 #[cfg(target_os = "macos")]
 use tauri::{AppHandle, Emitter, Manager};
 #[cfg(target_os = "macos")]
@@ -17,9 +20,7 @@ static BRIDGE_INITIALIZED: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "macos")]
 #[link(name = "RainyNativeNotifications", kind = "dylib")]
 unsafe extern "C" {
-    fn rainy_notification_bridge_initialize(
-        callback: extern "C" fn(*const c_char, *const c_char),
-    );
+    fn rainy_notification_bridge_initialize(callback: extern "C" fn(*const c_char, *const c_char));
     fn rainy_notification_bridge_runtime_supported() -> i32;
     fn rainy_notification_bridge_request_authorization() -> i32;
     fn rainy_notification_bridge_authorization_status() -> i32;
@@ -42,7 +43,10 @@ extern "C" fn notification_action_callback(action: *const c_char, command_id: *c
         if action.is_null() {
             None
         } else {
-            CStr::from_ptr(action).to_str().ok().map(|value| value.to_string())
+            CStr::from_ptr(action)
+                .to_str()
+                .ok()
+                .map(|value| value.to_string())
         }
     };
 
@@ -105,10 +109,13 @@ impl MacOSNativeNotificationBridge {
 
         tauri::async_runtime::spawn(async move {
             while let Some((action, command_id)) = rx.recv().await {
-                let _ = app.emit("airlock:notification_action", serde_json::json!({
-                    "action": action,
-                    "commandId": command_id,
-                }));
+                let _ = app.emit(
+                    "airlock:notification_action",
+                    serde_json::json!({
+                        "action": action,
+                        "commandId": command_id,
+                    }),
+                );
 
                 if matches!(action.as_str(), "open" | "approve" | "reject") {
                     if let Some(window) = app.get_webview_window("main") {
@@ -200,7 +207,9 @@ impl MacOSNativeNotificationBridge {
             rainy_notification_bridge_send(
                 title.as_ptr(),
                 body.as_ptr(),
-                command.as_ref().map_or(std::ptr::null(), |value| value.as_ptr()),
+                command
+                    .as_ref()
+                    .map_or(std::ptr::null(), |value| value.as_ptr()),
                 category
                     .as_ref()
                     .map_or(std::ptr::null(), |value| value.as_ptr()),

@@ -11,9 +11,9 @@ pub mod types;
 pub use service::MemoryVaultService;
 #[allow(unused_imports)]
 pub use service::VectorSearchMode;
+#[allow(unused_imports)]
+pub use types::EMBEDDING_DIM;
 pub use types::{
     AdditionalEmbeddingInput, MemorySensitivity, StoreMemoryInput, EMBEDDING_MODEL,
     EMBEDDING_PROVIDER,
 };
-#[allow(unused_imports)]
-pub use types::EMBEDDING_DIM;

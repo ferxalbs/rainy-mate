@@ -182,8 +182,7 @@ impl MemoryVaultService {
         workspace_id: &str,
         retention_days: u32,
     ) -> Result<u64, String> {
-        let cutoff = chrono::Utc::now().timestamp()
-            - (retention_days as i64) * 24 * 3600;
+        let cutoff = chrono::Utc::now().timestamp() - (retention_days as i64) * 24 * 3600;
         self.repository
             .delete_workspace_entries_older_than(workspace_id, cutoff)
             .await
@@ -410,10 +409,12 @@ impl MemoryVaultService {
         let raw = self.repository.list_workspaces().await?;
         Ok(raw
             .into_iter()
-            .map(|(workspace_id, entry_count)| super::types::WorkspaceSummary {
-                workspace_id,
-                entry_count,
-            })
+            .map(
+                |(workspace_id, entry_count)| super::types::WorkspaceSummary {
+                    workspace_id,
+                    entry_count,
+                },
+            )
             .collect())
     }
 
@@ -593,7 +594,12 @@ impl MemoryVaultService {
                     ),
                 )
                 .await
-                .map_err(|e| format!("Failed to query rows for backfill (offset {}): {}", offset, e))?;
+                .map_err(|e| {
+                    format!(
+                        "Failed to query rows for backfill (offset {}): {}",
+                        offset, e
+                    )
+                })?;
 
             let mut page_count = 0usize;
             while let Some(row) = rows.next().await.map_err(|e| e.to_string())? {
@@ -647,11 +653,8 @@ impl MemoryVaultService {
             .unwrap_or_default()
             .unwrap_or_default();
 
-        let embedder = crate::services::embedder::EmbedderService::new(
-            provider,
-            api_key.clone(),
-            Some(model),
-        );
+        let embedder =
+            crate::services::embedder::EmbedderService::new(provider, api_key.clone(), Some(model));
 
         if api_key.is_empty() {
             println!("Skipping re-embedding backfill: No API key available.");

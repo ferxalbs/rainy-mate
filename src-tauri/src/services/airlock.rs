@@ -10,8 +10,9 @@
 //! - **Level 2 (Dangerous)**: Execution operations - requires explicit approval
 
 use crate::models::neural::{AirlockLevel, QueuedCommand};
-use crate::services::ThirdPartySkillRegistry;
 use crate::services::tool_policy::get_tool_policy;
+use crate::services::ThirdPartySkillRegistry;
+use crate::services::{AirlockMessage, AirlockMessageStore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -54,12 +55,14 @@ pub struct AirlockService {
     app: AppHandle,
     pending_approvals: Arc<Mutex<HashMap<String, PendingApproval>>>,
     headless_mode: Arc<AtomicBool>,
+    message_store: Option<Arc<AirlockMessageStore>>,
 }
 
 impl std::fmt::Debug for AirlockService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AirlockService")
             .field("headless_mode", &self.headless_mode)
+            .field("has_message_store", &self.message_store.is_some())
             .finish()
     }
 }
@@ -199,12 +202,17 @@ impl AirlockService {
         approvals
     }
 
-    pub fn new(app: AppHandle) -> Self {
+    pub fn new(app: AppHandle, message_store: Option<Arc<AirlockMessageStore>>) -> Self {
         Self {
             app,
             pending_approvals: Arc::new(Mutex::new(HashMap::new())),
             headless_mode: Arc::new(AtomicBool::new(false)),
+            message_store,
         }
+    }
+
+    fn now_millis() -> i64 {
+        chrono::Utc::now().timestamp_millis()
     }
 
     pub fn set_headless_mode(&self, enabled: bool) {
@@ -229,14 +237,21 @@ impl AirlockService {
         // MCP tools use a dedicated global ask/no-ask gate in McpService.
         // They intentionally bypass 3-level Airlock classification.
         if Self::is_mcp_tool(command) {
-            tracing::debug!("Airlock: Bypassing MCP tool {}; delegated to MCP gate", command.id);
+            tracing::debug!(
+                "Airlock: Bypassing MCP tool {}; delegated to MCP gate",
+                command.id
+            );
             return Ok(true);
         }
 
         let inferred_tool = Self::infer_tool_name(command);
         let has_policy = inferred_tool
             .as_ref()
-            .and_then(|tool| get_tool_policy(tool).map(|_| ()).or_else(|| Self::third_party_tool_level(tool).map(|_| ())))
+            .and_then(|tool| {
+                get_tool_policy(tool)
+                    .map(|_| ())
+                    .or_else(|| Self::third_party_tool_level(tool).map(|_| ()))
+            })
             .is_some();
         if !has_policy {
             tracing::warn!(
@@ -332,6 +347,27 @@ impl AirlockService {
             Self::insert_pending_approval(&mut pending, request.clone(), tx);
         };
 
+        if let Some(store) = self.message_store.as_ref() {
+            if let Err(error) = store
+                .record_pending(
+                    &request.command_id,
+                    &request.intent,
+                    request.tool_name.as_deref(),
+                    &request.payload_summary,
+                    request.airlock_level,
+                    request.timestamp,
+                    request.expires_at,
+                )
+                .await
+            {
+                tracing::warn!(
+                    "Airlock: failed to persist pending message {}: {}",
+                    request.command_id,
+                    error
+                );
+            }
+        }
+
         // Emit event to frontend
         self.app
             .emit("airlock:approval_required", &request)
@@ -344,37 +380,7 @@ impl AirlockService {
             "{} is waiting for approval: {}",
             request.intent, request.payload_summary
         );
-        #[cfg(target_os = "macos")]
-        if let Err(error) = crate::services::MacOSNativeNotificationBridge::send_airlock_notification(
-            title,
-            &body,
-            Some(&request.command_id),
-        ) {
-            tracing::warn!(
-                "Airlock: native macOS notification unavailable for {}: {}",
-                request.command_id,
-                error
-            );
-            let _ = self.app.emit(
-                "desktop:notification",
-                crate::commands::settings::DesktopNotificationRequest {
-                    title: title.to_string(),
-                    body: body.clone(),
-                    kind: "airlock".to_string(),
-                    command_id: Some(request.command_id.clone()),
-                },
-            );
-        }
-        #[cfg(not(target_os = "macos"))]
-        let _ = self.app.emit(
-            "desktop:notification",
-            crate::commands::settings::DesktopNotificationRequest {
-                title: title.to_string(),
-                body,
-                kind: "airlock".to_string(),
-                command_id: Some(request.command_id.clone()),
-            },
-        );
+        self.send_notification(title, &body, Some(request.command_id.clone()), "airlock");
 
         let result = if let Some(timeout_secs) = timeout_secs {
             match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
@@ -397,12 +403,16 @@ impl AirlockService {
         match result {
             ApprovalResult::Approved => {
                 tracing::info!("Airlock: Command {} APPROVED by user", command.id);
+                self.persist_resolution(&command.id, "approved", Some("User approved command"))
+                    .await;
                 // Notify frontend to clear the request from UI
                 let _ = self.app.emit("airlock:approval_resolved", &command.id);
                 Ok(true)
             }
             ApprovalResult::Rejected => {
                 tracing::info!("Airlock: Command {} REJECTED by user", command.id);
+                self.persist_resolution(&command.id, "rejected", Some("User rejected command"))
+                    .await;
                 // Notify frontend to clear the request from UI
                 let _ = self.app.emit("airlock:approval_resolved", &command.id);
                 Ok(false)
@@ -417,6 +427,12 @@ impl AirlockService {
                         "Airlock: Command {} timed out, allowing due to explicit policy override",
                         command.id
                     );
+                    self.persist_resolution(
+                        &command.id,
+                        "approved",
+                        Some("Timed out and allowed by policy override"),
+                    )
+                    .await;
                     return Ok(true);
                 }
 
@@ -424,9 +440,65 @@ impl AirlockService {
                     "Airlock: Command {} timed out, denying by default",
                     command.id
                 );
+                self.persist_resolution(&command.id, "timeout", Some("Approval request timed out"))
+                    .await;
                 Ok(false)
             }
         }
+    }
+
+    async fn persist_resolution(&self, command_id: &str, status: &str, resolution: Option<&str>) {
+        if let Some(store) = self.message_store.as_ref() {
+            if let Err(error) = store
+                .mark_resolved(command_id, status, resolution, Self::now_millis())
+                .await
+            {
+                tracing::warn!(
+                    "Airlock: failed to persist resolution for {}: {}",
+                    command_id,
+                    error
+                );
+            }
+        }
+    }
+
+    fn send_notification(&self, title: &str, body: &str, command_id: Option<String>, kind: &str) {
+        #[cfg(target_os = "macos")]
+        {
+            if let Err(error) =
+                crate::services::MacOSNativeNotificationBridge::send_airlock_notification(
+                    title,
+                    body,
+                    command_id.as_deref(),
+                )
+            {
+                tracing::warn!(
+                    "Airlock: native macOS notification unavailable for {:?}: {}",
+                    command_id,
+                    error
+                );
+                let _ = self.app.emit(
+                    "desktop:notification",
+                    crate::commands::settings::DesktopNotificationRequest {
+                        title: title.to_string(),
+                        body: body.to_string(),
+                        kind: kind.to_string(),
+                        command_id,
+                    },
+                );
+            }
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        let _ = self.app.emit(
+            "desktop:notification",
+            crate::commands::settings::DesktopNotificationRequest {
+                title: title.to_string(),
+                body: body.to_string(),
+                kind: kind.to_string(),
+                command_id,
+            },
+        );
     }
 
     /// Respond to an approval request (called from frontend via Tauri command)
@@ -458,6 +530,58 @@ impl AirlockService {
     pub async fn get_pending_approvals(&self) -> Vec<ApprovalRequest> {
         let pending = self.pending_approvals.lock().await;
         Self::list_pending_approvals(&pending)
+    }
+
+    pub async fn list_messages(&self, limit: Option<u32>) -> Result<Vec<AirlockMessage>, String> {
+        let Some(store) = self.message_store.as_ref() else {
+            return Ok(Vec::new());
+        };
+        let effective_limit = limit.unwrap_or(200).clamp(1, 1000);
+        store
+            .list_messages(effective_limit)
+            .await
+            .map_err(|e| format!("Failed to list Airlock messages: {}", e))
+    }
+
+    pub async fn count_pending_messages(&self) -> Result<u64, String> {
+        let Some(store) = self.message_store.as_ref() else {
+            return Ok(0);
+        };
+        store
+            .count_pending()
+            .await
+            .map_err(|e| format!("Failed to count Airlock messages: {}", e))
+    }
+
+    pub async fn acknowledge_message(&self, command_id: &str) -> Result<(), String> {
+        let Some(store) = self.message_store.as_ref() else {
+            return Ok(());
+        };
+        store
+            .acknowledge_message(command_id, Self::now_millis())
+            .await
+            .map_err(|e| format!("Failed to acknowledge Airlock message: {}", e))
+    }
+
+    pub async fn send_message(
+        &self,
+        title: &str,
+        body: &str,
+        command_id: Option<&str>,
+    ) -> Result<(), String> {
+        let command_id_owned = command_id.map(|v| v.to_string());
+        self.send_notification(title, body, command_id_owned.clone(), "airlock");
+        self.app
+            .emit(
+                "airlock:message",
+                serde_json::json!({
+                    "title": title,
+                    "body": body,
+                    "commandId": command_id_owned,
+                    "timestamp": Self::now_millis(),
+                }),
+            )
+            .map_err(|e| format!("Failed to emit Airlock message event: {}", e))
     }
 }
 

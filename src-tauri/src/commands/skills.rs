@@ -1,11 +1,11 @@
 use crate::models::neural::{
     AirlockLevel, CommandPriority, CommandResult, CommandStatus, QueuedCommand, RainyPayload,
 };
+use crate::services::ThirdPartySkillRegistry;
 use crate::services::{
     skill_installer::{verify_downloaded_bundle_signature, write_temp_downloaded_skill},
     PromptSkillDiscoveryService, PromptSkillRegistry, SkillExecutor, SkillInstaller,
 };
-use crate::services::ThirdPartySkillRegistry;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -134,7 +134,8 @@ fn app_data_dir(app_handle: &AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 #[tauri::command]
-pub async fn list_installed_skills() -> Result<Vec<crate::services::third_party_skill_registry::InstalledThirdPartySkill>, String> {
+pub async fn list_installed_skills(
+) -> Result<Vec<crate::services::third_party_skill_registry::InstalledThirdPartySkill>, String> {
     let registry = ThirdPartySkillRegistry::new()?;
     registry.list_skills()
 }
@@ -148,28 +149,27 @@ pub async fn set_installed_skill_enabled(
 }
 
 #[tauri::command]
-pub async fn remove_installed_skill(
-    req: RemoveInstalledSkillRequest,
-) -> Result<(), String> {
+pub async fn remove_installed_skill(req: RemoveInstalledSkillRequest) -> Result<(), String> {
     let registry = ThirdPartySkillRegistry::new()?;
     let installed = registry
         .list_skills()?
         .into_iter()
         .find(|skill| skill.id == req.skill_id && skill.version == req.version)
         .ok_or_else(|| format!("Skill {}@{} not found", req.skill_id, req.version))?;
-    registry.remove(&req.skill_id, &req.version)
-        .and_then(|_| {
-            let binary_path = std::path::Path::new(&installed.binary_path);
-            let install_dir = binary_path
-                .parent()
-                .ok_or_else(|| "Installed skill binary path has no parent directory".to_string())?;
-            std::fs::remove_dir_all(install_dir)
-                .map_err(|e| format!("Failed to remove installed skill directory: {}", e))
-        })
+    registry.remove(&req.skill_id, &req.version).and_then(|_| {
+        let binary_path = std::path::Path::new(&installed.binary_path);
+        let install_dir = binary_path
+            .parent()
+            .ok_or_else(|| "Installed skill binary path has no parent directory".to_string())?;
+        std::fs::remove_dir_all(install_dir)
+            .map_err(|e| format!("Failed to remove installed skill directory: {}", e))
+    })
 }
 
 #[tauri::command]
-pub async fn install_local_skill(req: SkillInstallRequest) -> Result<crate::services::third_party_skill_registry::InstalledThirdPartySkill, String> {
+pub async fn install_local_skill(
+    req: SkillInstallRequest,
+) -> Result<crate::services::third_party_skill_registry::InstalledThirdPartySkill, String> {
     let installer = SkillInstaller::new()?;
     installer.install_from_directory(
         std::path::Path::new(&req.source_dir),
@@ -203,7 +203,10 @@ pub async fn install_skill_from_atm(
     if !key_response.status().is_success() {
         let status = key_response.status();
         let body = key_response.text().await.unwrap_or_default();
-        return Err(format!("ATM public key fetch failed ({}): {}", status, body));
+        return Err(format!(
+            "ATM public key fetch failed ({}): {}",
+            status, body
+        ));
     }
 
     let public_key: SkillPublicKeyResponse = key_response
@@ -260,7 +263,8 @@ pub async fn install_skill_from_atm(
         return Err("ATM skill bundle signature verification failed".to_string());
     }
 
-    let temp_dir = write_temp_downloaded_skill(&bundle.skill_id, &bundle.manifest_toml, &wasm_bytes)?;
+    let temp_dir =
+        write_temp_downloaded_skill(&bundle.skill_id, &bundle.manifest_toml, &wasm_bytes)?;
     let installer = SkillInstaller::new()?;
     installer.install_from_downloaded_bundle(&temp_dir, Some(&public_key.public_key_hex))
 }
@@ -399,9 +403,9 @@ pub fn parse_tool_calls_from_content(content: &str) -> Vec<ParsedToolCall> {
     }
 
     // search_files("query", optional "path")
-    if let Ok(re) = Regex::new(
-        r#"search_files\s*\(\s*["']([^"']+)["']\s*(?:,\s*["']([^"']+)["'])?\s*\)"#,
-    ) {
+    if let Ok(re) =
+        Regex::new(r#"search_files\s*\(\s*["']([^"']+)["']\s*(?:,\s*["']([^"']+)["'])?\s*\)"#)
+    {
         for cap in re.captures_iter(content) {
             let path = cap.get(2).map(|m| m.as_str()).unwrap_or("");
             calls.push(ParsedToolCall {
@@ -441,15 +445,11 @@ pub async fn execute_plan_from_content(
             success: false,
             summary: String::new(),
             executed_count: 0,
-            error: Some(
-                "No executable operations found in the plan.".to_string(),
-            ),
+            error: Some("No executable operations found in the plan.".to_string()),
         });
     }
 
-    let allowed_paths = workspace_path
-        .map(|p| vec![p])
-        .unwrap_or_default();
+    let allowed_paths = workspace_path.map(|p| vec![p]).unwrap_or_default();
 
     let mut completed: Vec<String> = Vec::new();
 
@@ -485,7 +485,11 @@ pub async fn execute_plan_from_content(
         };
 
         let result = skill_executor.execute(&command).await;
-        let path = call.params.get("path").and_then(|v| v.as_str()).unwrap_or("");
+        let path = call
+            .params
+            .get("path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
 
         if !result.success {
             return Ok(ExecutePlanResult {

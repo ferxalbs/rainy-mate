@@ -38,9 +38,14 @@ pub struct PersistedMcpServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PersistedMcpTransportConfig {
-    Stdio { command: String, args: Vec<String> },
+    Stdio {
+        command: String,
+        args: Vec<String>,
+    },
     #[serde(alias = "sse")]
-    Http { url: String },
+    Http {
+        url: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,9 +62,14 @@ pub struct McpServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum McpTransportConfig {
-    Stdio { command: String, args: Vec<String> },
+    Stdio {
+        command: String,
+        args: Vec<String>,
+    },
     #[serde(alias = "sse")]
-    Http { url: String },
+    Http {
+        url: String,
+    },
 }
 
 impl McpServerConfig {
@@ -76,7 +86,6 @@ impl McpServerConfig {
             out
         }
     }
-
 }
 
 impl PersistedMcpServerConfig {
@@ -92,9 +101,9 @@ impl PersistedMcpServerConfig {
                     command: command.clone(),
                     args: args.clone(),
                 },
-                PersistedMcpTransportConfig::Http { url } => McpTransportConfig::Http {
-                    url: url.clone(),
-                },
+                PersistedMcpTransportConfig::Http { url } => {
+                    McpTransportConfig::Http { url: url.clone() }
+                }
             },
             timeout_secs: self.timeout_secs,
             env,
@@ -194,13 +203,21 @@ impl StdioConnection {
         })
     }
 
-    async fn send_request(&self, req: &JsonRpcRequest, timeout_secs: u64) -> Result<JsonRpcResponse, String> {
+    async fn send_request(
+        &self,
+        req: &JsonRpcRequest,
+        timeout_secs: u64,
+    ) -> Result<JsonRpcResponse, String> {
         let _guard = self.request_lock.lock().await;
         write_frame(&self.stdin, req).await?;
         read_response_with_timeout(&self.stdout, req.id, timeout_secs).await
     }
 
-    async fn send_notification(&self, method: &str, params: Option<serde_json::Value>) -> Result<(), String> {
+    async fn send_notification(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<(), String> {
         let _guard = self.request_lock.lock().await;
         let notif = serde_json::json!({
             "jsonrpc": "2.0",
@@ -399,7 +416,11 @@ impl McpConnection {
         self.discover_tools().await
     }
 
-    async fn call_tool(&self, namespaced_name: &str, input: serde_json::Value) -> Result<String, String> {
+    async fn call_tool(
+        &self,
+        namespaced_name: &str,
+        input: serde_json::Value,
+    ) -> Result<String, String> {
         let original_name = self
             .original_names
             .get(namespaced_name)
@@ -466,7 +487,8 @@ async fn write_raw_frame(
     stdin: &Mutex<ChildStdin>,
     payload: &serde_json::Value,
 ) -> Result<(), String> {
-    let bytes = serde_json::to_vec(payload).map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+    let bytes =
+        serde_json::to_vec(payload).map_err(|e| format!("Failed to serialize JSON: {}", e))?;
     let mut lock = stdin.lock().await;
     lock.write_all(&bytes)
         .await
@@ -490,18 +512,15 @@ async fn read_response_with_timeout(
     expected_id: u64,
     timeout_secs: u64,
 ) -> Result<JsonRpcResponse, String> {
-    tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs.max(1)),
-        async {
-            loop {
-                let value = read_frame(stdout).await?;
-                if value.get("id").and_then(|v| v.as_u64()) == Some(expected_id) {
-                    return serde_json::from_value::<JsonRpcResponse>(value)
-                        .map_err(|e| format!("Invalid JSON-RPC response: {}", e));
-                }
+    tokio::time::timeout(std::time::Duration::from_secs(timeout_secs.max(1)), async {
+        loop {
+            let value = read_frame(stdout).await?;
+            if value.get("id").and_then(|v| v.as_u64()) == Some(expected_id) {
+                return serde_json::from_value::<JsonRpcResponse>(value)
+                    .map_err(|e| format!("Invalid JSON-RPC response: {}", e));
             }
-        },
-    )
+        }
+    })
     .await
     .map_err(|_| "MCP request timed out".to_string())?
 }
@@ -708,7 +727,9 @@ impl McpService {
         let saved = self.list_servers().await;
         let found = saved
             .into_iter()
-            .find(|s| McpServerConfig::sanitize_name(&s.name) == McpServerConfig::sanitize_name(name))
+            .find(|s| {
+                McpServerConfig::sanitize_name(&s.name) == McpServerConfig::sanitize_name(name)
+            })
             .ok_or_else(|| format!("MCP server '{}' not found", name))?;
         self.connect_server(found.to_runtime(env, headers)).await
     }
@@ -720,8 +741,8 @@ impl McpService {
     ) -> Result<McpJsonImportResult, String> {
         let contents = std::fs::read_to_string(json_path)
             .map_err(|e| format!("Failed to read MCP JSON file: {}", e))?;
-        let json: serde_json::Value = serde_json::from_str(&contents)
-            .map_err(|e| format!("Invalid MCP JSON file: {}", e))?;
+        let json: serde_json::Value =
+            serde_json::from_str(&contents).map_err(|e| format!("Invalid MCP JSON file: {}", e))?;
 
         let mcp_servers = json
             .get("mcpServers")
@@ -806,7 +827,10 @@ impl McpService {
                             .collect::<HashMap<String, String>>()
                     });
 
-                if let Err(error) = self.connect_server(persisted.to_runtime(env, headers)).await {
+                if let Err(error) = self
+                    .connect_server(persisted.to_runtime(env, headers))
+                    .await
+                {
                     failed.push(format!("{}: {}", name, error));
                 } else {
                     connected += 1;
@@ -850,7 +874,8 @@ impl McpService {
         tool_name: &str,
         input: serde_json::Value,
     ) -> Result<String, String> {
-        self.ensure_mcp_approval(server_name, tool_name, &input).await?;
+        self.ensure_mcp_approval(server_name, tool_name, &input)
+            .await?;
         let key = McpServerConfig::sanitize_name(server_name);
         let lock = self.connections.lock().await;
         let conn = lock
@@ -862,7 +887,8 @@ impl McpService {
     pub async fn list_runtime_statuses(&self) -> Vec<McpServerRuntimeStatus> {
         let saved = self.list_servers().await;
         let lock = self.connections.lock().await;
-        saved.into_iter()
+        saved
+            .into_iter()
             .map(|cfg| {
                 let key = McpServerConfig::sanitize_name(&cfg.name);
                 if let Some(conn) = lock.get(&key) {
@@ -914,13 +940,16 @@ impl McpService {
 
     pub async fn get_pending_approvals(&self) -> Vec<McpApprovalRequest> {
         let lock = self.pending_approvals.lock().await;
-        let mut list: Vec<McpApprovalRequest> =
-            lock.values().map(|p| p.request.clone()).collect();
+        let mut list: Vec<McpApprovalRequest> = lock.values().map(|p| p.request.clone()).collect();
         list.sort_by_key(|r| r.timestamp);
         list
     }
 
-    pub async fn respond_to_approval(&self, approval_id: &str, approved: bool) -> Result<(), String> {
+    pub async fn respond_to_approval(
+        &self,
+        approval_id: &str,
+        approved: bool,
+    ) -> Result<(), String> {
         let pending = self.pending_approvals.lock().await.remove(approval_id);
         if let Some(entry) = pending {
             entry

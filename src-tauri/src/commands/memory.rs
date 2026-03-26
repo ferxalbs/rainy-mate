@@ -499,8 +499,12 @@ pub async fn query_agent_memory(
         })
         .map(|entry| {
             let score = match selected_strategy {
-                MemoryStrategy::SimpleBuffer => compute_text_score(&query, &entry.content) * 0.7 + 0.3,
-                MemoryStrategy::Vector | MemoryStrategy::Hybrid => compute_text_score(&query, &entry.content),
+                MemoryStrategy::SimpleBuffer => {
+                    compute_text_score(&query, &entry.content) * 0.7 + 0.3
+                }
+                MemoryStrategy::Vector | MemoryStrategy::Hybrid => {
+                    compute_text_score(&query, &entry.content)
+                }
             };
 
             let file_id = extract_tag_value(&entry.tags, "knowledge_file");
@@ -518,7 +522,11 @@ pub async fn query_agent_memory(
         })
         .collect();
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     results.truncate(max_results);
     Ok(results)
 }
@@ -609,10 +617,13 @@ mod tests {
 
     fn create_test_manager() -> (MemoryManagerState, TempDir) {
         let temp_dir = TempDir::new().unwrap();
-        (MemoryManagerState(std::sync::Arc::new(MemoryManager::new(
-            10,
-            temp_dir.path().to_path_buf(),
-        ))), temp_dir)
+        (
+            MemoryManagerState(std::sync::Arc::new(MemoryManager::new(
+                10,
+                temp_dir.path().to_path_buf(),
+            ))),
+            temp_dir,
+        )
     }
 
     // Helper function to simulate Tauri State

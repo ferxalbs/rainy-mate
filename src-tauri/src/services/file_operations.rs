@@ -311,8 +311,10 @@ pub struct FileOperationEngine {
 impl FileOperationEngine {
     pub fn new() -> Self {
         let base_root = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
-        let base_dir = crate::services::app_identity::resolve_app_dir(base_root)
-            .unwrap_or_else(|_| PathBuf::from("/tmp").join(crate::services::app_identity::CURRENT_APP_DIR_NAME));
+        let base_dir =
+            crate::services::app_identity::resolve_app_dir(base_root).unwrap_or_else(|_| {
+                PathBuf::from("/tmp").join(crate::services::app_identity::CURRENT_APP_DIR_NAME)
+            });
 
         let trash_dir = base_dir.join("trash");
         let versions_dir = base_dir.join("versions");

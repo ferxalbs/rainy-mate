@@ -1,5 +1,5 @@
-use libsql::Connection;
 use super::repository::VaultRow;
+use libsql::Connection;
 
 /// Column names for SELECT queries on memory_vault_entries.
 /// Every query must use this exact column order so that `ColumnMap` indexing is stable.
@@ -44,17 +44,20 @@ impl ColumnMap {
 
     pub fn get_string(&self, row: &libsql::Row, field: &str) -> Result<String, String> {
         let idx = self.index_of(field)?;
-        row.get::<String>(idx as i32).map_err(|e| format!("ColumnMap get_string '{}': {}", field, e))
+        row.get::<String>(idx as i32)
+            .map_err(|e| format!("ColumnMap get_string '{}': {}", field, e))
     }
 
     pub fn get_i64(&self, row: &libsql::Row, field: &str) -> Result<i64, String> {
         let idx = self.index_of(field)?;
-        row.get::<i64>(idx as i32).map_err(|e| format!("ColumnMap get_i64 '{}': {}", field, e))
+        row.get::<i64>(idx as i32)
+            .map_err(|e| format!("ColumnMap get_i64 '{}': {}", field, e))
     }
 
     pub fn get_blob(&self, row: &libsql::Row, field: &str) -> Result<Vec<u8>, String> {
         let idx = self.index_of(field)?;
-        row.get::<Vec<u8>>(idx as i32).map_err(|e| format!("ColumnMap get_blob '{}': {}", field, e))
+        row.get::<Vec<u8>>(idx as i32)
+            .map_err(|e| format!("ColumnMap get_blob '{}': {}", field, e))
     }
 
     pub fn get_opt_blob(&self, row: &libsql::Row, field: &str) -> Option<Vec<u8>> {
@@ -227,10 +230,7 @@ impl VaultQuery {
     pub async fn count(&self, conn: &Connection) -> Result<usize, String> {
         let (where_clause, values) = self.build_where();
 
-        let sql = format!(
-            "SELECT COUNT(*) FROM memory_vault_entries {}",
-            where_clause,
-        );
+        let sql = format!("SELECT COUNT(*) FROM memory_vault_entries {}", where_clause,);
 
         let mut rows = conn
             .query(&sql, libsql::params::Params::Positional(values))

@@ -44,7 +44,7 @@ pub struct InstalledThirdPartySkill {
     pub binary_path: String,
     pub binary_sha256: String,
     pub enabled: bool,
-    pub trust_state: String, // verified | unsigned_dev
+    pub trust_state: String,    // verified | unsigned_dev
     pub install_source: String, // atm | local_dev
     pub installed_at: i64,
     #[serde(default)]
@@ -78,7 +78,10 @@ impl ThirdPartySkillRegistry {
         fs::create_dir_all(&root_dir)
             .map_err(|e| format!("Failed to create third-party skill dir: {}", e))?;
         let index_path = root_dir.join("registry.json");
-        Ok(Self { root_dir, index_path })
+        Ok(Self {
+            root_dir,
+            index_path,
+        })
     }
 
     pub fn root_dir(&self) -> &Path {
@@ -97,7 +100,8 @@ impl ThirdPartySkillRegistry {
     fn save_index(&self, file: &RegistryFile) -> Result<(), String> {
         let body = serde_json::to_string_pretty(file)
             .map_err(|e| format!("Failed to serialize registry index: {}", e))?;
-        fs::write(&self.index_path, body).map_err(|e| format!("Failed to write registry index: {}", e))
+        fs::write(&self.index_path, body)
+            .map_err(|e| format!("Failed to write registry index: {}", e))
     }
 
     pub fn list_skills(&self) -> Result<Vec<InstalledThirdPartySkill>, String> {
@@ -108,12 +112,15 @@ impl ThirdPartySkillRegistry {
 
     pub fn upsert_skill(&self, skill: InstalledThirdPartySkill) -> Result<(), String> {
         let mut file = self.load_index()?;
-        if file
-            .skills
-            .iter()
-            .any(|s| s.methods.iter().any(|m| skill.methods.iter().any(|nm| nm.name == m.name)) && s.id != skill.id)
-        {
-            return Err("Method name collision with another installed third-party skill".to_string());
+        if file.skills.iter().any(|s| {
+            s.methods
+                .iter()
+                .any(|m| skill.methods.iter().any(|nm| nm.name == m.name))
+                && s.id != skill.id
+        }) {
+            return Err(
+                "Method name collision with another installed third-party skill".to_string(),
+            );
         }
 
         if let Some(existing) = file
@@ -133,7 +140,8 @@ impl ThirdPartySkillRegistry {
         let Some(skill) = file
             .skills
             .iter_mut()
-            .find(|s| s.id == skill_id && s.version == version) else {
+            .find(|s| s.id == skill_id && s.version == version)
+        else {
             return Err(format!("Skill {}@{} not found", skill_id, version));
         };
         skill.enabled = enabled;
@@ -143,7 +151,8 @@ impl ThirdPartySkillRegistry {
     pub fn remove(&self, skill_id: &str, version: &str) -> Result<(), String> {
         let mut file = self.load_index()?;
         let before = file.skills.len();
-        file.skills.retain(|s| !(s.id == skill_id && s.version == version));
+        file.skills
+            .retain(|s| !(s.id == skill_id && s.version == version));
         if file.skills.len() == before {
             return Err(format!("Skill {}@{} not found", skill_id, version));
         }
@@ -262,7 +271,11 @@ mod tests {
         }
     }
 
-    fn skill(id: &str, version: &str, methods: Vec<InstalledThirdPartyMethod>) -> InstalledThirdPartySkill {
+    fn skill(
+        id: &str,
+        version: &str,
+        methods: Vec<InstalledThirdPartyMethod>,
+    ) -> InstalledThirdPartySkill {
         InstalledThirdPartySkill {
             id: id.to_string(),
             name: id.to_string(),
@@ -284,9 +297,14 @@ mod tests {
     #[test]
     fn registry_resolves_method_airlock_level() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let registry = ThirdPartySkillRegistry::new_with_root(temp.path().to_path_buf()).expect("registry");
+        let registry =
+            ThirdPartySkillRegistry::new_with_root(temp.path().to_path_buf()).expect("registry");
         registry
-            .upsert_skill(skill("alpha", "1.0.0", vec![method("alpha_run", AirlockLevel::Sensitive)]))
+            .upsert_skill(skill(
+                "alpha",
+                "1.0.0",
+                vec![method("alpha_run", AirlockLevel::Sensitive)],
+            ))
             .expect("insert");
 
         let level = registry
@@ -298,13 +316,22 @@ mod tests {
     #[test]
     fn registry_rejects_method_name_collisions_across_skills() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let registry = ThirdPartySkillRegistry::new_with_root(temp.path().to_path_buf()).expect("registry");
+        let registry =
+            ThirdPartySkillRegistry::new_with_root(temp.path().to_path_buf()).expect("registry");
         registry
-            .upsert_skill(skill("alpha", "1.0.0", vec![method("shared_method", AirlockLevel::Safe)]))
+            .upsert_skill(skill(
+                "alpha",
+                "1.0.0",
+                vec![method("shared_method", AirlockLevel::Safe)],
+            ))
             .expect("insert alpha");
 
         let err = registry
-            .upsert_skill(skill("beta", "1.0.0", vec![method("shared_method", AirlockLevel::Dangerous)]))
+            .upsert_skill(skill(
+                "beta",
+                "1.0.0",
+                vec![method("shared_method", AirlockLevel::Dangerous)],
+            ))
             .expect_err("collision should be rejected");
         assert!(err.contains("Method name collision"));
     }

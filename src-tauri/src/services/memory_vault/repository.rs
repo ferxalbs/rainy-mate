@@ -34,7 +34,7 @@ impl MemoryVaultRepository {
     pub async fn new(app_data_dir: PathBuf) -> Result<Self, String> {
         let _ = std::fs::create_dir_all(&app_data_dir);
         let db_path = app_data_dir.join("rainy_mate_v2.db");
-        
+
         #[cfg(test)]
         if db_path.exists() {
             let _ = std::fs::remove_file(&db_path);
@@ -42,7 +42,7 @@ impl MemoryVaultRepository {
 
         #[cfg(test)]
         let db_url = ":memory:".to_string();
-        
+
         #[cfg(not(test))]
         let db = {
             let turso_url = std::env::var("RAINY_MEMORY_TURSO_URL")
@@ -60,8 +60,8 @@ impl MemoryVaultRepository {
                     .and_then(|v| v.parse::<u64>().ok())
                     .filter(|v| *v > 0);
 
-                let mut builder = Builder::new_remote_replica(&db_path, url, token)
-                    .read_your_writes(true);
+                let mut builder =
+                    Builder::new_remote_replica(&db_path, url, token).read_your_writes(true);
                 if let Some(seconds) = sync_secs {
                     builder = builder.sync_interval(std::time::Duration::from_secs(seconds));
                 }
@@ -191,11 +191,7 @@ impl MemoryVaultRepository {
         &self.conn
     }
 
-    async fn upsert_encrypted_row(
-        &self,
-        row: &VaultRow,
-        key_version: i64,
-    ) -> Result<(), String> {
+    async fn upsert_encrypted_row(&self, row: &VaultRow, key_version: i64) -> Result<(), String> {
         self.conn.execute(
             "INSERT INTO memory_vault_entries
              (id, workspace_id, source, sensitivity, created_at, last_accessed, access_count,
@@ -621,7 +617,9 @@ impl MemoryVaultRepository {
                         params![id.clone()],
                     )
                     .await
-                    .map_err(|e| format!("Failed to delete expired embedding vector {}: {}", id, e))?;
+                    .map_err(|e| {
+                        format!("Failed to delete expired embedding vector {}: {}", id, e)
+                    })?;
             }
 
             self.conn
@@ -682,7 +680,9 @@ impl MemoryVaultRepository {
                         params![id.clone()],
                     )
                     .await
-                    .map_err(|e| format!("Failed to delete expired embedding vector {}: {}", id, e))?;
+                    .map_err(|e| {
+                        format!("Failed to delete expired embedding vector {}: {}", id, e)
+                    })?;
             }
 
             self.conn

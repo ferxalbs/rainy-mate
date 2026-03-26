@@ -132,7 +132,10 @@ where
     }
 
     for preferred in DEFAULT_CLOUD_MODEL_PREFERENCES {
-        if let Some(found) = available.iter().find(|item| item.eq_ignore_ascii_case(preferred)) {
+        if let Some(found) = available
+            .iter()
+            .find(|item| item.eq_ignore_ascii_case(preferred))
+        {
             return Ok(found.clone());
         }
     }

@@ -1,7 +1,7 @@
 use crate::models::neural::{ParameterSchema, SkillManifest, SkillMethod};
 use crate::services::tool_policy::get_tool_policy;
-use crate::services::ThirdPartySkillRegistry;
 use crate::services::SkillExecutor;
+use crate::services::ThirdPartySkillRegistry;
 use std::collections::{BTreeMap, HashMap};
 
 fn parse_method_parameters(
@@ -103,7 +103,8 @@ mod tests {
 
     #[test]
     fn manifest_covers_every_registered_tool() {
-        let manifests = build_skill_manifest_from_runtime().expect("manifest generation should work");
+        let manifests =
+            build_skill_manifest_from_runtime().expect("manifest generation should work");
         let from_manifest: std::collections::HashSet<String> = manifests
             .into_iter()
             .flat_map(|skill| skill.methods.into_iter().map(|method| method.name))

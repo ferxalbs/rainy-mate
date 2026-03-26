@@ -245,10 +245,7 @@ impl SessionCoordinator {
 
 fn is_placeholder_title(value: &str) -> bool {
     let n = value.trim().to_lowercase();
-    n.is_empty()
-        || n == "new thread"
-        || n == "new chat"
-        || n.starts_with("workspace session:")
+    n.is_empty() || n == "new thread" || n == "new chat" || n.starts_with("workspace session:")
 }
 
 fn build_fallback_title(seed: &str) -> String {

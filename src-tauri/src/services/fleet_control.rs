@@ -27,7 +27,10 @@ fn hash_policy(policy: &ToolAccessPolicy) -> String {
     hex::encode(hasher.finalize())
 }
 
-pub fn apply_fleet_policy(workspace_id: &str, envelope: &FleetPolicyEnvelope) -> Result<(), String> {
+pub fn apply_fleet_policy(
+    workspace_id: &str,
+    envelope: &FleetPolicyEnvelope,
+) -> Result<(), String> {
     let computed = hash_policy(&envelope.tool_access_policy);
     if computed != envelope.tool_access_policy_hash {
         return Err("Fleet policy hash mismatch".to_string());

@@ -160,7 +160,9 @@ pub(super) fn validate_archive_create(args: &ArchiveCreateArgs) -> Result<(), St
     Ok(())
 }
 
-pub(super) fn normalize_archive_entries(paths: &[PathBuf]) -> Result<Vec<(PathBuf, String)>, String> {
+pub(super) fn normalize_archive_entries(
+    paths: &[PathBuf],
+) -> Result<Vec<(PathBuf, String)>, String> {
     let mut seen = HashSet::new();
     let mut normalized = Vec::with_capacity(paths.len());
 
@@ -195,8 +197,8 @@ pub(super) fn normalize_archive_entries(paths: &[PathBuf]) -> Result<Vec<(PathBu
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::super::args::{DocxParagraph, ExcelSheet, PdfSection};
+    use super::*;
 
     #[test]
     fn rejects_wrong_output_extension() {
@@ -282,7 +284,9 @@ mod tests {
             sheets: vec![ExcelSheet {
                 name: "Sheet1".to_string(),
                 headers: None,
-                rows: vec![vec![ExcelCell::Text("a".repeat(EXCEL_MAX_TEXT_CELL_BYTES + 1))]],
+                rows: vec![vec![ExcelCell::Text(
+                    "a".repeat(EXCEL_MAX_TEXT_CELL_BYTES + 1),
+                )]],
             }],
         };
 

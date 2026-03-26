@@ -286,8 +286,14 @@ impl AgentMemory {
                     DedupDecision::Insert(distilled) => {
                         let entry_id = uuid::Uuid::new_v4().to_string();
                         let mut metadata = HashMap::new();
-                        metadata.insert("_category".to_string(), distilled.category.as_str().to_string());
-                        metadata.insert("_importance".to_string(), format!("{:.2}", distilled.importance));
+                        metadata.insert(
+                            "_category".to_string(),
+                            distilled.category.as_str().to_string(),
+                        );
+                        metadata.insert(
+                            "_importance".to_string(),
+                            format!("{:.2}", distilled.importance),
+                        );
 
                         let tags = vec![
                             format!("workspace:{}", workspace_id),
@@ -309,10 +315,19 @@ impl AgentMemory {
                             )
                             .await;
                     }
-                    DedupDecision::Update { existing_id, merged } => {
+                    DedupDecision::Update {
+                        existing_id,
+                        merged,
+                    } => {
                         let mut metadata = HashMap::new();
-                        metadata.insert("_category".to_string(), merged.category.as_str().to_string());
-                        metadata.insert("_importance".to_string(), format!("{:.2}", merged.importance));
+                        metadata.insert(
+                            "_category".to_string(),
+                            merged.category.as_str().to_string(),
+                        );
+                        metadata.insert(
+                            "_importance".to_string(),
+                            format!("{:.2}", merged.importance),
+                        );
 
                         let tags = vec![
                             format!("workspace:{}", workspace_id),

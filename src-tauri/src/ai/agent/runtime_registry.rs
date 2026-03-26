@@ -288,7 +288,12 @@ impl RuntimeRegistry {
             if let Some(write_like_used) = write_like_used {
                 specialist.write_like_used = write_like_used;
             }
-            if matches!(status, SpecialistStatus::Running | SpecialistStatus::WaitingOnAirlock | SpecialistStatus::Verifying) {
+            if matches!(
+                status,
+                SpecialistStatus::Running
+                    | SpecialistStatus::WaitingOnAirlock
+                    | SpecialistStatus::Verifying
+            ) {
                 run.status = "running".to_string();
             }
         }
@@ -394,7 +399,11 @@ mod tests {
                 "run-1",
                 &[
                     ("research-1".to_string(), SpecialistRole::Research, vec![]),
-                    ("executor-1".to_string(), SpecialistRole::Executor, vec!["research-1".to_string()]),
+                    (
+                        "executor-1".to_string(),
+                        SpecialistRole::Executor,
+                        vec!["research-1".to_string()],
+                    ),
                 ],
             )
             .await;

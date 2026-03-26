@@ -1,9 +1,8 @@
+use crate::ai::mode_selector::{ModeSelector, TaskComplexity, UseCase};
 use crate::ai::model_catalog::{
     all_catalog_models, ensure_supported_model_slug, find_catalog_model, normalize_model_slug,
-    CatalogModel,
-    ModelProvider,
+    CatalogModel, ModelProvider,
 };
-use crate::ai::mode_selector::{ModeSelector, TaskComplexity, UseCase};
 use crate::ai::provider::AIProviderManager;
 use crate::ai::provider_types::StreamingChunk;
 use crate::models::ProviderType;
@@ -105,10 +104,7 @@ fn dynamic_rainy_model_from_catalog(item: &ModelCatalogItem) -> UnifiedModel {
 
     UnifiedModel {
         id: format!("rainy:{}", item.id),
-        name: item
-            .name
-            .clone()
-            .unwrap_or_else(|| slug_to_title(&item.id)),
+        name: item.name.clone().unwrap_or_else(|| slug_to_title(&item.id)),
         provider: "Rainy API".to_string(),
         capabilities: ModelCapabilities {
             chat: true,
@@ -160,7 +156,10 @@ pub async fn get_unified_models(
     app: AppHandle,
     provider_manager: tauri::State<'_, Arc<AIProviderManager>>,
 ) -> Result<Vec<UnifiedModel>, String> {
-    let has_gemini_key = provider_manager.has_api_key("gemini").await.unwrap_or(false);
+    let has_gemini_key = provider_manager
+        .has_api_key("gemini")
+        .await
+        .unwrap_or(false);
 
     let mut models: Vec<UnifiedModel> = all_catalog_models()
         .into_iter()

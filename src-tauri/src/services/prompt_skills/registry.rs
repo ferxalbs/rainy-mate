@@ -71,7 +71,8 @@ pub struct PromptSkillRegistry {
 impl PromptSkillRegistry {
     pub fn global(app_data_dir: &Path) -> Result<Self, String> {
         let root = app_data_dir.join("prompt_skills");
-        fs::create_dir_all(&root).map_err(|e| format!("Failed to create prompt skill dir: {}", e))?;
+        fs::create_dir_all(&root)
+            .map_err(|e| format!("Failed to create prompt skill dir: {}", e))?;
         Ok(Self {
             path: root.join("registry.json"),
         })
@@ -79,7 +80,8 @@ impl PromptSkillRegistry {
 
     pub fn project(workspace_path: &Path) -> Result<Self, String> {
         let root = workspace_path.join(".rainy-mate").join("registry");
-        fs::create_dir_all(&root).map_err(|e| format!("Failed to create project prompt skill dir: {}", e))?;
+        fs::create_dir_all(&root)
+            .map_err(|e| format!("Failed to create project prompt skill dir: {}", e))?;
         Ok(Self {
             path: root.join("prompt-skills.json"),
         })
@@ -97,7 +99,8 @@ impl PromptSkillRegistry {
     fn save(&self, file: &PromptSkillRegistryFile) -> Result<(), String> {
         let raw = serde_json::to_string_pretty(file)
             .map_err(|e| format!("Failed to serialize prompt skill registry: {}", e))?;
-        fs::write(&self.path, raw).map_err(|e| format!("Failed to write prompt skill registry: {}", e))
+        fs::write(&self.path, raw)
+            .map_err(|e| format!("Failed to write prompt skill registry: {}", e))
     }
 
     pub fn get_entries(&self) -> Result<HashMap<String, PromptSkillRegistryEntry>, String> {
@@ -109,13 +112,13 @@ impl PromptSkillRegistry {
             .collect())
     }
 
-    pub fn set_all_agents_enabled(
-        &self,
-        source_path: &str,
-        enabled: bool,
-    ) -> Result<(), String> {
+    pub fn set_all_agents_enabled(&self, source_path: &str, enabled: bool) -> Result<(), String> {
         let mut file = self.load()?;
-        if let Some(entry) = file.entries.iter_mut().find(|entry| entry.source_path == source_path) {
+        if let Some(entry) = file
+            .entries
+            .iter_mut()
+            .find(|entry| entry.source_path == source_path)
+        {
             entry.all_agents_enabled = enabled;
         } else {
             file.entries.push(PromptSkillRegistryEntry {
@@ -123,7 +126,8 @@ impl PromptSkillRegistry {
                 all_agents_enabled: enabled,
             });
         }
-        file.entries.sort_by(|a, b| a.source_path.cmp(&b.source_path));
+        file.entries
+            .sort_by(|a, b| a.source_path.cmp(&b.source_path));
         self.save(&file)
     }
 }

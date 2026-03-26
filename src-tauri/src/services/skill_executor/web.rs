@@ -74,7 +74,10 @@ impl SkillExecutor {
         {
             Ok(result) => CommandResult {
                 success: true,
-                output: Some(format!("Research Result for '{}':\n{}", query, result.content)),
+                output: Some(format!(
+                    "Research Result for '{}':\n{}",
+                    query, result.content
+                )),
                 error: None,
                 exit_code: Some(0),
             },
@@ -179,7 +182,10 @@ impl SkillExecutor {
         for attempt in 0..=2 {
             match client
                 .get(parsed_url.clone())
-                .header("accept", "text/*,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .header(
+                    "accept",
+                    "text/*,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                )
                 .send()
                 .await
             {
@@ -208,7 +214,9 @@ impl SkillExecutor {
 
                     let bytes = match resp.bytes().await {
                         Ok(b) => b,
-                        Err(e) => return self.error(&format!("Failed to read response body: {}", e)),
+                        Err(e) => {
+                            return self.error(&format!("Failed to read response body: {}", e))
+                        }
                     };
                     if bytes.len() > max_bytes {
                         return self.error(&format!(
@@ -330,7 +338,9 @@ impl SkillExecutor {
                         .to_string();
                     let bytes = match resp.bytes().await {
                         Ok(b) => b,
-                        Err(e) => return self.error(&format!("Failed to read response body: {}", e)),
+                        Err(e) => {
+                            return self.error(&format!("Failed to read response body: {}", e))
+                        }
                     };
 
                     if bytes.len() > max_bytes {

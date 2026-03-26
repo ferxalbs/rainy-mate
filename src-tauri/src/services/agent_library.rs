@@ -53,8 +53,8 @@ impl AgentLibraryService {
 
     pub fn list_specs(&self) -> Result<Vec<AgentLibraryEntry>, String> {
         let mut entries = Vec::new();
-        for entry in fs::read_dir(&self.root)
-            .map_err(|e| format!("Failed to read agent library: {}", e))?
+        for entry in
+            fs::read_dir(&self.root).map_err(|e| format!("Failed to read agent library: {}", e))?
         {
             let entry = entry.map_err(|e| format!("Invalid library entry: {}", e))?;
             let path = entry.path();
@@ -137,10 +137,8 @@ mod tests {
 
     #[test]
     fn save_list_load_roundtrip() {
-        let dir = std::env::temp_dir().join(format!(
-            "rainy-agent-library-test-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("rainy-agent-library-test-{}", uuid::Uuid::new_v4()));
         let service = AgentLibraryService::from_root(dir).expect("service should initialize");
 
         let spec = AgentSpec {
@@ -209,7 +207,11 @@ mod tests {
                 provider: None,
                 signature: None,
             };
-            assert!(service.save_spec(&spec).is_err(), "id should fail: {}", invalid_id);
+            assert!(
+                service.save_spec(&spec).is_err(),
+                "id should fail: {}",
+                invalid_id
+            );
         }
     }
 

@@ -480,7 +480,6 @@ impl WorkflowStep for ThinkStep {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,7 +552,7 @@ mod tests {
             allowed_paths: None,
             custom_system_prompt: None,
             streaming_enabled: Some(false),
-               reasoning_effort: None,
+            reasoning_effort: None,
             temperature: None,
             max_tokens: None,
             connector_id: None,
@@ -583,7 +582,14 @@ mod tests {
         ));
         memory_manager.init().await;
         let memory = Arc::new(
-            AgentMemory::new("test-ws", temp_dir.path().to_path_buf(), memory_manager, None, None).await,
+            AgentMemory::new(
+                "test-ws",
+                temp_dir.path().to_path_buf(),
+                memory_manager,
+                None,
+                None,
+            )
+            .await,
         );
 
         let state = AgentState::new(
@@ -600,8 +606,7 @@ mod tests {
                 let provider_manager = Arc::new(AIProviderManager::new());
                 let managed_research = Arc::new(ManagedResearchService::new(provider_manager));
                 let browser = Arc::new(BrowserController::new());
-                let mcp_service =
-                    Arc::new(crate::services::mcp_service::McpService::new());
+                let mcp_service = Arc::new(crate::services::mcp_service::McpService::new());
                 let skills = Arc::new(SkillExecutor::new(
                     Arc::new(wm),
                     managed_research,

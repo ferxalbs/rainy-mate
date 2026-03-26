@@ -62,13 +62,8 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
                 "web_search" | "read_web_page" | "http_get_json" | "http_get_text" => {
                     ToolSkill::Web
                 }
-                "screenshot"
-                | "get_page_content"
-                | "get_page_snapshot"
-                | "wait_for_selector"
-                | "extract_links" => {
-                    ToolSkill::Browser
-                }
+                "screenshot" | "get_page_content" | "get_page_snapshot" | "wait_for_selector"
+                | "extract_links" => ToolSkill::Browser,
                 "git_status" | "git_diff" | "git_log" | "git_show" | "git_branch_list" => {
                     ToolSkill::Shell
                 }
@@ -82,11 +77,12 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
             skill: ToolSkill::Filesystem,
             airlock_level: AirlockLevel::Sensitive,
         },
-        "browse_url" | "click_element" | "navigate" | "open_new_tab" | "type_text"
-        | "go_back" => ToolPolicy {
-            skill: ToolSkill::Browser,
-            airlock_level: AirlockLevel::Sensitive,
-        },
+        "browse_url" | "click_element" | "navigate" | "open_new_tab" | "type_text" | "go_back" => {
+            ToolPolicy {
+                skill: ToolSkill::Browser,
+                airlock_level: AirlockLevel::Sensitive,
+            }
+        }
 
         // Level 2: destructive or external command execution
         "execute_command" => ToolPolicy {

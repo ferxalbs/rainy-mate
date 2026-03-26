@@ -37,6 +37,50 @@ pub async fn get_pending_airlock_approvals(
         Err("Airlock service not initialized".to_string())
     }
 }
+
+#[command]
+pub async fn list_airlock_messages(
+    state: State<'_, AirlockServiceState>,
+    limit: Option<u32>,
+) -> Result<Vec<crate::services::AirlockMessage>, String> {
+    let guard = state.0.lock().await;
+    if let Some(airlock) = guard.as_ref() {
+        airlock.list_messages(limit).await
+    } else {
+        Err("Airlock service not initialized".to_string())
+    }
+}
+
+#[command]
+pub async fn ack_airlock_message(
+    state: State<'_, AirlockServiceState>,
+    command_id: String,
+) -> Result<(), String> {
+    let guard = state.0.lock().await;
+    if let Some(airlock) = guard.as_ref() {
+        airlock.acknowledge_message(&command_id).await
+    } else {
+        Err("Airlock service not initialized".to_string())
+    }
+}
+
+#[command]
+pub async fn send_airlock_message(
+    state: State<'_, AirlockServiceState>,
+    title: String,
+    body: String,
+    command_id: Option<String>,
+) -> Result<(), String> {
+    let guard = state.0.lock().await;
+    if let Some(airlock) = guard.as_ref() {
+        airlock
+            .send_message(&title, &body, command_id.as_deref())
+            .await
+    } else {
+        Err("Airlock service not initialized".to_string())
+    }
+}
+
 /// Set headless mode (auto-approve sensitive commands)
 #[command]
 pub async fn set_headless_mode(

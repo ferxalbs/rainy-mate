@@ -147,8 +147,6 @@ impl SkillInstaller {
     }
 }
 
-
-
 pub fn verify_ed25519_signature(message: &[u8], signature_hex: &str, public_key_hex: &str) -> bool {
     let sig_bytes = match hex::decode(signature_hex) {
         Ok(b) if b.len() == 64 => b,

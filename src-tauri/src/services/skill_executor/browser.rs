@@ -195,9 +195,10 @@ impl SkillExecutor {
                                 error: None,
                                 exit_code: Some(0),
                             },
-                            Err(e) => {
-                                self.error(&format!("Back navigation completed but snapshot failed: {}", e))
-                            }
+                            Err(e) => self.error(&format!(
+                                "Back navigation completed but snapshot failed: {}",
+                                e
+                            )),
                         }
                     }
                     Err(e) => self.error(&format!("Failed to navigate back: {}", e)),
@@ -225,7 +226,8 @@ impl SkillExecutor {
                 }
             }
             "extract_links" => {
-                let args: ExtractLinksArgs = serde_json::from_value(params.clone()).unwrap_or_default();
+                let args: ExtractLinksArgs =
+                    serde_json::from_value(params.clone()).unwrap_or_default();
                 let limit = args.limit.unwrap_or(100).clamp(1, 500);
                 let script = format!(
                     "(function() {{ const out = []; const els = document.querySelectorAll('a[href]'); for (let i = 0; i < els.length && out.length < {}; i++) {{ const el = els[i]; out.push({{ href: el.href || '', text: (el.innerText || el.textContent || '').trim(), title: (el.getAttribute('title') || '').trim() }}); }} return JSON.stringify(out); }})()",

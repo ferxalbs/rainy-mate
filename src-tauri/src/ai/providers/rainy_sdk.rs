@@ -8,9 +8,9 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use rainy_sdk::models::{
     CapabilityFlag, FunctionDefinition, OpenAIChatCompletionRequest, OpenAIChatMessage,
-    OpenAIContentPart, OpenAIFunctionCall, OpenAIImageUrl, OpenAIMessageContent,
-    OpenAIMessageRole, OpenAIToolCall, ResponsesApiResponse, ResponsesRequest, ThinkingConfig,
-    ThinkingLevel, Tool, ToolChoice, ToolFunction, ToolType,
+    OpenAIContentPart, OpenAIFunctionCall, OpenAIImageUrl, OpenAIMessageContent, OpenAIMessageRole,
+    OpenAIToolCall, ResponsesApiResponse, ResponsesRequest, ThinkingConfig, ThinkingLevel, Tool,
+    ToolChoice, ToolFunction, ToolType,
 };
 use rainy_sdk::RainyClient;
 use serde_json::{json, Value};
@@ -127,9 +127,12 @@ impl RainySDKProvider {
         match content {
             MessageContent::Text(text) => OpenAIMessageContent::Text(text.clone()),
             MessageContent::Parts(parts) => OpenAIMessageContent::Parts(
-                parts.iter()
+                parts
+                    .iter()
                     .map(|part| match part {
-                        ContentPart::Text { text } => OpenAIContentPart::Text { text: text.clone() },
+                        ContentPart::Text { text } => {
+                            OpenAIContentPart::Text { text: text.clone() }
+                        }
                         ContentPart::ImageUrl { image_url } => OpenAIContentPart::ImageUrl {
                             image_url: OpenAIImageUrl {
                                 url: image_url.url.clone(),
@@ -162,7 +165,8 @@ impl RainySDKProvider {
             },
             name: message.name.clone(),
             tool_calls: message.tool_calls.as_ref().map(|calls| {
-                calls.iter()
+                calls
+                    .iter()
                     .map(|call| OpenAIToolCall {
                         id: call.id.clone(),
                         r#type: call.r#type.clone(),
@@ -254,7 +258,8 @@ impl RainySDKProvider {
 
     fn map_response_content_parts(parts: &[ContentPart]) -> Value {
         Value::Array(
-            parts.iter()
+            parts
+                .iter()
                 .map(|part| match part {
                     ContentPart::Text { text } => json!({
                         "type": "input_text",
@@ -341,8 +346,10 @@ impl RainySDKProvider {
 
     fn build_responses_request(request: &ChatCompletionRequest) -> ResponsesRequest {
         let (model_id, _) = Self::map_model_id(&request.model);
-        let mut sdk_request =
-            ResponsesRequest::new(model_id.clone(), Value::Array(Self::map_responses_input_items(request)));
+        let mut sdk_request = ResponsesRequest::new(
+            model_id.clone(),
+            Value::Array(Self::map_responses_input_items(request)),
+        );
 
         sdk_request.stream = Some(request.stream);
         sdk_request.temperature = request.temperature;
@@ -497,7 +504,8 @@ impl RainySDKProvider {
     async fn fetch_capabilities(&self) -> ProviderCapabilities {
         match self.client.get_models_catalog().await {
             Ok(models) if !models.is_empty() => {
-                let mut model_ids: Vec<String> = models.iter().map(|item| item.id.clone()).collect();
+                let mut model_ids: Vec<String> =
+                    models.iter().map(|item| item.id.clone()).collect();
                 model_ids.sort();
                 model_ids.dedup();
 
@@ -512,7 +520,11 @@ impl RainySDKProvider {
                 };
 
                 let function_calling = models.iter().any(|item| {
-                    supports(item.rainy_capabilities.as_ref().and_then(|caps| caps.tools.as_ref()))
+                    supports(
+                        item.rainy_capabilities
+                            .as_ref()
+                            .and_then(|caps| caps.tools.as_ref()),
+                    )
                 });
                 let vision = models.iter().any(|item| {
                     supports(
@@ -571,12 +583,16 @@ impl RainySDKProvider {
     ) -> ProviderResult<ChatCompletionResponse> {
         let api_request = Self::build_openai_request(&request);
 
-        let response = self.client.create_openai_chat_completion(api_request).await.map_err(|e| {
-            AIError::APIError(format!(
-                "Rainy chat.completions request failed for model '{}': {}",
-                request.model, e
-            ))
-        })?;
+        let response = self
+            .client
+            .create_openai_chat_completion(api_request)
+            .await
+            .map_err(|e| {
+                AIError::APIError(format!(
+                    "Rainy chat.completions request failed for model '{}': {}",
+                    request.model, e
+                ))
+            })?;
 
         let choice = response
             .choices
@@ -604,7 +620,8 @@ impl RainySDKProvider {
         });
 
         let tool_calls = choice.message.tool_calls.map(|calls| {
-            calls.into_iter()
+            calls
+                .into_iter()
                 .map(|call| ToolCall {
                     id: call.id,
                     r#type: call.r#type,
@@ -648,12 +665,16 @@ impl RainySDKProvider {
         request: ChatCompletionRequest,
     ) -> ProviderResult<ChatCompletionResponse> {
         let api_request = Self::build_responses_request(&request);
-        let (response, metadata) = self.client.create_response(api_request).await.map_err(|e| {
-            AIError::APIError(format!(
-                "Rainy responses request failed for model '{}': {}",
-                request.model, e
-            ))
-        })?;
+        let (response, metadata) = self
+            .client
+            .create_response(api_request)
+            .await
+            .map_err(|e| {
+                AIError::APIError(format!(
+                    "Rainy responses request failed for model '{}': {}",
+                    request.model, e
+                ))
+            })?;
 
         let mut mapped = Self::map_responses_response(RainyTransport::Responses, response)?;
         if let Some(existing) = mapped.provider_metadata.as_mut() {

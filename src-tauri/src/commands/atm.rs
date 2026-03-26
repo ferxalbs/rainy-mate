@@ -15,10 +15,11 @@ async fn ensure_default_cloud_agent(
     client: &ATMClient,
 ) -> Result<EnsureDefaultAtmAgentResult, String> {
     let existing_agents = client.list_agent_summaries().await?;
-    if let Some(active) = existing_agents.iter().find(|agent| agent.status == "active") {
-        let is_default_cloud_agent = active
-            .logical_spec_id
-            .as_deref()
+    if let Some(active) = existing_agents
+        .iter()
+        .find(|agent| agent.status == "active")
+    {
+        let is_default_cloud_agent = active.logical_spec_id.as_deref()
             == Some(crate::services::default_agent_spec::DEFAULT_CLOUD_AGENT_ID);
 
         if !is_default_cloud_agent {
@@ -138,7 +139,8 @@ pub async fn import_atm_workspace_shared_agent(
     agent_id: String,
 ) -> Result<crate::services::atm_client::WorkspaceSharedAgentSpecResponse, String> {
     let imported = client.get_workspace_shared_agent_spec(agent_id).await?;
-    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone(), None).await?;
+    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone(), None)
+        .await?;
     Ok(imported)
 }
 
@@ -181,7 +183,8 @@ pub async fn import_atm_marketplace_agent(
     marketplace_id: String,
 ) -> Result<crate::services::atm_client::MarketplaceAgentSpecResponse, String> {
     let imported = client.get_marketplace_agent_spec(marketplace_id).await?;
-    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone(), None).await?;
+    crate::commands::agent_builder::save_agent_spec(app_handle, imported.spec.clone(), None)
+        .await?;
     Ok(imported)
 }
 

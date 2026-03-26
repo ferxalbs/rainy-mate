@@ -36,7 +36,10 @@ fn materialize_prompt_skills(
         .map(|binding| (binding.source_path.clone(), binding))
         .collect();
 
-    for skill in discovered.into_iter().filter(|skill| skill.valid && skill.all_agents_enabled) {
+    for skill in discovered
+        .into_iter()
+        .filter(|skill| skill.valid && skill.all_agents_enabled)
+    {
         merged
             .entry(skill.source_path.clone())
             .or_insert_with(|| skill.to_binding());

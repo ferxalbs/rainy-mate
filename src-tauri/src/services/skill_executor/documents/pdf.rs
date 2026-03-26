@@ -1,6 +1,6 @@
-use super::limits::{ensure_output_extension, normalized_pdf_read_max_pages, validate_pdf_create};
-use super::super::args::{PdfCreateArgs, PdfSection, PdfReadArgs};
+use super::super::args::{PdfCreateArgs, PdfReadArgs, PdfSection};
 use super::super::SkillExecutor;
+use super::limits::{ensure_output_extension, normalized_pdf_read_max_pages, validate_pdf_create};
 use crate::models::neural::CommandResult;
 use serde_json::Value;
 use std::io::BufWriter;
@@ -110,7 +110,11 @@ impl SkillExecutor {
     }
 }
 
-fn build_pdf(title: &str, sections: &[PdfSection], output_path: &PathBuf) -> Result<String, String> {
+fn build_pdf(
+    title: &str,
+    sections: &[PdfSection],
+    output_path: &PathBuf,
+) -> Result<String, String> {
     use printpdf::{
         ops::{Op, PdfFontHandle},
         BuiltinFont, Mm, PdfDocument, PdfPage, PdfSaveOptions, Point, Pt, TextItem,
@@ -134,24 +138,29 @@ fn build_pdf(title: &str, sections: &[PdfSection], output_path: &PathBuf) -> Res
     let mut ops = Vec::new();
     let mut y = PAGE_HEIGHT_MM - TOP_MARGIN_MM;
 
-    let push_text = |ops: &mut Vec<Op>, text: &str, size: f32, x_mm: f32, y_mm: f32, font: BuiltinFont| {
-        ops.push(Op::StartTextSection);
-        ops.push(Op::SetFont {
-            font: PdfFontHandle::Builtin(font),
-            size: Pt(size),
-        });
-        ops.push(Op::SetTextCursor {
-            pos: Point::new(Mm(x_mm), Mm(y_mm)),
-        });
-        ops.push(Op::ShowText {
-            items: vec![TextItem::Text(text.to_string())],
-        });
-        ops.push(Op::EndTextSection);
-    };
+    let push_text =
+        |ops: &mut Vec<Op>, text: &str, size: f32, x_mm: f32, y_mm: f32, font: BuiltinFont| {
+            ops.push(Op::StartTextSection);
+            ops.push(Op::SetFont {
+                font: PdfFontHandle::Builtin(font),
+                size: Pt(size),
+            });
+            ops.push(Op::SetTextCursor {
+                pos: Point::new(Mm(x_mm), Mm(y_mm)),
+            });
+            ops.push(Op::ShowText {
+                items: vec![TextItem::Text(text.to_string())],
+            });
+            ops.push(Op::EndTextSection);
+        };
 
     let flush_page = |ops: &mut Vec<Op>, pages: &mut Vec<PdfPage>| {
         if !ops.is_empty() {
-            pages.push(PdfPage::new(Mm(PAGE_WIDTH_MM), Mm(PAGE_HEIGHT_MM), std::mem::take(ops)));
+            pages.push(PdfPage::new(
+                Mm(PAGE_WIDTH_MM),
+                Mm(PAGE_HEIGHT_MM),
+                std::mem::take(ops),
+            ));
         }
     };
 
@@ -186,7 +195,8 @@ fn build_pdf(title: &str, sections: &[PdfSection], output_path: &PathBuf) -> Res
 
         let mut current_line = String::new();
         for word in section.body.split_whitespace() {
-            if !current_line.is_empty() && current_line.len() + word.len() + 1 > MAX_CHARS_PER_LINE {
+            if !current_line.is_empty() && current_line.len() + word.len() + 1 > MAX_CHARS_PER_LINE
+            {
                 if y <= BOTTOM_MARGIN_MM {
                     flush_page(&mut ops, &mut pages);
                     y = PAGE_HEIGHT_MM - TOP_MARGIN_MM;
@@ -233,8 +243,8 @@ fn build_pdf(title: &str, sections: &[PdfSection], output_path: &PathBuf) -> Res
 
     let mut warnings = Vec::new();
     let bytes = doc.save(&PdfSaveOptions::default(), &mut warnings);
-    let file =
-        std::fs::File::create(output_path).map_err(|error| format!("Failed to create output file: {}", error))?;
+    let file = std::fs::File::create(output_path)
+        .map_err(|error| format!("Failed to create output file: {}", error))?;
     let mut writer = BufWriter::new(file);
     std::io::Write::write_all(&mut writer, &bytes)
         .map_err(|error| format!("Failed to save PDF: {}", error))?;

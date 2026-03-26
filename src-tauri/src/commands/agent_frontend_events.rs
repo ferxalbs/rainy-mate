@@ -128,11 +128,9 @@ mod tests {
             projector.project(&AgentEvent::StreamChunk("hello".to_string())).as_slice(),
             [AgentEvent::StreamChunk(chunk)] if chunk == "hello"
         ));
-        assert!(
-            projector
-                .project(&AgentEvent::StreamChunk(" world".to_string()))
-                .is_empty()
-        );
+        assert!(projector
+            .project(&AgentEvent::StreamChunk(" world".to_string()))
+            .is_empty());
         assert!(matches!(
             projector.project(&AgentEvent::Status("checkpoint".to_string())).as_slice(),
             [AgentEvent::StreamChunk(chunk), AgentEvent::Status(status)]

@@ -236,9 +236,7 @@ pub(crate) async fn process_agent_run(
         return CommandResult {
             success: false,
             output: None,
-            error: Some(
-                "Kill switch active: agent.run blocked until policy reset".to_string(),
-            ),
+            error: Some("Kill switch active: agent.run blocked until policy reset".to_string()),
             exit_code: Some(1),
         };
     }
@@ -377,10 +375,7 @@ pub(crate) async fn process_agent_run(
                 .get_agent_spec(id)
                 .await
                 .unwrap_or_else(|e| {
-                    eprintln!(
-                        "[CommandPoller] Failed to load agent spec {}: {}",
-                        id, e
-                    );
+                    eprintln!("[CommandPoller] Failed to load agent spec {}: {}", id, e);
                     None
                 })
         } else {
@@ -543,8 +538,14 @@ GUIDELINES:
             )
             .await
             .unwrap_or_else(|e| {
-                eprintln!("[CommandPoller] SessionCoordinator.start_remote_session failed: {}", e);
-                (uuid::Uuid::new_v4().to_string(), uuid::Uuid::new_v4().to_string())
+                eprintln!(
+                    "[CommandPoller] SessionCoordinator.start_remote_session failed: {}",
+                    e
+                );
+                (
+                    uuid::Uuid::new_v4().to_string(),
+                    uuid::Uuid::new_v4().to_string(),
+                )
             });
         let session_coordinator_for_events = session_coordinator.clone();
         let session_run_id_for_events = session_run_id.clone();
@@ -599,7 +600,8 @@ GUIDELINES:
                 }
 
                 // Emit to frontend for live streaming
-                session_coordinator_for_events.emit_agent_event(&session_run_id_for_events, event.clone());
+                session_coordinator_for_events
+                    .emit_agent_event(&session_run_id_for_events, event.clone());
 
                 match event {
                     AgentEvent::ToolCall(ref call) => {

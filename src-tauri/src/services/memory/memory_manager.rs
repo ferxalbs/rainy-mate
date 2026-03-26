@@ -1,8 +1,8 @@
+use crate::services::embedder::{EmbedderService, EmbeddingTaskType};
 use crate::services::memory::{
     IngestionResult, MemoryEntry, MemoryError, MemoryStats, SemanticRetrievalMode,
     SemanticSearchResult,
 };
-use crate::services::embedder::{EmbedderService, EmbeddingTaskType};
 use crate::services::memory_vault::{MemorySensitivity, MemoryVaultService, StoreMemoryInput};
 use crate::services::memory_vault::{EMBEDDING_MODEL, EMBEDDING_PROVIDER};
 use std::collections::{HashMap, VecDeque};
@@ -45,7 +45,9 @@ impl MemoryManager {
             tokio::spawn(async move {
                 match vault_for_prune.prune_global_expired(365).await {
                     Ok(0) => {}
-                    Ok(n) => tracing::info!("Startup pruning: removed {} globally expired entries", n),
+                    Ok(n) => {
+                        tracing::info!("Startup pruning: removed {} globally expired entries", n)
+                    }
                     Err(e) => tracing::warn!("Startup global pruning failed: {}", e),
                 }
             });
@@ -390,19 +392,27 @@ impl MemoryManager {
             let now = chrono::Utc::now().timestamp();
             let mut merged: HashMap<
                 String,
-                (f64, crate::services::memory_vault::types::DecryptedMemoryEntry),
+                (
+                    f64,
+                    crate::services::memory_vault::types::DecryptedMemoryEntry,
+                ),
             > = HashMap::new();
 
             for (entry, distance) in rows {
                 let recency = recency_score(entry.created_at, now);
                 let access = access_score(entry.access_count);
                 let semantic = semantic_score(distance);
-                let importance = entry.metadata.get("_importance")
+                let importance = entry
+                    .metadata
+                    .get("_importance")
                     .and_then(|v| v.parse::<f64>().ok())
                     .unwrap_or(0.5);
                 let cat_boost = category_boost(entry.metadata.get("_category").map(|s| s.as_str()));
-                let score = 0.55 * semantic + 0.13 * recency + 0.05 * access
-                          + 0.15 * importance + 0.12 * cat_boost;
+                let score = 0.55 * semantic
+                    + 0.13 * recency
+                    + 0.05 * access
+                    + 0.15 * importance
+                    + 0.12 * cat_boost;
                 upsert_ranked_entry(&mut merged, entry, score);
             }
 
@@ -449,7 +459,10 @@ impl MemoryManager {
         let now = chrono::Utc::now().timestamp();
         let mut merged: HashMap<
             String,
-            (f64, crate::services::memory_vault::types::DecryptedMemoryEntry),
+            (
+                f64,
+                crate::services::memory_vault::types::DecryptedMemoryEntry,
+            ),
         > = HashMap::new();
 
         for (entry, distance) in rows {
@@ -457,12 +470,18 @@ impl MemoryManager {
             let recency = recency_score(entry.created_at, now);
             let access = access_score(entry.access_count);
             let semantic = semantic_score(distance);
-            let importance = entry.metadata.get("_importance")
+            let importance = entry
+                .metadata
+                .get("_importance")
                 .and_then(|v| v.parse::<f64>().ok())
                 .unwrap_or(0.5);
             let cat_boost = category_boost(entry.metadata.get("_category").map(|s| s.as_str()));
-            let score = 0.50 * semantic + 0.12 * lexical + 0.12 * recency + 0.04 * access
-                      + 0.12 * importance + 0.10 * cat_boost;
+            let score = 0.50 * semantic
+                + 0.12 * lexical
+                + 0.12 * recency
+                + 0.04 * access
+                + 0.12 * importance
+                + 0.10 * cat_boost;
             upsert_ranked_entry(&mut merged, entry, score);
         }
 
@@ -519,7 +538,10 @@ impl MemoryManager {
         let embedder = self.resolve_gemini_embedder().map_err(MemoryError::Other)?;
         let mut warnings = Vec::new();
         if embedder.is_none() {
-            warnings.push("Gemini embedding API key unavailable; storing chunks without embeddings".to_string());
+            warnings.push(
+                "Gemini embedding API key unavailable; storing chunks without embeddings"
+                    .to_string(),
+            );
         }
 
         let chunks: Vec<String> = text
@@ -556,7 +578,8 @@ impl MemoryManager {
 
         let chunk_count = chunks.len();
         let active_model = crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.model;
-        let fallback_model = crate::services::memory_vault::profiles::FALLBACK_EMBEDDING_PROFILE.model;
+        let fallback_model =
+            crate::services::memory_vault::profiles::FALLBACK_EMBEDDING_PROFILE.model;
         let mut primary_embeddings: Vec<Option<Vec<f32>>> = vec![None; chunk_count];
         let mut primary_models: Vec<String> = vec![active_model.to_string(); chunk_count];
         let mut fallback_embeddings: Vec<Option<Vec<f32>>> = vec![None; chunk_count];
@@ -648,12 +671,14 @@ impl MemoryManager {
             let mut additional_embeddings = Vec::new();
 
             if let Some(extra) = fallback_embeddings[idx].clone() {
-                additional_embeddings.push(crate::services::memory_vault::AdditionalEmbeddingInput {
-                    embedding: extra,
-                    embedding_model: fallback_model.to_string(),
-                    embedding_provider: EMBEDDING_PROVIDER.to_string(),
-                    embedding_dim: crate::services::memory_vault::EMBEDDING_DIM,
-                });
+                additional_embeddings.push(
+                    crate::services::memory_vault::AdditionalEmbeddingInput {
+                        embedding: extra,
+                        embedding_model: fallback_model.to_string(),
+                        embedding_provider: EMBEDDING_PROVIDER.to_string(),
+                        embedding_dim: crate::services::memory_vault::EMBEDDING_DIM,
+                    },
+                );
             }
 
             if embedding.is_some() {
@@ -798,7 +823,13 @@ fn category_boost(cat: Option<&str>) -> f64 {
 }
 
 fn upsert_ranked_entry(
-    merged: &mut HashMap<String, (f64, crate::services::memory_vault::types::DecryptedMemoryEntry)>,
+    merged: &mut HashMap<
+        String,
+        (
+            f64,
+            crate::services::memory_vault::types::DecryptedMemoryEntry,
+        ),
+    >,
     entry: crate::services::memory_vault::types::DecryptedMemoryEntry,
     score: f64,
 ) {
@@ -846,9 +877,18 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(!result.entries.is_empty(), "simple_buffer should return ring buffer entries");
-        assert_eq!(result.mode, crate::services::memory::SemanticRetrievalMode::SimpleBuffer);
-        assert!(result.entries.iter().any(|e| e.content.contains("ring buffer content")));
+        assert!(
+            !result.entries.is_empty(),
+            "simple_buffer should return ring buffer entries"
+        );
+        assert_eq!(
+            result.mode,
+            crate::services::memory::SemanticRetrievalMode::SimpleBuffer
+        );
+        assert!(result
+            .entries
+            .iter()
+            .any(|e| e.content.contains("ring buffer content")));
     }
 
     #[tokio::test]
@@ -922,6 +962,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.entries.is_empty(), "workspace-b must not see workspace-a entries");
+        assert!(
+            result.entries.is_empty(),
+            "workspace-b must not see workspace-a entries"
+        );
     }
 }

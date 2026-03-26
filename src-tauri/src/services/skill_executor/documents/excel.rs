@@ -1,8 +1,8 @@
+use super::super::args::{ExcelCell, ExcelReadArgs, ExcelSheet, ExcelWriteArgs};
+use super::super::SkillExecutor;
 use super::limits::{
     ensure_output_extension, normalized_excel_read_max_rows, validate_excel_write,
 };
-use super::super::args::{ExcelCell, ExcelReadArgs, ExcelSheet, ExcelWriteArgs};
-use super::super::SkillExecutor;
 use crate::models::neural::CommandResult;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -166,8 +166,8 @@ fn build_excel(sheets: &[ExcelSheet], output_path: &PathBuf) -> Result<String, S
 fn read_excel(path: &PathBuf, max_rows: usize) -> Result<Vec<serde_json::Value>, String> {
     use calamine::{open_workbook_auto, Data, Reader};
 
-    let mut workbook =
-        open_workbook_auto(path).map_err(|error| format!("Failed to open Excel file: {}", error))?;
+    let mut workbook = open_workbook_auto(path)
+        .map_err(|error| format!("Failed to open Excel file: {}", error))?;
 
     let mut result = Vec::new();
     for name in workbook.sheet_names().to_vec() {
@@ -231,11 +231,19 @@ mod tests {
             ],
         }];
         let write_result = build_excel(&sheets, &output);
-        assert!(write_result.is_ok(), "Excel build failed: {:?}", write_result.err());
+        assert!(
+            write_result.is_ok(),
+            "Excel build failed: {:?}",
+            write_result.err()
+        );
         assert!(output.exists());
 
         let read_result = read_excel(&output, 100);
-        assert!(read_result.is_ok(), "Excel read failed: {:?}", read_result.err());
+        assert!(
+            read_result.is_ok(),
+            "Excel read failed: {:?}",
+            read_result.err()
+        );
         assert_eq!(read_result.unwrap().len(), 1);
     }
 }

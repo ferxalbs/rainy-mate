@@ -43,7 +43,10 @@ impl AuditEmitter {
             drained
         };
 
-        match atm_client.send_fleet_audit_events(node_id.to_string(), events.clone()).await {
+        match atm_client
+            .send_fleet_audit_events(node_id.to_string(), events.clone())
+            .await
+        {
             Ok(written) => Ok(written),
             Err(e) => {
                 let mut lock = self.queue.lock().await;

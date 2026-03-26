@@ -1,12 +1,12 @@
 // AgentRuntime v2 — Core runtime orchestrating the agent's ReAct workflow.
 // Manages state, history, memory persistence, and the Think→Act execution loop.
+use crate::ai::agent::act_step::ActStep;
 use crate::ai::agent::context_window::ContextWindow;
 use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::hierarchical_supervisor::HierarchicalSupervisorAgent;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::ai::agent::supervisor::SupervisorAgent;
-use crate::ai::agent::act_step::ActStep;
 use crate::ai::agent::workflow::{AgentState, ThinkStep, Workflow};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::{AgentSpec, RuntimeMode};

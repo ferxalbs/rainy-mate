@@ -69,11 +69,7 @@ impl ModeSelector {
     }
 
     /// Determine if Cowork mode should be used
-    pub fn should_use_cowork(
-        api_key: &str,
-        use_case: UseCase,
-        complexity: TaskComplexity,
-    ) -> bool {
+    pub fn should_use_cowork(api_key: &str, use_case: UseCase, complexity: TaskComplexity) -> bool {
         Self::select_mode(api_key, use_case, complexity) == ProcessingMode::DeepProcessing
     }
 

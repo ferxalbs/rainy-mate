@@ -1,9 +1,7 @@
 // Rainy Cowork - User Settings Service
 // Manages user preferences including AI model selection
 
-use crate::ai::model_catalog::{
-    ensure_supported_model_slug, find_catalog_model, ModelProvider,
-};
+use crate::ai::model_catalog::{ensure_supported_model_slug, find_catalog_model, ModelProvider};
 use crate::ai::provider::AIProviderManager;
 use crate::models::neural::ToolAccessPolicy;
 use crate::services::mcp_service::{McpPermissionMode, PersistedMcpServerConfig};
@@ -372,7 +370,11 @@ impl SettingsManager {
             if let Ok(catalog) = provider_manager.get_models_catalog("rainy_api").await {
                 models.extend(catalog.iter().map(Self::dynamic_model_option_from_catalog));
             } else if let Ok(dynamic_models) = provider_manager.get_models("rainy_api").await {
-                models.extend(dynamic_models.iter().map(|slug| Self::dynamic_model_option(slug)));
+                models.extend(
+                    dynamic_models
+                        .iter()
+                        .map(|slug| Self::dynamic_model_option(slug)),
+                );
             }
         }
 

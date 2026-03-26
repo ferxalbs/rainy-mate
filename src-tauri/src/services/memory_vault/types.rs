@@ -4,7 +4,8 @@ use std::collections::HashMap;
 pub const EMBEDDING_PROVIDER: &str = "gemini";
 pub const EMBEDDING_MODEL: &str =
     crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.model;
-pub const EMBEDDING_DIM: usize = crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.dim;
+pub const EMBEDDING_DIM: usize =
+    crate::services::memory_vault::profiles::ACTIVE_EMBEDDING_PROFILE.dim;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

@@ -457,6 +457,23 @@ export interface NotificationStatus {
   permission: "granted" | "denied" | "unknown" | string;
 }
 
+export interface ReadinessCredential {
+  provider: string;
+  configured: boolean;
+}
+
+export interface SystemReadiness {
+  platform: string;
+  notificationsEnabled: boolean;
+  nativeNotificationRuntimeSupported: boolean;
+  notificationPermission: "granted" | "denied" | "unsupported" | "unknown" | string;
+  workspaceCount: number;
+  hasWorkspace: boolean;
+  pendingAirlockApprovals: number;
+  pendingAirlockMessages: number;
+  credentials: ReadinessCredential[];
+}
+
 // ============ Settings Commands ============
 
 export async function getUserSettings(): Promise<UserSettings> {
@@ -489,6 +506,10 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 export async function sendTestNotification(): Promise<void> {
   return invoke<void>("send_test_notification");
+}
+
+export async function getSystemReadiness(): Promise<SystemReadiness> {
+  return invoke<SystemReadiness>("get_system_readiness");
 }
 
 export async function focusAirlockRequest(
@@ -1309,6 +1330,21 @@ export interface ApprovalRequest {
   timestamp: number;
 }
 
+export interface AirlockMessage {
+  commandId: string;
+  intent: string;
+  toolName?: string | null;
+  payloadSummary: string;
+  airlockLevel: AirlockLevel;
+  status: string;
+  resolution?: string | null;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt?: number | null;
+  resolvedAt?: number | null;
+  acknowledgedAt?: number | null;
+}
+
 export interface ParameterSchema {
   type: string;
   required?: boolean;
@@ -1373,6 +1409,26 @@ export async function respondToAirlock(
 
 export async function getPendingAirlockApprovals(): Promise<ApprovalRequest[]> {
   return invoke("get_pending_airlock_approvals");
+}
+
+export async function listAirlockMessages(limit?: number): Promise<AirlockMessage[]> {
+  return invoke("list_airlock_messages", { limit });
+}
+
+export async function ackAirlockMessage(commandId: string): Promise<void> {
+  return invoke("ack_airlock_message", { commandId });
+}
+
+export async function sendAirlockMessage(
+  title: string,
+  body: string,
+  commandId?: string | null,
+): Promise<void> {
+  return invoke("send_airlock_message", {
+    title,
+    body,
+    commandId: commandId ?? null,
+  });
 }
 
 export async function setHeadlessMode(enabled: boolean): Promise<void> {

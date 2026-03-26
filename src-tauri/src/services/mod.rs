@@ -2,9 +2,10 @@
 // Business logic layer
 
 pub mod agent_kill_switch;
+pub mod agent_library;
 pub mod agent_run_control;
 pub mod airlock;
-pub mod agent_library;
+pub mod airlock_messages;
 pub mod app_identity;
 pub mod atm_auth;
 pub mod atm_client;
@@ -13,9 +14,9 @@ pub mod browser_controller;
 pub mod cloud_bridge;
 pub mod command_poller;
 pub mod command_poller_agent;
+pub mod default_agent_spec;
 pub mod document;
 pub mod embedder;
-pub mod default_agent_spec;
 pub mod file_manager;
 pub mod file_operations;
 pub mod fleet_control;
@@ -45,12 +46,13 @@ pub mod tool_manifest;
 pub mod tool_policy;
 pub mod wasm_sandbox;
 
-pub mod workspace;
 pub mod workflow_recorder;
+pub mod workspace;
 
-pub use airlock::AirlockService;
-pub use agent_run_control::AgentRunControl;
 pub use agent_library::AgentLibraryService;
+pub use agent_run_control::AgentRunControl;
+pub use airlock::AirlockService;
+pub use airlock_messages::{AirlockMessage, AirlockMessageStore};
 pub use atm_client::ATMClient;
 pub use browser_controller::BrowserController;
 pub use command_poller::CommandPoller;
@@ -63,7 +65,9 @@ pub use managed_research::ManagedResearchService;
 pub use mcp_service::McpService;
 pub use memory::MemoryManager;
 pub use neural_service::NeuralService;
-pub use prompt_skills::{DiscoveredPromptSkill, PromptSkillBinding, PromptSkillDiscoveryService, PromptSkillRegistry};
+pub use prompt_skills::{
+    DiscoveredPromptSkill, PromptSkillBinding, PromptSkillDiscoveryService, PromptSkillRegistry,
+};
 pub use security::NodeAuthenticator;
 pub use skill_executor::SkillExecutor;
 
@@ -77,8 +81,8 @@ pub use task_manager::TaskManager;
 pub use third_party_skill_registry::ThirdPartySkillRegistry;
 pub use tool_policy::get_tool_policy;
 
+pub use workflow_recorder::WorkflowRecorderService;
 pub use workspace::{
     ConfigFormat, PermissionOverride, Workspace, WorkspaceAnalytics, WorkspaceManager,
     WorkspacePermissions, WorkspaceTemplate,
 };
-pub use workflow_recorder::WorkflowRecorderService;

@@ -38,9 +38,7 @@ impl KeychainManager {
 
         #[cfg(all(not(test), target_os = "macos"))]
         {
-            use security_framework::passwords::{
-                delete_generic_password, set_generic_password,
-            };
+            use security_framework::passwords::{delete_generic_password, set_generic_password};
 
             // Try to delete existing key first (in case of update)
             let _ = delete_generic_password(SERVICE_NAME, &account);
@@ -138,7 +136,6 @@ impl KeychainManager {
             Err("Keychain not supported on this platform".to_string())
         }
     }
-
 }
 
 impl Default for KeychainManager {

@@ -116,7 +116,10 @@ impl EmbedderService {
                     .map_err(|fallback_error| {
                         format!(
                             "Embedding failed for '{}' and fallback '{}': {} | {}",
-                            self.model, FALLBACK_EMBEDDING_PROFILE.model, primary_error, fallback_error
+                            self.model,
+                            FALLBACK_EMBEDDING_PROFILE.model,
+                            primary_error,
+                            fallback_error
                         )
                     })
             }
@@ -220,7 +223,9 @@ impl EmbedderService {
                     }],
                 },
                 task_type: Some(task_type.as_api_value().to_string()),
-                output_dimensionality: Some(crate::services::memory_vault::types::EMBEDDING_DIM as u32),
+                output_dimensionality: Some(
+                    crate::services::memory_vault::types::EMBEDDING_DIM as u32,
+                ),
             })
             .collect::<Vec<_>>();
 

@@ -32,7 +32,9 @@ pub fn run() {
     let provider_registry = Arc::new(ProviderRegistry::new());
 
     // Initialize task manager with Arc clone (needs its own reference)
-    let task_manager = Arc::new(services::task_manager::TaskManager::new(ai_provider.clone()));
+    let task_manager = Arc::new(services::task_manager::TaskManager::new(
+        ai_provider.clone(),
+    ));
 
     // Initialize file manager
     let file_manager = Arc::new(FileManager::new());
@@ -324,8 +326,23 @@ pub fn run() {
                 });
             }
 
-            // Initialize Airlock Service with app handle
-            let airlock = AirlockService::new(app.handle().clone());
+            // Initialize Database and AgentManager
+            // We block here to ensure DB is ready for core services like CommandPoller
+            let db = tauri::async_runtime::block_on(async { Database::init(app.handle()).await })
+                .expect("Failed to initialize database");
+
+            let airlock_message_store =
+                Arc::new(crate::services::AirlockMessageStore::new(db.pool.clone()));
+            tauri::async_runtime::block_on(async {
+                airlock_message_store
+                    .init()
+                    .await
+                    .expect("Failed to initialize Airlock message store");
+            });
+
+            // Initialize Airlock Service with app handle + persistence
+            let airlock =
+                AirlockService::new(app.handle().clone(), Some(airlock_message_store.clone()));
             let airlock_for_poller = airlock.clone();
 
             let airlock_state = app.state::<commands::airlock::AirlockServiceState>();
@@ -333,10 +350,6 @@ pub fn run() {
                 let mut guard = tauri::async_runtime::block_on(airlock_state.0.lock());
                 *guard = Some(airlock);
             }
-            // Initialize Database and AgentManager
-            // We block here to ensure DB is ready for core services like CommandPoller
-            let db = tauri::async_runtime::block_on(async { Database::init(app.handle()).await })
-                .expect("Failed to initialize database");
 
             let agent_manager = AgentManager::new(db.pool.clone());
             app.manage(agent_manager.clone());
@@ -378,7 +391,7 @@ pub fn run() {
                 crate::services::session_coordinator::SessionCoordinator::new(
                     agent_manager_for_poller.clone(),
                     app.handle().clone(),
-                )
+                ),
             );
             app.manage(session_coordinator.clone());
 
@@ -582,6 +595,7 @@ pub fn run() {
             commands::request_notification_permission,
             commands::send_test_notification,
             commands::focus_airlock_request,
+            commands::get_system_readiness,
             commands::get_user_profile,
             commands::set_user_profile,
             commands::get_available_models,
@@ -679,6 +693,9 @@ pub fn run() {
             // Airlock Commands (Security)
             commands::respond_to_airlock,
             commands::get_pending_airlock_approvals,
+            commands::list_airlock_messages,
+            commands::ack_airlock_message,
+            commands::send_airlock_message,
             commands::set_headless_mode,
             // Skill Commands (Direct Local Execution)
             commands::execute_skill,

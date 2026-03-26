@@ -8,9 +8,9 @@ mod tests {
     use crate::ai::specs::soul::AgentSoul;
     use crate::db::Database;
     use crate::services::SkillExecutor;
+    use serial_test::serial;
     use std::sync::Arc;
     use tokio::sync::RwLock;
-    use serial_test::serial;
 
     #[tokio::test]
     #[serial]

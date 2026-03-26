@@ -360,7 +360,10 @@ fn derive_recording_metrics(recording: &RecordedWorkflow) -> ForgeRecordingMetri
     }
 }
 
-fn run_forge_validation(spec: &AgentSpec, recording: Option<&RecordedWorkflow>) -> ForgeValidationResult {
+fn run_forge_validation(
+    spec: &AgentSpec,
+    recording: Option<&RecordedWorkflow>,
+) -> ForgeValidationResult {
     let mut reasons = Vec::new();
     let mut coverage_score: i32 = 30;
     let mut determinism_score: i32 = 35;

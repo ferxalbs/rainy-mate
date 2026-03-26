@@ -99,7 +99,10 @@ impl WorkflowRecorderService {
             return Err("Recording step kind is required".to_string());
         }
         if !is_allowed_kind(&normalized_kind) {
-            return Err(format!("Unsupported recording step kind '{}'", normalized_kind));
+            return Err(format!(
+                "Unsupported recording step kind '{}'",
+                normalized_kind
+            ));
         }
         let normalized_label = label.trim().to_string();
         if normalized_label.is_empty() {

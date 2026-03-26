@@ -11,11 +11,11 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 use wasmtime::Config;
 use wasmtime::{Engine, Linker, Module, ResourceLimiter, Store};
-use wasmtime_wasi::{DirPerms, FilePerms};
 use wasmtime_wasi::p1;
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::p2::pipe::{MemoryInputPipe, MemoryOutputPipe};
 use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wasi::{DirPerms, FilePerms};
 
 struct SandboxCtx {
     wasi: WasiP1Ctx,
@@ -25,7 +25,6 @@ struct SandboxCtx {
 struct SandboxLimits {
     max_memory_bytes: usize,
     max_table_elements: usize,
-
 }
 
 impl ResourceLimiter for SandboxLimits {
@@ -237,7 +236,9 @@ impl WasmSandboxService {
                 ));
             }
             if perm.guest_path.trim().is_empty() {
-                return Err("WASM sandbox filesystem permission guest_path must be non-empty".to_string());
+                return Err(
+                    "WASM sandbox filesystem permission guest_path must be non-empty".to_string(),
+                );
             }
             builder
                 .preopened_dir(&perm.host_path, &perm.guest_path, dir_perms, file_perms)
@@ -333,7 +334,9 @@ impl WasmSandboxService {
             );
         }
         if requests.len() > 4 {
-            return Err("WASM sandbox supports at most 4 networkRequests per execution".to_string());
+            return Err(
+                "WASM sandbox supports at most 4 networkRequests per execution".to_string(),
+            );
         }
 
         let client = reqwest::Client::builder()
@@ -384,7 +387,9 @@ impl WasmSandboxService {
                         .map_err(|e| format!("Invalid JSON from '{}': {}", url, e))?;
                     parsed
                 }
-                "text" => serde_json::Value::String(String::from_utf8_lossy(body_slice).to_string()),
+                "text" => {
+                    serde_json::Value::String(String::from_utf8_lossy(body_slice).to_string())
+                }
                 other => {
                     return Err(format!(
                         "Unsupported networkRequests[{}].responseType '{}' (expected 'text' or 'json')",
@@ -486,8 +491,8 @@ mod tests {
 
     #[test]
     fn map_fs_mode_rejects_invalid_mode() {
-        let err = WasmSandboxService::map_fs_mode("write_only")
-            .expect_err("invalid mode should fail");
+        let err =
+            WasmSandboxService::map_fs_mode("write_only").expect_err("invalid mode should fail");
         assert!(err.contains("Unsupported filesystem permission mode"));
     }
 

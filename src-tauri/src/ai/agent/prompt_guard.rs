@@ -67,9 +67,7 @@ fn exfiltration_patterns() -> &'static [Regex] {
 /// Character allowlist for workspace paths.
 fn workspace_path_allowed() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"[^A-Za-z0-9/_\-. :()\\ ]").expect("valid path allowlist regex")
-    })
+    RE.get_or_init(|| Regex::new(r"[^A-Za-z0-9/_\-. :()\\ ]").expect("valid path allowlist regex"))
 }
 
 // ---------------------------------------------------------------------------
@@ -357,13 +355,22 @@ mod tests {
 
     #[test]
     fn valid_reasoning_effort_high() {
-        assert_eq!(validate_reasoning_effort(Some("high")), Some("high".to_string()));
+        assert_eq!(
+            validate_reasoning_effort(Some("high")),
+            Some("high".to_string())
+        );
     }
 
     #[test]
     fn valid_reasoning_effort_case_insensitive() {
-        assert_eq!(validate_reasoning_effort(Some("HIGH")), Some("high".to_string()));
-        assert_eq!(validate_reasoning_effort(Some("Medium")), Some("medium".to_string()));
+        assert_eq!(
+            validate_reasoning_effort(Some("HIGH")),
+            Some("high".to_string())
+        );
+        assert_eq!(
+            validate_reasoning_effort(Some("Medium")),
+            Some("medium".to_string())
+        );
     }
 
     #[test]

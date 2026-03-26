@@ -1,4 +1,4 @@
-use crate::ai::specs::manifest::{AirlockToolPolicy, AgentSpec};
+use crate::ai::specs::manifest::{AgentSpec, AirlockToolPolicy};
 use crate::models::neural::ToolAccessPolicy;
 use crate::services::settings::SettingsManager;
 use crate::services::workspace::{WorkspaceManager, WorkspacePermissions};
@@ -103,7 +103,8 @@ impl LocalAgentSecurityService {
         let mut blocked_domains = Vec::new();
 
         if let Some(spec) = spec {
-            allowed_paths = Self::merge_allowed_paths(&allowed_paths, &spec.airlock.scopes.allowed_paths);
+            allowed_paths =
+                Self::merge_allowed_paths(&allowed_paths, &spec.airlock.scopes.allowed_paths);
             blocked_paths = Self::merge_unique(&blocked_paths, &spec.airlock.scopes.blocked_paths);
             allowed_domains =
                 Self::merge_allowed_domains(&allowed_domains, &spec.airlock.scopes.allowed_domains);
@@ -111,16 +112,15 @@ impl LocalAgentSecurityService {
                 Self::merge_unique(&blocked_domains, &spec.airlock.scopes.blocked_domains);
         }
 
-        let (mut tool_access_policy, mut source) = if let Some(state) =
-            settings.get_workspace_tool_policy_state(workspace_id)
-        {
-            (state.tool_access_policy, "settings".to_string())
-        } else {
-            (
-                Self::tool_policy_from_permissions(&workspace_permissions),
-                "workspace_permissions".to_string(),
-            )
-        };
+        let (mut tool_access_policy, mut source) =
+            if let Some(state) = settings.get_workspace_tool_policy_state(workspace_id) {
+                (state.tool_access_policy, "settings".to_string())
+            } else {
+                (
+                    Self::tool_policy_from_permissions(&workspace_permissions),
+                    "workspace_permissions".to_string(),
+                )
+            };
 
         if let Some(spec) = spec {
             tool_access_policy =
@@ -136,7 +136,8 @@ impl LocalAgentSecurityService {
             blocked_domains,
             tool_access_policy,
             tool_access_policy_source: source,
-            notifications_enabled: workspace_notifications && settings.get_settings().notifications_enabled,
+            notifications_enabled: workspace_notifications
+                && settings.get_settings().notifications_enabled,
             can_create_agents: workspace_permissions.can_create_agents,
         }
     }
@@ -287,13 +288,14 @@ mod tests {
 
     #[test]
     fn permissions_disable_mutating_tools() {
-        let policy = LocalAgentSecurityService::tool_policy_from_permissions(&WorkspacePermissions {
-            can_read: true,
-            can_write: false,
-            can_execute: false,
-            can_delete: false,
-            can_create_agents: true,
-        });
+        let policy =
+            LocalAgentSecurityService::tool_policy_from_permissions(&WorkspacePermissions {
+                can_read: true,
+                can_write: false,
+                can_execute: false,
+                can_delete: false,
+                can_create_agents: true,
+            });
 
         assert!(policy.deny.iter().any(|item| item == "write_file"));
         assert!(policy.deny.iter().any(|item| item == "execute_command"));

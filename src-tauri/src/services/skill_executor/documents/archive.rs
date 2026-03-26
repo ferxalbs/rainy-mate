@@ -1,6 +1,6 @@
-use super::limits::{ensure_output_extension, normalize_archive_entries, validate_archive_create};
 use super::super::args::ArchiveCreateArgs;
 use super::super::SkillExecutor;
+use super::limits::{ensure_output_extension, normalize_archive_entries, validate_archive_create};
 use crate::models::neural::CommandResult;
 use serde_json::Value;
 use std::io::Write;
@@ -24,7 +24,12 @@ impl SkillExecutor {
         }
 
         let output_path = match self
-            .resolve_path(workspace_id.clone(), &args.filename, allowed_paths, blocked_paths)
+            .resolve_path(
+                workspace_id.clone(),
+                &args.filename,
+                allowed_paths,
+                blocked_paths,
+            )
             .await
         {
             Ok(path) => path,
@@ -76,8 +81,8 @@ fn build_zip(files: &[PathBuf], output_path: &PathBuf) -> Result<(String, usize)
     use zip::write::SimpleFileOptions;
     use zip::{CompressionMethod, ZipWriter};
 
-    let file =
-        std::fs::File::create(output_path).map_err(|error| format!("Failed to create archive file: {}", error))?;
+    let file = std::fs::File::create(output_path)
+        .map_err(|error| format!("Failed to create archive file: {}", error))?;
     let mut zip = ZipWriter::new(file);
     let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
@@ -90,12 +95,16 @@ fn build_zip(files: &[PathBuf], output_path: &PathBuf) -> Result<(String, usize)
         zip.start_file(&entry_name, options)
             .map_err(|error| format!("Failed to start zip entry '{}': {}", entry_name, error))?;
 
-        let content =
-            std::fs::read(&file_path).map_err(|error| format!("Failed to read '{}': {}", file_path.to_string_lossy(), error))?;
-
-        zip.write_all(&content).map_err(|error| {
-            format!("Failed to write '{}' to archive: {}", entry_name, error)
+        let content = std::fs::read(&file_path).map_err(|error| {
+            format!(
+                "Failed to read '{}': {}",
+                file_path.to_string_lossy(),
+                error
+            )
         })?;
+
+        zip.write_all(&content)
+            .map_err(|error| format!("Failed to write '{}' to archive: {}", entry_name, error))?;
 
         count += 1;
     }

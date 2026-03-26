@@ -1,5 +1,7 @@
 use crate::models::neural::CommandResult;
-use crate::services::third_party_skill_registry::{InstalledThirdPartyMethod, InstalledThirdPartySkill};
+use crate::services::third_party_skill_registry::{
+    InstalledThirdPartyMethod, InstalledThirdPartySkill,
+};
 
 #[derive(Debug, Clone)]
 pub struct WasmExecutionRequest {
@@ -21,13 +23,21 @@ impl WasmExecutionResult {
             CommandResult {
                 success: true,
                 output: Some(self.stdout),
-                error: if self.stderr.trim().is_empty() { None } else { Some(self.stderr) },
+                error: if self.stderr.trim().is_empty() {
+                    None
+                } else {
+                    Some(self.stderr)
+                },
                 exit_code: Some(0),
             }
         } else {
             CommandResult {
                 success: false,
-                output: if self.stdout.trim().is_empty() { None } else { Some(self.stdout) },
+                output: if self.stdout.trim().is_empty() {
+                    None
+                } else {
+                    Some(self.stdout)
+                },
                 error: Some(if self.stderr.trim().is_empty() {
                     "WASM sandbox execution failed".to_string()
                 } else {

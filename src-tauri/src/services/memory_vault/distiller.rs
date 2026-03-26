@@ -75,9 +75,9 @@ impl MemoryDistiller {
         }
 
         if normalized.len() <= 12
-            && normalized
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || ",.!?'".contains(c))
+            && normalized.chars().all(|c| {
+                c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || ",.!?'".contains(c)
+            })
         {
             return true;
         }
@@ -119,7 +119,10 @@ impl MemoryDistiller {
         // Build extraction prompt from turns
         let mut input_block = String::with_capacity(4096);
         for turn in &meaningful_turns {
-            input_block.push_str(&format!("[{}] ({}): {}\n\n", turn.role, turn.source, turn.content));
+            input_block.push_str(&format!(
+                "[{}] ({}): {}\n\n",
+                turn.role, turn.source, turn.content
+            ));
         }
 
         let request = ChatCompletionRequest {

@@ -155,24 +155,22 @@ impl SkillExecutor {
             Some(id) => id.clone(),
             None => return self.error("Missing workspace ID in command"),
         };
-        let fallback_policy_state = if payload.tool_access_policy.is_none()
-            || payload.allowed_paths.is_empty()
-        {
-            let settings = SettingsManager::new();
-            let effective = crate::services::LocalAgentSecurityService::resolve(
-                &self.workspace_manager,
-                &settings,
-                &workspace_id,
-                None,
-            );
-            Some(effective)
-        } else {
-            None
-        };
-        let tool_policy = payload
-            .tool_access_policy
+        let fallback_policy_state =
+            if payload.tool_access_policy.is_none() || payload.allowed_paths.is_empty() {
+                let settings = SettingsManager::new();
+                let effective = crate::services::LocalAgentSecurityService::resolve(
+                    &self.workspace_manager,
+                    &settings,
+                    &workspace_id,
+                    None,
+                );
+                Some(effective)
+            } else {
+                None
+            };
+        let tool_policy = payload.tool_access_policy.as_ref().or(fallback_policy_state
             .as_ref()
-            .or(fallback_policy_state.as_ref().map(|policy| &policy.tool_access_policy));
+            .map(|policy| &policy.tool_access_policy));
 
         let fallback_allowed_paths = fallback_policy_state
             .as_ref()
@@ -300,9 +298,10 @@ impl SkillExecutor {
                 self.execute_browser(method, &payload.params, allowed_domains, blocked_domains)
                     .await
             }
-            "memory" => self
-                .execute_memory(&workspace_id, method, &payload.params)
-                .await,
+            "memory" => {
+                self.execute_memory(&workspace_id, method, &payload.params)
+                    .await
+            }
             "documents" => {
                 self.execute_documents(
                     workspace_id,
@@ -508,17 +507,18 @@ impl SkillExecutor {
                 let preview = content[..content.len().min(120)].to_string();
                 // Always persist explicit user facts to the global namespace so
                 // they are retrievable from any chat, thread, or workspace.
-                match mm.store_workspace_memory(
-                    USER_GLOBAL_NS,
-                    uuid::Uuid::new_v4().to_string(),
-                    content,
-                    "agent".to_string(),
-                    tags,
-                    std::collections::HashMap::new(),
-                    chrono::Utc::now().timestamp(),
-                    crate::services::memory_vault::MemorySensitivity::Internal,
-                )
-                .await
+                match mm
+                    .store_workspace_memory(
+                        USER_GLOBAL_NS,
+                        uuid::Uuid::new_v4().to_string(),
+                        content,
+                        "agent".to_string(),
+                        tags,
+                        std::collections::HashMap::new(),
+                        chrono::Utc::now().timestamp(),
+                        crate::services::memory_vault::MemorySensitivity::Internal,
+                    )
+                    .await
                 {
                     Ok(()) => CommandResult {
                         success: true,

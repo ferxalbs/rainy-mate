@@ -1,8 +1,6 @@
-use crate::ai::specs::{PromptSkillBinding, PromptSkillKind, PromptSkillScope};
 use super::parser::{parse_instruction_skill, parse_prompt_skill};
-use super::registry::{
-    now_ts, DiscoveredPromptSkill, PromptSkillRegistry, PromptSkillSourceKind,
-};
+use super::registry::{now_ts, DiscoveredPromptSkill, PromptSkillRegistry, PromptSkillSourceKind};
+use crate::ai::specs::{PromptSkillBinding, PromptSkillKind, PromptSkillScope};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -10,9 +8,21 @@ use walkdir::{DirEntry, WalkDir};
 
 const ROOT_FILES: &[&str] = &["SKILL.md"];
 const ROOT_INSTRUCTION_FILES: &[(&str, &str, &str)] = &[
-    ("CLAUDE.md", "claude-md", "Project instructions from CLAUDE.md. Use as repository-specific operating guidance."),
-    ("AGENTS.md", "agents-md", "Project instructions from AGENTS.md. Use as repository-specific operating guidance."),
-    ("GEMINI.md", "gemini-md", "Project instructions from GEMINI.md. Use as repository-specific operating guidance."),
+    (
+        "CLAUDE.md",
+        "claude-md",
+        "Project instructions from CLAUDE.md. Use as repository-specific operating guidance.",
+    ),
+    (
+        "AGENTS.md",
+        "agents-md",
+        "Project instructions from AGENTS.md. Use as repository-specific operating guidance.",
+    ),
+    (
+        "GEMINI.md",
+        "gemini-md",
+        "Project instructions from GEMINI.md. Use as repository-specific operating guidance.",
+    ),
 ];
 const PROJECT_DIRS: &[&str] = &[
     "skills",
@@ -32,14 +42,7 @@ const PROJECT_DIRS: &[&str] = &[
     ".goose/skills",
     ".rainy-mate/skills",
 ];
-const IGNORED_DIR_NAMES: &[&str] = &[
-    ".git",
-    "node_modules",
-    "target",
-    "dist",
-    "build",
-    ".next",
-];
+const IGNORED_DIR_NAMES: &[&str] = &[".git", "node_modules", "target", "dist", "build", ".next"];
 
 pub struct PromptSkillDiscoveryService {
     app_data_dir: PathBuf,
@@ -50,7 +53,10 @@ impl PromptSkillDiscoveryService {
         Self { app_data_dir }
     }
 
-    pub fn discover(&self, workspace_path: Option<&Path>) -> Result<Vec<DiscoveredPromptSkill>, String> {
+    pub fn discover(
+        &self,
+        workspace_path: Option<&Path>,
+    ) -> Result<Vec<DiscoveredPromptSkill>, String> {
         let global_entries = PromptSkillRegistry::global(&self.app_data_dir)?.get_entries()?;
         let project_entries = if let Some(workspace_path) = workspace_path {
             PromptSkillRegistry::project(workspace_path)?.get_entries()?
@@ -118,7 +124,10 @@ impl PromptSkillDiscoveryService {
         &self,
         path: &Path,
         scope: PromptSkillScope,
-        registry_entries: &std::collections::HashMap<String, super::registry::PromptSkillRegistryEntry>,
+        registry_entries: &std::collections::HashMap<
+            String,
+            super::registry::PromptSkillRegistryEntry,
+        >,
         seen: &mut HashSet<String>,
     ) -> Option<DiscoveredPromptSkill> {
         let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
@@ -127,7 +136,10 @@ impl PromptSkillDiscoveryService {
             return None;
         }
 
-        let file_name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("INSTRUCTIONS.md");
+        let file_name = canonical
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("INSTRUCTIONS.md");
         let (entry_name, description) = match file_name {
             "CLAUDE.md" => ("claude-md", "Project instructions from CLAUDE.md. Use as repository-specific operating guidance."),
             "AGENTS.md" => ("agents-md", "Project instructions from AGENTS.md. Use as repository-specific operating guidance."),
@@ -181,7 +193,10 @@ impl PromptSkillDiscoveryService {
         workspace_path: Option<&Path>,
         source_path: &Path,
     ) -> Result<PromptSkillBinding, String> {
-        let file_name = source_path.file_name().and_then(|value| value.to_str()).unwrap_or_default();
+        let file_name = source_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
         let scope = if let Some(workspace_path) = workspace_path {
             if source_path.starts_with(workspace_path.join(".rainy-mate")) {
                 PromptSkillScope::MateManaged
@@ -200,9 +215,15 @@ impl PromptSkillDiscoveryService {
                 "AGENTS.md" => ("agents-md", "Project instructions from AGENTS.md. Use as repository-specific operating guidance."),
                 _ => ("gemini-md", "Project instructions from GEMINI.md. Use as repository-specific operating guidance."),
             };
-            (parse_instruction_skill(source_path, entry_name, description)?, PromptSkillKind::WorkspaceInstruction)
+            (
+                parse_instruction_skill(source_path, entry_name, description)?,
+                PromptSkillKind::WorkspaceInstruction,
+            )
         } else {
-            (parse_prompt_skill(source_path)?, PromptSkillKind::PromptSkill)
+            (
+                parse_prompt_skill(source_path)?,
+                PromptSkillKind::PromptSkill,
+            )
         };
         Ok(DiscoveredPromptSkill {
             id: parsed.id,
@@ -229,7 +250,10 @@ impl PromptSkillDiscoveryService {
         path: &Path,
         scope: PromptSkillScope,
         source_kind: PromptSkillSourceKind,
-        registry_entries: &std::collections::HashMap<String, super::registry::PromptSkillRegistryEntry>,
+        registry_entries: &std::collections::HashMap<
+            String,
+            super::registry::PromptSkillRegistryEntry,
+        >,
         seen: &mut HashSet<String>,
     ) -> Option<DiscoveredPromptSkill> {
         let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
@@ -317,7 +341,10 @@ fn collect_global_candidates(app_data_dir: &Path) -> Result<Vec<PathBuf>, String
             candidates.extend(scan_skill_dirs(&home_dir.join(dir), 4)?);
         }
     }
-    candidates.extend(scan_skill_dirs(&app_data_dir.join("prompt_skills").join("managed"), 4)?);
+    candidates.extend(scan_skill_dirs(
+        &app_data_dir.join("prompt_skills").join("managed"),
+        4,
+    )?);
     Ok(candidates)
 }
 
@@ -348,7 +375,10 @@ fn collect_paths_from_json(value: &Value, base_dir: &Path, out: &mut Vec<PathBuf
                 if let Some(parent) = path.parent() {
                     out.push(parent.to_path_buf());
                 }
-            } else if raw.contains("skills/") || raw.ends_with("/skills") || raw.ends_with("\\skills") {
+            } else if raw.contains("skills/")
+                || raw.ends_with("/skills")
+                || raw.ends_with("\\skills")
+            {
                 out.extend(scan_skill_dirs(&base_dir.join(raw), 4).unwrap_or_default());
             }
         }

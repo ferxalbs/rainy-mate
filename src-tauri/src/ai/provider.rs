@@ -264,7 +264,10 @@ impl AIProviderManager {
             .collect())
     }
 
-    pub async fn get_models_catalog(&self, provider: &str) -> Result<Vec<ModelCatalogItem>, String> {
+    pub async fn get_models_catalog(
+        &self,
+        provider: &str,
+    ) -> Result<Vec<ModelCatalogItem>, String> {
         match provider {
             "rainy_api" => {
                 {
@@ -279,10 +282,11 @@ impl AIProviderManager {
                 let models = match self.fetch_public_rainy_model_catalog().await {
                     Ok(models) if !models.is_empty() => models,
                     Ok(_) | Err(_) => {
-                        let api_key = self
-                            .resolve_api_key("rainy_api")
-                            .await?
-                            .ok_or_else(|| "No public Rainy model catalog and no Rainy API key found".to_string())?;
+                        let api_key =
+                            self.resolve_api_key("rainy_api").await?.ok_or_else(|| {
+                                "No public Rainy model catalog and no Rainy API key found"
+                                    .to_string()
+                            })?;
 
                         let client = self
                             .get_or_create_client("rainy_api", &api_key)

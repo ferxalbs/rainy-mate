@@ -1,5 +1,7 @@
 use crate::ai::keychain::KeychainManager;
-use crate::services::atm_auth::{clear_owner_auth_bundle, load_owner_auth_bundle, ATMOwnerAuthBundle};
+use crate::services::atm_auth::{
+    clear_owner_auth_bundle, load_owner_auth_bundle, ATMOwnerAuthBundle,
+};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -1541,7 +1543,10 @@ impl ATMClient {
         if !res.status().is_success() {
             let status = res.status();
             let err_text = res.text().await.unwrap_or_default();
-            return Err(format!("Get fleet status failed: {} - {}", status, err_text));
+            return Err(format!(
+                "Get fleet status failed: {} - {}",
+                status, err_text
+            ));
         }
 
         res.json().await.map_err(|e| e.to_string())
@@ -1573,7 +1578,10 @@ impl ATMClient {
         if !res.status().is_success() {
             let status = res.status();
             let err_text = res.text().await.unwrap_or_default();
-            return Err(format!("Push fleet policy failed: {} - {}", status, err_text));
+            return Err(format!(
+                "Push fleet policy failed: {} - {}",
+                status, err_text
+            ));
         }
 
         res.json().await.map_err(|e| e.to_string())
@@ -1640,7 +1648,10 @@ impl ATMClient {
         if !res.status().is_success() {
             let status = res.status();
             let err_text = res.text().await.unwrap_or_default();
-            return Err(format!("Retire fleet node failed: {} - {}", status, err_text));
+            return Err(format!(
+                "Retire fleet node failed: {} - {}",
+                status, err_text
+            ));
         }
 
         res.json().await.map_err(|e| e.to_string())
@@ -1837,14 +1848,14 @@ impl ATMClient {
         if !res.status().is_success() {
             let status = res.status();
             let err_text = res.text().await.unwrap_or_default();
-            return Err(format!("Fleet audit flush failed: {} - {}", status, err_text));
+            return Err(format!(
+                "Fleet audit flush failed: {} - {}",
+                status, err_text
+            ));
         }
 
         let value: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-        Ok(value
-            .get("written")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize)
+        Ok(value.get("written").and_then(|v| v.as_u64()).unwrap_or(0) as usize)
     }
 
     /// Deploys an AgentSpec to the Cloud.

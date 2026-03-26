@@ -2,8 +2,8 @@
 // Export all command handlers for registration with Tauri
 
 pub mod agent;
-pub(crate) mod agent_frontend_events;
 pub mod agent_builder;
+pub(crate) mod agent_frontend_events;
 pub mod ai;
 pub mod ai_providers;
 pub mod airlock;
@@ -15,8 +15,8 @@ pub mod file;
 pub mod file_ops;
 pub mod folder;
 pub mod image;
-pub mod memory;
 pub mod mcp;
+pub mod memory;
 pub mod neural;
 
 pub mod research;
@@ -25,8 +25,8 @@ pub mod settings;
 pub mod task;
 pub mod unified_models;
 pub mod web;
-pub mod workspace;
 pub mod workflow_factory;
+pub mod workspace;
 
 pub use agent_builder::*;
 pub use ai::*;
@@ -40,8 +40,8 @@ pub use file::*;
 pub use file_ops::*;
 pub use folder::*;
 pub use image::*;
-pub use memory::*;
 pub use mcp::*;
+pub use memory::*;
 pub use neural::*;
 
 pub use router::*;
@@ -50,7 +50,7 @@ pub use skills::*;
 pub use task::*;
 pub use unified_models::*;
 pub use web::*;
-pub use workspace::*;
 pub use workflow_factory::*;
+pub use workspace::*;
 
 pub mod skills;

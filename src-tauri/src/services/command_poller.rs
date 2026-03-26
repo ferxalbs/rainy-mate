@@ -1,17 +1,17 @@
 use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::ai::router::IntelligentRouter;
 use crate::models::neural::CommandResult;
-use crate::services::airlock::AirlockService;
 use crate::services::agent_kill_switch::AgentKillSwitch;
-use crate::services::audit_emitter::{AuditEmitter, FleetAuditEvent};
+use crate::services::airlock::AirlockService;
 use crate::services::atm_client::ATMClient;
+use crate::services::audit_emitter::{AuditEmitter, FleetAuditEvent};
 use crate::services::fleet_control::{apply_fleet_policy, FleetPolicyEnvelope};
 use crate::services::neural_service::NeuralService;
+use crate::services::session_coordinator::SessionCoordinator;
 use crate::services::settings::SettingsManager;
 use crate::services::skill_executor::SkillExecutor;
 use crate::services::tool_manifest::build_skill_manifest_from_runtime;
 use crate::services::MemoryManager;
-use crate::services::session_coordinator::SessionCoordinator;
 use dashmap::DashSet;
 use rand::Rng;
 use std::path::PathBuf;
@@ -269,8 +269,15 @@ impl CommandPoller {
                 }
             }
 
-            if let Err(e) = self.neural_service.sync_workspace_id_with_auth_context().await {
-                eprintln!("[CommandPoller] Auth-context sync failed before register: {}", e);
+            if let Err(e) = self
+                .neural_service
+                .sync_workspace_id_with_auth_context()
+                .await
+            {
+                eprintln!(
+                    "[CommandPoller] Auth-context sync failed before register: {}",
+                    e
+                );
                 return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)));
             }
 
@@ -313,7 +320,10 @@ impl CommandPoller {
                 for command in commands {
                     // Skip commands we've already dispatched (dedup against network retries)
                     if !self.seen_commands.insert(command.id.clone()) {
-                        tracing::debug!("[CommandPoller] Skipping duplicate command: {}", command.id);
+                        tracing::debug!(
+                            "[CommandPoller] Skipping duplicate command: {}",
+                            command.id
+                        );
                         continue;
                     }
                     // Prune seen_commands to avoid unbounded growth (keep last ~500)
@@ -509,8 +519,7 @@ impl CommandPoller {
                             Ok(envelope)
                         });
 
-                    match parsed.and_then(|envelope| apply_fleet_policy(&workspace_id, &envelope))
-                    {
+                    match parsed.and_then(|envelope| apply_fleet_policy(&workspace_id, &envelope)) {
                         Ok(_) => {
                             self.kill_switch.clear();
                             self.audit_emitter
@@ -635,7 +644,8 @@ impl CommandPoller {
                         self.skill_executor.clone(),
                         self.neural_service.clone(),
                         self.audit_emitter.clone(),
-                    ).await
+                    )
+                    .await
                 }
                 _ => CommandResult {
                     success: false,

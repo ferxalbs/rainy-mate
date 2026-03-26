@@ -57,7 +57,9 @@ struct GeminiTextPart {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 enum GeminiPart {
-    Text { text: String },
+    Text {
+        text: String,
+    },
     FunctionCall {
         function_call: GeminiFunctionCall,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,7 +71,9 @@ enum GeminiPart {
         )]
         thought_signature_camel: Option<String>,
     },
-    FunctionResponse { function_response: GeminiFunctionResponse },
+    FunctionResponse {
+        function_response: GeminiFunctionResponse,
+    },
     // Catch-all for unknown part types (e.g. inlineData) — skip text extraction.
     Unknown(serde_json::Value),
 }
@@ -240,14 +244,13 @@ fn build_gemini_request_parts(
 
                 if let Some(calls) = msg.tool_calls.as_ref() {
                     for call in calls {
-                        let args = serde_json::from_str::<serde_json::Value>(
-                            &call.function.arguments,
-                        )
-                        .unwrap_or_else(|_| {
-                            serde_json::json!({
-                                "raw_arguments": call.function.arguments
-                            })
-                        });
+                        let args =
+                            serde_json::from_str::<serde_json::Value>(&call.function.arguments)
+                                .unwrap_or_else(|_| {
+                                    serde_json::json!({
+                                        "raw_arguments": call.function.arguments
+                                    })
+                                });
                         tool_name_by_id.insert(call.id.clone(), call.function.name.clone());
                         let thought_signature = call
                             .extra_content

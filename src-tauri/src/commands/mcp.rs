@@ -1,6 +1,6 @@
 use crate::services::mcp_service::{
-    McpApprovalRequest, McpJsonImportResult, McpPermissionMode, McpRuntimeStatus,
-    McpServerConfig, McpServerRuntimeStatus, PersistedMcpServerConfig,
+    McpApprovalRequest, McpJsonImportResult, McpPermissionMode, McpRuntimeStatus, McpServerConfig,
+    McpServerRuntimeStatus, PersistedMcpServerConfig,
 };
 use crate::services::McpService;
 use serde::Serialize;
@@ -108,7 +108,9 @@ pub async fn respond_to_mcp_approval(
     approval_id: String,
     approved: bool,
 ) -> Result<(), String> {
-    mcp_service.respond_to_approval(&approval_id, approved).await
+    mcp_service
+        .respond_to_approval(&approval_id, approved)
+        .await
 }
 
 #[command]
@@ -133,8 +135,14 @@ fn default_mcp_json_path() -> PathBuf {
     let base = dirs::config_dir()
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."));
-    crate::services::app_identity::resolve_child_file(base, "mcp/servers.json")
-    .unwrap_or_else(|_| PathBuf::from(".").join("rainy-mate").join("mcp").join("servers.json"))
+    crate::services::app_identity::resolve_child_file(base, "mcp/servers.json").unwrap_or_else(
+        |_| {
+            PathBuf::from(".")
+                .join("rainy-mate")
+                .join("mcp")
+                .join("servers.json")
+        },
+    )
 }
 
 fn default_mcp_json_template() -> String {

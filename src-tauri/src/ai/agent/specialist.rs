@@ -1,4 +1,6 @@
-use super::protocol::{SpecialistAssignment, SpecialistOutcome, SpecialistRole, SpecialistStatus, SupervisorMessage};
+use super::protocol::{
+    SpecialistAssignment, SpecialistOutcome, SpecialistRole, SpecialistStatus, SupervisorMessage,
+};
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::{AgentRuntime, RuntimeOptions};
 use crate::ai::router::IntelligentRouter;
@@ -205,56 +207,59 @@ impl SpecialistAgent {
         let callback_role = role.clone();
         let callback_depends_on = depends_on.clone();
         let response = runtime
-            .run_single(&input, move |event| {
-                match event {
-                    super::events::AgentEvent::ToolCall(ref call) => {
-                        if let Ok(mut count) = tool_count_flag.lock() {
-                            *count += 1;
-                        }
-                        if matches!(
-                            call.function.name.as_str(),
-                            "write_file" | "append_file" | "mkdir" | "move_file" | "delete_file" | "execute_command"
-                        ) {
-                            if let Ok(mut flag) = tool_flag.lock() {
-                                *flag = true;
-                            }
-                        }
-                        let _ = callback_tx.try_send(SupervisorMessage::SpecialistStatus {
-                            run_id: callback_run_id.clone(),
-                            agent_id: callback_agent_id.clone(),
-                            role: callback_role.clone(),
-                            status: SpecialistStatus::Running,
-                            detail: Some(format!("Executing {}", call.function.name)),
-                            active_tool: Some(call.function.name.clone()),
-                            depends_on: callback_depends_on.clone(),
-                            started_at_ms: Some(started_at_ms),
-                            finished_at_ms: None,
-                            tool_count: tool_count_flag.lock().ok().map(|count| *count),
-                            write_like_used: tool_flag.lock().ok().map(|flag| *flag),
-                        });
+            .run_single(&input, move |event| match event {
+                super::events::AgentEvent::ToolCall(ref call) => {
+                    if let Ok(mut count) = tool_count_flag.lock() {
+                        *count += 1;
                     }
-                    super::events::AgentEvent::Status(ref text) => {
-                        let status = if text.to_ascii_lowercase().contains("airlock") {
-                            SpecialistStatus::WaitingOnAirlock
-                        } else {
-                            SpecialistStatus::Running
-                        };
-                        let _ = callback_tx.try_send(SupervisorMessage::SpecialistStatus {
-                            run_id: callback_run_id.clone(),
-                            agent_id: callback_agent_id.clone(),
-                            role: callback_role.clone(),
-                            status,
-                            detail: Some(text.clone()),
-                            active_tool: None,
-                            depends_on: callback_depends_on.clone(),
-                            started_at_ms: Some(started_at_ms),
-                            finished_at_ms: None,
-                            tool_count: tool_count_flag.lock().ok().map(|count| *count),
-                            write_like_used: tool_flag.lock().ok().map(|flag| *flag),
-                        });
+                    if matches!(
+                        call.function.name.as_str(),
+                        "write_file"
+                            | "append_file"
+                            | "mkdir"
+                            | "move_file"
+                            | "delete_file"
+                            | "execute_command"
+                    ) {
+                        if let Ok(mut flag) = tool_flag.lock() {
+                            *flag = true;
+                        }
                     }
-                    _ => {}
+                    let _ = callback_tx.try_send(SupervisorMessage::SpecialistStatus {
+                        run_id: callback_run_id.clone(),
+                        agent_id: callback_agent_id.clone(),
+                        role: callback_role.clone(),
+                        status: SpecialistStatus::Running,
+                        detail: Some(format!("Executing {}", call.function.name)),
+                        active_tool: Some(call.function.name.clone()),
+                        depends_on: callback_depends_on.clone(),
+                        started_at_ms: Some(started_at_ms),
+                        finished_at_ms: None,
+                        tool_count: tool_count_flag.lock().ok().map(|count| *count),
+                        write_like_used: tool_flag.lock().ok().map(|flag| *flag),
+                    });
                 }
+                super::events::AgentEvent::Status(ref text) => {
+                    let status = if text.to_ascii_lowercase().contains("airlock") {
+                        SpecialistStatus::WaitingOnAirlock
+                    } else {
+                        SpecialistStatus::Running
+                    };
+                    let _ = callback_tx.try_send(SupervisorMessage::SpecialistStatus {
+                        run_id: callback_run_id.clone(),
+                        agent_id: callback_agent_id.clone(),
+                        role: callback_role.clone(),
+                        status,
+                        detail: Some(text.clone()),
+                        active_tool: None,
+                        depends_on: callback_depends_on.clone(),
+                        started_at_ms: Some(started_at_ms),
+                        finished_at_ms: None,
+                        tool_count: tool_count_flag.lock().ok().map(|count| *count),
+                        write_like_used: tool_flag.lock().ok().map(|flag| *flag),
+                    });
+                }
+                _ => {}
             })
             .await?;
 

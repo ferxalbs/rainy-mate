@@ -274,11 +274,8 @@ impl SkillExecutor {
             .current_dir(Path::new(cwd))
             .kill_on_drop(true)
             .output();
-        let output = tokio::time::timeout(
-            tokio::time::Duration::from_millis(timeout),
-            command_future,
-        )
-        .await;
+        let output =
+            tokio::time::timeout(tokio::time::Duration::from_millis(timeout), command_future).await;
 
         match output {
             Ok(Ok(out)) => {

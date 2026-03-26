@@ -24,10 +24,16 @@ pub fn parse_prompt_skill(skill_dir: &Path) -> Result<ParsedPromptSkill, String>
     let raw = std::fs::read_to_string(&skill_file)
         .map_err(|e| format!("Failed to read {}: {}", skill_file.display(), e))?;
     let (frontmatter, body) = split_frontmatter(&raw)?;
-    let metadata: PromptSkillFrontmatter = serde_yaml::from_str(frontmatter)
-        .map_err(|e| format!("Invalid YAML frontmatter in {}: {}", skill_file.display(), e))?;
+    let metadata: PromptSkillFrontmatter = serde_yaml::from_str(frontmatter).map_err(|e| {
+        format!(
+            "Invalid YAML frontmatter in {}: {}",
+            skill_file.display(),
+            e
+        )
+    })?;
 
-    let canonical_dir = std::fs::canonicalize(skill_dir).unwrap_or_else(|_| skill_dir.to_path_buf());
+    let canonical_dir =
+        std::fs::canonicalize(skill_dir).unwrap_or_else(|_| skill_dir.to_path_buf());
     let id = build_skill_id(&metadata.name, &canonical_dir);
 
     Ok(ParsedPromptSkill {
@@ -42,7 +48,11 @@ pub fn parse_prompt_skill(skill_dir: &Path) -> Result<ParsedPromptSkill, String>
     })
 }
 
-pub fn parse_instruction_skill(file_path: &Path, name: &str, description: &str) -> Result<ParsedPromptSkill, String> {
+pub fn parse_instruction_skill(
+    file_path: &Path,
+    name: &str,
+    description: &str,
+) -> Result<ParsedPromptSkill, String> {
     let raw = std::fs::read_to_string(file_path)
         .map_err(|e| format!("Failed to read {}: {}", file_path.display(), e))?;
     let canonical = std::fs::canonicalize(file_path).unwrap_or_else(|_| file_path.to_path_buf());
@@ -111,7 +121,11 @@ fn build_skill_id(name: &str, source_path: &Path) -> String {
         .collect::<Vec<_>>()
         .join("-");
     let hash = hash_content(&source_path.to_string_lossy());
-    format!("{}-{}", if slug.is_empty() { "skill" } else { &slug }, &hash[..8])
+    format!(
+        "{}-{}",
+        if slug.is_empty() { "skill" } else { &slug },
+        &hash[..8]
+    )
 }
 
 fn hash_content(value: &str) -> String {

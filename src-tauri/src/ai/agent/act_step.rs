@@ -125,62 +125,63 @@ impl WorkflowStep for ActStep {
             // First try the static built-in policy map; if not found, look in the
             // third-party Wasm skill registry. This makes Wasm skills fully first-class
             // citizens in the agent chat loop.
-            let (skill, method_str, airlock_level) = if crate::services::mcp_service::McpService::is_mcp_tool(&function_name) {
-                let level = resolve_airlock_level_for_tool(state.spec.as_ref(), &function_name);
-                ("mcp".to_string(), function_name.clone(), level)
-            } else if let Some(policy) = get_tool_policy(&function_name) {
-                let level = resolve_airlock_level_for_tool(state.spec.as_ref(), &function_name);
-                (
-                    policy.skill.as_str().to_string(),
-                    function_name.clone(),
-                    level,
-                )
-            } else {
-                // Check if it's a registered third-party Wasm skill method.
-                // Instantiate registry once and reuse for both the airlock check and skill_id lookup.
-                let wasm_registry = crate::services::ThirdPartySkillRegistry::new().ok();
-                let registry_check = wasm_registry
-                    .as_ref()
-                    .and_then(|reg| reg.find_method_airlock_level(&function_name).ok().flatten());
-
-                let Some(wasm_airlock) = registry_check else {
-                    let blocked_msg = format!(
-                        "Tool '{}' blocked: no explicit policy entry (fail-closed)",
-                        function_name
-                    );
-                    on_event(AgentEvent::ToolResult {
-                        id: call.id.clone(),
-                        result: blocked_msg.clone(),
-                    });
-                    results.push(AgentMessage {
-                        role: "tool".to_string(),
-                        content: AgentContent::text(blocked_msg),
-                        tool_calls: None,
-                        tool_call_id: Some(call.id.clone()),
-                    });
-                    continue;
-                };
-
-                // For Wasm skills the skill_id is derived from the registry (reuse instance above).
-                // `execute_third_party_skill` looks up the skill by (skill_id, method_name).
-                let skill_id = wasm_registry
-                    .and_then(|reg| reg.list_skills().ok())
-                    .and_then(|skills| {
-                        skills.into_iter().find(|s| {
-                            s.enabled && s.methods.iter().any(|m| m.name == function_name)
-                        })
-                    })
-                    .map(|s| s.id)
-                    .unwrap_or_else(|| function_name.clone());
-
-                let level = resolve_airlock_level_for_tool(state.spec.as_ref(), &function_name);
-                let effective = if level > wasm_airlock {
-                    level
+            let (skill, method_str, airlock_level) =
+                if crate::services::mcp_service::McpService::is_mcp_tool(&function_name) {
+                    let level = resolve_airlock_level_for_tool(state.spec.as_ref(), &function_name);
+                    ("mcp".to_string(), function_name.clone(), level)
+                } else if let Some(policy) = get_tool_policy(&function_name) {
+                    let level = resolve_airlock_level_for_tool(state.spec.as_ref(), &function_name);
+                    (
+                        policy.skill.as_str().to_string(),
+                        function_name.clone(),
+                        level,
+                    )
                 } else {
-                    wasm_airlock
+                    // Check if it's a registered third-party Wasm skill method.
+                    // Instantiate registry once and reuse for both the airlock check and skill_id lookup.
+                    let wasm_registry = crate::services::ThirdPartySkillRegistry::new().ok();
+                    let registry_check = wasm_registry.as_ref().and_then(|reg| {
+                        reg.find_method_airlock_level(&function_name).ok().flatten()
+                    });
+
+                    let Some(wasm_airlock) = registry_check else {
+                        let blocked_msg = format!(
+                            "Tool '{}' blocked: no explicit policy entry (fail-closed)",
+                            function_name
+                        );
+                        on_event(AgentEvent::ToolResult {
+                            id: call.id.clone(),
+                            result: blocked_msg.clone(),
+                        });
+                        results.push(AgentMessage {
+                            role: "tool".to_string(),
+                            content: AgentContent::text(blocked_msg),
+                            tool_calls: None,
+                            tool_call_id: Some(call.id.clone()),
+                        });
+                        continue;
+                    };
+
+                    // For Wasm skills the skill_id is derived from the registry (reuse instance above).
+                    // `execute_third_party_skill` looks up the skill by (skill_id, method_name).
+                    let skill_id = wasm_registry
+                        .and_then(|reg| reg.list_skills().ok())
+                        .and_then(|skills| {
+                            skills.into_iter().find(|s| {
+                                s.enabled && s.methods.iter().any(|m| m.name == function_name)
+                            })
+                        })
+                        .map(|s| s.id)
+                        .unwrap_or_else(|| function_name.clone());
+
+                    let level = resolve_airlock_level_for_tool(state.spec.as_ref(), &function_name);
+                    let effective = if level > wasm_airlock {
+                        level
+                    } else {
+                        wasm_airlock
+                    };
+                    (skill_id, function_name.clone(), effective)
                 };
-                (skill_id, function_name.clone(), effective)
-            };
 
             on_event(AgentEvent::Status(format!(
                 "Executing tool: {}",
@@ -264,7 +265,11 @@ impl WorkflowStep for ActStep {
             // Implement Auto-Retry Logic.
             // Only retry L0 (read-only) tools — destructive (L1/L2) operations must not
             // be retried as a double-write or double-delete would corrupt state.
-            let effective_max_retries = if airlock_level == AirlockLevel::Safe { MAX_RETRIES } else { 0 };
+            let effective_max_retries = if airlock_level == AirlockLevel::Safe {
+                MAX_RETRIES
+            } else {
+                0
+            };
             let mut attempts = 0;
             const MAX_RETRIES: u32 = 2;
             let mut final_output = String::new();
@@ -313,13 +318,15 @@ impl WorkflowStep for ActStep {
                     if !content_preview.is_empty() {
                         state
                             .memory
-                            .push_for_distillation(crate::services::memory_vault::types::RawMemoryTurn {
-                                content: content_preview,
-                                role: "tool_result".to_string(),
-                                source: format!("tool:{}", function_name),
-                                workspace_id: state.workspace_id.clone(),
-                                timestamp: chrono::Utc::now().timestamp(),
-                            })
+                            .push_for_distillation(
+                                crate::services::memory_vault::types::RawMemoryTurn {
+                                    content: content_preview,
+                                    role: "tool_result".to_string(),
+                                    source: format!("tool:{}", function_name),
+                                    workspace_id: state.workspace_id.clone(),
+                                    timestamp: chrono::Utc::now().timestamp(),
+                                },
+                            )
                             .await;
                     }
                 }

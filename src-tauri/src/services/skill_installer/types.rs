@@ -84,11 +84,17 @@ pub struct SkillTomlSignature {
 
 impl SkillToml {
     pub fn validate(&self) -> Result<(), String> {
-        if self.id.trim().is_empty() || self.name.trim().is_empty() || self.version.trim().is_empty() {
+        if self.id.trim().is_empty()
+            || self.name.trim().is_empty()
+            || self.version.trim().is_empty()
+        {
             return Err("skill.toml requires id, name, version".to_string());
         }
         if self.runtime != "wasi-core-v1" {
-            return Err(format!("Unsupported runtime '{}'; expected wasi-core-v1", self.runtime));
+            return Err(format!(
+                "Unsupported runtime '{}'; expected wasi-core-v1",
+                self.runtime
+            ));
         }
         if self.methods.is_empty() {
             return Err("skill.toml must declare at least one method".to_string());
@@ -96,7 +102,12 @@ impl SkillToml {
         Ok(())
     }
 
-    pub fn into_installed(self, binary_path: String, install_source: &str, trust_state: &str) -> InstalledThirdPartySkill {
+    pub fn into_installed(
+        self,
+        binary_path: String,
+        install_source: &str,
+        trust_state: &str,
+    ) -> InstalledThirdPartySkill {
         InstalledThirdPartySkill {
             id: self.id,
             name: self.name,

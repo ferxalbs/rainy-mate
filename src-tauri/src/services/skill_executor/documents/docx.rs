@@ -1,6 +1,6 @@
-use super::limits::{ensure_output_extension, validate_docx_create};
 use super::super::args::{DocxCreateArgs, DocxParagraph};
 use super::super::SkillExecutor;
+use super::limits::{ensure_output_extension, validate_docx_create};
 use crate::models::neural::CommandResult;
 use serde_json::Value;
 use std::io::BufWriter;
@@ -89,8 +89,8 @@ fn build_docx(paragraphs: &[DocxParagraph], output_path: &PathBuf) -> Result<Str
         docx = docx.add_paragraph(Paragraph::new().add_run(run));
     }
 
-    let file =
-        std::fs::File::create(output_path).map_err(|error| format!("Failed to create output file: {}", error))?;
+    let file = std::fs::File::create(output_path)
+        .map_err(|error| format!("Failed to create output file: {}", error))?;
     let mut writer = BufWriter::new(file);
     docx.build()
         .pack(&mut writer)
@@ -128,4 +128,3 @@ mod tests {
         assert!(output.metadata().unwrap().len() > 0);
     }
 }
-

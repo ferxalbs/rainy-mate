@@ -7,7 +7,9 @@ fn compile_swift_bridge() {
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR missing"));
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir missing"));
-    let swift_src = manifest_dir.join("macos").join("RainyNativeNotifications.swift");
+    let swift_src = manifest_dir
+        .join("macos")
+        .join("RainyNativeNotifications.swift");
     let dylib_path = out_dir.join("libRainyNativeNotifications.dylib");
     let module_cache = out_dir.join("swift-module-cache");
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("target arch missing");
@@ -59,7 +61,8 @@ fn compile_swift_bridge() {
 
     fs::create_dir_all(&target_deps_dir).expect("failed to create Cargo deps dir");
     fs::create_dir_all(&target_frameworks_dir).expect("failed to create Cargo Frameworks dir");
-    fs::copy(&dylib_path, &debug_dylib_path).expect("failed to copy Swift bridge dylib to target dir");
+    fs::copy(&dylib_path, &debug_dylib_path)
+        .expect("failed to copy Swift bridge dylib to target dir");
     fs::copy(&dylib_path, &debug_deps_dylib_path)
         .expect("failed to copy Swift bridge dylib to target deps dir");
     fs::copy(&dylib_path, &framework_dylib_path)
