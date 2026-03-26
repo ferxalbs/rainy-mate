@@ -20,6 +20,7 @@ use services::{
     SkillExecutor, SocketClient, WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
+use tauri::Manager;
 use tokio::sync::{Mutex, RwLock};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -121,7 +122,7 @@ pub fn run() {
     // Initialize folder manager (requires app handle for data dir)
     // We'll initialize it in setup since we need the app handle
 
-    tauri::Builder::default()
+    let tauri_app = tauri::Builder::default()
         // Plugins
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
@@ -332,7 +333,6 @@ pub fn run() {
                 let mut guard = tauri::async_runtime::block_on(airlock_state.0.lock());
                 *guard = Some(airlock);
             }
-
             // Initialize Database and AgentManager
             // We block here to ensure DB is ready for core services like CommandPoller
             let db = tauri::async_runtime::block_on(async { Database::init(app.handle()).await })
@@ -578,6 +578,10 @@ pub fn run() {
             commands::set_embedder_model,
             commands::set_theme,
             commands::set_notifications,
+            commands::get_notification_status,
+            commands::request_notification_permission,
+            commands::send_test_notification,
+            commands::focus_airlock_request,
             commands::get_user_profile,
             commands::set_user_profile,
             commands::get_available_models,
@@ -591,6 +595,7 @@ pub fn run() {
             commands::remove_permission_override,
             commands::get_permission_overrides,
             commands::get_effective_permissions,
+            commands::get_effective_local_agent_policy,
             commands::get_workspace_templates,
             commands::create_workspace_from_template,
             commands::save_workspace_template,
@@ -694,6 +699,7 @@ pub fn run() {
             commands::agent::list_chat_sessions,
             commands::agent::create_chat_session,
             commands::agent::create_or_reuse_empty_chat_session,
+            commands::agent::ensure_default_local_agent,
             commands::agent::delete_chat_session,
             commands::agent::update_chat_title,
             commands::agent::ensure_chat_title,
@@ -749,6 +755,17 @@ pub fn run() {
             crate::services::persistent_scheduler::list_scheduled_jobs,
             crate::services::persistent_scheduler::remove_scheduled_job,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    tauri_app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Ready = event {
+            let airlock_state = app_handle.state::<commands::airlock::AirlockServiceState>();
+            crate::services::MacOSNativeNotificationBridge::initialize(
+                app_handle.clone(),
+                commands::airlock::AirlockServiceState(airlock_state.0.clone()),
+            );
+        }
+    });
 }

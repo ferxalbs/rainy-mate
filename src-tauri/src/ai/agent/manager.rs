@@ -463,26 +463,11 @@ impl AgentManager {
         workspace_id: &str,
     ) -> Result<ChatSessionDto, sqlx::Error> {
         let chat_id = uuid::Uuid::new_v4().to_string();
-        let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
-
-        // Ensure default agent exists — DO NOTHING on conflict to preserve user customizations
-        let default_spec_json = build_default_agent_spec_json(default_agent_id, "Rainy Agent");
-        sqlx::query(
-            "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(id) DO NOTHING",
-        )
-        .bind(default_agent_id)
-        .bind("Rainy Agent")
-        .bind("Default Rainy agent — spawns Research, Executor, Verifier, and Memory Scribe sub-agents")
-        .bind(crate::services::default_agent_spec::DEFAULT_AGENT_SOUL_MARKDOWN)
-        .bind(&default_spec_json)
-        .bind("3.0.0")
-        .execute(&*self.db)
-        .await?;
+        let default_agent_id = self.ensure_default_local_agent().await?;
 
         sqlx::query("INSERT INTO chats (id, agent_id, title, workspace_id) VALUES (?, ?, NULL, ?)")
             .bind(&chat_id)
-            .bind(default_agent_id)
+            .bind(&default_agent_id)
             .bind(workspace_id)
             .execute(&*self.db)
             .await?;
@@ -605,28 +590,14 @@ impl AgentManager {
         agent_name: &str,
         workspace_id: &str,
     ) -> Result<(), sqlx::Error> {
-        let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
-        let default_soul = crate::services::default_agent_spec::DEFAULT_AGENT_SOUL_MARKDOWN;
-        let default_spec_json = build_default_agent_spec_json(default_agent_id, agent_name);
-
-        sqlx::query(
-            "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-        )
-        .bind(default_agent_id)
-        .bind(agent_name)
-        .bind("Default Rainy agent — spawns Research, Executor, Verifier, and Memory Scribe sub-agents")
-        .bind(default_soul)
-        .bind(&default_spec_json)
-        .bind("3.0.0")
-        .execute(&*self.db)
-        .await?;
+        let default_agent_id = self.ensure_default_local_agent_named(agent_name).await?;
 
         // Ensure the chat session exists with workspace_id
         sqlx::query(
             "INSERT INTO chats (id, agent_id, title, workspace_id) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
         )
         .bind(chat_id)
-        .bind(default_agent_id)
+        .bind(&default_agent_id)
         .bind(Option::<String>::None)
         .bind(workspace_id)
         .execute(&*self.db)
@@ -643,28 +614,14 @@ impl AgentManager {
         connector_id: Option<&str>,
         remote_session_peer: Option<&str>,
     ) -> Result<(), sqlx::Error> {
-        let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
-        let default_soul = crate::services::default_agent_spec::DEFAULT_AGENT_SOUL_MARKDOWN;
-        let default_spec_json = build_default_agent_spec_json(default_agent_id, "Rainy Agent");
-
-        sqlx::query(
-            "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-        )
-        .bind(default_agent_id)
-        .bind("Rainy Agent")
-        .bind("Default Rainy agent — parallel supervisor")
-        .bind(default_soul)
-        .bind(&default_spec_json)
-        .bind("3.0.0")
-        .execute(&*self.db)
-        .await?;
+        let default_agent_id = self.ensure_default_local_agent().await?;
 
         sqlx::query(
             "INSERT INTO chats (id, agent_id, title, workspace_id, source, connector_id, remote_session_peer) \
              VALUES (?, ?, NULL, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
         )
         .bind(chat_id)
-        .bind(default_agent_id)
+        .bind(&default_agent_id)
         .bind(workspace_id)
         .bind(source)
         .bind(connector_id)
@@ -673,6 +630,33 @@ impl AgentManager {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn ensure_default_local_agent(&self) -> Result<String, sqlx::Error> {
+        self.ensure_default_local_agent_named("Rainy Agent").await
+    }
+
+    pub async fn ensure_default_local_agent_named(
+        &self,
+        agent_name: &str,
+    ) -> Result<String, sqlx::Error> {
+        let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
+        let default_spec_json = build_default_agent_spec_json(default_agent_id, agent_name);
+
+        sqlx::query(
+            "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) \
+             ON CONFLICT(id) DO NOTHING",
+        )
+        .bind(default_agent_id)
+        .bind(agent_name)
+        .bind("Default Rainy agent — local-first secure runtime with bounded specialist work")
+        .bind(crate::services::default_agent_spec::DEFAULT_AGENT_SOUL_MARKDOWN)
+        .bind(&default_spec_json)
+        .bind("3.0.0")
+        .execute(&*self.db)
+        .await?;
+
+        Ok(default_agent_id.to_string())
     }
 
     pub async fn get_agent(&self, id: &str) -> Result<Option<AgentEntity>, sqlx::Error> {
@@ -722,4 +706,3 @@ impl AgentManager {
         }
     }
 }
-

@@ -22,6 +22,8 @@ pub mod fleet_control;
 pub mod folder_manager;
 pub mod image;
 pub mod llm_client;
+pub mod local_agent_security;
+pub mod macos_native_notifications;
 pub mod managed_research; // Phase 3 AI Research
 pub mod manifest_signing;
 pub mod mcp_http;
@@ -66,6 +68,8 @@ pub use security::NodeAuthenticator;
 pub use skill_executor::SkillExecutor;
 
 pub use llm_client::LLMClient;
+pub use local_agent_security::{EffectiveLocalAgentPolicy, LocalAgentSecurityService};
+pub use macos_native_notifications::MacOSNativeNotificationBridge;
 pub use settings::SettingsManager;
 pub use skill_installer::SkillInstaller;
 pub use socket_client::SocketClient;

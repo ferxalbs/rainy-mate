@@ -336,6 +336,45 @@ impl AirlockService {
         self.app
             .emit("airlock:approval_required", &request)
             .map_err(|e| format!("Failed to emit approval event: {}", e))?;
+        let title = match effective_level {
+            AirlockLevel::Dangerous => "Rainy MaTE: Critical Approval Required",
+            _ => "Rainy MaTE: Approval Required",
+        };
+        let body = format!(
+            "{} is waiting for approval: {}",
+            request.intent, request.payload_summary
+        );
+        #[cfg(target_os = "macos")]
+        if let Err(error) = crate::services::MacOSNativeNotificationBridge::send_airlock_notification(
+            title,
+            &body,
+            Some(&request.command_id),
+        ) {
+            tracing::warn!(
+                "Airlock: native macOS notification unavailable for {}: {}",
+                request.command_id,
+                error
+            );
+            let _ = self.app.emit(
+                "desktop:notification",
+                crate::commands::settings::DesktopNotificationRequest {
+                    title: title.to_string(),
+                    body: body.clone(),
+                    kind: "airlock".to_string(),
+                    command_id: Some(request.command_id.clone()),
+                },
+            );
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = self.app.emit(
+            "desktop:notification",
+            crate::commands::settings::DesktopNotificationRequest {
+                title: title.to_string(),
+                body,
+                kind: "airlock".to_string(),
+                command_id: Some(request.command_id.clone()),
+            },
+        );
 
         let result = if let Some(timeout_secs) = timeout_secs {
             match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {

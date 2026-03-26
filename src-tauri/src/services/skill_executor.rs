@@ -155,21 +155,61 @@ impl SkillExecutor {
             Some(id) => id.clone(),
             None => return self.error("Missing workspace ID in command"),
         };
-        let fallback_tool_policy = if payload.tool_access_policy.is_none() {
+        let fallback_policy_state = if payload.tool_access_policy.is_none()
+            || payload.allowed_paths.is_empty()
+        {
             let settings = SettingsManager::new();
-            settings.get_workspace_tool_policy(&workspace_id)
+            let effective = crate::services::LocalAgentSecurityService::resolve(
+                &self.workspace_manager,
+                &settings,
+                &workspace_id,
+                None,
+            );
+            Some(effective)
         } else {
             None
         };
         let tool_policy = payload
             .tool_access_policy
             .as_ref()
-            .or(fallback_tool_policy.as_ref());
+            .or(fallback_policy_state.as_ref().map(|policy| &policy.tool_access_policy));
 
-        let allowed_paths = &payload.allowed_paths;
-        let blocked_paths = &payload.blocked_paths;
-        let allowed_domains = &payload.allowed_domains;
-        let blocked_domains = &payload.blocked_domains;
+        let fallback_allowed_paths = fallback_policy_state
+            .as_ref()
+            .map(|policy| policy.allowed_paths.clone())
+            .unwrap_or_default();
+        let fallback_blocked_paths = fallback_policy_state
+            .as_ref()
+            .map(|policy| policy.blocked_paths.clone())
+            .unwrap_or_default();
+        let fallback_allowed_domains = fallback_policy_state
+            .as_ref()
+            .map(|policy| policy.allowed_domains.clone())
+            .unwrap_or_default();
+        let fallback_blocked_domains = fallback_policy_state
+            .as_ref()
+            .map(|policy| policy.blocked_domains.clone())
+            .unwrap_or_default();
+        let allowed_paths = if payload.allowed_paths.is_empty() {
+            &fallback_allowed_paths
+        } else {
+            &payload.allowed_paths
+        };
+        let blocked_paths = if payload.blocked_paths.is_empty() {
+            &fallback_blocked_paths
+        } else {
+            &payload.blocked_paths
+        };
+        let allowed_domains = if payload.allowed_domains.is_empty() {
+            &fallback_allowed_domains
+        } else {
+            &payload.allowed_domains
+        };
+        let blocked_domains = if payload.blocked_domains.is_empty() {
+            &fallback_blocked_domains
+        } else {
+            &payload.blocked_domains
+        };
         if let (Some(policy), Some(expected_hash)) =
             (tool_policy, payload.tool_access_policy_hash.as_deref())
         {

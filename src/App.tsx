@@ -12,6 +12,7 @@ import { Toaster } from "sonner";
 import { AlertCircle, FolderPlus } from "lucide-react";
 import { useAIProvider, useFolderManager } from "./hooks";
 import { useChatSessions } from "./hooks/useChatSessions";
+import { useDesktopNotifications } from "./hooks/useDesktopNotifications";
 import type { Folder } from "./types";
 import type { AgentSpec } from "./types/agent-spec";
 import * as tauri from "./services/tauri";
@@ -21,6 +22,7 @@ import { Button } from "./components/ui/button";
 function App() {
   const { refreshProviders } = useAIProvider();
   useCloudEvents();
+  useDesktopNotifications();
 
   // Folder management hook
   const {

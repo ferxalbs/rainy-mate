@@ -483,13 +483,36 @@ GUIDELINES:
             }
         };
 
-        // Resolve allowed_paths from spec airlock if not already set by command payload
-        let final_options = if options.allowed_paths.is_none()
-            && !spec.airlock.scopes.allowed_paths.is_empty()
-        {
-            RuntimeOptions {
-                allowed_paths: Some(spec.airlock.scopes.allowed_paths.clone()),
-                ..options
+        let final_options = if options.allowed_paths.is_none() {
+            let workspace_manager = match crate::services::WorkspaceManager::new() {
+                Ok(manager) => Arc::new(manager),
+                Err(error) => {
+                    return CommandResult {
+                        success: false,
+                        output: None,
+                        error: Some(format!(
+                            "Failed to initialize workspace manager for effective policy: {}",
+                            error
+                        )),
+                        exit_code: Some(1),
+                    };
+                }
+            };
+            let settings = crate::services::SettingsManager::new();
+            let effective_policy = crate::services::LocalAgentSecurityService::resolve(
+                &workspace_manager,
+                &settings,
+                &workspace_id,
+                Some(&spec),
+            );
+
+            if effective_policy.allowed_paths.is_empty() {
+                options
+            } else {
+                RuntimeOptions {
+                    allowed_paths: Some(effective_policy.allowed_paths),
+                    ..options
+                }
             }
         } else {
             options

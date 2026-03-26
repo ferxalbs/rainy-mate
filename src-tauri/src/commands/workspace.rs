@@ -1,9 +1,13 @@
 // Rainy Cowork - Workspace Commands
 // Tauri commands for advanced workspace management
 
-use crate::services::{PermissionOverride, Workspace, WorkspaceManager, WorkspacePermissions};
+use crate::services::{
+    EffectiveLocalAgentPolicy, LocalAgentSecurityService, PermissionOverride, SettingsManager,
+    Workspace, WorkspaceManager, WorkspacePermissions,
+};
 use std::sync::Arc;
 use tauri::State;
+use tokio::sync::Mutex;
 
 /// Create a new workspace
 #[tauri::command]
@@ -139,6 +143,21 @@ pub async fn get_effective_permissions(
         .map_err(|e| format!("Failed to load workspace: {}", e))?;
 
     Ok(workspace_manager.get_effective_permissions(&workspace, &path))
+}
+
+#[tauri::command]
+pub async fn get_effective_local_agent_policy(
+    workspace_id: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    settings: State<'_, Arc<Mutex<SettingsManager>>>,
+) -> Result<EffectiveLocalAgentPolicy, String> {
+    let settings = settings.lock().await;
+    Ok(LocalAgentSecurityService::resolve(
+        &workspace_manager.inner().clone(),
+        &settings,
+        &workspace_id,
+        None,
+    ))
 }
 
 /// Get all available workspace templates

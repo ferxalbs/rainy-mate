@@ -50,6 +50,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Centralized IRONMILL limits + safety guards** — `src-tauri/src/services/skill_executor/documents/limits.rs` now owns extension enforcement, row/page clamping, oversized-cell rejection, duplicate archive entry rejection, and directory rejection for ZIP inputs
 
+### Fixed
+
+- **macOS native notification bridge launch crash** — Rainy MaTE no longer crashes on startup when the native Swift notification bridge is present but the app is launched from the raw debug binary instead of a bundled `.app`:
+  - `src-tauri/src/lib.rs` now initializes the macOS notification bridge from `RunEvent::Ready` instead of `setup()`
+  - `src-tauri/macos/RainyNativeNotifications.swift` now gates `UNUserNotificationCenter` access behind a supported app-bundle runtime check and fails closed for unsupported debug launches
+  - `src-tauri/src/services/macos_native_notifications.rs` now uses retry-safe bridge initialization, explicit runtime support checks, and correct dylib FFI linkage
+
+- **macOS notification fallback behavior** — unsupported native notification runtime no longer reports false success:
+  - `src-tauri/src/commands/settings.rs` now reports `"unsupported"` permission state for raw debug launches
+  - `src-tauri/src/services/airlock.rs` now falls back cleanly to the app event path if native macOS notification delivery is unavailable
+  - `src/components/settings/tabs/PermissionsTab.tsx` now surfaces the unsupported debug-launch state in the UI
+
+- **macOS packaging/runtime alignment for the Swift bridge** — the local native notification dylib is now prepared for both debug and app-bundle lookup paths:
+  - `src-tauri/build.rs` now copies `libRainyNativeNotifications.dylib` into `target/*/Frameworks` and adds `@executable_path/../Frameworks` to the binary rpath
+  - `.cargo/config.toml` now aligns Rust macOS builds to deployment target `15.0`, matching the app's Sequoia-only support policy
+
 ### Dependencies Added (Cargo)
 
 ```
@@ -66,6 +82,9 @@ calamine = "0.26"          # Excel/ODS reader (dates feature enabled)
 - ✅ `cargo test -q every_registered_tool_has_explicit_policy_entry --lib` — 1 passed
 - ✅ `cargo test -q documents --lib` — 13 passed (format handlers + IRONMILL limits/safety boundary tests)
 - ✅ `pnpm exec tsc --noEmit` — clean (0 errors)
+- ✅ `cd src-tauri && cargo build -q` — clean after native macOS notification bridge hardening
+- ✅ `pnpm exec tsc --noEmit` — clean after notification settings/status UI update
+- ✅ `target/debug/rainy-mate` launch probe — no new `~/Library/Logs/DiagnosticReports/rainy-mate-*.ips` crash report generated
 
 ---
 

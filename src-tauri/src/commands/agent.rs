@@ -27,6 +27,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{Emitter, Manager, State};
+use tokio::sync::Mutex;
 
 const MAX_HISTORY_MESSAGE_CHARS: usize = 12_000;
 const AUTO_COMPACTION_TRIGGER_TOKENS: usize = 80_000;
@@ -852,6 +853,7 @@ pub async fn run_agent_workflow(
     provider_registry: State<'_, ProviderRegistryState>,
     memory_manager: State<'_, MemoryManagerState>,
     skills: State<'_, Arc<SkillExecutor>>,
+    workspace_manager: State<'_, Arc<crate::services::WorkspaceManager>>,
     agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
     runtime_registry: State<'_, Arc<RuntimeRegistry>>,
     run_control: State<'_, Arc<AgentRunControl>>,
@@ -1062,28 +1064,25 @@ pub async fn run_agent_workflow(
         return Ok(RunAgentWorkflowResponse { run_id, response });
     }
 
-    // Extract allowed paths from spec. If absent, derive a safe local default
-    // from the provided workspace identifier when it looks like an absolute path.
-    // Without at least one allowed path, filesystem tools are intentionally filtered
-    // out in ThinkStep, which leads to "simulated" responses instead of real tool calls.
-    let mut derived_allowed_paths = spec.airlock.scopes.allowed_paths.clone();
-    if derived_allowed_paths.is_empty() {
-        let ws = workspace_path.trim();
-        let is_unix_abs = ws.starts_with('/');
-        let is_windows_abs = ws.len() > 2 && ws.as_bytes()[1] == b':' && ws.as_bytes()[2] == b'\\';
-        if is_unix_abs || is_windows_abs {
-            derived_allowed_paths.push(ws.to_string());
-        }
-    }
+    let settings_manager = app_handle.state::<Arc<Mutex<crate::services::SettingsManager>>>();
+    let effective_policy = {
+        let settings = settings_manager.lock().await;
+        crate::services::LocalAgentSecurityService::resolve(
+            &workspace_manager.inner().clone(),
+            &settings,
+            &workspace_path,
+            Some(&spec),
+        )
+    };
 
     let options = RuntimeOptions {
         model: Some(selected_model_id),
         workspace_id: workspace_path.clone(),
         max_steps: None,
-        allowed_paths: if derived_allowed_paths.is_empty() {
+        allowed_paths: if effective_policy.allowed_paths.is_empty() {
             None
         } else {
-            Some(derived_allowed_paths.clone())
+            Some(effective_policy.allowed_paths.clone())
         },
         custom_system_prompt: None,
         streaming_enabled: Some(false),
@@ -1364,6 +1363,16 @@ pub async fn create_or_reuse_empty_chat_session(
     };
     agent_manager
         .create_or_reuse_empty_chat_session(&ws)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn ensure_default_local_agent(
+    agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
+) -> Result<String, String> {
+    agent_manager
+        .ensure_default_local_agent()
         .await
         .map_err(|e| e.to_string())
 }

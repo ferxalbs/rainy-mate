@@ -257,11 +257,6 @@ impl SettingsManager {
             .cloned()
     }
 
-    pub fn get_workspace_tool_policy(&self, workspace_id: &str) -> Option<ToolAccessPolicy> {
-        self.get_workspace_tool_policy_state(workspace_id)
-            .map(|state| state.tool_access_policy)
-    }
-
     pub fn set_workspace_tool_policy_state(
         &mut self,
         workspace_id: &str,

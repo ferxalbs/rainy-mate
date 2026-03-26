@@ -36,6 +36,22 @@ export function useAirlock() {
       },
     );
 
+    const unlistenClicked = listen<string | null>(
+      "airlock:notification_clicked",
+      (event) => {
+        const commandId = event.payload;
+        if (!commandId) return;
+        setPendingRequests((prev) => {
+          const index = prev.findIndex((request) => request.commandId === commandId);
+          if (index <= 0) return prev;
+          const next = [...prev];
+          const [request] = next.splice(index, 1);
+          next.unshift(request);
+          return next;
+        });
+      },
+    );
+
     // Check for existing pending requests on mount
     getPendingAirlockApprovals()
       .then((requests) => {
@@ -57,6 +73,7 @@ export function useAirlock() {
     return () => {
       unlistenNew.then((f) => f());
       unlistenResolved.then((f) => f());
+      unlistenClicked.then((f) => f());
     };
   }, []);
 

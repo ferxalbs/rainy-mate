@@ -450,6 +450,13 @@ export interface UserProfile {
   role: string;
 }
 
+export interface NotificationStatus {
+  enabled: boolean;
+  platform: string;
+  nativeRuntimeSupported: boolean;
+  permission: "granted" | "denied" | "unknown" | string;
+}
+
 // ============ Settings Commands ============
 
 export async function getUserSettings(): Promise<UserSettings> {
@@ -470,6 +477,26 @@ export async function setTheme(theme: string): Promise<void> {
 
 export async function setNotifications(enabled: boolean): Promise<void> {
   return invoke<void>("set_notifications", { enabled });
+}
+
+export async function getNotificationStatus(): Promise<NotificationStatus> {
+  return invoke<NotificationStatus>("get_notification_status");
+}
+
+export async function requestNotificationPermission(): Promise<boolean> {
+  return invoke<boolean>("request_notification_permission");
+}
+
+export async function sendTestNotification(): Promise<void> {
+  return invoke<void>("send_test_notification");
+}
+
+export async function focusAirlockRequest(
+  commandId?: string | null,
+): Promise<void> {
+  return invoke<void>("focus_airlock_request", {
+    commandId: commandId ?? null,
+  });
 }
 
 export async function getAvailableModels(): Promise<ModelOption[]> {
@@ -776,6 +803,31 @@ export async function getEffectivePermissions(
     canDelete: boolean;
     canCreateAgents: boolean;
   }>("get_effective_permissions", { workspaceId, path });
+}
+
+export interface EffectiveLocalAgentPolicy {
+  workspaceId: string;
+  allowedPaths: string[];
+  blockedPaths: string[];
+  allowedDomains: string[];
+  blockedDomains: string[];
+  toolAccessPolicy: {
+    enabled: boolean;
+    mode: string;
+    allow: string[];
+    deny: string[];
+  };
+  toolAccessPolicySource: string;
+  notificationsEnabled: boolean;
+  canCreateAgents: boolean;
+}
+
+export async function getEffectiveLocalAgentPolicy(
+  workspaceId: string,
+): Promise<EffectiveLocalAgentPolicy> {
+  return invoke<EffectiveLocalAgentPolicy>("get_effective_local_agent_policy", {
+    workspaceId,
+  });
 }
 
 // ============ File Versioning Types ============
@@ -2434,6 +2486,10 @@ export async function createOrReuseEmptyChatSession(
   return invoke<ChatSession>("create_or_reuse_empty_chat_session", {
     workspaceId,
   });
+}
+
+export async function ensureDefaultLocalAgent(): Promise<string> {
+  return invoke<string>("ensure_default_local_agent");
 }
 
 export async function deleteChatSession(
