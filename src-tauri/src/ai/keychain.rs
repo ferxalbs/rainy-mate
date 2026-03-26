@@ -51,6 +51,8 @@ impl KeychainManager {
 
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
+            #[allow(unused_variables)]
+            let _account = account;
             let _ = api_key;
             Err("Keychain not supported on this platform".to_string())
         }
@@ -95,6 +97,8 @@ impl KeychainManager {
 
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
+            #[allow(unused_variables)]
+            let _account = account;
             Err("Keychain not supported on this platform".to_string())
         }
     }
@@ -135,6 +139,8 @@ impl KeychainManager {
 
         #[cfg(all(not(test), not(target_os = "macos")))]
         {
+            #[allow(unused_variables)]
+            let _account = account;
             Err("Keychain not supported on this platform".to_string())
         }
     }
