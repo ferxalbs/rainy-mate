@@ -33,6 +33,7 @@ export function NeuralDashboard({
 }: Omit<NeuralDashboardProps, "isHeadless" | "onToggleHeadless">) {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isPreparingSession, setIsPreparingSession] = useState(false);
   const pairingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -43,10 +44,13 @@ export function NeuralDashboard({
   }, []);
 
   const handleGeneratePairingCode = async () => {
+    if (isPreparingSession) return;
+    setIsPreparingSession(true);
     try {
       if (!nodeReady) {
         toast.error(
           "Desktop node is still syncing with ATM. Wait a moment and try again.",
+          { id: "node-not-ready" },
         );
         return;
       }
@@ -69,7 +73,10 @@ export function NeuralDashboard({
         message?.trim().length
           ? `Failed to prepare remote access session: ${message}`
           : "Failed to prepare remote access session",
+        { id: "pairing-prepare-failed" },
       );
+    } finally {
+      setIsPreparingSession(false);
     }
   };
 
@@ -213,9 +220,9 @@ export function NeuralDashboard({
                 <Button
                   className="w-full bg-blue-500/90 text-white hover:bg-blue-500 font-medium tracking-wide shadow-lg shadow-blue-500/20 transition-all"
                   onPress={handleGeneratePairingCode}
-                  isDisabled={!nodeReady}
+                  isDisabled={!nodeReady || isPreparingSession}
                 >
-                  Generate Session Code
+                  {isPreparingSession ? "Preparing Session..." : "Generate Session Code"}
                 </Button>
                 <p className="text-xs text-muted-foreground/50">
                   {nodeReady

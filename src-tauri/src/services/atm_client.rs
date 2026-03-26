@@ -494,20 +494,51 @@ pub struct AdminPolicyAuditResponse {
 impl ATMClient {
     fn parse_service_status(status: reqwest::StatusCode, body: &str) -> ATMServiceStatus {
         let parsed = serde_json::from_str::<serde_json::Value>(body).ok();
+        let checks = parsed.as_ref().and_then(|value| value.get("checks"));
+        let parsed_ready = parsed
+            .as_ref()
+            .and_then(|value| value.get("status"))
+            .and_then(|value| value.as_str())
+            .map(|value| value == "ready");
         let code = parsed
             .as_ref()
             .and_then(|value| value.get("code"))
             .and_then(|value| value.as_str())
-            .map(|value| value.to_string());
+            .map(|value| value.to_string())
+            .or_else(|| {
+                checks.and_then(|value| {
+                    if value.get("migrations").and_then(|m| m.as_str()) == Some("error") {
+                        Some("DB_NOT_READY".to_string())
+                    } else {
+                        None
+                    }
+                })
+            });
         let message = parsed
             .as_ref()
             .and_then(|value| value.get("error").or_else(|| value.get("message")))
             .and_then(|value| value.as_str())
             .map(|value| value.to_string())
+            .or_else(|| {
+                checks.map(|value| {
+                    let db = value
+                        .get("database")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    let migrations = value
+                        .get("migrations")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    format!(
+                        "ATM readiness checks: database={}, migrations={}",
+                        db, migrations
+                    )
+                })
+            })
             .unwrap_or_else(|| body.trim().to_string());
 
         ATMServiceStatus {
-            ready: status.is_success(),
+            ready: parsed_ready.unwrap_or_else(|| status.is_success()),
             code,
             message: if message.is_empty() {
                 format!("HTTP {}", status)

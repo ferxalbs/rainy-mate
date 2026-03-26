@@ -22,6 +22,7 @@ use tokio::time::sleep;
 
 const ACTIVE_POLL_INTERVAL: Duration = Duration::from_secs(2);
 const IDLE_POLL_INTERVAL: Duration = Duration::from_secs(10);
+const WARMUP_LOG_THROTTLE: Duration = Duration::from_secs(60);
 pub(crate) const MAX_PROGRESS_PREVIEW_CHARS: usize = 300;
 
 fn with_jitter(duration: Duration) -> Duration {
@@ -85,6 +86,7 @@ pub struct CommandPoller {
     concurrent_runs: Arc<Semaphore>,
     /// Tracks recently processed command IDs to skip duplicate deliveries
     seen_commands: Arc<DashSet<String>>,
+    atm_warmup_status: Arc<Mutex<Option<(String, Instant)>>>,
 }
 
 impl CommandPoller {
@@ -107,6 +109,7 @@ impl CommandPoller {
             audit_emitter: AuditEmitter::new(),
             concurrent_runs: Arc::new(Semaphore::new(3)),
             seen_commands: Arc::new(DashSet::new()),
+            atm_warmup_status: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -255,14 +258,33 @@ impl CommandPoller {
 
             match self.atm_client.get_service_status().await {
                 Ok(status) if !status.ready => {
-                    println!(
-                        "[CommandPoller] ATM warming up (code={}): {}. Skipping registration until ready.",
-                        status.code.unwrap_or_else(|| "UNKNOWN".to_string()),
-                        status.message
-                    );
+                    let code = status.code.unwrap_or_else(|| "UNKNOWN".to_string());
+                    let signature = format!("{}::{}", code, status.message);
+                    let now = Instant::now();
+                    let mut warmup = self.atm_warmup_status.lock().await;
+                    let should_log = match warmup.as_ref() {
+                        Some((last_signature, last_at)) => {
+                            last_signature != &signature
+                                || now.duration_since(*last_at) >= WARMUP_LOG_THROTTLE
+                        }
+                        None => true,
+                    };
+                    if should_log {
+                        println!(
+                            "[CommandPoller] ATM warming up (code={}): {}. Skipping registration until ready.",
+                            code, status.message
+                        );
+                        *warmup = Some((signature, now));
+                    }
                     return Ok(0);
                 }
-                Ok(_) => {}
+                Ok(_) => {
+                    let mut warmup = self.atm_warmup_status.lock().await;
+                    if warmup.is_some() {
+                        println!("[CommandPoller] ATM readiness restored.");
+                    }
+                    *warmup = None;
+                }
                 Err(e) => {
                     eprintln!("[CommandPoller] ATM readiness probe failed: {}", e);
                     return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)));

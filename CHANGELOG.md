@@ -42,6 +42,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Read tools (`pdf_read`, `excel_read`) → `"observing"` state
   - Human-readable tool names added to `TOOL_DISPLAY_NAMES`
 
+- **Airlock message persistence store** — new `src-tauri/src/services/airlock_messages.rs` service persists Airlock message lifecycle (`pending`, `approved`, `rejected`, `timeout`, `acknowledged`) in SQLite.
+
+- **Airlock message database migration** — new migration `src-tauri/migrations/20260326091500_add_airlock_messages.sql` creates `airlock_messages` table and status/timestamp index.
+
+- **Airlock message management commands** — new Tauri commands in `src-tauri/src/commands/airlock.rs`:
+  - `list_airlock_messages`
+  - `ack_airlock_message`
+  - `send_airlock_message`
+
+- **System readiness diagnostics command** — new `get_system_readiness` Tauri command in `src-tauri/src/commands/settings.rs` reports:
+  - Notification runtime support + permission state
+  - Workspace count/presence
+  - Pending Airlock approvals/messages
+  - Credential presence matrix (without exposing secrets)
+
+- **Frontend wrappers for new diagnostics + Airlock message APIs** — added typed bindings in `src/services/tauri.ts`:
+  - `getSystemReadiness`
+  - `listAirlockMessages`
+  - `ackAirlockMessage`
+  - `sendAirlockMessage`
+
 ### Changed
 
 - **IRONMILL schemas hardened in Rust** — `src-tauri/src/services/skill_executor/args.rs` now exposes real JSON-schema limits for filenames, paths, section counts, sheet counts, row caps, paragraph caps, heading ranges, and archive file counts so the tool contract matches the backend invariants
@@ -50,7 +71,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Centralized IRONMILL limits + safety guards** — `src-tauri/src/services/skill_executor/documents/limits.rs` now owns extension enforcement, row/page clamping, oversized-cell rejection, duplicate archive entry rejection, and directory rejection for ZIP inputs
 
+- **Airlock service constructor + startup wiring** — `src-tauri/src/services/airlock.rs` and `src-tauri/src/lib.rs` now initialize Airlock with optional persisted message store (`AirlockMessageStore`) and initialize the store during app startup.
+
+- **Airlock notification delivery path unified** — `src-tauri/src/services/airlock.rs` now centralizes notification send/fallback logic for consistent native bridge + desktop event behavior.
+
+- **ATM readiness parsing hardening (desktop)** — `src-tauri/src/services/atm_client.rs` now derives readiness from JSON status, infers `DB_NOT_READY` from migration checks, and produces structured readiness messages.
+
+- **ATM `/health/ready` response contract clarity** — `rainy-atm/src/routes/health.ts` now returns explicit `code` and `message` fields in addition to `checks`.
+
+- **TypeScript gate compatibility update** — `tsconfig.json` now includes `"ignoreDeprecations": "6.0"` to keep `pnpm exec tsc --noEmit` green with current TS deprecation enforcement.
+
 ### Fixed
+
+- **ATM readiness endpoint now returns explicit warmup code/message** — `rainy-atm/src/routes/health.ts` `/health/ready` now reports `code: "DB_NOT_READY"` and a clear `message` while migrations are pending, instead of only raw checks.
+
+- **Desktop ATM readiness parsing now infers migration warmup correctly** — `src-tauri/src/services/atm_client.rs` now maps `checks.migrations = "error"` to `DB_NOT_READY`, derives a structured readiness message, and uses JSON `status` (`ready` / `not_ready`) as source of truth.
+
+- **CommandPoller warmup log spam reduced** — `src-tauri/src/services/command_poller.rs` now throttles repeated ATM warmup logs (60s window) and emits a single recovery log when ATM becomes ready again.
+
+- **Neural Dashboard pairing-action spam guarded** — `src/components/neural/modules/NeuralDashboard.tsx` now blocks concurrent `Generate Session Code` requests, disables the button while in-flight, and deduplicates repeated error toasts.
+
+- **Airlock approval/message durability across reloads** — `src-tauri/src/services/airlock.rs` now records pending/resolved approval messages into persistent storage so approval context survives UI refresh/restart.
+
+- **Airlock command surface expanded for explicit messaging** — `src-tauri/src/lib.rs` invoke handler now registers `list_airlock_messages`, `ack_airlock_message`, `send_airlock_message`, and `get_system_readiness`.
 
 - **macOS native notification bridge launch crash** — Rainy MaTE no longer crashes on startup when the native Swift notification bridge is present but the app is launched from the raw debug binary instead of a bundled `.app`:
   - `src-tauri/src/lib.rs` now initializes the macOS notification bridge from `RunEvent::Ready` instead of `setup()`
@@ -82,6 +125,10 @@ calamine = "0.26"          # Excel/ODS reader (dates feature enabled)
 - ✅ `cargo test -q every_registered_tool_has_explicit_policy_entry --lib` — 1 passed
 - ✅ `cargo test -q documents --lib` — 13 passed (format handlers + IRONMILL limits/safety boundary tests)
 - ✅ `pnpm exec tsc --noEmit` — clean (0 errors)
+- ✅ `cd src-tauri && cargo fmt` — pass
+- ✅ `cd src-tauri && cargo test -q` — pass (199 passed)
+- ✅ `cd src-tauri && cargo check -q` — pass after ATM warmup handling hardening
+- ✅ `pnpm exec tsc --noEmit` — pass after Neural Dashboard pairing guard changes
 - ✅ `cd src-tauri && cargo build -q` — clean after native macOS notification bridge hardening
 - ✅ `pnpm exec tsc --noEmit` — clean after notification settings/status UI update
 - ✅ `target/debug/rainy-mate` launch probe — no new `~/Library/Logs/DiagnosticReports/rainy-mate-*.ips` crash report generated
