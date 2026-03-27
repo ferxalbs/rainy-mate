@@ -32,7 +32,9 @@ const methodColors: Record<string, string> = {
   default: "text-gray-400 bg-gray-400/10 border-gray-400/20",
 };
 
-export function PlanConfirmationCard({
+// Performance: Wrapped PlanConfirmationCard in React.memo() to prevent full re-renders
+// of tool call lists while the parent chat interface streams new tokens.
+export const PlanConfirmationCard = React.memo(function PlanConfirmationCard({
   toolCalls,
   onExecute,
   isExecuting,
@@ -88,4 +90,4 @@ export function PlanConfirmationCard({
       </div>
     </Card>
   );
-}
+});
