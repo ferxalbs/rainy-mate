@@ -5,6 +5,45 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-26 - PROJECT KINGFALL PHASE 2: FILE ATTACHMENTS + MODEL CAPABILITIES V2
+
+### Added
+
+- **File attachments in chat** — users can now attach images, PDFs, DOCX, XLSX, TXT, and other files directly in the ChatComposer using the Plus button:
+  - `src-tauri/src/services/attachment.rs` — new attachment processing service: images → base64 data URIs (resize if >2048px, 256px JPEG thumbnail), PDF → text extraction, DOCX → XML paragraph extraction, XLSX → sheet text via `calamine`, TXT/MD/CSV → UTF-8 read; hard limits: 10 MB/file, 50 KB extracted text, 5 attachments/message
+  - `src-tauri/src/commands/agent.rs` — `run_agent_workflow` and `run_agent_workflow_internal` now accept `attachments: Option<Vec<AttachmentInput>>`; new `prepare_attachment_previews` Tauri command returns lightweight preview metadata for the file-picker flow
+  - `src-tauri/src/ai/agent/runtime.rs` — `RuntimeOptions` extended with `attachments: Option<Vec<ProcessedAttachment>>`; at user-message construction the runtime branches into `AgentContent::Parts` when attachments are present, injecting image data URIs and extracted document text alongside the prompt
+  - `src/types/agent.ts` — new `ChatAttachment` and `AttachmentPreview` types; `AgentMessage` carries optional `attachments` for bubble rendering
+  - `src/services/tauri.ts` — `runAgentWorkflow` forwards `attachments`, `prepareAttachmentPreviews` command wrapper added, `UnifiedModel.capabilities` extended with `reasoning_options`, `reasoning_mode`, `multimodal_inputs`
+  - `src/components/agent-chat/ChatComposer.tsx` — Plus button wired; attachment preview strip (image thumbnails / document chips with remove button) shown between Textarea and toolbar
+  - `src/components/agent-chat/AgentChatPanel.tsx` — `pendingAttachments` state, `handleAddAttachments` (uses `@tauri-apps/plugin-dialog`), `handleRemoveAttachment`; both ChatComposer instances receive attachment props
+  - `src/hooks/useAgentChat.ts` — `runNativeAgent` extended to accept and forward `attachments` to `runAgentWorkflow`; attachment metadata stored on user `AgentMessage`
+  - `src/components/agent-chat/MessageBubble.tsx` — user messages with attachments render image thumbnails or file-type chips above the text content
+
+- **ATM / Telegram file attachment support** — Telegram photos and documents sent to the bot are now forwarded to the desktop agent as cloud attachments:
+  - `rainy-atm/src/connectors/telegram.ts` — `downloadFile(fileId)` fetches file path via `getFile` API and downloads raw bytes; `mimeFromExt()` helper for MIME guessing
+  - `rainy-atm/src/services/telegram-agent-runtime.ts` — `downloadMediaAsCloudAttachments()` downloads up to 5 media items (≤10 MB each), base64-encodes them, and passes them as `attachments` in the `CommandBridge.executeOnDesktop()` payload
+  - `rainy-atm/src/routes/webhooks.ts` — `message.media` items forwarded into the enqueue call
+  - `src-tauri/src/services/attachment.rs` — new `CloudAttachmentInput` struct and `process_cloud_attachment()` function decode ATM-supplied base64 blobs through the same extraction pipeline as local files
+  - `src-tauri/src/services/command_poller_agent.rs` — extracts `attachments` from command payload params and processes them via `process_cloud_attachment` before passing to the agent runtime
+
+- **Model Capabilities V2 — dynamic reasoning options** — reasoning levels are now derived from the live Rainy API catalog instead of being hardcoded per model ID:
+  - `src-tauri/src/commands/unified_models.rs` — `ModelCapabilities` extended with `reasoning_options: Vec<String>`, `reasoning_mode: Option<String>`, `multimodal_inputs: Vec<String>`; `reasoning_from_v2()` now reads `ReasoningControls` arrays first, then falls back to `reasoning.profiles[].parameter_path` to infer correct options when the live catalog omits explicit arrays (fixes Claude Opus 4.6 and Gemini 3.1 Pro Preview showing only "Enabled/Disabled")
+  - `src-tauri/src/ai/providers/rainy_sdk.rs` — `thinking_config_from_catalog()` extended to handle thinking-budget models (maps "low/medium/high" → 1024/8192/32768 tokens) and toggle-only models with profile hints; "none"/"disabled" bail out cleanly; "enabled" resolves to a sensible default level
+  - `src/components/ai/UnifiedModelSelector.tsx` — `getReasoningOptions` now reads `model.capabilities.reasoning_options` directly; `REASONING_LEVELS` constant and all hardcoded model-ID checks removed
+
+### Changed
+
+- **`reasoning_from_v2()` profile-aware fallback** — when `reasoning_toggle: true` but no explicit `thinking_level`/`effort` arrays are present (as seen with Claude Opus 4.6, Gemini 3.1 Pro), the function now inspects `reasoning.profiles[].parameter_path` to determine the correct mode and option set rather than falling through to the generic "enabled/disabled" toggle
+
+### Fixed
+
+- **Claude Opus 4.6 and Gemini 3.1 Pro Preview reasoning selector showing only "Enabled/Disabled"** — root cause was the live Rainy API catalog returning `reasoning_toggle: true` with empty level arrays; fixed by consulting profile `parameter_path` to infer `thinking_level`, `thinking_budget`, or `effort` options (`unified_models.rs`)
+
+- **Minimax M2.7 and similar toggle+level models missing "None" option** — the "none" sentinel is now appended to thinking-level and effort options when `reasoning_toggle: true`, and `thinking_config_from_catalog()` bails out early for "none"/"disabled" so no thinking config is injected (`rainy_sdk.rs`)
+
+---
+
 ## [Unreleased] - 2026-03-23 - PROJECT KINGFALL PHASE 1: IRONMILL — NATIVE DOCUMENT ENGINE
 
 ### Added

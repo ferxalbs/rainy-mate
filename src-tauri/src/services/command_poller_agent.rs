@@ -409,7 +409,23 @@ pub(crate) async fn process_agent_run(
             max_tokens: None,
             connector_id: command.payload.connector_id.clone(),
             user_id: command.payload.user_id.clone(),
-            attachments: None,
+            attachments: {
+                // Extract cloud attachments sent by ATM connectors (bytes pre-downloaded).
+                let cloud_inputs: Option<Vec<crate::services::attachment::CloudAttachmentInput>> =
+                    command_for_execution
+                        .payload
+                        .params
+                        .as_ref()
+                        .and_then(|p| p.get("attachments"))
+                        .and_then(|v| serde_json::from_value(v.clone()).ok());
+                cloud_inputs.map(|inputs| {
+                    inputs
+                        .into_iter()
+                        .take(5)
+                        .filter_map(crate::services::attachment::process_cloud_attachment)
+                        .collect::<Vec<_>>()
+                })
+            },
         };
 
         // Create config

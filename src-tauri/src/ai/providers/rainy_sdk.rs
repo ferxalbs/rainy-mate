@@ -106,28 +106,72 @@ impl RainySDKProvider {
         effort: &str,
         catalog: &[ModelCatalogItem],
     ) -> Option<ThinkingConfig> {
+        let effort_lower = effort.to_lowercase();
+        // "none" / "disabled" sentinel — caller wants thinking off; return no config.
+        if matches!(effort_lower.as_str(), "none" | "disabled") {
+            return None;
+        }
+
         let clean_id = crate::ai::model_catalog::normalize_model_slug(model_id);
         let item = catalog
             .iter()
             .find(|item| crate::ai::model_catalog::normalize_model_slug(&item.id) == clean_id)?;
         let v2 = item.rainy_capabilities_v2.as_ref()?;
         let controls = v2.reasoning.controls.as_ref()?;
+        let profiles = &v2.reasoning.profiles;
 
-        // Determine which reasoning mode the model uses
-        let mode = if controls.thinking_level.as_ref().is_some_and(|v| !v.is_empty()) {
-            ReasoningMode::ThinkingLevel
-        } else if controls.reasoning_effort == Some(true)
-            || controls.effort.as_ref().is_some_and(|v| !v.is_empty())
-        {
-            // Effort-mode models (gpt-5, o-series) use the Responses API path
-            return None;
-        } else {
-            return None;
-        };
+        // Determine which reasoning mode the model uses.
+        // When explicit level/effort arrays are absent, fall back to profile parameter_path.
+        let has_thinking_level_array = controls
+            .thinking_level
+            .as_ref()
+            .is_some_and(|v| !v.is_empty());
+        let has_effort_array = controls.reasoning_effort == Some(true)
+            || controls.effort.as_ref().is_some_and(|v| !v.is_empty());
+        let has_budget = controls.thinking_budget.is_some();
+        let has_toggle = controls.reasoning_toggle == Some(true);
 
+        let has_level_profile = profiles
+            .iter()
+            .any(|p| p.parameter_path == "thinking_config.thinking_level");
+        let has_budget_profile = profiles.iter().any(|p| {
+            p.parameter_path == "thinking.budget_tokens"
+                || p.parameter_path == "thinking_config.thinking_budget"
+        });
+        let has_effort_profile = profiles
+            .iter()
+            .any(|p| p.parameter_path == "reasoning.effort");
+
+        if has_effort_array || has_effort_profile {
+            // Effort-mode models (gpt-5, o-series) use the Responses API path.
+            return None;
+        }
+
+        // Budget mode — map effort string to token budget.
+        if has_budget || has_budget_profile {
+            let budget_tokens: i32 = match effort_lower.as_str() {
+                "low" => 1024,
+                "high" => 32768,
+                "enabled" | "medium" | _ => 8192,
+            };
+            let mut config = ThinkingConfig::default();
+            config.include_thoughts = Some(true);
+            config.thinking_budget = Some(budget_tokens);
+            return Some(config);
+        }
+
+        // Thinking-level mode — explicit array or profile hint.
+        if !has_thinking_level_array && !has_level_profile && !has_toggle {
+            return None;
+        }
+
+        // "enabled" with a toggle-only model — resolve to a sensible default level.
+        let resolved_effort = if effort_lower == "enabled" { "medium" } else { effort };
+
+        let mode = ReasoningMode::ThinkingLevel;
         let preference = ReasoningPreference {
             mode,
-            value: Some(effort.to_string()),
+            value: Some(resolved_effort.to_string()),
             budget: None,
         };
 
@@ -442,13 +486,15 @@ impl RainySDKProvider {
         }
 
         if model_id.starts_with("gpt-5") || model_id.starts_with("o") {
-            sdk_request.reasoning = Some(json!({
-                "effort": request
-                    .reasoning_effort
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or("medium")
-            }));
+            let effort = request
+                .reasoning_effort
+                .as_deref()
+                .filter(|v| !v.is_empty())
+                .unwrap_or("medium");
+            // "none"/"disabled" means the user wants to turn off reasoning entirely.
+            if !matches!(effort.to_lowercase().as_str(), "none" | "disabled") {
+                sdk_request.reasoning = Some(json!({ "effort": effort }));
+            }
         }
 
         sdk_request

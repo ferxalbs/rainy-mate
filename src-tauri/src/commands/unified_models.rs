@@ -141,27 +141,96 @@ fn reasoning_from_v2(v2: Option<&RainyCapabilitiesV2>) -> (Vec<String>, Option<S
         None => return (vec![], Some("effort".to_string())),
     };
 
+    let has_toggle = controls.reasoning_toggle == Some(true);
+
     // Prefer effort > thinking_level > thinking_budget
     if let Some(efforts) = &controls.effort {
         if !efforts.is_empty() {
-            return (efforts.clone(), Some("effort".to_string()));
+            let mut options = efforts.clone();
+            // Add "none" sentinel when the model also supports disabling thinking entirely.
+            if has_toggle {
+                options.push("none".to_string());
+            }
+            return (options, Some("effort".to_string()));
         }
     }
     if controls.reasoning_effort == Some(true) {
         // Generic effort toggle — use standard set
-        return (
-            vec![
-                "low".to_string(),
-                "medium".to_string(),
-                "high".to_string(),
-            ],
-            Some("effort".to_string()),
-        );
+        let mut options = vec![
+            "low".to_string(),
+            "medium".to_string(),
+            "high".to_string(),
+        ];
+        if has_toggle {
+            options.push("none".to_string());
+        }
+        return (options, Some("effort".to_string()));
     }
     if let Some(levels) = &controls.thinking_level {
         if !levels.is_empty() {
-            return (levels.clone(), Some("thinking_level".to_string()));
+            let mut options = levels.clone();
+            if has_toggle {
+                options.push("none".to_string());
+            }
+            return (options, Some("thinking_level".to_string()));
         }
+    }
+    // Pure on/off toggle — consult profiles for the actual reasoning mechanism.
+    // The live catalog sometimes omits explicit level/effort arrays even when a model
+    // supports them; the profile parameter_path is the authoritative signal.
+    if has_toggle {
+        let has_level_profile = reasoning
+            .profiles
+            .iter()
+            .any(|p| p.parameter_path == "thinking_config.thinking_level");
+        let has_budget_profile = reasoning.profiles.iter().any(|p| {
+            p.parameter_path == "thinking.budget_tokens"
+                || p.parameter_path == "thinking_config.thinking_budget"
+        });
+        let has_effort_profile = reasoning
+            .profiles
+            .iter()
+            .any(|p| p.parameter_path == "reasoning.effort");
+
+        if has_level_profile {
+            return (
+                vec![
+                    "minimal".to_string(),
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "none".to_string(),
+                ],
+                Some("thinking_level".to_string()),
+            );
+        }
+        if has_budget_profile {
+            return (
+                vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "none".to_string(),
+                ],
+                Some("thinking_budget".to_string()),
+            );
+        }
+        if has_effort_profile {
+            return (
+                vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "none".to_string(),
+                ],
+                Some("effort".to_string()),
+            );
+        }
+        // True pure toggle — no profile hints available
+        return (
+            vec!["enabled".to_string(), "disabled".to_string()],
+            Some("toggle".to_string()),
+        );
     }
     if controls.thinking_budget.is_some() {
         return (vec![], Some("thinking_budget".to_string()));

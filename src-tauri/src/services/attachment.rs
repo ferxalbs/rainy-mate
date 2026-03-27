@@ -49,6 +49,17 @@ pub struct ProcessedAttachment {
     pub thumbnail_data_uri: Option<String>,
 }
 
+/// Attachment received from a cloud connector (ATM) — bytes pre-downloaded and base64-encoded.
+/// The ATM downloads the file from Telegram/WhatsApp and sends this payload to the desktop.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CloudAttachmentInput {
+    pub filename: String,
+    pub mime_type: String,
+    /// Raw file bytes encoded as standard base64 (no data URI prefix).
+    pub data_base64: String,
+    pub size_bytes: u64,
+}
+
 /// Lightweight preview returned by `prepare_attachment_previews` before the user submits.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttachmentPreview {
@@ -114,6 +125,105 @@ pub fn process_attachments(
         .take(MAX_ATTACHMENTS)
         .filter_map(|input| process_single(&input).ok())
         .collect()
+}
+
+/// Process a cloud attachment (bytes pre-downloaded by the ATM connector) into agent content.
+/// Returns `None` when the file is too large or the base64 payload is malformed.
+pub fn process_cloud_attachment(input: CloudAttachmentInput) -> Option<ProcessedAttachment> {
+    if input.size_bytes > MAX_FILE_SIZE_BYTES {
+        return None;
+    }
+
+    let bytes = BASE64.decode(&input.data_base64).ok()?;
+
+    let ext = Path::new(&input.filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let attachment_type = attachment_type_from_mime_or_ext(&input.mime_type, &ext);
+
+    match attachment_type.as_str() {
+        "image" => {
+            let img = match image::load_from_memory(&bytes) {
+                Ok(i) => i,
+                Err(_) => {
+                    // Cannot decode — wrap raw base64 as data URI anyway
+                    let data_uri = format!("data:{};base64,{}", input.mime_type, input.data_base64);
+                    return Some(ProcessedAttachment {
+                        filename: input.filename,
+                        mime_type: input.mime_type,
+                        size_bytes: input.size_bytes,
+                        content: AttachmentContent::ImageDataUri { data_uri },
+                        thumbnail_data_uri: None,
+                    });
+                }
+            };
+            let img = resize_if_needed(img, MAX_IMAGE_DIMENSION);
+            let data_uri = encode_image_to_data_uri(&img, &input.mime_type)
+                .unwrap_or_else(|_| format!("data:{};base64,{}", input.mime_type, input.data_base64));
+            let thumb = {
+                let t = img.thumbnail(THUMBNAIL_DIMENSION, THUMBNAIL_DIMENSION);
+                encode_image_to_data_uri(&t, "image/jpeg").ok()
+            };
+            Some(ProcessedAttachment {
+                filename: input.filename,
+                mime_type: input.mime_type,
+                size_bytes: input.size_bytes,
+                content: AttachmentContent::ImageDataUri { data_uri },
+                thumbnail_data_uri: thumb,
+            })
+        }
+        "text" => {
+            let text = String::from_utf8_lossy(&bytes);
+            let truncated = truncate_text(&text, MAX_EXTRACTED_TEXT_BYTES);
+            Some(ProcessedAttachment {
+                filename: input.filename,
+                mime_type: input.mime_type,
+                size_bytes: input.size_bytes,
+                content: AttachmentContent::ExtractedText { text: truncated },
+                thumbnail_data_uri: None,
+            })
+        }
+        "document" => {
+            let text = match ext.as_str() {
+                "pdf" => {
+                    let raw = pdf_extract::extract_text_from_mem(&bytes).unwrap_or_default();
+                    let t = raw.trim().to_string();
+                    if t.is_empty() {
+                        format!("[PDF '{}' — no extractable text]", input.filename)
+                    } else {
+                        truncate_text(&t, MAX_EXTRACTED_TEXT_BYTES)
+                    }
+                }
+                "docx" => extract_docx_text(&bytes).unwrap_or_else(|_| {
+                    format!("[DOCX '{}' — extraction failed]", input.filename)
+                }),
+                "xlsx" | "xls" => extract_xlsx_text_from_bytes(&bytes, &input.filename),
+                _ => {
+                    let t = String::from_utf8_lossy(&bytes);
+                    truncate_text(&t, MAX_EXTRACTED_TEXT_BYTES)
+                }
+            };
+            Some(ProcessedAttachment {
+                filename: input.filename,
+                mime_type: input.mime_type,
+                size_bytes: input.size_bytes,
+                content: AttachmentContent::ExtractedText { text },
+                thumbnail_data_uri: None,
+            })
+        }
+        _ => Some(ProcessedAttachment {
+            filename: input.filename.clone(),
+            mime_type: input.mime_type,
+            size_bytes: input.size_bytes,
+            content: AttachmentContent::UnsupportedBinary {
+                summary: format!("Binary file '{}' ({} bytes)", input.filename, input.size_bytes),
+            },
+            thumbnail_data_uri: None,
+        }),
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -268,39 +378,10 @@ fn process_xlsx(
     filename: String,
     size_bytes: u64,
 ) -> Result<ProcessedAttachment, String> {
-    use calamine::{open_workbook_auto_from_rs, Data, Reader};
-
     let bytes = std::fs::read(&input.path)
         .map_err(|e| format!("Cannot read XLSX '{}': {}", filename, e))?;
 
-    let cursor = Cursor::new(bytes);
-    let mut workbook = open_workbook_auto_from_rs(cursor)
-        .map_err(|e| format!("Cannot parse XLSX '{}': {}", filename, e))?;
-
-    let sheet_names: Vec<String> = workbook.sheet_names().to_vec();
-    let mut parts: Vec<String> = Vec::new();
-
-    for name in &sheet_names {
-        if let Ok(range) = workbook.worksheet_range(name) {
-            parts.push(format!("=== Sheet: {} ===", name));
-            for row in range.rows() {
-                let cells: Vec<String> = row
-                    .iter()
-                    .map(|cell| match cell {
-                        Data::Empty => String::new(),
-                        Data::String(s) => s.clone(),
-                        Data::Float(f) => f.to_string(),
-                        Data::Int(i) => i.to_string(),
-                        Data::Bool(b) => b.to_string(),
-                        _ => String::new(),
-                    })
-                    .collect();
-                parts.push(cells.join("\t"));
-            }
-        }
-    }
-
-    let text = truncate_text(&parts.join("\n"), MAX_EXTRACTED_TEXT_BYTES);
+    let text = extract_xlsx_text_from_bytes(&bytes, &filename);
 
     Ok(ProcessedAttachment {
         filename,
@@ -431,6 +512,63 @@ fn attachment_type_from_ext(ext: &str) -> String {
     .to_string()
 }
 
+/// Classify attachment type using MIME type first, falling back to file extension.
+fn attachment_type_from_mime_or_ext(mime_type: &str, ext: &str) -> String {
+    if mime_type.starts_with("image/") {
+        return "image".to_string();
+    }
+    if mime_type.starts_with("text/") {
+        return "text".to_string();
+    }
+    if matches!(
+        mime_type,
+        "application/pdf"
+            | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            | "application/vnd.ms-excel"
+            | "application/msword"
+    ) {
+        return "document".to_string();
+    }
+    attachment_type_from_ext(ext)
+}
+
+/// Extract spreadsheet text from raw bytes (shared between local and cloud attachment paths).
+fn extract_xlsx_text_from_bytes(bytes: &[u8], filename: &str) -> String {
+    use calamine::{open_workbook_auto_from_rs, Data, Reader};
+
+    let cursor = Cursor::new(bytes);
+    let mut workbook = match open_workbook_auto_from_rs(cursor) {
+        Ok(w) => w,
+        Err(e) => return format!("[XLSX '{}' — parse error: {}]", filename, e),
+    };
+
+    let sheet_names: Vec<String> = workbook.sheet_names().to_vec();
+    let mut parts: Vec<String> = Vec::new();
+
+    for name in &sheet_names {
+        if let Ok(range) = workbook.worksheet_range(name) {
+            parts.push(format!("=== Sheet: {} ===", name));
+            for row in range.rows() {
+                let cells: Vec<String> = row
+                    .iter()
+                    .map(|cell| match cell {
+                        Data::Empty => String::new(),
+                        Data::String(s) => s.clone(),
+                        Data::Float(f) => f.to_string(),
+                        Data::Int(i) => i.to_string(),
+                        Data::Bool(b) => b.to_string(),
+                        _ => String::new(),
+                    })
+                    .collect();
+                parts.push(cells.join("\t"));
+            }
+        }
+    }
+
+    truncate_text(&parts.join("\n"), MAX_EXTRACTED_TEXT_BYTES)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -462,7 +600,8 @@ mod tests {
         assert_eq!(truncate_text(short, 100), "hello");
         let long = "a".repeat(200);
         let t = truncate_text(&long, 10);
-        assert!(t.len() <= 20); // truncated + suffix
+        // suffix "…[truncated]" = 13 bytes; content = 10 bytes
+        assert!(t.len() <= 10 + "…[truncated]".len());
         assert!(t.contains("…[truncated]"));
     }
 
