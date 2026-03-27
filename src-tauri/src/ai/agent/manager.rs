@@ -796,6 +796,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn get_history_preserves_insert_order_for_same_second_messages() {
         let manager = setup_manager().await;
         let chat_id = "chat-history-order";
