@@ -72,6 +72,15 @@ fn c_string(input: &str) -> Result<CString, String> {
 }
 
 #[cfg(target_os = "macos")]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NotificationFocusPayload {
+    kind: String,
+    workspace_id: String,
+    chat_id: String,
+}
+
+#[cfg(target_os = "macos")]
 pub struct MacOSNativeNotificationBridge;
 
 #[cfg(target_os = "macos")]
@@ -123,7 +132,17 @@ impl MacOSNativeNotificationBridge {
                         let _ = window.unminimize();
                         let _ = window.set_focus();
                     }
-                    let _ = app.emit("airlock:notification_clicked", command_id.clone());
+                    if let Some(payload) = parse_focus_payload(command_id.as_deref()) {
+                        let _ = app.emit(
+                            "agent:notification_clicked",
+                            serde_json::json!({
+                                "workspaceId": payload.workspace_id,
+                                "chatId": payload.chat_id,
+                            }),
+                        );
+                    } else {
+                        let _ = app.emit("airlock:notification_clicked", command_id.clone());
+                    }
                 }
 
                 if let Some(command_id) = command_id.as_deref() {
@@ -168,6 +187,27 @@ impl MacOSNativeNotificationBridge {
 
     pub fn send_test_notification(title: &str, body: &str) -> Result<(), String> {
         Self::send(title, body, None, None)
+    }
+
+    pub fn send_agent_notification(
+        title: &str,
+        body: &str,
+        workspace_id: Option<&str>,
+        chat_id: Option<&str>,
+    ) -> Result<(), String> {
+        let payload = match (workspace_id, chat_id) {
+            (Some(workspace_id), Some(chat_id)) => Some(
+                serde_json::json!({
+                    "kind": "chat_focus",
+                    "workspaceId": workspace_id,
+                    "chatId": chat_id,
+                })
+                .to_string(),
+            ),
+            _ => None,
+        };
+
+        Self::send(title, body, payload.as_deref(), None)
     }
 
     pub fn activate_app() {
@@ -259,5 +299,25 @@ impl MacOSNativeNotificationBridge {
         Ok(())
     }
 
+    pub fn send_agent_notification(
+        _title: &str,
+        _body: &str,
+        _workspace_id: Option<&str>,
+        _chat_id: Option<&str>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
     pub fn activate_app() {}
+}
+
+#[cfg(target_os = "macos")]
+fn parse_focus_payload(command_id: Option<&str>) -> Option<NotificationFocusPayload> {
+    let raw = command_id?;
+    let payload: NotificationFocusPayload = serde_json::from_str(raw).ok()?;
+    if payload.kind == "chat_focus" {
+        Some(payload)
+    } else {
+        None
+    }
 }

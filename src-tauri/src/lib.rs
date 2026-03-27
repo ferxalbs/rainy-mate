@@ -16,8 +16,9 @@ use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
     ATMClient, AgentLibraryService, AgentRunControl, BrowserController, CommandPoller,
     DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService, LLMClient,
-    ManagedResearchService, MemoryManager, NeuralService, NodeAuthenticator, SettingsManager,
-    SkillExecutor, SocketClient, WorkflowRecorderService, WorkspaceManager,
+    ManagedResearchService, MemoryManager, NeuralService, NodeAuthenticator,
+    QuickDelegateModalService, SettingsManager, SkillExecutor, SocketClient,
+    WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tauri::Manager;
@@ -184,6 +185,8 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("Failed to get app data dir");
+
+            app.manage(Arc::new(QuickDelegateModalService::new(app.handle().clone())));
 
             tauri::async_runtime::block_on(async {
                 mcp_service.set_app_handle(app.handle().clone()).await;
@@ -596,6 +599,8 @@ pub fn run() {
             commands::send_test_notification,
             commands::focus_airlock_request,
             commands::get_system_readiness,
+            commands::open_quick_delegate_modal,
+            commands::get_quick_delegate_status,
             commands::get_user_profile,
             commands::set_user_profile,
             commands::get_available_models,
@@ -783,6 +788,11 @@ pub fn run() {
             crate::services::MacOSNativeNotificationBridge::initialize(
                 app_handle.clone(),
                 commands::airlock::AirlockServiceState(airlock_state.0.clone()),
+            );
+            let quick_delegate = app_handle.state::<Arc<QuickDelegateModalService>>();
+            crate::services::MacOSQuickDelegateBridge::initialize(
+                app_handle.clone(),
+                quick_delegate.inner().clone(),
             );
         }
     });

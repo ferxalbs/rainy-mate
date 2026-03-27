@@ -2727,10 +2727,23 @@ export async function clearWorkspaceVault(
 export interface ActiveSessionInfo {
   chatId: string;
   runId: string;
-  source: "local" | "remote";
+  source: "local" | "remote" | "native_modal";
   connectorId: string | null;
 }
 
 export async function listActiveSessions(): Promise<ActiveSessionInfo[]> {
   return invoke<ActiveSessionInfo[]>("list_active_sessions");
+}
+
+export interface QuickDelegateStatus {
+  available: boolean;
+  busy: boolean;
+}
+
+export async function openQuickDelegateModal(): Promise<void> {
+  return invoke<void>("open_quick_delegate_modal");
+}
+
+export async function getQuickDelegateStatus(): Promise<QuickDelegateStatus> {
+  return invoke<QuickDelegateStatus>("get_quick_delegate_status");
 }

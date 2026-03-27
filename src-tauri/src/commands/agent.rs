@@ -421,6 +421,12 @@ pub struct EnsureChatTitleResponse {
     pub status: String,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum WorkflowInvocationSource {
+    Local,
+    NativeModal,
+}
+
 fn is_placeholder_chat_title(value: &str) -> bool {
     let normalized = value.trim().to_lowercase();
     normalized.is_empty()
@@ -849,19 +855,68 @@ pub async fn run_agent_workflow(
     run_id: Option<String>,
     reasoning_effort: Option<String>,
     attachments: Option<Vec<crate::services::attachment::AttachmentInput>>,
-    router: State<'_, IntelligentRouterState>,
-    airlock_state: State<'_, AirlockServiceState>,
-    provider_registry: State<'_, ProviderRegistryState>,
-    memory_manager: State<'_, MemoryManagerState>,
-    skills: State<'_, Arc<SkillExecutor>>,
-    workspace_manager: State<'_, Arc<crate::services::WorkspaceManager>>,
-    agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
-    runtime_registry: State<'_, Arc<RuntimeRegistry>>,
-    run_control: State<'_, Arc<AgentRunControl>>,
-    session_coordinator: State<'_, Arc<crate::services::session_coordinator::SessionCoordinator>>,
+    _router: State<'_, IntelligentRouterState>,
+    _airlock_state: State<'_, AirlockServiceState>,
+    _provider_registry: State<'_, ProviderRegistryState>,
+    _memory_manager: State<'_, MemoryManagerState>,
+    _skills: State<'_, Arc<SkillExecutor>>,
+    _workspace_manager: State<'_, Arc<crate::services::WorkspaceManager>>,
+    _agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
+    _runtime_registry: State<'_, Arc<RuntimeRegistry>>,
+    _run_control: State<'_, Arc<AgentRunControl>>,
+    _session_coordinator: State<'_, Arc<crate::services::session_coordinator::SessionCoordinator>>,
 ) -> Result<RunAgentWorkflowResponse, String> {
+    run_agent_workflow_internal(
+        app_handle,
+        prompt,
+        model_id,
+        workspace_id,
+        agent_spec_id,
+        chat_scope_id,
+        run_id,
+        reasoning_effort,
+        attachments,
+        WorkflowInvocationSource::Local,
+    )
+    .await
+}
+
+pub async fn run_agent_workflow_internal(
+    app_handle: tauri::AppHandle,
+    prompt: String,
+    model_id: String,
+    workspace_id: String,
+    agent_spec_id: Option<String>,
+    chat_scope_id: Option<String>,
+    run_id: Option<String>,
+    reasoning_effort: Option<String>,
+    attachments: Option<Vec<crate::services::attachment::AttachmentInput>>,
+    invocation_source: WorkflowInvocationSource,
+) -> Result<RunAgentWorkflowResponse, String> {
+    let router = app_handle.state::<IntelligentRouterState>().0.clone();
+    let airlock_state = app_handle.state::<AirlockServiceState>().0.clone();
+    let provider_registry = app_handle.state::<ProviderRegistryState>().0.clone();
+    let memory_manager = app_handle.state::<MemoryManagerState>().0.clone();
+    let skills = app_handle.state::<Arc<SkillExecutor>>().inner().clone();
+    let workspace_manager = app_handle
+        .state::<Arc<crate::services::WorkspaceManager>>()
+        .inner()
+        .clone();
+    let agent_manager = app_handle
+        .state::<crate::ai::agent::manager::AgentManager>()
+        .inner()
+        .clone();
+    let runtime_registry = app_handle.state::<Arc<RuntimeRegistry>>().inner().clone();
+    let run_control = app_handle.state::<Arc<AgentRunControl>>().inner().clone();
+    let session_coordinator = app_handle
+        .state::<Arc<crate::services::session_coordinator::SessionCoordinator>>()
+        .inner()
+        .clone();
+    let router_state = IntelligentRouterState(router.clone());
+    let provider_registry_state = ProviderRegistryState(provider_registry.clone());
+
     crate::ai::model_catalog::ensure_supported_model_slug(&model_id)?;
-    ensure_provider_ready_for_model(&model_id, &provider_registry, &router).await?;
+    ensure_provider_ready_for_model(&model_id, &provider_registry_state, &router_state).await?;
     let selected_model_id = model_id.clone();
     let run_id = run_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
@@ -900,14 +955,29 @@ pub async fn run_agent_workflow(
     let chat_id = chat_scope_id
         .unwrap_or_else(|| crate::ai::agent::manager::DEFAULT_LONG_CHAT_SCOPE_ID.to_string());
 
-    // Register with SessionCoordinator so this local run appears in list_active_sessions
-    session_coordinator.register_local(chat_id.clone(), run_id.clone(), workspace_path.clone());
-
-    // 0. Ensure Chat Session Exists (Persist Metadata)
-    let _ = agent_manager
-        .ensure_chat_session_with_workspace(&chat_id, "Rainy Agent", &workspace_path)
-        .await
-        .map_err(|e| format!("Failed to initialize chat session: {}", e))?;
+    match invocation_source {
+        WorkflowInvocationSource::Local => {
+            session_coordinator.register_local(
+                chat_id.clone(),
+                run_id.clone(),
+                workspace_path.clone(),
+            );
+            let _ = agent_manager
+                .ensure_chat_session_with_workspace(&chat_id, "Rainy Agent", &workspace_path)
+                .await
+                .map_err(|e| format!("Failed to initialize chat session: {}", e))?;
+        }
+        WorkflowInvocationSource::NativeModal => {
+            let _ = session_coordinator
+                .start_native_modal_session(
+                    Some(chat_id.clone()),
+                    Some(run_id.clone()),
+                    &workspace_path,
+                    &prompt,
+                )
+                .await?;
+        }
+    }
 
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
@@ -1054,14 +1124,24 @@ pub async fn run_agent_workflow(
             _ => unreachable!("filtered by matches above"),
         };
 
-        let _ = agent_manager
-            .save_message(&chat_id, "user", &prompt)
-            .await
-            .map_err(|e| format!("Failed to save user message: {}", e))?;
-        let _ = agent_manager
-            .save_message(&chat_id, "assistant", &response)
-            .await
-            .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+        match invocation_source {
+            WorkflowInvocationSource::Local => {
+                let _ = agent_manager
+                    .save_message(&chat_id, "user", &prompt)
+                    .await
+                    .map_err(|e| format!("Failed to save user message: {}", e))?;
+                let _ = agent_manager
+                    .save_message(&chat_id, "assistant", &response)
+                    .await
+                    .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+                session_coordinator.unregister(&chat_id);
+            }
+            WorkflowInvocationSource::NativeModal => {
+                session_coordinator
+                    .finish_native_modal_session(&chat_id, &response, &prompt)
+                    .await?;
+            }
+        }
         return Ok(RunAgentWorkflowResponse { run_id, response });
     }
 
@@ -1069,7 +1149,7 @@ pub async fn run_agent_workflow(
     let effective_policy = {
         let settings = settings_manager.lock().await;
         crate::services::LocalAgentSecurityService::resolve(
-            &workspace_manager.inner().clone(),
+            &workspace_manager,
             &settings,
             &workspace_path,
             Some(&spec),
@@ -1106,19 +1186,19 @@ pub async fn run_agent_workflow(
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
-    let vault = memory_manager.0.get_vault().await;
+    let vault = memory_manager.get_vault().await;
     let memory_obj = crate::ai::agent::memory::AgentMemory::new(
         &workspace_path,
         app_data_dir,
-        memory_manager.0.clone(),
-        Some(router.0.clone()),
+        memory_manager.clone(),
+        Some(router.clone()),
         vault,
     )
     .await;
     let memory = Arc::new(memory_obj);
 
     let airlock_service = {
-        let guard = airlock_state.0.lock().await;
+        let guard = airlock_state.lock().await;
         Arc::new(guard.clone())
     };
 
@@ -1130,18 +1210,19 @@ pub async fn run_agent_workflow(
     let runtime = AgentRuntime::new(
         spec,
         options,
-        router.0.clone(),
-        skills.inner().clone(),
+        router.clone(),
+        skills.clone(),
         memory,
         airlock_service,
         Some(run_kill_switch),
-        Some(runtime_registry.inner().clone()),
+        Some(runtime_registry.clone()),
     );
 
     // Load persisted conversation history into runtime so local Native Runtime
     // preserves context across turns.
     let compaction_state =
-        maybe_compact_chat_history(&agent_manager, &router, &chat_id, &model_id, &prompt).await?;
+        maybe_compact_chat_history(&agent_manager, &router_state, &chat_id, &model_id, &prompt)
+            .await?;
 
     if let Some(compaction) = compaction_state {
         let _ = app_handle.emit(
@@ -1185,16 +1266,18 @@ pub async fn run_agent_workflow(
         .await;
 
     let app_handle_clone = app_handle.clone();
-    let agent_manager_clone = agent_manager.inner().clone();
+    let agent_manager_clone = agent_manager.clone();
     let chat_id_for_events = chat_id.clone();
     let run_id_for_events = run_id.clone();
     let frontend_event_projector = Arc::new(StdMutex::new(FrontendEventProjector::default()));
 
     // Persist Initial User Prompt
-    let _ = agent_manager
-        .save_message(&chat_id, "user", &prompt)
-        .await
-        .map_err(|e| format!("Failed to save user message: {}", e))?;
+    if invocation_source == WorkflowInvocationSource::Local {
+        let _ = agent_manager
+            .save_message(&chat_id, "user", &prompt)
+            .await
+            .map_err(|e| format!("Failed to save user message: {}", e))?;
+    }
 
     let frontend_event_projector_for_events = frontend_event_projector.clone();
     let response_result = runtime
@@ -1273,14 +1356,31 @@ pub async fn run_agent_workflow(
     }
 
     run_control.unregister_run(&run_id).await;
-    session_coordinator.unregister(&chat_id);
-    let response = response_result?;
+    let response = match response_result {
+        Ok(response) => response,
+        Err(error) => {
+            match invocation_source {
+                WorkflowInvocationSource::Local => session_coordinator.unregister(&chat_id),
+                WorkflowInvocationSource::NativeModal => session_coordinator.abort_session(&chat_id),
+            }
+            return Err(error);
+        }
+    };
 
-    // Persist final assistant response only (avoid noisy intermediate event spam).
-    let _ = agent_manager
-        .save_message(&chat_id, "assistant", &response)
-        .await
-        .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+    match invocation_source {
+        WorkflowInvocationSource::Local => {
+            session_coordinator.unregister(&chat_id);
+            let _ = agent_manager
+                .save_message(&chat_id, "assistant", &response)
+                .await
+                .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+        }
+        WorkflowInvocationSource::NativeModal => {
+            session_coordinator
+                .finish_native_modal_session(&chat_id, &response, &prompt)
+                .await?;
+        }
+    }
 
     Ok(RunAgentWorkflowResponse { run_id, response })
 }

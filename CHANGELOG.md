@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Native document generation engine** — Rainy MaTE now creates full-featured documents from scratch with zero external dependencies. This closes a significant capability gap versus cloud-only agents that can only read but not create documents.
 
+- **macOS native quick-delegate entrypoint** — Rainy MaTE now exposes a Swift/AppKit quick delegation surface that creates first-class Rust chat sessions without going through the React composer:
+  - new Swift bridge `src-tauri/macos/RainyQuickDelegate.swift`
+  - new Rust bridge/service layer `src-tauri/src/services/macos_quick_delegate.rs` and `src-tauri/src/services/quick_delegate_modal.rs`
+  - new Tauri commands `open_quick_delegate_modal` and `get_quick_delegate_status` in `src-tauri/src/commands/quick_delegate.rs`
+  - `Cmd+Shift+Space` global hotkey opens the native modal
+  - native submissions create a fresh chat/run and register in AgentChat via the existing Rust session lifecycle
+
+- **macOS menu bar quick-access integration** — the quick delegate bridge now installs a compact status item with the whale icon and a native menu:
+  - `Quick Delegate`
+  - `Open Rainy MaTE`
+  - `Quit`
+  - whale asset is bundled from `public/whale-dnf.png` into app resources and copied into debug/runtime lookup paths by `src-tauri/build.rs`
+
 - **`pdf_create` tool** (Airlock L1 Sensitive) — generates structured multi-section PDF documents using `printpdf` (A4 portrait, built-in Helvetica/HelveticaBold fonts, automatic word-wrap, pagination, heading + body layout):
   - Input: `title`, array of `{ heading?, body }` sections
   - Output: absolute path of rendered `.pdf` file
@@ -69,6 +82,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`run_agent_workflow` now has a reusable internal Rust execution path** — `src-tauri/src/commands/agent.rs` now exposes `run_agent_workflow_internal(...)` plus `WorkflowInvocationSource` so native modal launches reuse the exact local agent runtime instead of duplicating orchestration, Airlock, memory, or session persistence logic.
+
+- **Session lifecycle now supports a third origin: `native_modal`** — `src-tauri/src/services/session_coordinator.rs` and `src-tauri/src/ai/agent/manager.rs` now persist and emit native-modal sessions alongside existing `local` and `remote` runs; modal-launched delegations show up in the sidebar and active-run tracking as normal chats.
+
+- **macOS notification bridge expanded beyond Airlock-only alerts** — `src-tauri/src/services/macos_native_notifications.rs` now supports agent-finish notifications that carry chat focus metadata, and `src/App.tsx` now routes notification clicks back into the correct workspace/chat thread.
+
+- **Quick delegate runtime support relaxed for development launches** — unlike the notification bridge, the quick delegate bridge no longer requires a bundled `.app` runtime just to create its `NSStatusBar` item and `NSPanel`; it now initializes whenever AppKit is available, so the native modal and menu bar path also work in normal local desktop runs.
+
 - **IRONMILL schemas hardened in Rust** — `src-tauri/src/services/skill_executor/args.rs` now exposes real JSON-schema limits for filenames, paths, section counts, sheet counts, row caps, paragraph caps, heading ranges, and archive file counts so the tool contract matches the backend invariants
 
 - **Document tool descriptions now advertise bounded behavior** — `src-tauri/src/services/skill_executor/registry.rs` descriptions were tightened to reflect workspace-scoped outputs and hard caps instead of generic capability text
@@ -86,6 +107,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TypeScript gate compatibility update** — `tsconfig.json` now includes `"ignoreDeprecations": "6.0"` to keep `pnpm exec tsc --noEmit` green with current TS deprecation enforcement.
 
 ### Fixed
+
+- **Native quick-delegate sessions no longer fork a second chat runtime** — modal-triggered runs now enter the same Rust runtime, persistence, active-session, and finish-event pipeline as standard AgentChat runs:
+  - `src-tauri/src/commands/agent.rs`
+  - `src-tauri/src/services/session_coordinator.rs`
+
+- **macOS status item startup dead path** — the initial quick delegate bridge incorrectly failed closed outside bundled `.app` launches, which prevented the menu bar icon and native modal bridge from initializing during local runs; `src-tauri/macos/RainyQuickDelegate.swift` and `src-tauri/src/services/macos_quick_delegate.rs` now gate on AppKit availability instead of bundle packaging.
+
+- **Menu bar whale icon resource resolution** — the quick delegate status item now has deterministic whale asset packaging and fallback lookup instead of relying on guessed runtime-only paths:
+  - `src-tauri/tauri.conf.json`
+  - `src-tauri/build.rs`
+  - `src-tauri/macos/RainyQuickDelegate.swift`
+
+- **Quick delegate text editor contrast/readability** — the native modal’s `NSTextView` no longer inherits low-contrast translucent rendering from the glass background:
+  - explicit dark scroll-view/editor surface
+  - explicit white text and caret
+  - explicit selection colors
+  - disabled automatic text substitutions that made the field feel unstable for command-style input
+  - file: `src-tauri/macos/RainyQuickDelegate.swift`
 
 - **Chat history ordering instability across fast consecutive messages** — `src-tauri/src/ai/agent/manager.rs` now loads persisted history by insertion order (`rowid ASC`) instead of timestamp-only ordering (`created_at`), preventing context shuffle when multiple turns are saved within the same second.
 
@@ -145,6 +184,11 @@ calamine = "0.26"          # Excel/ODS reader (dates feature enabled)
 - ✅ `pnpm exec tsc --noEmit` — pass after Neural Dashboard pairing guard changes
 - ✅ `cd src-tauri && cargo build -q` — clean after native macOS notification bridge hardening
 - ✅ `pnpm exec tsc --noEmit` — clean after notification settings/status UI update
+- ✅ `cd src-tauri && cargo check -q` — clean after native quick-delegate bridge, session integration, and menu bar status item changes
+- ✅ `pnpm exec tsc --noEmit` — clean after quick-delegate Tauri wrapper and notification-click chat focus routing
+- ✅ `cd src-tauri && cargo check -q` — clean after bundling whale menu bar resources and replacing the status-item click target with a compact native menu
+- ✅ `cd src-tauri && cargo check -q` — clean after removing the bundled-app-only gate from the quick delegate bridge so the menu bar path also initializes in local runs
+- ✅ `cd src-tauri && cargo check -q` — clean after fixing native modal editor contrast and explicit text/caret styling
 - ✅ `target/debug/rainy-mate` launch probe — no new `~/Library/Logs/DiagnosticReports/rainy-mate-*.ips` crash report generated
 - ✅ `cd src-tauri && cargo test -q docx_read_extracts_paragraphs --lib` — pass (1 passed)
 - ✅ `cd src-tauri && cargo test -q get_history_preserves_insert_order_for_same_second_messages --lib` — pass (1 passed)

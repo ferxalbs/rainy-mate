@@ -18,6 +18,7 @@ pub mod image;
 pub mod mcp;
 pub mod memory;
 pub mod neural;
+pub mod quick_delegate;
 
 pub mod research;
 pub mod router;
@@ -43,6 +44,7 @@ pub use image::*;
 pub use mcp::*;
 pub use memory::*;
 pub use neural::*;
+pub use quick_delegate::*;
 
 pub use router::*;
 pub use settings::*;

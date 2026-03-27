@@ -484,6 +484,8 @@ impl AirlockService {
                         body: body.to_string(),
                         kind: kind.to_string(),
                         command_id,
+                        workspace_id: None,
+                        chat_id: None,
                     },
                 );
             }
@@ -497,6 +499,8 @@ impl AirlockService {
                 body: body.to_string(),
                 kind: kind.to_string(),
                 command_id,
+                workspace_id: None,
+                chat_id: None,
             },
         );
     }

@@ -51,6 +51,10 @@ pub struct DesktopNotificationRequest {
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chat_id: Option<String>,
 }
 
 /// Get all user settings
@@ -178,6 +182,8 @@ pub async fn send_test_notification(
                 body: "Test notification from the local desktop runtime.".to_string(),
                 kind: "test".to_string(),
                 command_id: None,
+                workspace_id: None,
+                chat_id: None,
             },
         )
         .map_err(|e| format!("Failed to emit test notification: {}", e))

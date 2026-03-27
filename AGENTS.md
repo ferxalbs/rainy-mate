@@ -717,20 +717,24 @@ We use **Semantic Versioning** (`MAJOR.MINOR.PATCH`) across three files simultan
 If — and only if — the user explicitly authorizes a breaking change, you must produce and get approval for a **Breaking Change Plan** before writing a single line of code. The plan must cover all of the following:
 
 ### 4.1 Impact Assessment
+
 - List every component, command, or data format that will break.
 - Identify all active users / integrations affected (ATM, desktop app, third-party skills).
 
 ### 4.2 Migration Strategy
+
 - Provide a step-by-step migration path for each breaking point.
 - Specify whether a compatibility shim (adapter layer) can be used to support both old and new simultaneously during a transition window.
 - For SQLite: write the exact migration SQL and define rollback SQL.
 - For Tauri commands: keep old command names as deprecated wrappers calling the new implementation (at minimum one MINOR version).
 
 ### 4.3 Rollback Plan
+
 - Define exactly how to revert if the new release causes unexpected failures in production.
 - Identify which data (if any) is irreversibly mutated and cannot be rolled back.
 
 ### 4.4 Validation Gates
+
 All of the following must pass **before** the breaking change ships:
 
 ```bash
@@ -742,6 +746,7 @@ cd src-tauri && cargo test -q manifest_covers_every_registered_tool --lib
 ```
 
 ### 4.5 CHANGELOG Entry
+
 The CHANGELOG entry for a breaking change must include:
 
 ```
@@ -845,6 +850,23 @@ Use backdrop blur to create depth and separation between layers:
 - Test text readability against blurred backgrounds
 - Consider users with motion sensitivity
 - Provide alternative high-contrast mode when needed
+
+---
+
+## 21. System Analysis & Integrations (MANDATORY)
+
+Before making any changes to the system or its native integrations:
+
+### 21.1 Pre-Modification Analysis
+
+- **Analyze First**: You must deeply analyze how the system is constructed before touching or modifying any existing code.
+- **Understand Context**: Review existing architecture, dependencies, and integration points to ensure new changes do not break system invariants.
+
+### 21.2 Swift Native Code Requirements
+
+- **Precision & Functionality**: Any Swift code (e.g., macOS native bridges like `RainyNativeNotifications.swift`) must precise, robust, and functional.
+- **System Integration**: Swift code must seamlessly integrate into the broader Rust/Tauri system architecture.
+- **Strict Modularization**: All Swift and native components must be completely modularized, adhering to the same high standards of single responsibility and explicit interfaces as the Rust codebase.
 
 ---
 

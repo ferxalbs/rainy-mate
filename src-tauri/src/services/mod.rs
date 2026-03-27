@@ -26,6 +26,7 @@ pub mod image;
 pub mod llm_client;
 pub mod local_agent_security;
 pub mod macos_native_notifications;
+pub mod macos_quick_delegate;
 pub mod managed_research; // Phase 3 AI Research
 pub mod manifest_signing;
 pub mod mcp_http;
@@ -35,6 +36,7 @@ pub mod memory_vault;
 pub mod neural_service;
 pub mod persistent_scheduler;
 pub mod prompt_skills;
+pub mod quick_delegate_modal;
 pub mod security;
 pub mod session_coordinator;
 pub mod settings;
@@ -69,12 +71,14 @@ pub use neural_service::NeuralService;
 pub use prompt_skills::{
     DiscoveredPromptSkill, PromptSkillBinding, PromptSkillDiscoveryService, PromptSkillRegistry,
 };
+pub use quick_delegate_modal::{QuickDelegateModalService, QuickDelegateStatus};
 pub use security::NodeAuthenticator;
 pub use skill_executor::SkillExecutor;
 
 pub use llm_client::LLMClient;
 pub use local_agent_security::{EffectiveLocalAgentPolicy, LocalAgentSecurityService};
 pub use macos_native_notifications::MacOSNativeNotificationBridge;
+pub use macos_quick_delegate::MacOSQuickDelegateBridge;
 pub use settings::SettingsManager;
 pub use skill_installer::SkillInstaller;
 pub use socket_client::SocketClient;

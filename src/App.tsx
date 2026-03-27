@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { UpdateChecker } from "./components/updater/UpdateChecker";
 import { TahoeLayout, AIDocumentPanel, AIResearchPanel } from "./components";
 import { SettingsPage } from "./components/settings";
@@ -141,6 +142,41 @@ function App() {
   const settingsTab = isSettingsSection
     ? activeSection.replace("settings-", "")
     : "models";
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+
+    void listen<{ workspaceId: string; chatId: string }>(
+      "agent:notification_clicked",
+      async (event) => {
+        if (cancelled) return;
+
+        const { workspaceId, chatId } = event.payload;
+        setActiveSection("agent-chat");
+        await refreshWorkspaceSessions(workspaceId);
+
+        const matchingFolder = folders.find((folder) => folder.path === workspaceId);
+        if (matchingFolder) {
+          await handleSelectChatForFolder(matchingFolder, chatId);
+          return;
+        }
+
+        switchToChat(chatId);
+      },
+    ).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [folders, handleSelectChatForFolder, refreshWorkspaceSessions, switchToChat]);
 
   return (
     <>

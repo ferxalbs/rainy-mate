@@ -17,6 +17,7 @@ use tauri::Emitter;
 
 pub enum SessionSource {
     Local,
+    NativeModal,
     Remote {
         connector_id: String,
         #[allow(dead_code)]
@@ -124,6 +125,59 @@ impl SessionCoordinator {
         Ok((chat_id, run_id))
     }
 
+    /// Create/reuse chat session for a native quick-delegate run, save user message,
+    /// register it as active, and emit `session://started`.
+    pub async fn start_native_modal_session(
+        &self,
+        chat_id: Option<String>,
+        run_id: Option<String>,
+        workspace_id: &str,
+        prompt: &str,
+    ) -> Result<(String, String), String> {
+        let chat_id = chat_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let run_id = run_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        self.agent_manager
+            .ensure_chat_session_with_source(&chat_id, workspace_id, "native_modal", None, None)
+            .await
+            .map_err(|e| format!("Failed to ensure native modal chat session: {}", e))?;
+
+        self.agent_manager
+            .save_message(&chat_id, "user", prompt)
+            .await
+            .map_err(|e| format!("Failed to save native modal user message: {}", e))?;
+
+        if self.active_sessions.contains_key(&chat_id) {
+            tracing::warn!(
+                "[SessionCoordinator] Native modal session {} already active — ignoring duplicate start",
+                chat_id
+            );
+        } else {
+            self.active_sessions.insert(
+                chat_id.clone(),
+                ActiveSession {
+                    source: SessionSource::NativeModal,
+                    started_at: Instant::now(),
+                    run_id: run_id.clone(),
+                    workspace_id: workspace_id.to_string(),
+                },
+            );
+        }
+
+        let _ = self.app_handle.emit(
+            "session://started",
+            serde_json::json!({
+                "chatId": chat_id,
+                "runId": run_id,
+                "workspaceId": workspace_id,
+                "source": "native_modal",
+                "connectorId": serde_json::Value::Null,
+            }),
+        );
+
+        Ok((chat_id, run_id))
+    }
+
     /// Emit `agent://event` to frontend. Safe to call from sync closures.
     pub fn emit_agent_event(&self, run_id: &str, event: AgentEvent) {
         let _ = self.app_handle.emit(
@@ -182,6 +236,17 @@ impl SessionCoordinator {
         Ok(())
     }
 
+    /// Save the assistant response for a native modal session, derive a fallback
+    /// title when needed, and emit `session://finished`.
+    pub async fn finish_native_modal_session(
+        &self,
+        chat_id: &str,
+        response: &str,
+        prompt: &str,
+    ) -> Result<(), String> {
+        self.finish_remote_session(chat_id, response, prompt).await
+    }
+
     /// Register a local session so it appears in `list_active_sessions`.
     pub fn register_local(&self, chat_id: String, run_id: String, workspace_id: String) {
         self.active_sessions.insert(
@@ -227,6 +292,7 @@ impl SessionCoordinator {
             .map(|entry| {
                 let (source, connector_id) = match &entry.value().source {
                     SessionSource::Local => ("local".to_string(), None),
+                    SessionSource::NativeModal => ("native_modal".to_string(), None),
                     SessionSource::Remote { connector_id, .. } => {
                         ("remote".to_string(), Some(connector_id.clone()))
                     }
