@@ -7,10 +7,11 @@ use crate::ai::provider_types::{
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use rainy_sdk::models::{
-    CapabilityFlag, FunctionDefinition, OpenAIChatCompletionRequest, OpenAIChatMessage,
-    OpenAIContentPart, OpenAIFunctionCall, OpenAIImageUrl, OpenAIMessageContent, OpenAIMessageRole,
-    OpenAIToolCall, ResponsesApiResponse, ResponsesRequest, ThinkingConfig, ThinkingLevel, Tool,
-    ToolChoice, ToolFunction, ToolType,
+    build_reasoning_config, CapabilityFlag, FunctionDefinition, ModelCatalogItem,
+    OpenAIChatCompletionRequest, OpenAIChatMessage, OpenAIContentPart, OpenAIFunctionCall,
+    OpenAIImageUrl, OpenAIMessageContent, OpenAIMessageRole, OpenAIToolCall, ReasoningMode,
+    ReasoningPreference, ResponsesApiResponse, ResponsesRequest, ThinkingConfig, ThinkingLevel,
+    Tool, ToolChoice, ToolFunction, ToolType,
 };
 use rainy_sdk::RainyClient;
 use serde_json::{json, Value};
@@ -26,6 +27,9 @@ pub struct RainySDKProvider {
     config: ProviderConfig,
     client: RainyClient,
     cached_capabilities: tokio::sync::RwLock<Option<ProviderCapabilities>>,
+    /// Catalog items cached from last successful get_models_catalog call.
+    /// Used by resolve_reasoning_from_catalog to derive ThinkingConfig from v2 caps.
+    cached_catalog: tokio::sync::RwLock<Vec<ModelCatalogItem>>,
 }
 
 impl RainySDKProvider {
@@ -55,6 +59,7 @@ impl RainySDKProvider {
             config,
             client,
             cached_capabilities: tokio::sync::RwLock::new(None),
+            cached_catalog: tokio::sync::RwLock::new(Vec::new()),
         })
     }
 
@@ -91,6 +96,57 @@ impl RainySDKProvider {
             }
             _ => (clean_id.to_string(), None),
         }
+    }
+
+    /// Derive a ThinkingConfig from v2 catalog capabilities given a base model ID and
+    /// reasoning_effort value. Used when the model ID is a plain base slug (not a virtual
+    /// thinking-level slug) and the caller provided an explicit reasoning_effort.
+    fn thinking_config_from_catalog(
+        model_id: &str,
+        effort: &str,
+        catalog: &[ModelCatalogItem],
+    ) -> Option<ThinkingConfig> {
+        let clean_id = crate::ai::model_catalog::normalize_model_slug(model_id);
+        let item = catalog
+            .iter()
+            .find(|item| crate::ai::model_catalog::normalize_model_slug(&item.id) == clean_id)?;
+        let v2 = item.rainy_capabilities_v2.as_ref()?;
+        let controls = v2.reasoning.controls.as_ref()?;
+
+        // Determine which reasoning mode the model uses
+        let mode = if controls.thinking_level.as_ref().is_some_and(|v| !v.is_empty()) {
+            ReasoningMode::ThinkingLevel
+        } else if controls.reasoning_effort == Some(true)
+            || controls.effort.as_ref().is_some_and(|v| !v.is_empty())
+        {
+            // Effort-mode models (gpt-5, o-series) use the Responses API path
+            return None;
+        } else {
+            return None;
+        };
+
+        let preference = ReasoningPreference {
+            mode,
+            value: Some(effort.to_string()),
+            budget: None,
+        };
+
+        let payload = build_reasoning_config(item, &preference)?;
+        let tc = payload.get("thinking_config")?;
+        let level_str = tc.get("thinking_level")?.as_str()?;
+
+        let thinking_level = match level_str.to_lowercase().as_str() {
+            "minimal" => ThinkingLevel::Minimal,
+            "low" => ThinkingLevel::Low,
+            "medium" => ThinkingLevel::Medium,
+            "high" => ThinkingLevel::High,
+            _ => return None,
+        };
+
+        let mut config = ThinkingConfig::default();
+        config.include_thoughts = Some(true);
+        config.thinking_level = Some(thinking_level);
+        Some(config)
     }
 
     fn resolve_transport(model_id: &str) -> RainyTransport {
@@ -217,8 +273,20 @@ impl RainySDKProvider {
         }
     }
 
-    fn build_openai_request(request: &ChatCompletionRequest) -> OpenAIChatCompletionRequest {
-        let (model_id, thinking_config) = Self::map_model_id(&request.model);
+    fn build_openai_request(
+        request: &ChatCompletionRequest,
+        catalog: &[ModelCatalogItem],
+    ) -> OpenAIChatCompletionRequest {
+        let (model_id, mut thinking_config) = Self::map_model_id(&request.model);
+
+        // When model is a plain base slug (no thinking level encoded), try to derive
+        // ThinkingConfig from v2 catalog capabilities using the reasoning_effort field.
+        if thinking_config.is_none() {
+            if let Some(effort) = request.reasoning_effort.as_deref().filter(|s| !s.is_empty()) {
+                thinking_config =
+                    Self::thinking_config_from_catalog(&model_id, effort, catalog);
+            }
+        }
 
         let mut sdk_request = OpenAIChatCompletionRequest::new(
             model_id,
@@ -504,6 +572,12 @@ impl RainySDKProvider {
     async fn fetch_capabilities(&self) -> ProviderCapabilities {
         match self.client.get_models_catalog().await {
             Ok(models) if !models.is_empty() => {
+                // Cache the catalog for reasoning config resolution
+                {
+                    let mut cache = self.cached_catalog.write().await;
+                    *cache = models.clone();
+                }
+
                 let mut model_ids: Vec<String> =
                     models.iter().map(|item| item.id.clone()).collect();
                 model_ids.sort();
@@ -581,7 +655,8 @@ impl RainySDKProvider {
         &self,
         request: ChatCompletionRequest,
     ) -> ProviderResult<ChatCompletionResponse> {
-        let api_request = Self::build_openai_request(&request);
+        let catalog = self.cached_catalog.read().await;
+        let api_request = Self::build_openai_request(&request, &catalog);
 
         let response = self
             .client
@@ -753,7 +828,9 @@ impl AIProvider for RainySDKProvider {
     ) -> ProviderResult<()> {
         match Self::resolve_transport_for_request(&request) {
             RainyTransport::ChatCompletions => {
-                let api_request = Self::build_openai_request(&request).with_stream(true);
+                let catalog = self.cached_catalog.read().await;
+                let api_request =
+                    Self::build_openai_request(&request, &catalog).with_stream(true);
 
                 let mut stream = self
                     .client

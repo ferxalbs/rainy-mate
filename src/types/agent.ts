@@ -123,10 +123,26 @@ export interface ExecutionResult {
   errors: string[];
 }
 
+/** A file attached by the user to a chat message. */
+export interface ChatAttachment {
+  id: string;
+  /** Original file path (used when submitting to Tauri). */
+  path: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** "image" | "document" | "text" | "unknown" */
+  type: string;
+  /** Base64 data URI for image thumbnails (frontend preview only). */
+  thumbnailDataUri?: string;
+}
+
 export interface AgentMessage {
   id: string;
   type: "user" | "agent" | "system";
   content: string;
+  /** Files attached to this message (user messages only). */
+  attachments?: ChatAttachment[];
   isLoading?: boolean;
   timestamp: Date;
   thought?: string;

@@ -6,7 +6,7 @@ use crate::ai::model_catalog::{
 use crate::ai::provider::AIProviderManager;
 use crate::ai::provider_types::StreamingChunk;
 use crate::models::ProviderType;
-use rainy_sdk::models::{CapabilityFlag, ModelCatalogItem};
+use rainy_sdk::models::{CapabilityFlag, ModelCatalogItem, RainyCapabilitiesV2};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
@@ -32,6 +32,14 @@ pub struct ModelCapabilities {
     pub reasoning: bool,
     pub max_context: usize,
     pub max_output: usize,
+    /// Dynamic reasoning options derived from v2 capabilities (e.g. ["low", "medium", "high"]).
+    /// Empty when the model has no reasoning support.
+    pub reasoning_options: Vec<String>,
+    /// How the model's reasoning is controlled: "effort", "thinking_level", or "thinking_budget".
+    /// None when model has no reasoning.
+    pub reasoning_mode: Option<String>,
+    /// Input modalities supported (e.g. ["text", "image", "audio"]).
+    pub multimodal_inputs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +65,25 @@ fn to_unified_model(entry: &CatalogModel) -> UnifiedModel {
         ModelProvider::GeminiByok => ("gemini", "Google Gemini", "direct"),
     };
 
+    // Static catalog models encode reasoning via thinking_level string.
+    // Map known thinking_level values to reasoning_options for UI consistency.
+    let (reasoning_options, reasoning_mode) = match entry.thinking_level {
+        Some("minimal") => (
+            vec![
+                "minimal".to_string(),
+                "low".to_string(),
+                "medium".to_string(),
+                "high".to_string(),
+            ],
+            Some("thinking_level".to_string()),
+        ),
+        Some(_) => (
+            vec!["low".to_string(), "high".to_string()],
+            Some("thinking_level".to_string()),
+        ),
+        None => (vec![], None),
+    };
+
     UnifiedModel {
         id: format!("{}:{}", provider_prefix, entry.slug),
         name: entry.name.to_string(),
@@ -70,6 +97,13 @@ fn to_unified_model(entry: &CatalogModel) -> UnifiedModel {
             reasoning: entry.thinking_level.is_some(),
             max_context: entry.max_context,
             max_output: entry.max_output,
+            reasoning_options,
+            reasoning_mode,
+            multimodal_inputs: if entry.vision {
+                vec!["text".to_string(), "image".to_string()]
+            } else {
+                vec!["text".to_string()]
+            },
         },
         enabled: true,
         processing_mode: processing_mode.to_string(),
@@ -95,12 +129,75 @@ fn capability_flag_enabled(flag: Option<&CapabilityFlag>) -> bool {
     matches!(flag, Some(CapabilityFlag::Bool(true)))
 }
 
+/// Extract reasoning options and mode from v2 capability block.
+fn reasoning_from_v2(v2: Option<&RainyCapabilitiesV2>) -> (Vec<String>, Option<String>) {
+    let reasoning = match v2.map(|v| &v.reasoning) {
+        Some(r) if r.supported => r,
+        _ => return (vec![], None),
+    };
+
+    let controls = match &reasoning.controls {
+        Some(c) => c,
+        None => return (vec![], Some("effort".to_string())),
+    };
+
+    // Prefer effort > thinking_level > thinking_budget
+    if let Some(efforts) = &controls.effort {
+        if !efforts.is_empty() {
+            return (efforts.clone(), Some("effort".to_string()));
+        }
+    }
+    if controls.reasoning_effort == Some(true) {
+        // Generic effort toggle — use standard set
+        return (
+            vec![
+                "low".to_string(),
+                "medium".to_string(),
+                "high".to_string(),
+            ],
+            Some("effort".to_string()),
+        );
+    }
+    if let Some(levels) = &controls.thinking_level {
+        if !levels.is_empty() {
+            return (levels.clone(), Some("thinking_level".to_string()));
+        }
+    }
+    if controls.thinking_budget.is_some() {
+        return (vec![], Some("thinking_budget".to_string()));
+    }
+
+    (vec![], None)
+}
+
 fn dynamic_rainy_model_from_catalog(item: &ModelCatalogItem) -> UnifiedModel {
     if let Some(entry) = find_catalog_model(&item.id, ModelProvider::RainyApi) {
         return to_unified_model(&entry);
     }
 
     let caps = item.rainy_capabilities.as_ref();
+    let v2 = item.rainy_capabilities_v2.as_ref();
+
+    // v2 takes precedence for reasoning and multimodal data
+    let (reasoning_options, reasoning_mode) = reasoning_from_v2(v2);
+    let has_reasoning = v2
+        .map(|v| v.reasoning.supported)
+        .unwrap_or_else(|| capability_flag_enabled(caps.and_then(|c| c.reasoning.as_ref())));
+
+    let has_vision = v2
+        .map(|v| v.multimodal.input.iter().any(|m| m.eq_ignore_ascii_case("image")))
+        .unwrap_or_else(|| capability_flag_enabled(caps.and_then(|c| c.image_input.as_ref())));
+
+    let multimodal_inputs = v2
+        .map(|v| v.multimodal.input.clone())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| {
+            if has_vision {
+                vec!["text".to_string(), "image".to_string()]
+            } else {
+                vec!["text".to_string()]
+            }
+        });
 
     UnifiedModel {
         id: format!("rainy:{}", item.id),
@@ -109,16 +206,19 @@ fn dynamic_rainy_model_from_catalog(item: &ModelCatalogItem) -> UnifiedModel {
         capabilities: ModelCapabilities {
             chat: true,
             streaming: true,
-            function_calling: capability_flag_enabled(caps.and_then(|caps| caps.tools.as_ref())),
-            vision: capability_flag_enabled(caps.and_then(|caps| caps.image_input.as_ref())),
+            function_calling: capability_flag_enabled(caps.and_then(|c| c.tools.as_ref())),
+            vision: has_vision,
             web_search: true,
-            reasoning: capability_flag_enabled(caps.and_then(|caps| caps.reasoning.as_ref())),
+            reasoning: has_reasoning,
             max_context: item.context_length.unwrap_or(128_000) as usize,
             max_output: 65_536,
+            reasoning_options,
+            reasoning_mode,
+            multimodal_inputs,
         },
         enabled: true,
         processing_mode: "rainy_api".to_string(),
-        reasoning_level: if capability_flag_enabled(caps.and_then(|caps| caps.reasoning.as_ref())) {
+        reasoning_level: if has_reasoning {
             Some("dynamic".to_string())
         } else {
             None
@@ -144,6 +244,9 @@ fn dynamic_rainy_model(slug: &str) -> UnifiedModel {
             reasoning: false,
             max_context: 128_000,
             max_output: 65_536,
+            reasoning_options: vec![],
+            reasoning_mode: None,
+            multimodal_inputs: vec!["text".to_string()],
         },
         enabled: true,
         processing_mode: "rainy_api".to_string(),

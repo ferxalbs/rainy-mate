@@ -878,6 +878,12 @@ export interface UnifiedModel {
     max_context: number;
     max_output: number;
     reasoning?: boolean;
+    /** Dynamic reasoning effort/level options derived from v2 catalog capabilities. */
+    reasoning_options: string[];
+    /** How reasoning is controlled: "effort" | "thinking_level" | "thinking_budget" */
+    reasoning_mode?: string | null;
+    /** Input modalities the model accepts (e.g. ["text", "image"]). */
+    multimodal_inputs: string[];
   };
   enabled: boolean;
   processing_mode: "rainy_api" | "cowork" | "direct";
@@ -2612,6 +2618,21 @@ export async function getChatHistoryWindow(
   });
 }
 
+export interface AttachmentPreview {
+  path: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  attachment_type: string;
+  thumbnail_data_uri?: string | null;
+}
+
+export async function prepareAttachmentPreviews(
+  paths: string[],
+): Promise<AttachmentPreview[]> {
+  return invoke<AttachmentPreview[]>("prepare_attachment_previews", { paths });
+}
+
 // Agent Command
 export const runAgentWorkflow = async (
   prompt: string,
@@ -2621,6 +2642,7 @@ export const runAgentWorkflow = async (
   chatScopeId?: string,
   runId?: string,
   reasoningEffort?: string,
+  attachments?: Array<{ path: string; name?: string }>,
 ): Promise<RunAgentWorkflowResponse> => {
   try {
     return await invoke<RunAgentWorkflowResponse>("run_agent_workflow", {
@@ -2631,6 +2653,7 @@ export const runAgentWorkflow = async (
       chatScopeId,
       runId,
       reasoningEffort,
+      attachments: attachments?.length ? attachments : null,
     });
   } catch (e) {
     console.error("Agent workflow failed:", e);

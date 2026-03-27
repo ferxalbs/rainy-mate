@@ -5,6 +5,7 @@ import * as tauri from "../../services/tauri";
 import { cn } from "../../lib/utils";
 import { useAgentChat } from "../../hooks/useAgentChat";
 import type { Folder } from "../../types";
+import type { ChatAttachment } from "../../types/agent";
 import type { AgentSpec } from "../../types/agent-spec";
 import type { UnifiedModel } from "../ai/UnifiedModelSelector";
 import { getReasoningOptions } from "../ai/UnifiedModelSelector";
@@ -158,6 +159,7 @@ export function AgentChatPanel({
   const [reasoningEffortOverride, setReasoningEffortOverride] = useState<string | undefined>(undefined);
   const [agentSpecs, setAgentSpecs] = useState<AgentSpec[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
@@ -249,19 +251,59 @@ export function AgentChatPanel({
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   }, []);
 
+  const handleAddAttachments = useCallback(async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        multiple: true,
+        filters: [
+          { name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp"] },
+          { name: "Documents", extensions: ["pdf", "docx", "xlsx", "xls", "txt", "md", "csv"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+      if (!selected) return;
+      const paths = Array.isArray(selected) ? selected : [selected];
+      const previews = await tauri.prepareAttachmentPreviews(paths);
+      setPendingAttachments((prev) =>
+        [
+          ...prev,
+          ...previews.map((p) => ({
+            id: `${p.path}-${Date.now()}`,
+            path: p.path,
+            filename: p.filename,
+            mimeType: p.mime_type,
+            sizeBytes: p.size_bytes,
+            type: p.attachment_type,
+            thumbnailDataUri: p.thumbnail_data_uri ?? undefined,
+          })),
+        ].slice(0, 5),
+      );
+    } catch (error) {
+      console.error("Failed to open file picker:", error);
+    }
+  }, []);
+
+  const handleRemoveAttachment = useCallback((id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     const instruction = input.trim();
-    if (!instruction || isProcessing) return;
+    if ((!instruction && pendingAttachments.length === 0) || isProcessing) return;
 
+    const attachmentsToSend = pendingAttachments.slice();
     setInput("");
+    setPendingAttachments([]);
     await runNativeAgent(
       instruction,
       currentModelId,
       workspacePath,
       selectedAgentId || undefined,
       stableReasoningOptions.length ? reasoningEffort : undefined,
+      attachmentsToSend.length ? attachmentsToSend : undefined,
     );
-  }, [input, isProcessing, runNativeAgent, currentModelId, workspacePath, selectedAgentId, stableReasoningOptions, reasoningEffort]);
+  }, [input, pendingAttachments, isProcessing, runNativeAgent, currentModelId, workspacePath, selectedAgentId, stableReasoningOptions, reasoningEffort]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -370,6 +412,9 @@ export function AgentChatPanel({
                 reasoningEffort={reasoningEffort}
                 onSelectReasoningEffort={setReasoningEffortOverride}
                 centered
+                attachments={pendingAttachments}
+                onAddAttachments={handleAddAttachments}
+                onRemoveAttachment={handleRemoveAttachment}
               />
             </div>
           </div>
@@ -417,6 +462,9 @@ export function AgentChatPanel({
               reasoningEffort={reasoningEffort}
               onSelectReasoningEffort={setReasoningEffortOverride}
               centered={false}
+              attachments={pendingAttachments}
+              onAddAttachments={handleAddAttachments}
+              onRemoveAttachment={handleRemoveAttachment}
             />
           </div>
         </div>

@@ -1,7 +1,8 @@
 import React from "react";
-import { ArrowUp, Check, ChevronDown, Mic, Plus } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, FileText, Image, Mic, Plus, X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
+import type { ChatAttachment } from "../../types/agent";
 import type { AgentSpec } from "../../types/agent-spec";
 import type { UnifiedModel } from "../ai/UnifiedModelSelector";
 import { AgentSelector } from "./AgentSelector";
@@ -27,6 +28,9 @@ interface ChatComposerProps {
   reasoningEffort?: string;
   onSelectReasoningEffort: (value: string) => void;
   centered: boolean;
+  attachments: ChatAttachment[];
+  onAddAttachments: () => void;
+  onRemoveAttachment: (id: string) => void;
 }
 
 function titleCase(value: string): string {
@@ -50,7 +54,11 @@ export function ChatComposer({
   reasoningEffort,
   onSelectReasoningEffort,
   centered,
+  attachments,
+  onAddAttachments,
+  onRemoveAttachment,
 }: ChatComposerProps) {
+  const canSubmit = (input.trim().length > 0 || attachments.length > 0) && !disabled;
   return (
     <div
       className={cn(
@@ -73,10 +81,43 @@ export function ChatComposer({
             disabled={disabled}
           />
 
+          {/* Attachment preview strip */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+              {attachments.map((att) => (
+                <div
+                  key={att.id}
+                  className="group relative flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-muted-foreground"
+                >
+                  {att.type === "image" && att.thumbnailDataUri ? (
+                    <img
+                      src={att.thumbnailDataUri}
+                      alt={att.filename}
+                      className="size-7 rounded object-cover"
+                    />
+                  ) : att.type === "image" ? (
+                    <Image className="size-4 shrink-0" />
+                  ) : (
+                    <FileText className="size-4 shrink-0" />
+                  )}
+                  <span className="max-w-[120px] truncate">{att.filename}</span>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveAttachment(att.id)}
+                    className="ml-0.5 rounded-full p-0.5 opacity-50 transition-opacity hover:opacity-100"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-2 pb-1 pl-1 pr-1">
             <div className="flex flex-wrap items-center gap-1">
               <button
                 type="button"
+                onClick={onAddAttachments}
                 className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 <Plus className="size-4" />
@@ -153,10 +194,10 @@ export function ChatComposer({
               <Button
                 size="icon"
                 onClick={onSubmit}
-                disabled={!input.trim() || disabled}
+                disabled={!canSubmit}
                 className={cn(
                   "size-8 rounded-full bg-white/90 text-black shadow-sm transition-all hover:bg-white dark:bg-white/90 dark:text-black",
-                  (!input.trim() || disabled) && "scale-95 opacity-50",
+                  !canSubmit && "scale-95 opacity-50",
                 )}
               >
                 <ArrowUp className="size-4" />

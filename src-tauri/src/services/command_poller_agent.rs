@@ -409,6 +409,7 @@ pub(crate) async fn process_agent_run(
             max_tokens: None,
             connector_id: command.payload.connector_id.clone(),
             user_id: command.payload.user_id.clone(),
+            attachments: None,
         };
 
         // Create config

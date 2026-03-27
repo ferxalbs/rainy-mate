@@ -4,6 +4,7 @@ import { useTauriTask } from "./useTauriTask";
 import type {
   AgentTraceEntry,
   AgentMessage,
+  ChatAttachment,
   SpecialistRunState,
   TaskPlan,
 } from "../types/agent";
@@ -730,6 +731,7 @@ export function useAgentChat(
       workspaceId: string,
       agentSpecId?: string,
       reasoningEffort?: string,
+      attachments?: ChatAttachment[],
     ) => {
       const resolvedChatScopeId = await ensureChatScope().catch((error) => {
         console.error("Failed to resolve chat scope:", error);
@@ -740,6 +742,7 @@ export function useAgentChat(
         id: crypto.randomUUID(),
         type: "user",
         content: instruction,
+        attachments: attachments?.length ? attachments : undefined,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, userMsg]);
@@ -1209,6 +1212,9 @@ export function useAgentChat(
           resolvedChatScopeId,
           clientRunId,
           reasoningEffort,
+          attachments?.length
+            ? attachments.map((a) => ({ path: a.path, name: a.filename }))
+            : undefined,
         );
 
         setMessages((prev) =>

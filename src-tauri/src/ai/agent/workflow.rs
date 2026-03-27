@@ -557,6 +557,7 @@ mod tests {
             max_tokens: None,
             connector_id: None,
             user_id: None,
+            attachments: None,
         };
 
         let mut workflow = Workflow::new(spec.clone(), options, "start".to_string());

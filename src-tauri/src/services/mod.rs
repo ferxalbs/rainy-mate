@@ -2,6 +2,7 @@
 // Business logic layer
 
 pub mod agent_kill_switch;
+pub mod attachment;
 pub mod agent_library;
 pub mod agent_run_control;
 pub mod airlock;

@@ -114,6 +114,7 @@ mod tests {
             max_tokens: None,
             connector_id: None,
             user_id: None,
+            attachments: None,
         };
 
         // We can't easily run() without a real SkillExecutor/Router,

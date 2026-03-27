@@ -848,6 +848,7 @@ pub async fn run_agent_workflow(
     chat_scope_id: Option<String>,
     run_id: Option<String>,
     reasoning_effort: Option<String>,
+    attachments: Option<Vec<crate::services::attachment::AttachmentInput>>,
     router: State<'_, IntelligentRouterState>,
     airlock_state: State<'_, AirlockServiceState>,
     provider_registry: State<'_, ProviderRegistryState>,
@@ -1075,6 +1076,9 @@ pub async fn run_agent_workflow(
         )
     };
 
+    let processed_attachments = attachments
+        .map(|inputs| crate::services::attachment::process_attachments(inputs));
+
     let options = RuntimeOptions {
         model: Some(selected_model_id),
         workspace_id: workspace_path.clone(),
@@ -1093,6 +1097,7 @@ pub async fn run_agent_workflow(
         max_tokens: spec.max_tokens,
         connector_id: None,
         user_id: None,
+        attachments: processed_attachments,
     };
 
     // Initialize Persistent Memory
@@ -1526,6 +1531,16 @@ pub async fn list_active_sessions(
     session_coordinator: State<'_, Arc<crate::services::session_coordinator::SessionCoordinator>>,
 ) -> Result<Vec<crate::services::session_coordinator::ActiveSessionInfo>, String> {
     Ok(session_coordinator.list_active())
+}
+
+/// Build lightweight previews for file paths selected by the user.
+/// This is called immediately after the file picker dialog closes, before the user submits.
+/// Returns thumbnail URIs for images and file metadata for all types.
+#[tauri::command]
+pub async fn prepare_attachment_previews(
+    paths: Vec<String>,
+) -> Result<Vec<crate::services::attachment::AttachmentPreview>, String> {
+    Ok(crate::services::attachment::prepare_previews(paths))
 }
 
 #[cfg(test)]

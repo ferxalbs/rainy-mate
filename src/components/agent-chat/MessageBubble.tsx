@@ -3,9 +3,11 @@ import {
   Play,
   Ban,
   FileCode,
+  FileText,
   FolderOpen,
   ArrowRight,
   Copy,
+  Image,
   RotateCcw,
   Square,
   ChevronDown,
@@ -176,6 +178,29 @@ function MessageBubbleComponent({
           )}
 
           <div className="relative z-10 min-w-0 select-text">
+            {isUser && message.attachments && message.attachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {message.attachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-xs text-primary-foreground/80"
+                  >
+                    {att.type === "image" && att.thumbnailDataUri ? (
+                      <img
+                        src={att.thumbnailDataUri}
+                        alt={att.filename}
+                        className="size-7 rounded object-cover"
+                      />
+                    ) : att.type === "image" ? (
+                      <Image className="size-4 shrink-0" />
+                    ) : (
+                      <FileText className="size-4 shrink-0" />
+                    )}
+                    <span className="max-w-[140px] truncate">{att.filename}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {message.content ? (
               <MarkdownRenderer
                 content={message.content}

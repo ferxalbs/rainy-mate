@@ -35,6 +35,9 @@ pub struct RuntimeOptions {
     /// End-user identifier passed by connectors. Used for per_user session scoping.
     #[serde(default)]
     pub user_id: Option<String>,
+    /// Pre-processed file attachments to inject into the first user message.
+    #[serde(default)]
+    pub attachments: Option<Vec<crate::services::attachment::ProcessedAttachment>>,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
@@ -155,6 +158,65 @@ pub struct AgentImageUrl {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+}
+
+/// Build user message content, injecting any pre-processed file attachments.
+///
+/// For images: adds an ImageUrl part per attachment.
+/// For text/documents: prepends extracted text before the user's prompt.
+/// The wrapped user prompt is always the final text part.
+fn build_user_content(
+    input: &str,
+    attachments: Option<&[crate::services::attachment::ProcessedAttachment]>,
+) -> AgentContent {
+    use crate::services::attachment::AttachmentContent;
+
+    let wrapped = crate::ai::agent::prompt_guard::wrap_user_turn(input);
+
+    let Some(attachments) = attachments.filter(|a| !a.is_empty()) else {
+        return AgentContent::text(wrapped);
+    };
+
+    let mut parts: Vec<AgentContentPart> = Vec::new();
+
+    // Text/document attachments: prepend extracted content as a text part
+    let mut doc_blocks: Vec<String> = Vec::new();
+    for att in attachments {
+        match &att.content {
+            AttachmentContent::ExtractedText { text } => {
+                doc_blocks.push(format!(
+                    "[Attached file: {}]\n{}",
+                    att.filename, text
+                ));
+            }
+            AttachmentContent::UnsupportedBinary { summary } => {
+                doc_blocks.push(format!("[Attached file: {}] {}", att.filename, summary));
+            }
+            AttachmentContent::ImageDataUri { .. } => {} // handled below
+        }
+    }
+    if !doc_blocks.is_empty() {
+        parts.push(AgentContentPart::Text {
+            text: doc_blocks.join("\n\n"),
+        });
+    }
+
+    // Image attachments: add ImageUrl parts
+    for att in attachments {
+        if let AttachmentContent::ImageDataUri { data_uri } = &att.content {
+            parts.push(AgentContentPart::ImageUrl {
+                image_url: AgentImageUrl {
+                    url: data_uri.clone(),
+                    detail: Some("auto".to_string()),
+                },
+            });
+        }
+    }
+
+    // Always end with the user's prompt text
+    parts.push(AgentContentPart::Text { text: wrapped });
+
+    AgentContent::Parts(parts)
 }
 
 impl AgentRuntime {
@@ -767,9 +829,10 @@ Rules:
 
         // Add the new User Message — wrap in structural delimiters so the LLM
         // can clearly identify the boundary of user-controlled text.
+        let user_content = build_user_content(input, self.options.attachments.as_deref());
         state.messages.push(AgentMessage {
             role: "user".to_string(),
-            content: AgentContent::text(crate::ai::agent::prompt_guard::wrap_user_turn(input)),
+            content: user_content,
             tool_calls: None,
             tool_call_id: None,
         });

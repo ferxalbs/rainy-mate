@@ -18,8 +18,6 @@ interface UnifiedModelSelectorProps {
   filter?: "all" | "chat" | "processing";
 }
 
-const REASONING_LEVELS = ["minimal", "low", "medium", "high"] as const;
-
 function getDisplayModelName(modelName: string): string {
   const name = modelName.trim();
   if (!/[-_]/.test(name)) return name;
@@ -53,23 +51,7 @@ function getDisplayModelName(modelName: string): string {
 
 export function getReasoningOptions(model: UnifiedModel | null): string[] {
   if (!model?.capabilities.reasoning) return [];
-
-  const normalizedId = model.id.toLowerCase();
-  if (normalizedId.includes("gemini-3-pro")) {
-    return ["low", "high"];
-  }
-
-  if (normalizedId.includes("gpt-5") || /(^|:)o[134]/.test(normalizedId)) {
-    return ["low", "medium", "high"];
-  }
-
-  if (normalizedId.includes("gemini-3")) {
-    return [...REASONING_LEVELS];
-  }
-
-  return model.reasoning_level === "dynamic"
-    ? ["low", "medium", "high"]
-    : [...REASONING_LEVELS];
+  return model.capabilities.reasoning_options ?? [];
 }
 
 
