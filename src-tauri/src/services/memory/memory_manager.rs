@@ -852,6 +852,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_simple_buffer_returns_ring_buffer_only() {
         let mm = make_manager();
         let workspace_id = "test-ws-simple";
@@ -892,6 +893,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_prune_expired_removes_old_entries() {
         let mm = make_manager();
         let workspace_id = "test-ws-prune";
@@ -940,6 +942,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_simple_buffer_no_cross_workspace_leak() {
         let mm = make_manager();
         let now = chrono::Utc::now().timestamp();
