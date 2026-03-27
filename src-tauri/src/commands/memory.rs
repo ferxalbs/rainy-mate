@@ -612,7 +612,6 @@ fn extract_tag_value(tags: &[String], key: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::services::memory::MemoryManager;
-    use serial_test::serial;
     use tempfile::TempDir;
 
     fn create_test_manager() -> (MemoryManagerState, TempDir) {

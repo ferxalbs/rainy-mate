@@ -937,7 +937,6 @@ fn row_to_vault(row: &libsql::Row) -> Result<VaultRow, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
     use std::fs;
 
     #[tokio::test]

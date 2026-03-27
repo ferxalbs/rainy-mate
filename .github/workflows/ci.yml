@@ -111,6 +111,7 @@ jobs:
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
           echo "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
           echo "C:\vcpkg\installed\x64-windows\bin" >> $env:GITHUB_PATH
+          echo "LIBSQLITE3_SYS_USE_PKG_CONFIG=1" >> $env:GITHUB_ENV
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -144,7 +145,7 @@ jobs:
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'
         run: |
-          APP_BIN=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "Rainy MaTE" -type f | head -n 1)
+          APP_BIN=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -type f -perm +111 -name "*Rainy*MaTE*" -o -type f -perm +111 -name "rainy-mate" | head -n 1)
           test -n "$APP_BIN"
           lipo -archs "$APP_BIN" | grep -E "arm64.*x86_64|x86_64.*arm64"
           file "$APP_BIN"
