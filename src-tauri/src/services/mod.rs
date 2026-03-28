@@ -78,6 +78,8 @@ pub use skill_executor::SkillExecutor;
 pub use llm_client::LLMClient;
 pub use local_agent_security::{EffectiveLocalAgentPolicy, LocalAgentSecurityService};
 pub use macos_native_notifications::MacOSNativeNotificationBridge;
+#[allow(unused_imports)]
+#[allow(unused_imports)]
 pub use macos_quick_delegate::MacOSQuickDelegateBridge;
 pub use settings::SettingsManager;
 pub use skill_installer::SkillInstaller;

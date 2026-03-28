@@ -85,6 +85,8 @@ pub struct MacOSNativeNotificationBridge;
 
 #[cfg(target_os = "macos")]
 impl MacOSNativeNotificationBridge {
+    #![allow(dead_code)]
+    #![allow(dead_code)]
     pub fn is_runtime_supported() -> bool {
         unsafe { rainy_notification_bridge_runtime_supported() == 1 }
     }
@@ -269,6 +271,8 @@ pub struct MacOSNativeNotificationBridge;
 
 #[cfg(not(target_os = "macos"))]
 impl MacOSNativeNotificationBridge {
+    #![allow(dead_code)]
+    #![allow(dead_code)]
     pub fn is_runtime_supported() -> bool {
         false
     }

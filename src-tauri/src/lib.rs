@@ -21,6 +21,9 @@ use services::{
     WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
+#[allow(unused_imports)]
+#[allow(unused_imports)]
+#[allow(unused_imports)]
 use tauri::Manager;
 use tokio::sync::{Mutex, RwLock};
 
@@ -166,7 +169,10 @@ pub fn run() {
         ))) // Placeholder, initialized in setup
         .setup(move |app| {
             use crate::services::AirlockService;
-            use tauri::Manager;
+            #[allow(unused_imports)]
+#[allow(unused_imports)]
+#[allow(unused_imports)]
+use tauri::Manager;
 
             // Initialize auto-updater plugin (desktop only)
             #[cfg(desktop)]
@@ -781,7 +787,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    tauri_app.run(|app_handle, event| {
+    tauri_app.run(|#[allow(unused_variables)] app_handle, #[allow(unused_variables)] event| {
         #[cfg(target_os = "macos")]
         if let tauri::RunEvent::Ready = event {
             let airlock_state = app_handle.state::<commands::airlock::AirlockServiceState>();

@@ -488,7 +488,7 @@ mod tests {
     use crate::ai::AIProviderManager;
     use crate::services::workspace::WorkspaceManager;
     use crate::services::{BrowserController, ManagedResearchService, SkillExecutor};
-    use serial_test::serial;
+
     use std::sync::Arc;
 
     #[derive(Debug)]
@@ -520,7 +520,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
+    #[serial_test::serial]
     async fn test_workflow_execution() {
         use crate::ai::specs::skills::AgentSkills;
         use crate::ai::specs::soul::AgentSoul;
