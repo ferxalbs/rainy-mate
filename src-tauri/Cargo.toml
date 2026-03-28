@@ -1,6 +1,6 @@
 [package]
 name = "rainy-mate"
-version = "0.6.1"
+version = "0.6.2"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -82,6 +82,7 @@ rust_xlsxwriter = "0.79.4"
 calamine = "0.26.1"
 zip = "2.4.2"
 docx-rs = "0.4.18"
+libloading = "0.8"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3.5.1"

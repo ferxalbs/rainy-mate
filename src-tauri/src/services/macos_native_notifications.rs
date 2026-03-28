@@ -1,7 +1,11 @@
 #[cfg(target_os = "macos")]
+use libloading::Library;
+#[cfg(target_os = "macos")]
 use crate::commands::airlock::AirlockServiceState;
 #[cfg(target_os = "macos")]
 use std::ffi::{c_char, CStr, CString};
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 #[cfg(target_os = "macos")]
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -16,21 +20,100 @@ use tokio::sync::mpsc;
 static ACTION_TX: OnceLock<mpsc::UnboundedSender<(String, Option<String>)>> = OnceLock::new();
 #[cfg(target_os = "macos")]
 static BRIDGE_INITIALIZED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "macos")]
+static NOTIFICATION_BRIDGE: OnceLock<Result<NotificationBridgeSymbols, String>> = OnceLock::new();
 
 #[cfg(target_os = "macos")]
-#[link(name = "RainyNativeNotifications", kind = "dylib")]
-unsafe extern "C" {
-    fn rainy_notification_bridge_initialize(callback: extern "C" fn(*const c_char, *const c_char));
-    fn rainy_notification_bridge_runtime_supported() -> i32;
-    fn rainy_notification_bridge_request_authorization() -> i32;
-    fn rainy_notification_bridge_authorization_status() -> i32;
-    fn rainy_notification_bridge_send(
-        title: *const c_char,
-        body: *const c_char,
-        command_id: *const c_char,
-        category_id: *const c_char,
-    ) -> i32;
-    fn rainy_notification_bridge_activate_app();
+struct NotificationBridgeSymbols {
+    _library: Library,
+    initialize: unsafe extern "C" fn(extern "C" fn(*const c_char, *const c_char)),
+    runtime_supported: unsafe extern "C" fn() -> i32,
+    request_authorization: unsafe extern "C" fn() -> i32,
+    authorization_status: unsafe extern "C" fn() -> i32,
+    send: unsafe extern "C" fn(*const c_char, *const c_char, *const c_char, *const c_char) -> i32,
+    activate_app: unsafe extern "C" fn(),
+}
+
+#[cfg(target_os = "macos")]
+fn notification_bridge_candidates() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(macos_dir) = exe.parent() {
+            paths.push(macos_dir.join("libRainyNativeNotifications.dylib"));
+            if let Some(contents_dir) = macos_dir.parent() {
+                paths.push(
+                    contents_dir
+                        .join("Frameworks")
+                        .join("libRainyNativeNotifications.dylib"),
+                );
+            }
+        }
+    }
+    paths
+}
+
+#[cfg(target_os = "macos")]
+fn notification_bridge() -> Result<&'static NotificationBridgeSymbols, String> {
+    let result = NOTIFICATION_BRIDGE.get_or_init(|| unsafe {
+        let mut tried = Vec::new();
+        for path in notification_bridge_candidates() {
+            tried.push(path.display().to_string());
+            if !path.exists() {
+                continue;
+            }
+
+            let library = match Library::new(&path) {
+                Ok(library) => library,
+                Err(error) => {
+                    return Err(format!(
+                        "Failed to load libRainyNativeNotifications.dylib from {}: {}",
+                        path.display(),
+                        error
+                    ));
+                }
+            };
+
+            let initialize = *library
+                .get::<unsafe extern "C" fn(extern "C" fn(*const c_char, *const c_char))>(
+                    b"rainy_notification_bridge_initialize\0",
+                )
+                .map_err(|e| e.to_string())?;
+            let runtime_supported = *library
+                .get::<unsafe extern "C" fn() -> i32>(b"rainy_notification_bridge_runtime_supported\0")
+                .map_err(|e| e.to_string())?;
+            let request_authorization = *library
+                .get::<unsafe extern "C" fn() -> i32>(b"rainy_notification_bridge_request_authorization\0")
+                .map_err(|e| e.to_string())?;
+            let authorization_status = *library
+                .get::<unsafe extern "C" fn() -> i32>(b"rainy_notification_bridge_authorization_status\0")
+                .map_err(|e| e.to_string())?;
+            let send = *library
+                .get::<unsafe extern "C" fn(*const c_char, *const c_char, *const c_char, *const c_char) -> i32>(
+                    b"rainy_notification_bridge_send\0",
+                )
+                .map_err(|e| e.to_string())?;
+            let activate_app = *library
+                .get::<unsafe extern "C" fn()>(b"rainy_notification_bridge_activate_app\0")
+                .map_err(|e| e.to_string())?;
+
+            return Ok(NotificationBridgeSymbols {
+                _library: library,
+                initialize,
+                runtime_supported,
+                request_authorization,
+                authorization_status,
+                send,
+                activate_app,
+            });
+        }
+
+        Err(format!(
+            "libRainyNativeNotifications.dylib not found. Tried: {}",
+            tried.join(", ")
+        ))
+    });
+
+    result.as_ref().map_err(|error| error.clone())
 }
 
 #[cfg(target_os = "macos")]
@@ -86,7 +169,13 @@ pub struct MacOSNativeNotificationBridge;
 #[cfg(target_os = "macos")]
 impl MacOSNativeNotificationBridge {
     pub fn is_runtime_supported() -> bool {
-        unsafe { rainy_notification_bridge_runtime_supported() == 1 }
+        match notification_bridge() {
+            Ok(bridge) => unsafe { (bridge.runtime_supported)() == 1 },
+            Err(error) => {
+                tracing::warn!("{}", error);
+                false
+            }
+        }
     }
 
     pub fn initialize(app: AppHandle, airlock_state: AirlockServiceState) {
@@ -108,9 +197,12 @@ impl MacOSNativeNotificationBridge {
             return;
         }
 
-        unsafe {
-            rainy_notification_bridge_initialize(notification_action_callback);
-        }
+        let Ok(bridge) = notification_bridge() else {
+            tracing::warn!("macOS native notification bridge dylib unavailable");
+            return;
+        };
+
+        unsafe { (bridge.initialize)(notification_action_callback) };
 
         BRIDGE_INITIALIZED.store(true, Ordering::SeqCst);
 
@@ -167,14 +259,18 @@ impl MacOSNativeNotificationBridge {
         if !Self::is_runtime_supported() {
             return -2;
         }
-        unsafe { rainy_notification_bridge_authorization_status() }
+        notification_bridge()
+            .map(|bridge| unsafe { (bridge.authorization_status)() })
+            .unwrap_or(-2)
     }
 
     pub fn request_authorization() -> bool {
         if !Self::is_runtime_supported() {
             return false;
         }
-        unsafe { rainy_notification_bridge_request_authorization() == 1 }
+        notification_bridge()
+            .map(|bridge| unsafe { (bridge.request_authorization)() == 1 })
+            .unwrap_or(false)
     }
 
     pub fn send_airlock_notification(
@@ -214,8 +310,8 @@ impl MacOSNativeNotificationBridge {
         if !Self::is_runtime_supported() {
             return;
         }
-        unsafe {
-            rainy_notification_bridge_activate_app();
+        if let Ok(bridge) = notification_bridge() {
+            unsafe { (bridge.activate_app)() };
         }
     }
 
@@ -243,8 +339,9 @@ impl MacOSNativeNotificationBridge {
             None => None,
         };
 
+        let bridge = notification_bridge()?;
         let ok = unsafe {
-            rainy_notification_bridge_send(
+            (bridge.send)(
                 title.as_ptr(),
                 body.as_ptr(),
                 command

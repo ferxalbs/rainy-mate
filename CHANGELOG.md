@@ -5,6 +5,24 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-03-28 - PROJECT KINGFALL PHASE 3B: MACOS BRIDGE SURVIVABILITY + RELEASE VERIFICATION FIXES
+
+### Fixed
+
+- **macOS launch crash when native Swift notification bridge dylib is missing** — Rainy MaTE no longer aborts at process launch with `DYLD, Code 1 Library missing` for `@rpath/libRainyNativeNotifications.dylib`:
+  - `src-tauri/src/services/macos_native_notifications.rs` — replaced hard dylib link-time dependency with runtime loading via `libloading`; bridge now searches bundled macOS locations, logs missing dylibs, and disables notifications gracefully instead of crashing the app before `main()`
+  - `src-tauri/src/services/macos_quick_delegate.rs` — applied the same runtime-loading pattern to the Quick Delegate bridge so a missing Swift bridge cannot trigger a launch-time dyld abort
+  - `src-tauri/Cargo.toml` — added `libloading` for runtime dylib resolution on macOS
+
+- **GitHub Actions macOS universal verification step looking for the wrong bundle artifact** — release/CI verification now checks the real Tauri app bundle executable path instead of searching for a non-existent standalone file named `Rainy MaTE`:
+  - `.github/workflows/publish.yml` — universal binary verification now resolves `Rainy MaTE.app/Contents/MacOS/rainy-mate`
+  - `.github/workflows/ci.yml` — same universal binary verification fix for the main CI workflow
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass after runtime-loading macOS bridge hardening
+- `pnpm exec tsc --noEmit` → pass after runtime-loading macOS bridge hardening
+
 ## [0.6.1] - 2026-03-28 - PROJECT KINGFALL PHASE 3: AIRLOCK VISIBILITY + ATM CONTRACT HARDENING
 
 ### Added

@@ -132,7 +132,9 @@ jobs:
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'
         run: |
-          APP_BIN=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "Rainy MaTE" -type f | head -n 1)
-          test -n "$APP_BIN"
+          APP_BUNDLE=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "Rainy MaTE.app" -type d | head -n 1)
+          test -n "$APP_BUNDLE"
+          APP_BIN="$APP_BUNDLE/Contents/MacOS/rainy-mate"
+          test -f "$APP_BIN"
           lipo -archs "$APP_BIN" | grep -E "arm64.*x86_64|x86_64.*arm64"
           file "$APP_BIN"
