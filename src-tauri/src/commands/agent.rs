@@ -6,7 +6,6 @@ use crate::ai::{
     agent::context_window::ContextWindow,
     agent::events::AgentEvent,
     agent::manager::ChatCompactionStateDto,
-    keychain::KeychainManager,
     provider_trait::{AIProviderFactory, ProviderWithStats},
     provider_types::{
         ChatCompletionRequest, ChatMessage, ProviderConfig, ProviderId, ProviderType,
@@ -20,7 +19,7 @@ use crate::commands::memory::MemoryManagerState;
 use crate::commands::router::IntelligentRouterState;
 use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::agent_run_control::{AgentRunControl, CancelRunResult};
-use crate::services::{PromptSkillDiscoveryService, SkillExecutor};
+use crate::services::{KeychainAccessService, PromptSkillDiscoveryService, SkillExecutor};
 use chrono::Utc;
 use regex::Regex;
 use serde::Serialize;
@@ -477,11 +476,12 @@ fn sanitize_chat_title(raw: &str, fallback_seed: &str) -> String {
 async fn generate_chat_title(
     router: &IntelligentRouterState,
     provider_registry: &ProviderRegistryState,
+    keychain: &KeychainAccessService,
     chat_id: &str,
     seed_prompt: &str,
     assistant_response: Option<&str>,
 ) -> Result<String, String> {
-    ensure_provider_ready_for_model(CHAT_TITLE_MODEL_ID, provider_registry, router).await?;
+    ensure_provider_ready_for_model(CHAT_TITLE_MODEL_ID, provider_registry, router, keychain).await?;
 
     let response_excerpt = assistant_response
         .map(|value| truncate_text(value, 600))
@@ -753,8 +753,8 @@ async fn ensure_provider_ready_for_model(
     model_id: &str,
     registry: &ProviderRegistryState,
     router: &IntelligentRouterState,
+    keychain: &KeychainAccessService,
 ) -> Result<(), String> {
-    let keychain = KeychainManager::new();
     let normalized_model = crate::ai::model_catalog::normalize_model_slug(model_id).to_string();
 
     let (provider_id, provider_factory_kind, key_aliases): (&str, &str, &[&str]) =
@@ -769,10 +769,16 @@ async fn ensure_provider_ready_for_model(
         };
 
     if registry.0.get(&ProviderId::new(provider_id)).is_err() {
-        let api_key = key_aliases
-            .iter()
-            .find_map(|alias| keychain.get_key(alias).ok().flatten())
-            .filter(|key| provider_factory_kind != "rainy" || is_valid_rainy_api_key(key));
+        let mut api_key = None;
+        for alias in key_aliases {
+            let candidate = keychain.get(alias).await.map_err(|e| e.to_string())?;
+            if let Some(key) =
+                candidate.filter(|key| provider_factory_kind != "rainy" || is_valid_rainy_api_key(key))
+            {
+                api_key = Some(key);
+                break;
+            }
+        }
 
         let api_key = api_key.ok_or_else(|| {
             if provider_factory_kind == "rainy" {
@@ -916,7 +922,14 @@ pub async fn run_agent_workflow_internal(
     let provider_registry_state = ProviderRegistryState(provider_registry.clone());
 
     crate::ai::model_catalog::ensure_supported_model_slug(&model_id)?;
-    ensure_provider_ready_for_model(&model_id, &provider_registry_state, &router_state).await?;
+    let keychain = app_handle.state::<KeychainAccessService>();
+    ensure_provider_ready_for_model(
+        &model_id,
+        &provider_registry_state,
+        &router_state,
+        keychain.inner(),
+    )
+    .await?;
     let selected_model_id = model_id.clone();
     let run_id = run_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
@@ -1535,6 +1548,7 @@ pub async fn ensure_chat_title(
     agent_manager: State<'_, crate::ai::agent::manager::AgentManager>,
     router: State<'_, IntelligentRouterState>,
     provider_registry: State<'_, ProviderRegistryState>,
+    keychain: State<'_, KeychainAccessService>,
     chat_scope_id: Option<String>,
     prompt: Option<String>,
     response: Option<String>,
@@ -1591,6 +1605,7 @@ pub async fn ensure_chat_title(
     let (next_title, status) = match generate_chat_title(
         &router,
         &provider_registry,
+        keychain.inner(),
         &chat_id,
         &seed_prompt,
         assistant_response.as_deref(),

@@ -1,4 +1,4 @@
-use crate::ai::keychain::KeychainManager;
+use crate::services::KeychainAccessService;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use rand::RngCore;
 
@@ -10,20 +10,24 @@ pub trait VaultKeyProvider: Send + Sync {
 
 #[derive(Default)]
 pub struct MacOSKeychainVaultKeyProvider {
-    keychain: KeychainManager,
+    keychain: KeychainAccessService,
 }
 
 impl MacOSKeychainVaultKeyProvider {
     pub fn new() -> Self {
         Self {
-            keychain: KeychainManager::new(),
+            keychain: KeychainAccessService::new(),
         }
     }
 }
 
 impl VaultKeyProvider for MacOSKeychainVaultKeyProvider {
     fn get_or_create_master_key(&self) -> Result<Vec<u8>, String> {
-        if let Some(encoded) = self.keychain.get_key(VAULT_MASTER_KEY_ID)? {
+        if let Some(encoded) = self
+            .keychain
+            .get_blocking(VAULT_MASTER_KEY_ID)
+            .map_err(|e| e.to_string())?
+        {
             let bytes = BASE64_STANDARD
                 .decode(encoded.as_bytes())
                 .map_err(|e| format!("Invalid vault key encoding: {}", e))?;
@@ -36,7 +40,8 @@ impl VaultKeyProvider for MacOSKeychainVaultKeyProvider {
         let mut key = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut key);
         let encoded = BASE64_STANDARD.encode(key);
-        self.keychain.store_key(VAULT_MASTER_KEY_ID, &encoded)?;
+        futures::executor::block_on(self.keychain.set(VAULT_MASTER_KEY_ID, &encoded))
+            .map_err(|e| e.to_string())?;
         Ok(key.to_vec())
     }
 }

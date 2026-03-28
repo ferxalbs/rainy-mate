@@ -1,4 +1,4 @@
-use crate::ai::keychain::KeychainManager;
+use crate::services::KeychainAccessService;
 use serde::{Deserialize, Serialize};
 
 const ATM_OWNER_AUTH_KEYCHAIN_ID: &str = "atm_owner_auth";
@@ -10,9 +10,14 @@ pub struct ATMOwnerAuthBundle {
     pub workspace_id: String,
 }
 
-pub fn load_owner_auth_bundle() -> Result<Option<ATMOwnerAuthBundle>, String> {
-    let keychain = KeychainManager::new();
-    let raw = match keychain.get_key(ATM_OWNER_AUTH_KEYCHAIN_ID)? {
+pub async fn load_owner_auth_bundle(
+    keychain: &KeychainAccessService,
+) -> Result<Option<ATMOwnerAuthBundle>, String> {
+    let raw = match keychain
+        .get(ATM_OWNER_AUTH_KEYCHAIN_ID)
+        .await
+        .map_err(|e| e.to_string())?
+    {
         Some(raw) => raw,
         None => return Ok(None),
     };
@@ -22,14 +27,21 @@ pub fn load_owner_auth_bundle() -> Result<Option<ATMOwnerAuthBundle>, String> {
         .map_err(|e| format!("Failed to decode ATM owner auth bundle: {}", e))
 }
 
-pub fn save_owner_auth_bundle(bundle: &ATMOwnerAuthBundle) -> Result<(), String> {
-    let keychain = KeychainManager::new();
+pub async fn save_owner_auth_bundle(
+    keychain: &KeychainAccessService,
+    bundle: &ATMOwnerAuthBundle,
+) -> Result<(), String> {
     let raw = serde_json::to_string(bundle)
         .map_err(|e| format!("Failed to encode ATM owner auth bundle: {}", e))?;
-    keychain.store_key(ATM_OWNER_AUTH_KEYCHAIN_ID, &raw)
+    keychain
+        .set(ATM_OWNER_AUTH_KEYCHAIN_ID, &raw)
+        .await
+        .map_err(|e| e.to_string())
 }
 
-pub fn clear_owner_auth_bundle() -> Result<(), String> {
-    let keychain = KeychainManager::new();
-    keychain.delete_key(ATM_OWNER_AUTH_KEYCHAIN_ID)
+pub async fn clear_owner_auth_bundle(keychain: &KeychainAccessService) -> Result<(), String> {
+    keychain
+        .delete(ATM_OWNER_AUTH_KEYCHAIN_ID)
+        .await
+        .map_err(|e| e.to_string())
 }

@@ -604,7 +604,9 @@ mod tests {
 
         match WorkspaceManager::new() {
             Ok(wm) => {
-                let provider_manager = Arc::new(AIProviderManager::new());
+                let provider_manager = Arc::new(AIProviderManager::new(
+                    crate::services::KeychainAccessService::new(),
+                ));
                 let managed_research = Arc::new(ManagedResearchService::new(provider_manager));
                 let browser = Arc::new(BrowserController::new());
                 let mcp_service = Arc::new(crate::services::mcp_service::McpService::new());

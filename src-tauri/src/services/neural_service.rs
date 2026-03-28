@@ -5,6 +5,7 @@ use crate::models::neural::{
 use crate::services::atm_auth::{
     clear_owner_auth_bundle, load_owner_auth_bundle, save_owner_auth_bundle, ATMOwnerAuthBundle,
 };
+use crate::services::KeychainAccessService;
 use crate::services::manifest_signing::sign_skills_manifest;
 use crate::services::security::NodeAuthenticator;
 use crate::services::tool_manifest::build_skill_manifest_from_runtime;
@@ -23,6 +24,7 @@ pub struct NeuralService {
     authenticator: NodeAuthenticator,
     manifest_state: Arc<Mutex<ManifestState>>,
     runtime_registry: Option<Arc<RuntimeRegistry>>,
+    keychain: KeychainAccessService,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,6 +135,7 @@ impl NeuralService {
         workspace_id: String,
         authenticator: NodeAuthenticator,
         runtime_registry: Option<Arc<RuntimeRegistry>>,
+        keychain: KeychainAccessService,
     ) -> Self {
         let hostname = std::env::var("HOSTNAME")
             .or_else(|_| std::env::var("COMPUTERNAME"))
@@ -155,6 +158,7 @@ impl NeuralService {
             authenticator,
             manifest_state: Arc::new(Mutex::new(ManifestState::default())),
             runtime_registry,
+            keychain,
         }
     }
 
@@ -170,8 +174,7 @@ impl NeuralService {
         };
 
         // Keychain I/O outside the lock
-        let keychain = crate::ai::keychain::KeychainManager::new();
-        if let Err(e) = keychain.store_key("neural_workspace_id", &workspace_id) {
+        if let Err(e) = self.keychain.set("neural_workspace_id", &workspace_id).await {
             eprintln!("Failed to persist neural workspace id: {}", e);
         }
 
@@ -181,7 +184,7 @@ impl NeuralService {
                 user_api_key,
                 workspace_id: workspace_id.clone(),
             };
-            if let Err(e) = save_owner_auth_bundle(&bundle) {
+            if let Err(e) = save_owner_auth_bundle(&self.keychain, &bundle).await {
                 eprintln!("Failed to persist ATM owner auth bundle: {}", e);
             }
         }
@@ -203,14 +206,20 @@ impl NeuralService {
         let workspace_id = metadata.workspace_id.clone();
 
         // Persist to Keychain
-        let keychain = crate::ai::keychain::KeychainManager::new();
-        keychain.store_key("neural_platform_key", &platform_key)?;
-        keychain.store_key("neural_user_api_key", &user_api_key)?;
-        save_owner_auth_bundle(&ATMOwnerAuthBundle {
+        self.keychain
+            .set("neural_platform_key", &platform_key)
+            .await
+            .map_err(|e| e.to_string())?;
+        self.keychain
+            .set("neural_user_api_key", &user_api_key)
+            .await
+            .map_err(|e| e.to_string())?;
+        save_owner_auth_bundle(&self.keychain, &ATMOwnerAuthBundle {
             platform_key,
             user_api_key,
             workspace_id,
-        })?;
+        })
+        .await?;
 
         Ok(())
     }
@@ -224,21 +233,17 @@ impl NeuralService {
         metadata.node_id = None;
 
         // 2. Remove from Keychain
-        let keychain = crate::ai::keychain::KeychainManager::new();
-        // Ignore errors if keys don't exist
-        let _ = keychain.delete_key("neural_platform_key");
-        let _ = keychain.delete_key("neural_user_api_key");
-        let _ = keychain.delete_key("neural_workspace_id");
-        let _ = clear_owner_auth_bundle();
+        let _ = self.keychain.delete("neural_platform_key").await;
+        let _ = self.keychain.delete("neural_user_api_key").await;
+        let _ = self.keychain.delete("neural_workspace_id").await;
+        let _ = clear_owner_auth_bundle(&self.keychain).await;
 
         Ok(())
     }
 
     /// Load credentials from Keychain (call on app startup)
     pub async fn load_credentials_from_keychain(&self) -> Result<bool, String> {
-        let keychain = crate::ai::keychain::KeychainManager::new();
-
-        if let Some(bundle) = load_owner_auth_bundle()? {
+        if let Some(bundle) = load_owner_auth_bundle(&self.keychain).await? {
             let mut metadata = self.metadata.lock().await;
             metadata.platform_key = Some(bundle.platform_key);
             metadata.user_api_key = Some(bundle.user_api_key);
@@ -247,9 +252,18 @@ impl NeuralService {
             }
             Ok(true)
         } else {
-            let platform_key = keychain.get_key("neural_platform_key")?;
-            let user_api_key = keychain.get_key("neural_user_api_key")?;
-            let workspace_id = keychain.get_key("neural_workspace_id")?;
+            let values = self
+                .keychain
+                .get_many(&[
+                    "neural_platform_key",
+                    "neural_user_api_key",
+                    "neural_workspace_id",
+                ])
+                .await
+                .map_err(|e| e.to_string())?;
+            let platform_key = values.get("neural_platform_key").cloned().unwrap_or(None);
+            let user_api_key = values.get("neural_user_api_key").cloned().unwrap_or(None);
+            let workspace_id = values.get("neural_workspace_id").cloned().unwrap_or(None);
 
             if let (Some(pk), Some(uk)) = (platform_key, user_api_key) {
                 let mut metadata = self.metadata.lock().await;
@@ -264,7 +278,7 @@ impl NeuralService {
                     user_api_key: uk,
                     workspace_id: metadata.workspace_id.clone(),
                 };
-                if let Err(e) = save_owner_auth_bundle(&bundle) {
+                if let Err(e) = save_owner_auth_bundle(&self.keychain, &bundle).await {
                     eprintln!("Failed to migrate legacy neural auth bundle: {}", e);
                 }
                 Ok(true)

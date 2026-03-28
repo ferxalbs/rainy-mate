@@ -735,11 +735,17 @@ impl MemoryManager {
                 "g" | "google" | "gemini" => EMBEDDING_PROVIDER.to_string(),
                 _ => return None,
             };
-            let keychain = crate::ai::keychain::KeychainManager::new();
+            let keychain = crate::services::KeychainAccessService::new();
             let api_key = keychain
-                .get_key(EMBEDDING_PROVIDER)
-                .or_else(|_| keychain.get_key(&provider_raw))
-                .unwrap_or_default()
+                .get_many_blocking(&[EMBEDDING_PROVIDER, &provider_raw])
+                .ok()
+                .and_then(|values| {
+                    values
+                        .get(EMBEDDING_PROVIDER)
+                        .cloned()
+                        .flatten()
+                        .or_else(|| values.get(&provider_raw).cloned().flatten())
+                })
                 .unwrap_or_default();
             if api_key.trim().is_empty() {
                 return None;

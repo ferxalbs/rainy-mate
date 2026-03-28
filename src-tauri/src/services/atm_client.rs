@@ -1,7 +1,7 @@
-use crate::ai::keychain::KeychainManager;
 use crate::services::atm_auth::{
     clear_owner_auth_bundle, load_owner_auth_bundle, ATMOwnerAuthBundle,
 };
+use crate::services::KeychainAccessService;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -21,6 +21,7 @@ pub struct ATMClientState {
 pub struct ATMClient {
     http: Client,
     state: Arc<Mutex<ATMClientState>>,
+    keychain: KeychainAccessService,
 }
 
 const ATM_ADMIN_KEYCHAIN_ID: &str = "atm_admin_key";
@@ -557,19 +558,24 @@ impl ATMClient {
                 platform_key: None,
                 user_api_key: None,
             })),
+            keychain: KeychainAccessService::new(),
         }
     }
 
+    pub fn with_keychain(mut self, keychain: KeychainAccessService) -> Self {
+        self.keychain = keychain;
+        self
+    }
+
     pub async fn set_credentials(&self, api_key: String) {
-        let mut state = self.state.lock().await;
-        state.api_key = Some(api_key);
+        {
+            let mut state = self.state.lock().await;
+            state.api_key = Some(api_key.clone());
+        }
 
         // Best-effort persistence to keychain for session continuity
-        let keychain = KeychainManager::new();
-        if let Some(key) = state.api_key.as_ref() {
-            if let Err(e) = keychain.store_key(ATM_ADMIN_KEYCHAIN_ID, key) {
-                eprintln!("[ATMClient] Failed to persist admin key: {}", e);
-            }
+        if let Err(e) = self.keychain.set(ATM_ADMIN_KEYCHAIN_ID, &api_key).await {
+            eprintln!("[ATMClient] Failed to persist admin key: {}", e);
         }
     }
 
@@ -591,20 +597,23 @@ impl ATMClient {
             workspace_id,
         };
 
-        crate::services::atm_auth::save_owner_auth_bundle(&bundle)
+        crate::services::atm_auth::save_owner_auth_bundle(&self.keychain, &bundle).await
     }
 
     pub async fn load_credentials_from_keychain(&self) -> Result<bool, String> {
-        let keychain = KeychainManager::new();
-        let stored = keychain.get_key(ATM_ADMIN_KEYCHAIN_ID)?;
+        let stored = self
+            .keychain
+            .get(ATM_ADMIN_KEYCHAIN_ID)
+            .await
+            .map_err(|e| e.to_string())?;
         if let Some(api_key) = stored {
             self.set_credentials(api_key).await;
 
-            if let Some(bundle) = load_owner_auth_bundle()? {
+            if let Some(bundle) = load_owner_auth_bundle(&self.keychain).await? {
                 let mut state = self.state.lock().await;
                 state.platform_key = Some(bundle.platform_key);
                 state.user_api_key = Some(bundle.user_api_key);
-            } else if let Ok(Some(pk)) = keychain.get_key("neural_platform_key") {
+            } else if let Ok(Some(pk)) = self.keychain.get("neural_platform_key").await {
                 let mut state = self.state.lock().await;
                 state.platform_key = Some(pk);
             }
@@ -621,9 +630,8 @@ impl ATMClient {
         state.platform_key = None;
         state.user_api_key = None;
 
-        let keychain = KeychainManager::new();
-        let _ = keychain.delete_key(ATM_ADMIN_KEYCHAIN_ID);
-        let _ = clear_owner_auth_bundle();
+        let _ = self.keychain.delete(ATM_ADMIN_KEYCHAIN_ID).await;
+        let _ = clear_owner_auth_bundle(&self.keychain).await;
         Ok(())
     }
 

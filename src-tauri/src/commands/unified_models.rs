@@ -6,6 +6,7 @@ use crate::ai::model_catalog::{
 use crate::ai::provider::AIProviderManager;
 use crate::ai::provider_types::StreamingChunk;
 use crate::models::ProviderType;
+use crate::services::KeychainAccessService;
 use rainy_sdk::models::{CapabilityFlag, ModelCatalogItem, RainyCapabilitiesV2};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -477,6 +478,7 @@ fn messages_to_prompt(messages: &[ChatMessage]) -> String {
 pub async fn send_unified_message(
     _app: AppHandle,
     provider_manager: tauri::State<'_, Arc<AIProviderManager>>,
+    keychain: tauri::State<'_, KeychainAccessService>,
     model_id: String,
     messages: Vec<ChatMessage>,
     use_case: String,
@@ -492,10 +494,9 @@ pub async fn send_unified_message(
     ensure_supported_model_slug(model_name)?;
 
     let api_key = {
-        use crate::ai::keychain::KeychainManager;
-        let keychain = KeychainManager::new();
         keychain
-            .get_key("rainy_api")
+            .get("rainy_api")
+            .await
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "No API key found".to_string())?
     };

@@ -126,7 +126,9 @@ impl SkillExecutor {
 
     #[cfg(test)]
     pub fn mock() -> Self {
-        let provider_manager = Arc::new(crate::ai::provider::AIProviderManager::new());
+        let provider_manager = Arc::new(crate::ai::provider::AIProviderManager::new(
+            crate::services::KeychainAccessService::new(),
+        ));
         let research = Arc::new(ManagedResearchService::new(provider_manager));
         let browser = Arc::new(BrowserController::new());
         let wm = Arc::new(WorkspaceManager::new().unwrap_or_else(|_| {

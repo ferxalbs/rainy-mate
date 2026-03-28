@@ -646,11 +646,18 @@ impl MemoryVaultService {
         };
         let model = super::types::EMBEDDING_MODEL.to_string();
 
-        let keychain = crate::ai::keychain::KeychainManager::new();
+        let keychain = crate::services::KeychainAccessService::new();
         let api_key = keychain
-            .get_key(&provider)
-            .or_else(|_| keychain.get_key(&provider_raw))
-            .unwrap_or_default()
+            .get_many(&[provider.as_str(), provider_raw.as_str()])
+            .await
+            .ok()
+            .and_then(|values| {
+                values
+                    .get(&provider)
+                    .cloned()
+                    .flatten()
+                    .or_else(|| values.get(&provider_raw).cloned().flatten())
+            })
             .unwrap_or_default();
 
         let embedder =

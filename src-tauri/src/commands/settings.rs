@@ -1,12 +1,10 @@
 // Rainy Cowork - Settings Commands
 // Tauri commands for user settings and model selection
 
-use crate::ai::keychain::KeychainManager;
 use crate::ai::provider::AIProviderManager;
 use crate::commands::airlock::AirlockServiceState;
 use crate::services::settings::{ModelOption, SettingsManager, UserProfile, UserSettings};
-use crate::services::MacOSNativeNotificationBridge;
-use crate::services::WorkspaceManager;
+use crate::services::{KeychainAccessService, MacOSNativeNotificationBridge, WorkspaceManager};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -214,6 +212,7 @@ pub async fn get_system_readiness(
     settings: State<'_, Arc<Mutex<SettingsManager>>>,
     workspace_manager: State<'_, Arc<WorkspaceManager>>,
     airlock_state: State<'_, AirlockServiceState>,
+    keychain: State<'_, KeychainAccessService>,
 ) -> Result<SystemReadiness, String> {
     let settings = settings.lock().await;
     let native_status = MacOSNativeNotificationBridge::authorization_status();
@@ -230,7 +229,6 @@ pub async fn get_system_readiness(
         .map(|items| items.len())
         .unwrap_or(0);
 
-    let keychain = KeychainManager::new();
     let providers = [
         "rainy_api",
         "gemini",
@@ -239,15 +237,15 @@ pub async fn get_system_readiness(
         "xai",
         "openrouter",
     ];
+    let provider_map = keychain
+        .get_many(&providers)
+        .await
+        .map_err(|e| e.to_string())?;
     let credentials = providers
         .iter()
         .map(|provider| ReadinessCredential {
             provider: (*provider).to_string(),
-            configured: keychain
-                .get_key(provider)
-                .ok()
-                .and_then(|value| value)
-                .is_some(),
+            configured: provider_map.get(*provider).cloned().unwrap_or(None).is_some(),
         })
         .collect::<Vec<_>>();
 

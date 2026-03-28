@@ -4,8 +4,9 @@
 use crate::ai::provider_trait::AIProvider;
 use crate::ai::provider_types::{ProviderConfig, ProviderId};
 use crate::ai::providers::moonshot::MoonshotProvider;
-use crate::ai::{gemini::GeminiProvider, keychain::KeychainManager};
+use crate::ai::gemini::GeminiProvider;
 use crate::models::{AIProviderConfig, ProviderType};
+use crate::services::KeychainAccessService;
 use futures::StreamExt;
 use rainy_sdk::{
     models::{ModelCatalogItem, ThinkingConfig, ThinkingLevel},
@@ -45,7 +46,7 @@ struct CachedModelCatalog {
 
 /// Manager for AI providers - uses rainy-sdk for paid plans, Gemini for free tier
 pub struct AIProviderManager {
-    keychain: KeychainManager,
+    keychain: KeychainAccessService,
     gemini: GeminiProvider,
 
     /// Connection pool for RainyClient instances
@@ -78,7 +79,7 @@ impl AIProviderManager {
         }
     }
 
-    pub fn new() -> Self {
+    pub fn new(keychain: KeychainAccessService) -> Self {
         // Create optimized HTTP client with timeouts and connection pooling
         let http_client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
@@ -92,7 +93,7 @@ impl AIProviderManager {
             .expect("Failed to create HTTP client");
 
         Self {
-            keychain: KeychainManager::new(),
+            keychain,
             gemini: GeminiProvider::new(),
             client_pool: Arc::new(RwLock::new(HashMap::new())),
             model_catalog_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -140,7 +141,7 @@ impl AIProviderManager {
 
     async fn resolve_api_key(&self, provider: &str) -> Result<Option<String>, String> {
         for alias in Self::provider_aliases(provider) {
-            if let Some(key) = self.keychain.get_key(alias)? {
+            if let Some(key) = self.keychain.get(alias).await.map_err(|e| e.to_string())? {
                 if provider == "rainy_api" && !Self::is_valid_rainy_api_key(&key) {
                     tracing::warn!(
                         "[AIProviderManager] Ignoring invalid Rainy API key stored under alias '{}'",
@@ -366,7 +367,7 @@ impl AIProviderManager {
                     }
                 }
 
-                if let Ok(api_key) = self.keychain.get_key("rainy_api") {
+                if let Ok(api_key) = self.keychain.get("rainy_api").await.map_err(|e| e.to_string()) {
                     if let Some(key) = api_key {
                         if let Ok(client) = RainyClient::with_api_key(&key) {
                             if let Ok(available) = client.list_available_models().await {
@@ -444,7 +445,10 @@ impl AIProviderManager {
 
     /// Store API key in macOS Keychain
     pub async fn store_api_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
-        self.keychain.store_key(provider, api_key)?;
+        self.keychain
+            .set(provider, api_key)
+            .await
+            .map_err(|e| e.to_string())?;
         self.invalidate_model_cache(provider).await;
         Ok(())
     }
@@ -458,10 +462,16 @@ impl AIProviderManager {
     pub async fn delete_api_key(&self, provider: &str) -> Result<(), String> {
         let aliases = Self::provider_aliases(provider);
         if aliases.is_empty() {
-            self.keychain.delete_key(provider)?;
+            self.keychain
+                .delete(provider)
+                .await
+                .map_err(|e| e.to_string())?;
         } else {
             for alias in aliases {
-                self.keychain.delete_key(alias)?;
+                self.keychain
+                    .delete(alias)
+                    .await
+                    .map_err(|e| e.to_string())?;
             }
         }
         self.invalidate_model_cache(provider).await;
@@ -739,6 +749,6 @@ impl AIProviderManager {
 
 impl Default for AIProviderManager {
     fn default() -> Self {
-        Self::new()
+        Self::new(KeychainAccessService::new())
     }
 }

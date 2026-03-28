@@ -16,7 +16,7 @@ use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
     ATMClient, AgentLibraryService, AgentRunControl, BrowserController, CommandPoller,
     DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService, LLMClient,
-    ManagedResearchService, MemoryManager, NeuralService, NodeAuthenticator,
+    KeychainAccessService, ManagedResearchService, MemoryManager, NeuralService, NodeAuthenticator,
     QuickDelegateModalService, SettingsManager, SkillExecutor, SocketClient,
     WorkflowRecorderService, WorkspaceManager,
 };
@@ -27,7 +27,8 @@ use tokio::sync::{Mutex, RwLock};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize AI provider manager as Arc for thread-safe access
-    let ai_provider = Arc::new(AIProviderManager::new());
+    let keychain_access = KeychainAccessService::new();
+    let ai_provider = Arc::new(AIProviderManager::new(keychain_access.clone()));
 
     // Initialize provider registry for PHASE 3
     let provider_registry = Arc::new(ProviderRegistry::new());
@@ -67,7 +68,8 @@ pub fn run() {
     let atm_client = ATMClient::new(
         "https://rainy-atm-cfe3gvcwua-uc.a.run.app".to_string(),
         None,
-    );
+    )
+    .with_keychain(keychain_access.clone());
 
     // Initialize Node Authenticator
     let authenticator = NodeAuthenticator::new();
@@ -80,6 +82,7 @@ pub fn run() {
         "pending-pairing".to_string(), // Initial state, will be updated after pairing
         authenticator,
         Some(runtime_registry.clone()),
+        keychain_access.clone(),
     );
 
     // Initialize Browser Controller (Native CDP)
@@ -145,6 +148,7 @@ pub fn run() {
             provider_registry,
         )) // Arc<ProviderRegistry>
         .manage(settings_manager) // Arc<Mutex<SettingsManager>>
+        .manage(keychain_access.clone())
         .manage(commands::router::IntelligentRouterState(
             intelligent_router.clone(),
         )) // Arc<RwLock<IntelligentRouter>>
@@ -214,39 +218,46 @@ pub fn run() {
                 }
             });
 
-            // Load ATM admin key from keychain (best-effort) for session continuity
-            let app_handle3 = app.handle().clone();
+            // Hydrate credentials in one serialized pass to avoid concurrent Security.framework access.
+            let app_handle_keychain = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let client = app_handle3.state::<ATMClient>();
-                if let Err(e) = client.load_credentials_from_keychain().await {
-                    tracing::warn!("Failed to load ATM admin key: {}", e);
-                }
-            });
-
-            // Load Neural credentials/workspace from keychain for cloud<->desktop auto reconnect.
-            let app_handle_neural = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let neural = app_handle_neural.state::<commands::neural::NeuralServiceState>();
-                if let Err(e) = neural.0.load_credentials_from_keychain().await {
-                    tracing::warn!("Failed to load Neural credentials: {}", e);
-                }
-            });
-
-            // Bootstrap built-in providers from keychain to keep router usable in headless flows.
-            let app_handle_providers = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                use crate::ai::keychain::KeychainManager;
                 use crate::ai::provider_trait::{AIProviderFactory, ProviderWithStats};
                 use crate::ai::provider_types::{ProviderConfig, ProviderId, ProviderType};
                 use crate::ai::providers::{GeminiProviderFactory, RainySDKProviderFactory};
 
+                let keychain = app_handle_keychain.state::<KeychainAccessService>();
+                let client = app_handle_keychain.state::<ATMClient>();
+                let neural = app_handle_keychain.state::<commands::neural::NeuralServiceState>();
                 let registry =
-                    app_handle_providers.state::<commands::ai_providers::ProviderRegistryState>();
+                    app_handle_keychain.state::<commands::ai_providers::ProviderRegistryState>();
                 let router_state =
-                    app_handle_providers.state::<commands::router::IntelligentRouterState>();
-                let keychain = KeychainManager::new();
+                    app_handle_keychain.state::<commands::router::IntelligentRouterState>();
 
-                if let Ok(Some(api_key)) = keychain.get_key("rainy_api") {
+                let snapshot = match keychain.load_startup_snapshot().await {
+                    Ok(snapshot) => snapshot,
+                    Err(err) => {
+                        tracing::warn!("Failed to hydrate startup keychain snapshot: {}", err);
+                        return;
+                    }
+                };
+
+                if snapshot.atm_admin_key.is_some() {
+                    if let Err(e) = client.load_credentials_from_keychain().await {
+                        tracing::warn!("Failed to load ATM admin key: {}", e);
+                    }
+                }
+
+                if snapshot.owner_auth_bundle_raw.is_some()
+                    || snapshot.neural_platform_key.is_some()
+                    || snapshot.neural_user_api_key.is_some()
+                    || snapshot.neural_workspace_id.is_some()
+                {
+                    if let Err(e) = neural.0.load_credentials_from_keychain().await {
+                        tracing::warn!("Failed to load Neural credentials: {}", e);
+                    }
+                }
+
+                if let Some(api_key) = snapshot.provider_keys.get("rainy_api").cloned().unwrap_or(None) {
                     let provider_id = ProviderId::new("rainy_api");
                     if registry.0.get(&provider_id).is_err() {
                         let config = ProviderConfig {
@@ -274,7 +285,7 @@ pub fn run() {
                     }
                 }
 
-                if let Ok(Some(api_key)) = keychain.get_key("gemini") {
+                if let Some(api_key) = snapshot.provider_keys.get("gemini").cloned().unwrap_or(None) {
                     let provider_id = ProviderId::new("gemini_byok");
                     if registry.0.get(&provider_id).is_err() {
                         let config = ProviderConfig {
