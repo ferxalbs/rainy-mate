@@ -32,7 +32,9 @@ const methodColors: Record<string, string> = {
   default: "text-gray-400 bg-gray-400/10 border-gray-400/20",
 };
 
-export function PlanConfirmationCard({
+// ⚡ Bolt: Wrapped in React.memo() to prevent unnecessary re-renders during message streaming.
+// Improves performance by avoiding deep re-rendering on every token stream update.
+export const PlanConfirmationCard = React.memo(function PlanConfirmationCard({
   toolCalls,
   onExecute,
   isExecuting,
@@ -88,4 +90,4 @@ export function PlanConfirmationCard({
       </div>
     </Card>
   );
-}
+});

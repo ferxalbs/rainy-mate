@@ -355,7 +355,9 @@ export const MessageBubble = React.memo(
 // Re-export with a name hint for the parent to avoid confusion
 export { MessageBubble as MemoizedMessageBubble };
 
-function SupervisorRail({
+// ⚡ Bolt: Wrapped in React.memo() to prevent unnecessary re-renders during message streaming.
+// Reduces render overhead heavily when new tokens are appended to the parent stream.
+const SupervisorRail = React.memo(function SupervisorRail({
   summary,
   steps,
   specialists,
@@ -468,9 +470,10 @@ function SupervisorRail({
       )}
     </div>
   );
-}
+});
 
-function TraceAccordion({
+// ⚡ Bolt: Wrapped in React.memo() to prevent unnecessary re-renders during message streaming.
+const TraceAccordion = React.memo(function TraceAccordion({
   trace,
   runState,
   stats,
@@ -571,9 +574,10 @@ function TraceAccordion({
       </div>
     </details>
   );
-}
+});
 
-function PlanCard({
+// ⚡ Bolt: Wrapped in React.memo() to prevent unnecessary re-renders during message streaming.
+const PlanCard = React.memo(function PlanCard({
   plan,
   onExecute,
   isExecuting,
@@ -633,7 +637,7 @@ function PlanCard({
       </div>
     </Card>
   );
-}
+});
 
 // Neural Status Component — CSS animations only
 const NeuralStatus = React.memo(({
