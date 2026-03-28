@@ -29,12 +29,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **7-branch regression coverage for `process_cloud_attachment()`** — `src-tauri/src/services/attachment.rs` now has tests for: JPEG→ImageDataUri, DOCX→ExtractedText, XLSX→ExtractedText, PDF→ExtractedText, oversized→None, malformed base64→None, unknown type→UnsupportedBinary
 
+- **macOS Security.framework keychain deadlock / SIGABRT hardening** — desktop startup and credential flows no longer fan out concurrent Keychain reads across Tokio workers, which previously risked aborts in `SecItemCopyMatching` / `SecKeychainSearchCopyNext`:
+  - `src-tauri/src/services/keychain_access.rs` — new centralized Keychain access service serializes all Security.framework operations behind a process-wide `std::sync::Mutex`, uses `spawn_blocking` for async callers, adds bounded retry for transient busy states, and exposes ordered startup snapshot loading
+  - `src-tauri/src/lib.rs` — replaced parallel startup Keychain hydration with one ordered snapshot pass; downgraded several startup `expect(...)` crash points in the main initialization path to logged early-return failures instead of process-abort behavior
+  - `src-tauri/src/services/neural_service.rs`, `src-tauri/src/services/atm_client.rs`, `src-tauri/src/services/atm_auth.rs`, `src-tauri/src/ai/provider.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/commands/settings.rs`, `src-tauri/src/commands/unified_models.rs` — migrated direct credential reads/writes to the serialized Keychain service
+  - `src-tauri/src/services/memory_vault/key_provider.rs`, `src-tauri/src/services/memory/memory_manager.rs`, `src-tauri/src/services/memory_vault/service.rs` — removed remaining ad hoc raw Keychain access from vault/embedder paths so macOS credential access follows one runtime-safe path
+  - `src-tauri/src/services/keychain_access.rs` — added focused wrapper tests for round-trip access, startup snapshot loading, and concurrent request serialization
+
 ### Validation
 
 - `cargo check -q` → pass
 - `cargo test` → 217 passed, 0 failed
 - `pnpm exec tsc --noEmit` → pass
 - `bun test` (ATM) → 59 passed, 0 failed
+- `cd src-tauri && cargo check -q` → pass after macOS Keychain serialization + startup crash-hardening changes
+- `pnpm exec tsc --noEmit` → pass after macOS Keychain serialization + startup crash-hardening changes
 
 ---
 

@@ -26,6 +26,10 @@ use tokio::sync::{Mutex, RwLock};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    fn startup_error(message: impl Into<String>) -> std::io::Error {
+        std::io::Error::other(message.into())
+    }
+
     // Initialize AI provider manager as Arc for thread-safe access
     let keychain_access = KeychainAccessService::new();
     let ai_provider = Arc::new(AIProviderManager::new(keychain_access.clone()));
@@ -57,8 +61,13 @@ pub fn run() {
     let image_service = ImageService::new();
 
     // Initialize workspace manager
-    let workspace_manager =
-        Arc::new(WorkspaceManager::new().expect("Failed to create workspace manager"));
+    let workspace_manager = match WorkspaceManager::new() {
+        Ok(manager) => Arc::new(manager),
+        Err(error) => {
+            tracing::error!("Failed to create workspace manager: {}", error);
+            return;
+        }
+    };
 
     // Initialize intelligent router for PHASE 3
     let intelligent_router = Arc::new(RwLock::new(IntelligentRouter::default()));
@@ -121,9 +130,13 @@ pub fn run() {
     // API Key will be loaded/set via commands later
     let llm_client = Arc::new(Mutex::new(LLMClient::new("".to_string())));
     let workflow_recorder = Arc::new(WorkflowRecorderService::new());
-    let agent_library = Arc::new(
-        AgentLibraryService::new_default().expect("Failed to initialize agent library service"),
-    );
+    let agent_library = match AgentLibraryService::new_default() {
+        Ok(service) => Arc::new(service),
+        Err(error) => {
+            tracing::error!("Failed to initialize agent library service: {}", error);
+            return;
+        }
+    };
 
     // Initialize folder manager (requires app handle for data dir)
     // We'll initialize it in setup since we need the app handle
@@ -188,7 +201,7 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .expect("Failed to get app data dir");
+                .map_err(|e| startup_error(format!("Failed to get app data dir: {}", e)))?;
 
             app.manage(Arc::new(QuickDelegateModalService::new(app.handle().clone())));
 
@@ -318,7 +331,7 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .expect("Failed to get app data dir");
+                .map_err(|e| startup_error(format!("Failed to get app data dir: {}", e)))?;
             let memory_db_path = app_data_dir.join("memory_db");
             let memory_manager = Arc::new(MemoryManager::new(100, memory_db_path));
 
@@ -343,7 +356,7 @@ pub fn run() {
             // Initialize Database and AgentManager
             // We block here to ensure DB is ready for core services like CommandPoller
             let db = tauri::async_runtime::block_on(async { Database::init(app.handle()).await })
-                .expect("Failed to initialize database");
+                .map_err(|e| startup_error(format!("Failed to initialize database: {}", e)))?;
 
             let airlock_message_store =
                 Arc::new(crate::services::AirlockMessageStore::new(db.pool.clone()));
@@ -351,8 +364,8 @@ pub fn run() {
                 airlock_message_store
                     .init()
                     .await
-                    .expect("Failed to initialize Airlock message store");
-            });
+                    .map_err(|e| startup_error(format!("Failed to initialize Airlock message store: {}", e)))
+            })?;
 
             // Initialize Airlock Service with app handle + persistence
             let airlock =
@@ -380,9 +393,10 @@ pub fn run() {
                 persistent_scheduler
                     .init()
                     .await
-                    .expect("Failed to init scheduler");
+                    .map_err(|e| startup_error(format!("Failed to init scheduler: {}", e)))?;
                 persistent_scheduler.start_loop();
-            });
+                Ok::<(), std::io::Error>(())
+            })?;
             app.manage(persistent_scheduler);
 
             tracing::info!("Database and AgentManager initialized successfully");
@@ -394,7 +408,7 @@ pub fn run() {
             let app_data_for_poller = app
                 .path()
                 .app_data_dir()
-                .expect("Failed to get app data dir for CommandPoller");
+                .map_err(|e| startup_error(format!("Failed to get app data dir for CommandPoller: {}", e)))?;
 
             let agent_manager_for_poller = Arc::new(agent_manager);
             let runtime_registry_for_poller = runtime_registry.clone();
@@ -789,8 +803,15 @@ pub fn run() {
             crate::services::persistent_scheduler::list_scheduled_jobs,
             crate::services::persistent_scheduler::remove_scheduled_job,
         ])
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application");
+        .build(tauri::generate_context!());
+
+    let tauri_app = match tauri_app {
+        Ok(app) => app,
+        Err(error) => {
+            tracing::error!("error while building tauri application: {}", error);
+            return;
+        }
+    };
 
     tauri_app.run(|app_handle, event| {
         #[cfg(target_os = "macos")]

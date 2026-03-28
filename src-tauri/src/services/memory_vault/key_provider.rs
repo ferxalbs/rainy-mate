@@ -40,7 +40,8 @@ impl VaultKeyProvider for MacOSKeychainVaultKeyProvider {
         let mut key = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut key);
         let encoded = BASE64_STANDARD.encode(key);
-        futures::executor::block_on(self.keychain.set(VAULT_MASTER_KEY_ID, &encoded))
+        self.keychain
+            .set_blocking(VAULT_MASTER_KEY_ID, &encoded)
             .map_err(|e| e.to_string())?;
         Ok(key.to_vec())
     }

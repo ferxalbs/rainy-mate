@@ -149,6 +149,19 @@ impl KeychainAccessService {
         Ok(())
     }
 
+    pub fn set_blocking(&self, key: &str, value: &str) -> KeychainOpResult<()> {
+        self.with_retry_blocking(&format!("set:{key}"), || {
+            let manager = KeychainManager::new();
+            manager.store_key(key, value).map_err(Self::classify_error)
+        })?;
+
+        self.cache
+            .lock()
+            .map_err(|_| Self::poisoned())?
+            .insert(key.to_string(), Some(value.to_string()));
+        Ok(())
+    }
+
     pub async fn delete(&self, key: &str) -> KeychainOpResult<()> {
         let key_owned = key.to_string();
         self.with_retry(&format!("delete:{key}"), move || {
@@ -229,18 +242,28 @@ impl KeychainAccessService {
             "neural_user_api_key",
             "neural_workspace_id",
             "rainy_api",
+            "rainyapi",
             "gemini",
+            "gemini_byok",
         ];
         let values = self.get_many(&keys).await?;
 
         let mut provider_keys = HashMap::new();
         provider_keys.insert(
             "rainy_api".to_string(),
-            values.get("rainy_api").cloned().unwrap_or(None),
+            values
+                .get("rainy_api")
+                .cloned()
+                .unwrap_or(None)
+                .or_else(|| values.get("rainyapi").cloned().unwrap_or(None)),
         );
         provider_keys.insert(
             "gemini".to_string(),
-            values.get("gemini").cloned().unwrap_or(None),
+            values
+                .get("gemini")
+                .cloned()
+                .unwrap_or(None)
+                .or_else(|| values.get("gemini_byok").cloned().unwrap_or(None)),
         );
 
         Ok(StartupCredentialSnapshot {
@@ -394,5 +417,27 @@ mod tests {
             snapshot.provider_keys.get("rainy_api").cloned().unwrap_or(None),
             Some("ra-test".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn concurrent_requests_share_serialized_access_path() {
+        let service = KeychainAccessService::new();
+        let key = "keychain_access_concurrent";
+        let _ = service.delete(key).await;
+
+        let mut tasks = Vec::new();
+        for idx in 0..8u8 {
+            let svc = service.clone();
+            tasks.push(tokio::spawn(async move {
+                let value = format!("value-{idx}");
+                svc.set(key, &value).await?;
+                svc.get(key).await
+            }));
+        }
+
+        for task in tasks {
+            let result = task.await.expect("join").expect("keychain op");
+            assert!(result.is_some());
+        }
     }
 }
