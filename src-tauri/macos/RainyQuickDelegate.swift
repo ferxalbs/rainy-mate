@@ -61,6 +61,18 @@ private final class RainyQuickDelegateController: NSObject {
             return false
         }
 
+        // Clear previous input and force white typingAttributes every open.
+        // This is the critical reset: NSTextView can lose typingAttributes
+        // between sessions, causing black (invisible) typed text.
+        if let tv = textView {
+            tv.string = ""
+            let font = tv.font ?? NSFont.systemFont(ofSize: 15, weight: .regular)
+            tv.typingAttributes = [
+                .foregroundColor: NSColor.white,
+                .font: font,
+            ]
+        }
+
         updateState(state: state, message: message)
         NSApp.activate(ignoringOtherApps: true)
         panel.center()
@@ -94,17 +106,17 @@ private final class RainyQuickDelegateController: NSObject {
         switch normalized {
         case "running":
             statusLabel?.stringValue = message.isEmpty ? "Delegating to Rainy..." : message
-            statusLabel?.textColor = NSColor.systemBlue
+            statusLabel?.textColor = NSColor.systemBlue.withAlphaComponent(0.90)
             submitButton?.isEnabled = false
             cancelButton?.isEnabled = true
         case "error":
             statusLabel?.stringValue = message.isEmpty ? "The request could not be submitted." : message
-            statusLabel?.textColor = NSColor.systemRed
+            statusLabel?.textColor = NSColor.systemRed.withAlphaComponent(0.90)
             submitButton?.isEnabled = true
             cancelButton?.isEnabled = true
         default:
             statusLabel?.stringValue = message.isEmpty ? "Ask Rainy to delegate a task into a new chat session." : message
-            statusLabel?.textColor = NSColor.secondaryLabelColor
+            statusLabel?.textColor = NSColor.white.withAlphaComponent(0.60)
             submitButton?.isEnabled = true
             cancelButton?.isEnabled = true
         }
@@ -118,7 +130,7 @@ private final class RainyQuickDelegateController: NSObject {
         }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 660, height: 360),
             styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -137,48 +149,83 @@ private final class RainyQuickDelegateController: NSObject {
         effectView.material = .hudWindow
         effectView.blendingMode = .behindWindow
         effectView.state = .active
+        effectView.wantsLayer = true
+        effectView.layer?.cornerRadius = 18
+        effectView.layer?.masksToBounds = true
 
         let content = NSView()
         content.translatesAutoresizingMaskIntoConstraints = false
 
         let titleLabel = NSTextField(labelWithString: "Quick Delegate")
         titleLabel.font = NSFont.systemFont(ofSize: 22, weight: .semibold)
+        // Force white text so it's always legible on the dark HUD material
+        titleLabel.textColor = NSColor.white
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let statusLabel = NSTextField(labelWithString: "Ask Rainy to delegate a task into a new chat session.")
-        statusLabel.font = NSFont.systemFont(ofSize: 12, weight: .regular)
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+        // Use a high-alpha white so text is always visible on the dark glass panel
+        statusLabel.textColor = NSColor.white.withAlphaComponent(0.60)
         statusLabel.lineBreakMode = .byWordWrapping
         statusLabel.maximumNumberOfLines = 2
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        // Outer container: provides the background tint + border + rounded corners.
+        // Background is set here on the CALayer so alpha compositing works correctly
+        // over the NSVisualEffectView behind it (drawsBackground on NSScrollView
+        // uses an opaque renderer path that ignores alpha, causing the black void).
+        let textContainer = NSView()
+        textContainer.translatesAutoresizingMaskIntoConstraints = false
+        textContainer.wantsLayer = true
+        textContainer.layer?.cornerRadius = 14
+        textContainer.layer?.borderWidth = 1
+        textContainer.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        // Subtle white tint that composites correctly over the blurred background
+        textContainer.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        textContainer.layer?.masksToBounds = true
 
         let scrollView = NSScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .noBorder
-        scrollView.drawsBackground = true
-        scrollView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 0.92)
+        // MUST be false — drawsBackground = true uses an opaque rendering path
+        // that ignores alpha, painting a solid dark rectangle over the glass effect.
+        scrollView.drawsBackground = false
         scrollView.wantsLayer = true
-        scrollView.layer?.cornerRadius = 14
-        scrollView.layer?.masksToBounds = true
+        scrollView.layer?.backgroundColor = NSColor.clear.cgColor
 
-        let textView = NSTextView()
+        let textFont = NSFont.systemFont(ofSize: 15, weight: .regular)
+
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 612, height: 160))
         textView.isRichText = false
-        textView.font = NSFont.systemFont(ofSize: 15, weight: .regular)
-        textView.drawsBackground = true
-        textView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 0.92)
-        textView.textColor = NSColor.white.withAlphaComponent(0.98)
+        textView.font = textFont
+        textView.drawsBackground = false
+        textView.backgroundColor = .clear
+        textView.textColor = NSColor.white
         textView.insertionPointColor = NSColor.white
+        // CRITICAL: typingAttributes controls the color of text AS IT IS TYPED.
+        // Without this, NSTextView falls back to system defaults (black on dark bg = invisible).
+        textView.typingAttributes = [
+            .foregroundColor: NSColor.white,
+            .font: textFont,
+        ]
         textView.selectedTextAttributes = [
-            .backgroundColor: NSColor.systemBlue.withAlphaComponent(0.35),
+            .backgroundColor: NSColor.systemBlue.withAlphaComponent(0.40),
             .foregroundColor: NSColor.white,
         ]
         textView.isAutomaticTextCompletionEnabled = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
         textView.string = ""
         textView.isVerticallyResizable = true
-        textView.textContainerInset = NSSize(width: 12, height: 10)
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainerInset = NSSize(width: 14, height: 12)
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         scrollView.documentView = textView
 
         let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelPressed))
@@ -190,18 +237,26 @@ private final class RainyQuickDelegateController: NSObject {
         submitButton.keyEquivalent = "\r"
         submitButton.translatesAutoresizingMaskIntoConstraints = false
 
+        textContainer.addSubview(scrollView)
+        NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: textContainer.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: textContainer.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: textContainer.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor),
+        ])
+
         content.addSubview(titleLabel)
         content.addSubview(statusLabel)
-        content.addSubview(scrollView)
+        content.addSubview(textContainer)
         content.addSubview(cancelButton)
         content.addSubview(submitButton)
         effectView.addSubview(content)
         panel.contentView = effectView
 
         NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: effectView.leadingAnchor, constant: 20),
-            content.trailingAnchor.constraint(equalTo: effectView.trailingAnchor, constant: -20),
-            content.topAnchor.constraint(equalTo: effectView.topAnchor, constant: 20),
+            content.leadingAnchor.constraint(equalTo: effectView.leadingAnchor, constant: 24),
+            content.trailingAnchor.constraint(equalTo: effectView.trailingAnchor, constant: -24),
+            content.topAnchor.constraint(equalTo: effectView.topAnchor, constant: 24),
             content.bottomAnchor.constraint(equalTo: effectView.bottomAnchor, constant: -20),
 
             titleLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
@@ -210,12 +265,12 @@ private final class RainyQuickDelegateController: NSObject {
 
             statusLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             statusLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            statusLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            statusLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
 
-            scrollView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 14),
-            scrollView.bottomAnchor.constraint(equalTo: submitButton.topAnchor, constant: -16),
+            textContainer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            textContainer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            textContainer.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 14),
+            textContainer.bottomAnchor.constraint(equalTo: submitButton.topAnchor, constant: -16),
 
             cancelButton.trailingAnchor.constraint(equalTo: submitButton.leadingAnchor, constant: -10),
             cancelButton.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -269,9 +324,7 @@ private final class RainyQuickDelegateController: NSObject {
         titleItem.isEnabled = false
         menu.addItem(titleItem)
 
-        let subtitleItem = NSMenuItem(title: "Quick Delegate", action: nil, keyEquivalent: "")
-        subtitleItem.isEnabled = false
-        menu.addItem(subtitleItem)
+        // Removed duplicate 'Quick Delegate' subtitle item — it mirrored the action item below.
 
         menu.addItem(.separator())
 
@@ -390,12 +443,14 @@ private final class RainyQuickDelegateController: NSObject {
     @objc
     private func submitPressed() {
         let text = textView?.string.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        textView?.string = ""
         updateState(state: "running", message: "Delegating to Rainy...")
         sendCallback(action: "submit", payload: text)
     }
 
     @objc
     private func cancelPressed() {
+        textView?.string = ""
         updateState(state: "idle", message: "")
         sendCallback(action: "cancel", payload: nil)
         _ = hidePanel()
