@@ -417,7 +417,17 @@ pub(crate) async fn process_agent_run(
                         .params
                         .as_ref()
                         .and_then(|p| p.get("attachments"))
-                        .and_then(|v| serde_json::from_value(v.clone()).ok());
+                        .and_then(|v| {
+                            serde_json::from_value(v.clone())
+                                .map_err(|e| {
+                                    eprintln!(
+                                        "[CommandPoller] WARNING: Failed to parse cloud attachments (dropping): {}",
+                                        e
+                                    );
+                                    e
+                                })
+                                .ok()
+                        });
                 cloud_inputs.map(|inputs| {
                     inputs
                         .into_iter()

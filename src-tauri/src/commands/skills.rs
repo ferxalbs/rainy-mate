@@ -66,6 +66,7 @@ pub async fn execute_skill(
         created_at: Some(chrono::Utc::now().timestamp()),
         started_at: Some(chrono::Utc::now().timestamp()),
         completed_at: None,
+        schema_version: None,
     };
 
     // Execute directly via the shared SkillExecutor
@@ -482,6 +483,7 @@ pub async fn execute_plan_from_content(
             created_at: Some(chrono::Utc::now().timestamp()),
             started_at: Some(chrono::Utc::now().timestamp()),
             completed_at: None,
+            schema_version: None,
         };
 
         let result = skill_executor.execute(&command).await;

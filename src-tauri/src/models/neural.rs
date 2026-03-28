@@ -207,6 +207,10 @@ pub struct QueuedCommand {
     pub started_at: Option<i64>,
     #[serde(default)]
     pub completed_at: Option<i64>,
+    /// Schema version for ATM <-> Desktop contract validation.
+    /// Absent on older payloads; bump when the envelope shape changes in a breaking way.
+    #[serde(default)]
+    pub schema_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,7 +279,100 @@ pub struct SpecialistRuntimeStatus {
 
 #[cfg(test)]
 mod tests {
-    use super::DesktopNodeStatus;
+    use super::*;
+
+    // Canonical ATM <-> Desktop contract fixture (inlined — no external file dependency).
+    // Keep in sync with the fixture object in rainy-atm/src/integrations/atm-contract.test.ts.
+    // Any change that breaks these tests means the contract has changed and both sides must be updated.
+    const FIXTURE: &str = r#"{
+        "id": "cmd-contract-001",
+        "workspaceId": "ws-contract",
+        "desktopNodeId": "node-contract",
+        "intent": "agent.run",
+        "payload": {
+            "skill": "agent",
+            "method": "run",
+            "params": { "attachments": [] },
+            "content": "List files in the workspace",
+            "allowedPaths": ["/workspace"],
+            "blockedPaths": ["/etc"],
+            "allowedDomains": ["example.com"],
+            "blockedDomains": [],
+            "toolAccessPolicy": null,
+            "toolAccessPolicyVersion": null,
+            "toolAccessPolicyHash": null,
+            "connectorId": "telegram",
+            "userId": "user-contract"
+        },
+        "priority": "normal",
+        "status": "pending",
+        "airlockLevel": 0,
+        "approvalTimeoutSecs": null,
+        "approvedBy": null,
+        "result": null,
+        "createdAt": 1743000000000,
+        "startedAt": null,
+        "completedAt": null,
+        "schemaVersion": "1"
+    }"#;
+
+    #[test]
+    fn atm_queued_command_fixture_deserializes_without_field_loss() {
+        let cmd: QueuedCommand =
+            serde_json::from_str(FIXTURE).expect("fixture must deserialize into QueuedCommand");
+
+        assert_eq!(cmd.id, "cmd-contract-001");
+        assert_eq!(cmd.workspace_id.as_deref(), Some("ws-contract"));
+        assert_eq!(cmd.desktop_node_id.as_deref(), Some("node-contract"));
+        assert_eq!(cmd.intent, "agent.run");
+        assert!(matches!(cmd.priority, CommandPriority::Normal));
+        assert!(matches!(cmd.status, CommandStatus::Pending));
+        assert!(matches!(cmd.airlock_level, AirlockLevel::Safe));
+        assert_eq!(cmd.created_at, Some(1743000000000));
+        assert_eq!(cmd.schema_version.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn atm_queued_command_fixture_payload_fields_preserved() {
+        let cmd: QueuedCommand =
+            serde_json::from_str(FIXTURE).expect("fixture must deserialize into QueuedCommand");
+
+        assert_eq!(cmd.payload.skill.as_deref(), Some("agent"));
+        assert_eq!(cmd.payload.method.as_deref(), Some("run"));
+        assert_eq!(
+            cmd.payload.content.as_deref(),
+            Some("List files in the workspace")
+        );
+        assert_eq!(cmd.payload.allowed_paths, vec!["/workspace"]);
+        assert_eq!(cmd.payload.blocked_paths, vec!["/etc"]);
+        assert_eq!(cmd.payload.allowed_domains, vec!["example.com"]);
+        assert!(cmd.payload.blocked_domains.is_empty());
+        assert_eq!(cmd.payload.connector_id.as_deref(), Some("telegram"));
+        assert_eq!(cmd.payload.user_id.as_deref(), Some("user-contract"));
+    }
+
+    #[test]
+    fn atm_queued_command_fixture_round_trips_without_field_loss() {
+        let cmd: QueuedCommand =
+            serde_json::from_str(FIXTURE).expect("fixture must deserialize");
+        let re_serialized =
+            serde_json::to_value(&cmd).expect("re-serialize must succeed");
+        let fixture_value: serde_json::Value =
+            serde_json::from_str(FIXTURE).expect("fixture must be valid JSON");
+
+        // All non-null fields in the fixture must survive the round-trip.
+        // Null fields in the fixture may serialize as absent (serde skip_serializing_if).
+        for (key, fixture_val) in fixture_value.as_object().unwrap() {
+            if fixture_val.is_null() {
+                continue; // null → Option::None → may be omitted in output
+            }
+            assert_eq!(
+                re_serialized.get(key),
+                Some(fixture_val),
+                "field '{key}' was lost or changed during round-trip"
+            );
+        }
+    }
 
     #[test]
     fn desktop_node_status_accepts_runtime_values() {

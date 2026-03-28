@@ -169,6 +169,10 @@ pub struct ToolCall {
     pub extra_content: Option<serde_json::Value>,
     /// Function execution details
     pub function: FunctionCall,
+    /// Airlock level for this tool call (populated by act_step before emission).
+    /// 0=Safe, 1=Sensitive, 2=Dangerous. Absent when not yet resolved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub airlock_level: Option<crate::models::neural::AirlockLevel>,
 }
 
 /// Function call details

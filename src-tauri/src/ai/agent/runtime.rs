@@ -745,6 +745,7 @@ Rules:
                         workspace_id: Some(self.options.workspace_id.clone()),
                         desktop_node_id: None,
                         approved_by: None,
+                        schema_version: None,
                     };
 
                     match airlock.check_permission(&cmd).await {

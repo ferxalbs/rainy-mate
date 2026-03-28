@@ -164,6 +164,8 @@ export interface AgentMessage {
   neuralState?: string;
   /** Name of the tool currently being executed by the agent */
   activeToolName?: string;
+  /** Highest Airlock tier reached so far this run (0=Safe, 1=Sensitive, 2=Dangerous). Ratchets up, never down. */
+  airlockLevel?: number;
   supervisorPlan?: {
     summary: string;
     steps: string[];

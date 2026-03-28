@@ -1000,9 +1000,12 @@ export function useAgentChat(
                 toolCallId: payload.data?.id ?? null,
                 arguments: payload.data?.function?.arguments ?? null,
               });
+              const incomingLevel: number =
+                (payload.data?.airlock_level as number | undefined) ?? 0;
               return {
                 ...message,
                 neuralState: resolveNeuralState(functionName),
+                airlockLevel: Math.max(message.airlockLevel ?? 0, incomingLevel),
                 trace: [
                   ...(message.trace || []),
                   createTraceEntry(

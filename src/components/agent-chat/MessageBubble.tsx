@@ -212,6 +212,7 @@ function MessageBubbleComponent({
               <NeuralStatus
                 state={neuralState}
                 toolName={message.activeToolName}
+                airlockLevel={message.airlockLevel}
               />
             ) : null}
           </div>
@@ -635,15 +636,24 @@ function PlanCard({
   );
 }
 
+const AIRLOCK_BADGE_CONFIG: Record<number, { label: string; className: string }> = {
+  0: { label: "L0 Safe",      className: "border-emerald-500/30 text-emerald-500 bg-emerald-500/10" },
+  1: { label: "L1 Notifying", className: "border-amber-500/30 text-amber-500 bg-amber-500/10" },
+  2: { label: "L2 Approval",  className: "border-red-500/30 text-red-500 bg-red-500/10" },
+};
+
 // Neural Status Component — CSS animations only
 const NeuralStatus = React.memo(({
   state,
   toolName,
+  airlockLevel,
 }: {
   state: NeuralState;
   toolName?: string;
+  airlockLevel?: number;
 }) => {
   const config = useMemo(() => getNeuralStateConfig(state), [state]);
+  const badge = airlockLevel !== undefined ? AIRLOCK_BADGE_CONFIG[airlockLevel] ?? AIRLOCK_BADGE_CONFIG[0] : undefined;
 
   const Icon = config.icon;
 
@@ -664,6 +674,14 @@ const NeuralStatus = React.memo(({
           ))}
         </div>
       </div>
+      {badge && (
+        <span
+          key={airlockLevel}
+          className={`ml-auto rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.14em] animate-in zoom-in-95 duration-300 ${badge.className}`}
+        >
+          {badge.label}
+        </span>
+      )}
     </div>
   );
 });

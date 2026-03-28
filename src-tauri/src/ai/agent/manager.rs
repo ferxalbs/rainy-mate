@@ -713,6 +713,11 @@ mod tests {
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn setup_manager() -> AgentManager {
+        // Initialize libsql C-state before sqlx to prevent "Once poisoned" panic.
+        // libsql and sqlx both embed SQLite; whichever initializes first wins.
+        // manager tests run first alphabetically, so this fix covers the whole binary.
+        let _ = libsql::Builder::new_local(":memory:").build().await;
+
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             .connect("sqlite::memory:")

@@ -689,6 +689,7 @@ impl AIProvider for GeminiProviderAdapter {
                             name: function_call.name,
                             arguments: function_call.args.to_string(),
                         },
+                        airlock_level: None,
                     });
                 }
                 GeminiPart::FunctionResponse { .. } => {}

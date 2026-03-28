@@ -130,7 +130,7 @@ private final class RainyQuickDelegateController: NSObject {
         }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 660, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 660, height: 395),
             styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -169,6 +169,14 @@ private final class RainyQuickDelegateController: NSObject {
         statusLabel.lineBreakMode = .byWordWrapping
         statusLabel.maximumNumberOfLines = 2
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        // Static Airlock notice — always visible, never changes with state transitions.
+        let noticeLabel = NSTextField(labelWithString: "MaTE will notify you for sensitive actions and ask your approval for dangerous ones.")
+        noticeLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        noticeLabel.textColor = NSColor.white.withAlphaComponent(0.45)
+        noticeLabel.lineBreakMode = .byWordWrapping
+        noticeLabel.maximumNumberOfLines = 3
+        noticeLabel.translatesAutoresizingMaskIntoConstraints = false
 
         // Outer container: provides the background tint + border + rounded corners.
         // Background is set here on the CALayer so alpha compositing works correctly
@@ -247,6 +255,7 @@ private final class RainyQuickDelegateController: NSObject {
 
         content.addSubview(titleLabel)
         content.addSubview(statusLabel)
+        content.addSubview(noticeLabel)
         content.addSubview(textContainer)
         content.addSubview(cancelButton)
         content.addSubview(submitButton)
@@ -267,9 +276,13 @@ private final class RainyQuickDelegateController: NSObject {
             statusLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             statusLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
 
+            noticeLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            noticeLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            noticeLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 6),
+
             textContainer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             textContainer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            textContainer.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 14),
+            textContainer.topAnchor.constraint(equalTo: noticeLabel.bottomAnchor, constant: 8),
             textContainer.bottomAnchor.constraint(equalTo: submitButton.topAnchor, constant: -16),
 
             cancelButton.trailingAnchor.constraint(equalTo: submitButton.leadingAnchor, constant: -10),

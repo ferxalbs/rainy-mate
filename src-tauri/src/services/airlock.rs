@@ -678,6 +678,7 @@ mod tests {
             created_at: None,
             started_at: None,
             completed_at: None,
+            schema_version: None,
         };
 
         let level = AirlockService::effective_airlock_level(&command);
@@ -726,6 +727,7 @@ mod tests {
             created_at: None,
             started_at: None,
             completed_at: None,
+            schema_version: None,
         }
     }
 

@@ -5,6 +5,39 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-03-28 - PROJECT KINGFALL PHASE 3: AIRLOCK VISIBILITY + ATM CONTRACT HARDENING
+
+### Added
+
+- **Airlock badge in NeuralStatus** — every agent run now shows a live security tier indicator (L0 Safe / L1 Notifying / L2 Approval) inside the NeuralStatus bar, right-justified, that ratchets up as tools execute and never resets mid-run:
+  - `src-tauri/src/ai/provider_types.rs` — `ToolCall` gains optional `airlock_level: Option<AirlockLevel>` field (backward-compatible, absent on older payloads)
+  - `src-tauri/src/ai/agent/act_step.rs` — populates `airlock_level` on the cloned `ToolCall` before emitting `AgentEvent::ToolCall`, so the level travels with the event through Tauri IPC to the frontend
+  - `src-tauri/src/ai/providers/rainy_sdk.rs`, `gemini_adapter.rs` — `airlock_level: None` added to all `ToolCall` struct literals to satisfy the new field
+  - `src/types/agent.ts` — `AgentMessage.airlockLevel?: number` (per-run high-water mark)
+  - `src/hooks/useAgentChat.ts` — `tool_call` case ratchets `airlockLevel` via `Math.max(message.airlockLevel ?? 0, incomingLevel)`; cast applied to untyped `payload.data.airlock_level`
+  - `src/components/agent-chat/MessageBubble.tsx` — `NeuralStatus` accepts `airlockLevel` prop; renders a pill badge (`AIRLOCK_BADGE_CONFIG`) with emerald/amber/red colors; `key={airlockLevel}` triggers `animate-in zoom-in-95` on each ratchet
+
+- **Airlock notice in native quick-delegate modal** — `src-tauri/macos/RainyQuickDelegate.swift` now displays a one-line notice below the status label: "MaTE will notify you for sensitive actions and ask your approval for dangerous ones." Panel height increased 360→395 px to accommodate the label.
+
+- **ATM contract hardening (Desktop side)** — versioned schema and round-trip tests for the ATM ↔ Desktop message envelope:
+  - `src-tauri/src/models/neural.rs` — `QueuedCommand` gains `schema_version: Option<String>` with `#[serde(default)]`; 3 new contract tests: field presence, payload fidelity, zero-field-loss round-trip against the canonical ATM fixture
+  - `src-tauri/src/services/command_poller_agent.rs` — attachment parse failures now emit `[CommandPoller] WARNING: Failed to parse cloud attachments (dropping): {err}` instead of silently discarding malformed payloads
+
+### Fixed
+
+- **14 parallel test failures (libsql/sqlx C-state ordering)** — `ai::agent::manager` tests run first alphabetically and called `connect("sqlite::memory:")`, initializing sqlx's SQLite C-state before libsql's `Once::call_once`, which panicked and poisoned the global mutex for all subsequent libsql tests. Fixed by pre-initializing libsql in `setup_manager()` before sqlx connect. All 217 tests now pass in parallel.
+
+- **7-branch regression coverage for `process_cloud_attachment()`** — `src-tauri/src/services/attachment.rs` now has tests for: JPEG→ImageDataUri, DOCX→ExtractedText, XLSX→ExtractedText, PDF→ExtractedText, oversized→None, malformed base64→None, unknown type→UnsupportedBinary
+
+### Validation
+
+- `cargo check -q` → pass
+- `cargo test` → 217 passed, 0 failed
+- `pnpm exec tsc --noEmit` → pass
+- `bun test` (ATM) → 59 passed, 0 failed
+
+---
+
 ## [Unreleased] - 2026-03-26 - PROJECT KINGFALL PHASE 2: FILE ATTACHMENTS + MODEL CAPABILITIES V2
 
 ### Added

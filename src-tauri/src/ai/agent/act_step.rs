@@ -187,7 +187,9 @@ impl WorkflowStep for ActStep {
                 "Executing tool: {}",
                 function_name
             )));
-            on_event(AgentEvent::ToolCall(call.clone()));
+            let mut call_with_level = call.clone();
+            call_with_level.airlock_level = Some(airlock_level);
+            on_event(AgentEvent::ToolCall(call_with_level));
 
             let command = QueuedCommand {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -217,6 +219,7 @@ impl WorkflowStep for ActStep {
                 workspace_id: Some(state.workspace_id.clone()),
                 desktop_node_id: None,
                 approved_by: None,
+                schema_version: None,
             };
 
             // Enforce Airlock for local agent tool execution as well as cloud-dispatched commands.

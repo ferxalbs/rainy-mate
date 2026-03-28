@@ -568,6 +568,7 @@ impl RainySDKProvider {
                     r#type: "function".to_string(),
                     extra_content: Some(item.clone()),
                     function: FunctionCall { name, arguments },
+                    airlock_level: None,
                 })
             })
             .collect();
@@ -761,6 +762,7 @@ impl RainySDKProvider {
                         name: call.function.name,
                         arguments: call.function.arguments,
                     },
+                    airlock_level: None,
                 })
                 .collect()
         });
