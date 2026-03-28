@@ -13,7 +13,7 @@ mod tests {
     use tokio::sync::RwLock;
 
     #[tokio::test]
-    #[serial]
+    #[serial_test::serial]
     async fn test_persisted_agent_execution() {
         // 0. Force LibSQL to initialize its global C-state first to prevent panic when sqlx initializes first
         let _ = libsql::Builder::new_local(":memory:").build().await;
