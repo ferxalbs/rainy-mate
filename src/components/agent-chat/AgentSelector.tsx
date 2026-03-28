@@ -37,23 +37,25 @@ export function AgentSelector({
 
   return (
     <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-      <PopoverTrigger>
-        <button
-          type="button"
-          className={cn(
-            "group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
-            className
-          )}
-        >
-          {selectedAgent ? (
-            <span className="max-w-[150px] truncate">
-              {selectedAgent.soul.name || "Untitled Agent"}
-            </span>
-          ) : (
-            <span>Default Agent</span>
-          )}
-          <ChevronDown className="size-3 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
-        </button>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              "group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
+              className
+            )}
+          />
+        }
+      >
+        {selectedAgent ? (
+          <span className="max-w-[150px] truncate">
+            {selectedAgent.soul.name || "Untitled Agent"}
+          </span>
+        ) : (
+          <span>Default Agent</span>
+        )}
+        <ChevronDown className="size-3 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
       </PopoverTrigger>
 
       <PopoverContent align="start" sideOffset={12} className="w-[240px] overflow-hidden rounded-xl border border-white/10 bg-background/20 p-1 shadow-2xl backdrop-blur-md">

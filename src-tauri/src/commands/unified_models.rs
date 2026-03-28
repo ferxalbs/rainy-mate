@@ -130,7 +130,10 @@ fn capability_flag_enabled(flag: Option<&CapabilityFlag>) -> bool {
 }
 
 /// Extract reasoning options and mode from v2 capability block.
-fn reasoning_from_v2(v2: Option<&RainyCapabilitiesV2>) -> (Vec<String>, Option<String>) {
+/// `model_id` is used as a last-resort heuristic when the catalog omits explicit
+/// level arrays AND profiles (e.g. the generic `deriveRainyCapabilitiesV2` fallback
+/// path sets `profiles: []` and only marks `reasoning_toggle: true`).
+fn reasoning_from_v2(v2: Option<&RainyCapabilitiesV2>, model_id: &str) -> (Vec<String>, Option<String>) {
     let reasoning = match v2.map(|v| &v.reasoning) {
         Some(r) if r.supported => r,
         _ => return (vec![], None),
@@ -226,7 +229,33 @@ fn reasoning_from_v2(v2: Option<&RainyCapabilitiesV2>) -> (Vec<String>, Option<S
                 Some("effort".to_string()),
             );
         }
-        // True pure toggle — no profile hints available
+        // True pure toggle — no profile hints. Use model ID prefix as last resort
+        // so that well-known providers get proper level selectors even when the live
+        // catalog doesn't populate profiles (generic deriveRainyCapabilitiesV2 path).
+        let normalized = crate::ai::model_catalog::normalize_model_slug(model_id);
+        if normalized.starts_with("anthropic/") {
+            return (
+                vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "none".to_string(),
+                ],
+                Some("thinking_budget".to_string()),
+            );
+        }
+        if normalized.starts_with("google/") {
+            return (
+                vec![
+                    "minimal".to_string(),
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "none".to_string(),
+                ],
+                Some("thinking_level".to_string()),
+            );
+        }
         return (
             vec!["enabled".to_string(), "disabled".to_string()],
             Some("toggle".to_string()),
@@ -248,7 +277,7 @@ fn dynamic_rainy_model_from_catalog(item: &ModelCatalogItem) -> UnifiedModel {
     let v2 = item.rainy_capabilities_v2.as_ref();
 
     // v2 takes precedence for reasoning and multimodal data
-    let (reasoning_options, reasoning_mode) = reasoning_from_v2(v2);
+    let (reasoning_options, reasoning_mode) = reasoning_from_v2(v2, &item.id);
     let has_reasoning = v2
         .map(|v| v.reasoning.supported)
         .unwrap_or_else(|| capability_flag_enabled(caps.and_then(|c| c.reasoning.as_ref())));

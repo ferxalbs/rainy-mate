@@ -68,14 +68,16 @@ export function ChatTopbar({
           </div>
 
           <Popover>
-            <PopoverTrigger>
-              <button
-                type="button"
-                className="ml-1 flex min-w-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
-              >
-                <span className="truncate uppercase tracking-wide">{workspaceName}</span>
-                <ChevronDown className="size-3.5" />
-              </button>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  className="ml-1 flex min-w-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                />
+              }
+            >
+              <span className="truncate uppercase tracking-wide">{workspaceName}</span>
+              <ChevronDown className="size-3.5" />
             </PopoverTrigger>
             <PopoverContent
               align="start"

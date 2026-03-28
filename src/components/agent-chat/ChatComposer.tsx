@@ -138,16 +138,18 @@ export function ChatComposer({
 
               {reasoningOptions.length > 0 && (
                 <Popover>
-                  <PopoverTrigger>
-                    <button
-                      type="button"
-                      className="group flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                    >
-                      <span className="truncate">
-                        {reasoningEffort ? titleCase(reasoningEffort) : "Reasoning"}
-                      </span>
-                      <ChevronDown className="size-3 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
-                    </button>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="group flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                      />
+                    }
+                  >
+                    <span className="truncate">
+                      {reasoningEffort ? titleCase(reasoningEffort) : "Reasoning"}
+                    </span>
+                    <ChevronDown className="size-3 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
                   </PopoverTrigger>
                   <PopoverContent
                     align="start"

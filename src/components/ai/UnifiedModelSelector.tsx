@@ -108,17 +108,19 @@ export function UnifiedModelSelector({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger>
-        <button
-          type="button"
-          className={cn(
-            "group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
-            className,
-          )}
-        >
-          <span className="truncate">{triggerLabel}</span>
-          <ChevronDown className="size-3 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
-        </button>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              "group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
+              className,
+            )}
+          />
+        }
+      >
+        <span className="truncate">{triggerLabel}</span>
+        <ChevronDown className="size-3 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
       </PopoverTrigger>
 
       <PopoverContent

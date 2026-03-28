@@ -332,13 +332,23 @@ impl RainySDKProvider {
             }
         }
 
+        let is_anthropic = crate::ai::model_catalog::normalize_model_slug(&model_id)
+            .starts_with("anthropic/");
+
         let mut sdk_request = OpenAIChatCompletionRequest::new(
             model_id,
             request.messages.iter().map(Self::map_message).collect(),
         );
 
         if let Some(config) = thinking_config {
-            sdk_request = sdk_request.with_thinking_config(config);
+            if is_anthropic {
+                // Anthropic extended thinking uses `{"thinking":{"type":"enabled","budget_tokens":N}}`
+                // (not `thinking_config`). Map the budget value from ThinkingConfig.
+                let budget = config.thinking_budget.unwrap_or(8192);
+                sdk_request = sdk_request.with_anthropic_thinking(budget);
+            } else {
+                sdk_request = sdk_request.with_thinking_config(config);
+            }
         }
         if let Some(max_tokens) = request.max_tokens {
             sdk_request = sdk_request.with_max_tokens(max_tokens);
