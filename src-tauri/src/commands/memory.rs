@@ -632,7 +632,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial]
     async fn test_store_memory_command() {
         let (manager, _temp) = create_test_manager();
 
@@ -648,7 +648,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial]
     async fn test_search_memory_command() {
         let (manager, _temp) = create_test_manager();
 
@@ -671,7 +671,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial]
     async fn test_get_recent_memory_command() {
         let (manager, _temp) = create_test_manager();
 
@@ -690,7 +690,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial]
     async fn test_clear_short_term_memory_command() {
         let (manager, _temp) = create_test_manager();
 
@@ -711,7 +711,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial]
     async fn test_get_memory_stats_command() {
         let (manager, _temp) = create_test_manager();
 
@@ -722,7 +722,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial]
     async fn test_get_short_term_memory_size_command() {
         let (manager, _temp) = create_test_manager();
 
@@ -743,7 +743,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial]
     async fn test_is_short_term_memory_empty_command() {
         let (manager, _temp) = create_test_manager();
 
