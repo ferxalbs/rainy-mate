@@ -356,7 +356,9 @@ export const MessageBubble = React.memo(
 // Re-export with a name hint for the parent to avoid confusion
 export { MessageBubble as MemoizedMessageBubble };
 
-function SupervisorRail({
+// ⚡ Bolt: Wrapped in React.memo() to prevent unnecessary re-renders of the SupervisorRail
+// during streaming chat token updates where these props don't change.
+const SupervisorRail = React.memo(function SupervisorRail({
   summary,
   steps,
   specialists,
@@ -469,9 +471,11 @@ function SupervisorRail({
       )}
     </div>
   );
-}
+});
 
-function TraceAccordion({
+// ⚡ Bolt: Wrapped in React.memo() to prevent unnecessary re-renders of the TraceAccordion
+// during streaming chat token updates where these props don't change.
+const TraceAccordion = React.memo(function TraceAccordion({
   trace,
   runState,
   stats,
@@ -572,9 +576,11 @@ function TraceAccordion({
       </div>
     </details>
   );
-}
+});
 
-function PlanCard({
+// ⚡ Bolt: Wrapped in React.memo() to prevent unnecessary re-renders of the PlanCard
+// during streaming chat token updates where these props don't change.
+const PlanCard = React.memo(function PlanCard({
   plan,
   onExecute,
   isExecuting,
@@ -634,7 +640,7 @@ function PlanCard({
       </div>
     </Card>
   );
-}
+});
 
 const AIRLOCK_BADGE_CONFIG: Record<number, { label: string; className: string }> = {
   0: { label: "L0 Safe",      className: "border-emerald-500/30 text-emerald-500 bg-emerald-500/10" },
