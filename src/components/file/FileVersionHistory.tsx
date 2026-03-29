@@ -1,4 +1,4 @@
-// Rainy Cowork - File Version History Component
+// Rainy MaTE - File Version History Component
 // UI component for viewing and managing file version history
 
 import { useState, useEffect } from "react";

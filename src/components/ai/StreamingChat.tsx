@@ -1,4 +1,4 @@
-// Rainy Cowork - Streaming Chat Component (PHASE 3)
+// Rainy MaTE - Streaming Chat Component (PHASE 3)
 // UI component for demonstrating streaming chat capabilities
 
 import { useState, useRef, useEffect } from "react";

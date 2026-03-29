@@ -1,4 +1,4 @@
-// Rainy Cowork - Settings Components
+// Rainy MaTE - Settings Components
 
 export { SettingsPage } from "./SettingsPage";
 export { ThemeSelector } from "./ThemeSelector";

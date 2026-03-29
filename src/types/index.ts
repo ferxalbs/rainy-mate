@@ -1,4 +1,4 @@
-// Rainy Cowork - Type Definitions
+// Rainy MaTE - Type Definitions
 // Updated for Rainy API + Gemini provider model
 
 export * from "./web";

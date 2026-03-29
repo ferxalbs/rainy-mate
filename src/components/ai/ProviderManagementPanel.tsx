@@ -1,4 +1,4 @@
-// Rainy Cowork - Provider Management Panel (PHASE 3)
+// Rainy MaTE - Provider Management Panel (PHASE 3)
 // UI component for managing AI providers
 
 import React, { useState, useEffect } from "react";

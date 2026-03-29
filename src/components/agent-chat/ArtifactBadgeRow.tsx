@@ -4,6 +4,7 @@ import { FileImage, FileSpreadsheet, FileText, Eye, ExternalLink } from "lucide-
 
 import * as tauri from "../../services/tauri";
 import type { ChatArtifact } from "../../types/agent";
+import { isRenderableArtifactPath } from "../../lib/chat-artifacts";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
 
@@ -31,7 +32,12 @@ export function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
   const [errorByPath, setErrorByPath] = useState<Record<string, string>>({});
 
   const visibleArtifacts = useMemo(
-    () => artifacts.filter((artifact) => artifact.kind === "image" || artifact.availableActions.includes("open")),
+    () =>
+      artifacts.filter(
+        (artifact) =>
+          isRenderableArtifactPath(artifact.path) &&
+          (artifact.kind === "image" || artifact.availableActions.includes("open")),
+      ),
     [artifacts],
   );
 

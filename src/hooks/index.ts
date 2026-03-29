@@ -1,4 +1,4 @@
-// Rainy Cowork - Hooks Barrel Export
+// Rainy MaTE - Hooks Barrel Export
 
 export { useTauriTask } from "./useTauriTask";
 export { useAIProvider } from "./useAIProvider";

@@ -1,4 +1,4 @@
-// Rainy Cowork - Main Library
+// Rainy MaTE - Main Library
 // Tauri 2 backend with AI workspace agent capabilities
 // Uses rainy-sdk for premium AI features
 

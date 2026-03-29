@@ -1,4 +1,4 @@
-// Rainy Cowork - Workspace List
+// Rainy MaTE - Workspace List
 // Component for overview and management of workspaces
 
 import { useState } from "react";

@@ -1,4 +1,4 @@
-// Rainy Cowork - Task Manager Service
+// Rainy MaTE - Task Manager Service
 // Core task orchestration with queue and parallel execution
 
 use crate::ai::AIProviderManager;

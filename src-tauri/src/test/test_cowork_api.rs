@@ -1,4 +1,4 @@
-// Rainy Cowork - Legacy API Testing Utility
+// Rainy MaTE - Legacy API Testing Utility
 // Tests legacy rainy-sdk cowork endpoint functionality (v2 compatibility only)
 
 use rainy_sdk::RainyClient;

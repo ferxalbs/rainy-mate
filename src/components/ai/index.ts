@@ -1,4 +1,4 @@
-// Rainy Cowork - AI Components Barrel Export (PHASE 3)
+// Rainy MaTE - AI Components Barrel Export (PHASE 3)
 
 export { ProviderManagementPanel } from './ProviderManagementPanel';
 export { ProviderStatsPanel } from './ProviderStatsPanel';

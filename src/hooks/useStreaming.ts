@@ -1,4 +1,4 @@
-// Rainy Cowork - useStreaming Hook (PHASE 3)
+// Rainy MaTE - useStreaming Hook (PHASE 3)
 // React hook for streaming chat completions using intelligent routing
 
 import { useCallback, useState, useRef } from 'react';

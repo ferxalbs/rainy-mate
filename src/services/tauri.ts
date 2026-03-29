@@ -1,4 +1,4 @@
-// Rainy Cowork - Tauri Service Layer
+// Rainy MaTE - Tauri Service Layer
 // Typed wrappers for Tauri command invocation
 
 import { invoke, Channel } from "@tauri-apps/api/core";

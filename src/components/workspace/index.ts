@@ -1,4 +1,4 @@
-// Rainy Cowork - Workspace Components
+// Rainy MaTE - Workspace Components
 // Export all workspace management components
 
 export { WorkspaceSelector } from './WorkspaceSelector';

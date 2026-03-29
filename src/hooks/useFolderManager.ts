@@ -1,4 +1,4 @@
-// Rainy Cowork - Folder Manager Hook
+// Rainy MaTE - Folder Manager Hook
 // Manages user-added folders with native folder picker dialog
 
 import { useState, useCallback, useEffect } from 'react';

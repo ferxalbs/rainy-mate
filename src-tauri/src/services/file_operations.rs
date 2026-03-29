@@ -1,4 +1,4 @@
-// Rainy Cowork - File Operations Engine
+// Rainy MaTE - File Operations Engine
 // High-performance file operations with parallel processing and AI integration
 // Part of Phase 1: Core AI File Operations Engine
 

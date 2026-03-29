@@ -1,4 +1,4 @@
-// Rainy Cowork - AI Features Module (PHASE 3)
+// Rainy MaTE - AI Features Module (PHASE 3)
 // Enhanced features for AI providers
 
 pub mod streaming;

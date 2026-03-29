@@ -1,4 +1,4 @@
-// Rainy Cowork - Streaming Feature (PHASE 3)
+// Rainy MaTE - Streaming Feature (PHASE 3)
 // Streaming chat completions using rainy-sdk
 
 use crate::ai::provider_types::{AIError, ProviderResult, StreamingCallback, StreamingChunk};

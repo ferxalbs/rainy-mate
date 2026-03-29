@@ -1,4 +1,4 @@
-// Rainy Cowork - File Versioning Hook
+// Rainy MaTE - File Versioning Hook
 // React hook for file version history and management
 
 import { useState, useCallback } from 'react';

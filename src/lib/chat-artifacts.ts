@@ -1,6 +1,16 @@
 import type { ChatArtifact } from "../types/agent";
 
+function isAbsolutePath(path: string): boolean {
+  return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path);
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
 function artifactFromPath(path: string, originTool: string): ChatArtifact | null {
+  if (!isAbsolutePath(path)) return null;
+
   const filename = path.split(/[\\/]/).pop();
   const extension = filename?.split(".").pop()?.toLowerCase();
   if (!filename || !extension) return null;
@@ -105,8 +115,13 @@ export function appendUniqueArtifact(
   artifact: ChatArtifact,
 ): ChatArtifact[] {
   const current = artifacts ?? [];
-  if (current.some((existing) => existing.path === artifact.path)) {
+  const normalized = normalizePath(artifact.path);
+  if (current.some((existing) => normalizePath(existing.path) === normalized)) {
     return current;
   }
   return [...current, artifact];
+}
+
+export function isRenderableArtifactPath(path: string): boolean {
+  return isAbsolutePath(path);
 }

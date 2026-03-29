@@ -1,4 +1,4 @@
-// Rainy Cowork - useIntelligentRouter Hook (PHASE 3)
+// Rainy MaTE - useIntelligentRouter Hook (PHASE 3)
 // React hook for intelligent AI routing with load balancing, fallback, and streaming
 
 import { useCallback, useEffect, useState, useRef } from "react";

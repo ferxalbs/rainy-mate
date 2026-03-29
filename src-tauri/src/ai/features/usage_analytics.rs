@@ -1,4 +1,4 @@
-// Rainy Cowork - Usage Analytics Feature (PHASE 3)
+// Rainy MaTE - Usage Analytics Feature (PHASE 3)
 // @TODO: Analytics integration pending Phase 3 completion
 #![allow(dead_code)]
 

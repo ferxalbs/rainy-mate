@@ -1,4 +1,4 @@
-// Rainy Cowork - Workspace Types
+// Rainy MaTE - Workspace Types
 // Type definitions for advanced workspace management
 
 /**

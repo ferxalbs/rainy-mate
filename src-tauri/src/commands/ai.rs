@@ -1,4 +1,4 @@
-// Rainy Cowork - AI Provider Commands
+// Rainy MaTE - AI Provider Commands
 // Tauri commands for AI provider management with rainy-sdk integration
 
 use crate::ai::AIProviderManager;

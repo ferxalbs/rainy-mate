@@ -1,4 +1,4 @@
-// Rainy Cowork - Data Models
+// Rainy MaTE - Data Models
 // Core data structures for tasks, files, and AI providers
 
 pub mod folder;

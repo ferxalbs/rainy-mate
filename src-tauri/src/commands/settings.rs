@@ -1,4 +1,4 @@
-// Rainy Cowork - Settings Commands
+// Rainy MaTE - Settings Commands
 // Tauri commands for user settings and model selection
 
 use crate::ai::provider::AIProviderManager;

@@ -1,4 +1,4 @@
-// Rainy Cowork - Workspace Selector
+// Rainy MaTE - Workspace Selector
 // Component for switching between workspaces
 
 import { Label, ListBox, Select } from "@heroui/react";

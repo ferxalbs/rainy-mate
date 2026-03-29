@@ -1,4 +1,4 @@
-// Rainy Cowork - useTauriTask Hook
+// Rainy MaTE - useTauriTask Hook
 // React hook for task management with Tauri backend
 
 import { useCallback, useState } from "react";

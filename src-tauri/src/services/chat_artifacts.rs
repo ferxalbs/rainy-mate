@@ -48,6 +48,9 @@ pub fn artifact_from_tool_result(
 
 pub fn artifact_from_path(path: &str, origin_tool: &str) -> Option<ChatArtifact> {
     let path_buf = PathBuf::from(path);
+    if !path_buf.is_absolute() {
+        return None;
+    }
     let filename = path_buf.file_name()?.to_string_lossy().to_string();
     let extension = path_buf
         .extension()
@@ -106,7 +109,11 @@ pub fn artifact_from_path(path: &str, origin_tool: &str) -> Option<ChatArtifact>
 }
 
 pub fn push_unique_artifact(artifacts: &mut Vec<ChatArtifact>, artifact: ChatArtifact) {
-    if artifacts.iter().any(|existing| existing.path == artifact.path) {
+    let normalized = normalize_path(&artifact.path);
+    if artifacts
+        .iter()
+        .any(|existing| normalize_path(&existing.path) == normalized)
+    {
         return;
     }
     artifacts.push(artifact);
@@ -133,10 +140,17 @@ fn extract_path_from_result(result: &str) -> Option<String> {
 
 fn extract_path_from_args(args_json: Option<&str>) -> Option<String> {
     let json = serde_json::from_str::<serde_json::Value>(args_json?).ok()?;
-    json.get("path")
+    let path = json
+        .get("path")
         .or_else(|| json.get("filename"))
         .and_then(|value| value.as_str())
-        .map(|value| value.to_string())
+        .map(|value| value.to_string())?;
+
+    Path::new(&path).is_absolute().then_some(path)
+}
+
+fn normalize_path(path: &str) -> String {
+    PathBuf::from(path).to_string_lossy().to_string()
 }
 
 #[cfg(test)]

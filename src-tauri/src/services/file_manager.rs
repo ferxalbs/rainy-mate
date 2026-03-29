@@ -1,4 +1,4 @@
-// Rainy Cowork - File Manager Service
+// Rainy MaTE - File Manager Service
 // File operations with workspace-based versioning
 
 use crate::commands::file::FileEntry;

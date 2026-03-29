@@ -1,4 +1,4 @@
-// Rainy Cowork - useBatchOperations Hook
+// Rainy MaTE - useBatchOperations Hook
 // Optimized batch API operations to reduce connection overhead
 
 import { useCallback, useRef } from 'react';

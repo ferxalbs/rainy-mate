@@ -1,4 +1,4 @@
-// Rainy Cowork - Router Commands (PHASE 3)
+// Rainy MaTE - Router Commands (PHASE 3)
 // Tauri commands for IntelligentRouter with advanced routing and streaming
 
 use crate::ai::router::fallback_chain::FallbackStrategy;

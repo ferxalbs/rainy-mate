@@ -1,4 +1,4 @@
-// Rainy Cowork - Router Config Panel (PHASE 3)
+// Rainy MaTE - Router Config Panel (PHASE 3)
 // UI component for configuring the Intelligent Router
 
 import { useState, useEffect } from "react";

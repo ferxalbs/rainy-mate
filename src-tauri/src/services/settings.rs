@@ -1,4 +1,4 @@
-// Rainy Cowork - User Settings Service
+// Rainy MaTE - User Settings Service
 // Manages user preferences including AI model selection
 
 use crate::ai::model_catalog::{ensure_supported_model_slug, find_catalog_model, ModelProvider};

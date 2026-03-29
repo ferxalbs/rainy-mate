@@ -1,4 +1,4 @@
-// Rainy Cowork - User Folder Models
+// Rainy MaTE - User Folder Models
 // Persisted folder entries for sidebar quick access
 
 use chrono::{DateTime, Utc};

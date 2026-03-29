@@ -1,4 +1,4 @@
-// Rainy Cowork - useAIProvider Hook (PHASE 3)
+// Rainy MaTE - useAIProvider Hook (PHASE 3)
 // React hook for AI provider management using new Phase 3 commands
 
 import { useCallback, useEffect, useState, useRef } from "react";

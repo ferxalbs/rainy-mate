@@ -1,3 +1,3 @@
-// Rainy Cowork - Services Barrel Export
+// Rainy MaTE - Services Barrel Export
 
 export * from './tauri';

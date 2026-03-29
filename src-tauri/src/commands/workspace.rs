@@ -1,4 +1,4 @@
-// Rainy Cowork - Workspace Commands
+// Rainy MaTE - Workspace Commands
 // Tauri commands for advanced workspace management
 
 use crate::services::{

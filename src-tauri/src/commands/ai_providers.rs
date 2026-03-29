@@ -1,4 +1,4 @@
-// Rainy Cowork - AI Provider Commands (PHASE 3)
+// Rainy MaTE - AI Provider Commands (PHASE 3)
 // Tauri commands for AI provider management using the new provider registry
 
 use crate::ai::provider_trait::AIProviderFactory;

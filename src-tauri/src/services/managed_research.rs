@@ -1,4 +1,4 @@
-// Rainy Cowork - Web Research Feature (PHASE 3)
+// Rainy MaTE - Web Research Feature (PHASE 3)
 // Web search integration using rainy-sdk (legacy bridge while migrating to Rainy API v3 connectors)
 
 use crate::ai::AIProviderManager;

@@ -1,4 +1,4 @@
-// Rainy Cowork - File Versioning Types
+// Rainy MaTE - File Versioning Types
 // Types for file version history and management
 
 /**

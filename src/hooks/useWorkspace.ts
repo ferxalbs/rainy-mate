@@ -1,4 +1,4 @@
-// Rainy Cowork - useWorkspace Hook
+// Rainy MaTE - useWorkspace Hook
 // React hook for advanced workspace management
 
 import { useCallback, useEffect, useState } from 'react';

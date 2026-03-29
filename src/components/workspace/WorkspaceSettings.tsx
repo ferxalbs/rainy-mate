@@ -1,4 +1,4 @@
-// Rainy Cowork - Workspace Settings
+// Rainy MaTE - Workspace Settings
 // Panel for configuring workspace settings
 
 import { useState } from "react";

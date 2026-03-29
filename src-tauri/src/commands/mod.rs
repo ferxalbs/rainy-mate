@@ -1,4 +1,4 @@
-// Rainy Cowork - Tauri Commands Module
+// Rainy MaTE - Tauri Commands Module
 // Export all command handlers for registration with Tauri
 
 pub mod agent;

@@ -1,4 +1,4 @@
-// Rainy Cowork - useUsageAnalytics Hook (PHASE 3)
+// Rainy MaTE - useUsageAnalytics Hook (PHASE 3)
 // React hook for usage analytics tracking using Phase 3 commands
 
 import { useCallback, useEffect, useState } from 'react';

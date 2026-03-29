@@ -1,4 +1,4 @@
-// Rainy Cowork - File Commands
+// Rainy MaTE - File Commands
 // Tauri commands for file system operations with versioning
 
 use crate::models::{FileChange, Workspace};

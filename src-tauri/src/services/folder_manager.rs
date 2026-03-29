@@ -1,4 +1,4 @@
-// Rainy Cowork - Folder Manager Service
+// Rainy MaTE - Folder Manager Service
 // Manages user-added folders with JSON persistence
 
 use crate::models::folder::{FolderAccess, UserFolder};

@@ -1,4 +1,4 @@
-// Rainy Cowork - Task Commands
+// Rainy MaTE - Task Commands
 // Tauri commands for task management
 
 use crate::models::{ProviderType, Task, TaskEvent};

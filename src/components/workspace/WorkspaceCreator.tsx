@@ -1,4 +1,4 @@
-// Rainy Cowork - Workspace Creator
+// Rainy MaTE - Workspace Creator
 // Modal dialog for creating new workspaces with template selection
 
 import { useState } from "react";

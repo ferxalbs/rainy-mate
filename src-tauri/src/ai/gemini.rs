@@ -1,4 +1,4 @@
-// Rainy Cowork - Google Gemini Provider (GenAI SDK)
+// Rainy MaTE - Google Gemini Provider (GenAI SDK)
 // Updated for Gemini 3 models with thinking level support
 
 use crate::ai::provider::AIError;

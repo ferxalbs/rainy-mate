@@ -1,4 +1,4 @@
-// Rainy Cowork - Folder Commands
+// Rainy MaTE - Folder Commands
 // Tauri commands for user folder management
 
 use crate::models::folder::{FolderAccess, UserFolder};

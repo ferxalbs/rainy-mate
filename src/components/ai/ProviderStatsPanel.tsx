@@ -1,4 +1,4 @@
-// Rainy Cowork - Provider Stats Panel (PHASE 3)
+// Rainy MaTE - Provider Stats Panel (PHASE 3)
 // UI component for displaying AI provider usage analytics
 
 import { useUsageAnalytics } from "../../hooks/useUsageAnalytics";

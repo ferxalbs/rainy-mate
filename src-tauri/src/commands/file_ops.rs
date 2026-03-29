@@ -1,4 +1,4 @@
-// Rainy Cowork - File Operations Commands
+// Rainy MaTE - File Operations Commands
 // Tauri commands for advanced file operations and AI agent
 // Part of Phase 2: Enhanced Tauri Commands
 
