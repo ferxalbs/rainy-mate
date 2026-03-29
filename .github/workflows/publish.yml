@@ -129,6 +129,12 @@ jobs:
           test -f "$APP_BIN"
           lipo -archs "$APP_BIN" | grep -E "arm64.*x86_64|x86_64.*arm64"
           file "$APP_BIN"
+          test -f "$APP_BUNDLE/Contents/Frameworks/libRainyNativeNotifications.dylib"
+          test -f "$APP_BUNDLE/Contents/Frameworks/libRainyQuickDelegate.dylib"
+          ! otool -L "$APP_BIN" | grep -q 'libRainyNativeNotifications.dylib'
+          ! otool -L "$APP_BIN" | grep -q 'libRainyQuickDelegate.dylib'
+          lipo -archs "$APP_BUNDLE/Contents/Frameworks/libRainyNativeNotifications.dylib" | grep -E "arm64.*x86_64|x86_64.*arm64"
+          lipo -archs "$APP_BUNDLE/Contents/Frameworks/libRainyQuickDelegate.dylib" | grep -E "arm64.*x86_64|x86_64.*arm64"
 
   failure-notification:
     name: Notify on Failure

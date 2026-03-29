@@ -5,6 +5,22 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-03-28 - PROJECT KINGFALL PHASE 3C: MACOS BRIDGE BUNDLE ENFORCEMENT
+
+### Fixed
+
+- **macOS Swift bridge dylibs are now bundled deterministically into the app and validated in CI/release** — Rainy MaTE no longer relies on incidental Cargo target copies for `libRainyNativeNotifications.dylib` / `libRainyQuickDelegate.dylib`:
+  - `scripts/build-macos-bridges.sh` — new macOS bridge staging hook copies the already-built Swift bridge dylibs from Cargo target output into `src-tauri/gen/macos-frameworks/` immediately before bundling
+  - `src-tauri/tauri.conf.json` — added `build.beforeBundleCommand` and explicit `bundle.macOS.frameworks` entries so Tauri bundles and signs both bridge dylibs into `Contents/Frameworks`
+  - `src-tauri/build.rs` — now seeds the staged frameworks directory during Cargo builds so Tauri's config validation can resolve the macOS framework paths even during plain `cargo check`
+  - `.github/workflows/ci.yml`, `.github/workflows/publish.yml` — macOS bundle verification now fails unless both bridge dylibs exist in `Contents/Frameworks`, both dylibs contain the expected slices, and the main app binary has no direct `otool -L` dependency on `libRainyNativeNotifications.dylib` or `libRainyQuickDelegate.dylib`
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+- `TAURI_ENV_TARGET_TRIPLE=x86_64-apple-darwin ./scripts/build-macos-bridges.sh` → pass
+
 ## [0.6.2] - 2026-03-28 - PROJECT KINGFALL PHASE 3B: MACOS BRIDGE SURVIVABILITY + RELEASE VERIFICATION FIXES
 
 ### Fixed

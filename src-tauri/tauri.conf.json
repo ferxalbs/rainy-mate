@@ -7,6 +7,7 @@
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm build",
+    "beforeBundleCommand": "bash ./scripts/build-macos-bridges.sh",
     "frontendDist": "../dist"
   },
   "app": {
@@ -37,6 +38,12 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
+    "macOS": {
+      "frameworks": [
+        "./gen/macos-frameworks/libRainyNativeNotifications.dylib",
+        "./gen/macos-frameworks/libRainyQuickDelegate.dylib"
+      ]
+    },
     "resources": [
       "../public/whale-dnf.png"
     ],

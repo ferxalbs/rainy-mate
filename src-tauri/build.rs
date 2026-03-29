@@ -24,10 +24,12 @@ fn compile_swift_bridge(module_name: &str, swift_file: &str, extra_frameworks: &
         .to_path_buf();
     let target_deps_dir = target_dir.join("deps");
     let target_frameworks_dir = target_dir.join("Frameworks");
+    let staged_frameworks_dir = manifest_dir.join("gen").join("macos-frameworks");
     let dylib_name = format!("lib{module_name}.dylib");
     let debug_dylib_path = target_dir.join(&dylib_name);
     let debug_deps_dylib_path = target_deps_dir.join(&dylib_name);
     let framework_dylib_path = target_frameworks_dir.join(&dylib_name);
+    let staged_dylib_path = staged_frameworks_dir.join(&dylib_name);
 
     println!("cargo:rerun-if-changed={}", swift_src.display());
 
@@ -60,12 +62,15 @@ fn compile_swift_bridge(module_name: &str, swift_file: &str, extra_frameworks: &
 
     fs::create_dir_all(&target_deps_dir).expect("failed to create Cargo deps dir");
     fs::create_dir_all(&target_frameworks_dir).expect("failed to create Cargo Frameworks dir");
+    fs::create_dir_all(&staged_frameworks_dir).expect("failed to create staged macOS Frameworks dir");
     fs::copy(&dylib_path, &debug_dylib_path)
         .expect("failed to copy Swift bridge dylib to target dir");
     fs::copy(&dylib_path, &debug_deps_dylib_path)
         .expect("failed to copy Swift bridge dylib to target deps dir");
     fs::copy(&dylib_path, &framework_dylib_path)
         .expect("failed to copy Swift bridge dylib to target Frameworks dir");
+    fs::copy(&dylib_path, &staged_dylib_path)
+        .expect("failed to copy Swift bridge dylib to staged Frameworks dir");
 
     let _ = extra_frameworks;
 

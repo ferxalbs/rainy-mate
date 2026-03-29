@@ -38,3 +38,4 @@ test-skills/*
 *.md
 
 rainy-mate-online
+src-tauri/gen/
