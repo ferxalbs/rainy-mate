@@ -67,16 +67,7 @@ fn compile_swift_bridge(module_name: &str, swift_file: &str, extra_frameworks: &
     fs::copy(&dylib_path, &framework_dylib_path)
         .expect("failed to copy Swift bridge dylib to target Frameworks dir");
 
-    println!("cargo:rustc-link-search=native={}", out_dir.display());
-    println!("cargo:rustc-link-lib=dylib={module_name}");
-    println!("cargo:rustc-link-lib=framework=Foundation");
-    println!("cargo:rustc-link-lib=framework=AppKit");
-    for framework in extra_frameworks {
-        println!("cargo:rustc-link-lib=framework={framework}");
-    }
-    println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path");
-    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
-    println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../Frameworks");
+    let _ = extra_frameworks;
 
     let whale_src = manifest_dir
         .parent()
