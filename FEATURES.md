@@ -7,6 +7,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 🤖 AI Agent Capabilities
 
 ### Multi-Provider AI Integration
+
 - **OpenAI Models**: GPT-4o, GPT-5, O3, O4-mini with advanced reasoning
 - **Google Gemini**: Gemini 3 Pro with thinking capabilities and thought signatures
 - **Groq**: Ultra-fast Llama 3.1 and 3.3 inference
@@ -15,6 +16,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Custom Providers**: Extensible architecture for new AI services
 
 ### Advanced AI Features
+
 - **Thinking Capabilities**: Gemini 3 deep reasoning with configurable levels
 - **Thought Signatures**: Preserve reasoning context across conversations
 - **Multi-step Planning**: Autonomous task breakdown and execution
@@ -25,6 +27,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 📁 File Management & Automation
 
 ### Intelligent File Operations
+
 - **Bulk Organization**: Sort thousands of files by type, date, size, or content
 - **Smart Renaming**: AI-powered file naming with consistent patterns
 - **Content-Based Sorting**: Analyze file contents to determine optimal organization
@@ -33,6 +36,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Batch Processing**: Apply operations across multiple files simultaneously
 
 ### Advanced File Analysis
+
 - **Content Extraction**: Pull text, images, and data from various file formats
 - **Format Conversion**: Transform between document formats (PDF, DOCX, MD, etc.)
 - **Image Processing**: EXIF data extraction, thumbnail generation, metadata analysis
@@ -43,6 +47,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 🌐 Web Research & Content
 
 ### Tavily-Powered Web Search
+
 - **Real-time Search**: Access current information from across the web
 - **Content Extraction**: Convert web pages to clean, readable markdown
 - **Source Verification**: Validate information from multiple sources
@@ -51,6 +56,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Fact Checking**: Cross-reference claims across reliable sources
 
 ### Content Processing
+
 - **URL Content Extraction**: Convert any webpage to structured markdown
 - **Content Caching**: Store extracted content for offline access
 - **Link Analysis**: Analyze and categorize web links
@@ -61,6 +67,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 📄 Document Generation & Processing
 
 ### Template-Based Creation
+
 - **Report Generation**: Create professional reports from data and notes
 - **Document Templates**: Pre-built templates for common document types
 - **Custom Formats**: Design your own document templates
@@ -69,6 +76,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Dynamic Content**: Insert real-time data and calculations
 
 ### AI-Assisted Writing
+
 - **Content Creation**: Generate articles, summaries, and documentation
 - **Writing Enhancement**: Improve clarity, tone, and structure
 - **Translation Services**: Multi-language document translation
@@ -79,6 +87,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 🎨 User Interface & Experience
 
 ### Modern Design System
+
 - **HeroUI Components**: Beautiful, accessible interface components
 - **Theme System**: Multiple themes with smooth transitions
 - **Dark/Light Mode**: Automatic or manual theme switching
@@ -87,6 +96,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Customization**: Personalize colors, layouts, and preferences
 
 ### Interactive Features
+
 - **Real-time Progress**: Live updates on task execution
 - **Drag & Drop**: Intuitive file and folder operations
 - **Context Menus**: Right-click actions for quick access
@@ -97,6 +107,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 🔒 Privacy & Security
 
 ### Local-First Architecture
+
 - **On-Device Processing**: Your files never leave your computer
 - **Encrypted Storage**: Secure local data storage
 - **API Key Management**: Secure handling of AI provider credentials
@@ -105,6 +116,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Data Isolation**: Separate workspaces for different projects
 
 ### Security Features
+
 - **Sandboxed Execution**: Isolated AI operations for safety
 - **File Backup**: Automatic backups before AI modifications
 - **Rollback Capability**: Undo AI operations if needed
@@ -115,6 +127,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 🔧 Extensibility & Integration
 
 ### Plugin Architecture
+
 - **Custom Agents**: Create specialized AI agents for specific tasks
 - **Workflow Automation**: Build complex multi-step workflows
 - **External Tool Integration**: Connect with other productivity tools
@@ -123,6 +136,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Community Plugins**: Access community-created extensions
 
 ### Platform Integration
+
 - **Cross-Platform**: Windows, macOS, and Linux support
 - **File System Integration**: Deep OS-level file operations
 - **Shell Integration**: Command-line interface for power users
@@ -133,6 +147,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 📊 Analytics & Monitoring
 
 ### Usage Analytics
+
 - **Task Tracking**: Monitor AI agent performance and usage
 - **Performance Metrics**: Response times, success rates, error analysis
 - **Resource Usage**: CPU, memory, and storage utilization
@@ -141,6 +156,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Custom Dashboards**: Create personalized analytics views
 
 ### Reporting Features
+
 - **Activity Reports**: Detailed logs of all AI operations
 - **Performance Reports**: System and AI performance analysis
 - **Usage Statistics**: Track feature usage and adoption
@@ -151,6 +167,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 🚀 Performance & Scalability
 
 ### Optimization Features
+
 - **Parallel Processing**: Multi-threaded operations for speed
 - **Caching System**: Intelligent caching for faster responses
 - **Resource Management**: Efficient CPU and memory usage
@@ -159,6 +176,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **Smart Queuing**: Intelligent task scheduling and prioritization
 
 ### Scalability
+
 - **Large File Support**: Handle files of any size
 - **Bulk Operations**: Process thousands of files simultaneously
 - **Distributed Processing**: Scale across multiple cores
@@ -169,6 +187,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 ## 🌟 Premium Features (Cowork Integration)
 
 ### Tier-Based Capabilities
+
 - **Free Tier**: Basic file operations and AI interactions
 - **GoPlus**: Enhanced AI capabilities and web research
 - **Plus**: Advanced document generation and processing
@@ -176,6 +195,7 @@ Rainy Cowork is a comprehensive AI desktop agent that transforms how you work wi
 - **ProPlus**: Enterprise features and custom integrations
 
 ### Advanced Features
+
 - **Priority Processing**: Faster AI response times
 - **Advanced Models**: Access to latest and most capable AI models
 - **Enhanced Support**: Priority customer support and assistance

@@ -1,5 +1,6 @@
 use crate::ai::specs::manifest::AgentSpec;
 use crate::db::Database;
+use crate::services::chat_artifacts::ChatArtifact;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use std::sync::Arc;
@@ -35,6 +36,8 @@ pub struct ChatHistoryMessageDto {
     pub chat_scope_id: String,
     pub role: String,
     pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifacts: Option<Vec<ChatArtifact>>,
     pub created_at: String,
     pub cursor_rowid: i64,
 }
@@ -114,14 +117,31 @@ impl AgentManager {
         role: &str,
         content: &str,
     ) -> Result<String, sqlx::Error> {
+        self.save_message_with_artifacts(chat_id, role, content, None)
+            .await
+    }
+
+    pub async fn save_message_with_artifacts(
+        &self,
+        chat_id: &str,
+        role: &str,
+        content: &str,
+        artifacts: Option<&[ChatArtifact]>,
+    ) -> Result<String, sqlx::Error> {
         let id = uuid::Uuid::new_v4().to_string();
         let mut tx = self.db.begin().await?;
+        let artifacts_json = artifacts
+            .filter(|items| !items.is_empty())
+            .and_then(|items| serde_json::to_string(items).ok());
 
-        sqlx::query("INSERT INTO messages (id, chat_id, role, content) VALUES (?, ?, ?, ?)")
+        sqlx::query(
+            "INSERT INTO messages (id, chat_id, role, content, artifacts_json) VALUES (?, ?, ?, ?, ?)",
+        )
             .bind(&id)
             .bind(chat_id)
             .bind(role)
             .bind(content)
+            .bind(artifacts_json)
             .execute(&mut *tx)
             .await?;
 
@@ -156,8 +176,8 @@ impl AgentManager {
     ) -> Result<ChatHistoryWindowDto, sqlx::Error> {
         let safe_limit = limit.clamp(1, 200) as i64;
         let rows = if let Some(cursor) = cursor_rowid {
-            sqlx::query_as::<_, (i64, String, String, String, String, String)>(
-                "SELECT rowid, id, chat_id, role, content, created_at
+            sqlx::query_as::<_, (i64, String, String, String, String, Option<String>, String)>(
+                "SELECT rowid, id, chat_id, role, content, artifacts_json, created_at
                  FROM messages
                  WHERE chat_id = ? AND rowid < ?
                  ORDER BY rowid DESC
@@ -169,8 +189,8 @@ impl AgentManager {
             .fetch_all(&*self.db)
             .await?
         } else {
-            sqlx::query_as::<_, (i64, String, String, String, String, String)>(
-                "SELECT rowid, id, chat_id, role, content, created_at
+            sqlx::query_as::<_, (i64, String, String, String, String, Option<String>, String)>(
+                "SELECT rowid, id, chat_id, role, content, artifacts_json, created_at
                  FROM messages
                  WHERE chat_id = ?
                  ORDER BY rowid DESC
@@ -199,11 +219,14 @@ impl AgentManager {
         let mut messages: Vec<ChatHistoryMessageDto> = rows
             .into_iter()
             .map(
-                |(cursor_rowid, id, chat_id, role, content, created_at)| ChatHistoryMessageDto {
+                |(cursor_rowid, id, chat_id, role, content, artifacts_json, created_at)| ChatHistoryMessageDto {
                     id,
                     chat_scope_id: chat_id,
                     role,
                     content,
+                    artifacts: artifacts_json
+                        .as_deref()
+                        .and_then(|value| serde_json::from_str::<Vec<ChatArtifact>>(value).ok()),
                     created_at,
                     cursor_rowid,
                 },
@@ -300,7 +323,9 @@ impl AgentManager {
         }
 
         let summary_id = uuid::Uuid::new_v4().to_string();
-        sqlx::query("INSERT INTO messages (id, chat_id, role, content) VALUES (?, ?, 'system', ?)")
+        sqlx::query(
+            "INSERT INTO messages (id, chat_id, role, content, artifacts_json) VALUES (?, ?, 'system', ?, NULL)",
+        )
             .bind(summary_id)
             .bind(chat_id)
             .bind(format!("SESSION COMPACTION SUMMARY:\n{}", summary_content))
@@ -760,6 +785,7 @@ mod tests {
                 chat_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
+                artifacts_json TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )",
         )

@@ -17,13 +17,16 @@ use crate::commands::ai_providers::ProviderRegistryState;
 use crate::commands::airlock::AirlockServiceState;
 use crate::commands::memory::MemoryManagerState;
 use crate::commands::router::IntelligentRouterState;
+use crate::services::chat_artifacts::{
+    artifact_from_tool_result, push_unique_artifact, ChatArtifact,
+};
 use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::agent_run_control::{AgentRunControl, CancelRunResult};
 use crate::services::{KeychainAccessService, PromptSkillDiscoveryService, SkillExecutor};
 use chrono::Utc;
 use regex::Regex;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex;
@@ -1283,6 +1286,8 @@ pub async fn run_agent_workflow_internal(
     let chat_id_for_events = chat_id.clone();
     let run_id_for_events = run_id.clone();
     let frontend_event_projector = Arc::new(StdMutex::new(FrontendEventProjector::default()));
+    let tool_call_index = Arc::new(StdMutex::new(HashMap::<String, (String, String)>::new()));
+    let collected_artifacts = Arc::new(StdMutex::new(Vec::<ChatArtifact>::new()));
 
     // Persist Initial User Prompt
     if invocation_source == WorkflowInvocationSource::Local {
@@ -1293,6 +1298,8 @@ pub async fn run_agent_workflow_internal(
     }
 
     let frontend_event_projector_for_events = frontend_event_projector.clone();
+    let tool_call_index_for_events = tool_call_index.clone();
+    let collected_artifacts_for_events = collected_artifacts.clone();
     let response_result = runtime
         .run(&prompt, move |event| {
             let projected_events = {
@@ -1303,6 +1310,43 @@ pub async fn run_agent_workflow_internal(
             };
 
             for projected_event in projected_events {
+                match &projected_event {
+                    AgentEvent::ToolCall(call) => {
+                        tool_call_index_for_events
+                            .lock()
+                            .expect("tool call index poisoned")
+                            .insert(
+                                call.id.clone(),
+                                (
+                                    call.function.name.clone(),
+                                    call.function.arguments.clone(),
+                                ),
+                            );
+                    }
+                    AgentEvent::ToolResult { id, result } => {
+                        let maybe_artifact = tool_call_index_for_events
+                            .lock()
+                            .expect("tool call index poisoned")
+                            .get(id)
+                            .cloned()
+                            .and_then(|(tool_name, args_json)| {
+                                artifact_from_tool_result(
+                                    &tool_name,
+                                    Some(args_json.as_str()),
+                                    result,
+                                )
+                            });
+
+                        if let Some(artifact) = maybe_artifact {
+                            let mut artifacts = collected_artifacts_for_events
+                                .lock()
+                                .expect("artifact collector poisoned");
+                            push_unique_artifact(&mut artifacts, artifact);
+                        }
+                    }
+                    _ => {}
+                }
+
                 let _ = app_handle_clone.emit(
                     "agent://event",
                     FrontendAgentEvent {
@@ -1383,8 +1427,17 @@ pub async fn run_agent_workflow_internal(
     match invocation_source {
         WorkflowInvocationSource::Local => {
             session_coordinator.unregister(&chat_id);
+            let artifacts = collected_artifacts
+                .lock()
+                .expect("artifact collector poisoned")
+                .clone();
             let _ = agent_manager
-                .save_message(&chat_id, "assistant", &response)
+                .save_message_with_artifacts(
+                    &chat_id,
+                    "assistant",
+                    &response,
+                    (!artifacts.is_empty()).then_some(artifacts.as_slice()),
+                )
                 .await
                 .map_err(|e| format!("Failed to save assistant message: {}", e))?;
         }

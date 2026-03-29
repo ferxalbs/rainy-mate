@@ -342,7 +342,18 @@ export function AgentChatPanel({
         : 0;
       const supervisorHeight = message.supervisorPlan ? 84 : 0;
       const thoughtHeight = message.thought ? 96 : 0;
-      return baseHeight + contentHeight + traceHeight + specialistsHeight + supervisorHeight + thoughtHeight;
+      const artifactsHeight = message.artifacts?.length
+        ? 28 + message.artifacts.length * 98
+        : 0;
+      return (
+        baseHeight +
+        contentHeight +
+        traceHeight +
+        specialistsHeight +
+        supervisorHeight +
+        thoughtHeight +
+        artifactsHeight
+      );
     },
     [],
   );

@@ -2,6 +2,7 @@
 // Typed wrappers for Tauri command invocation
 
 import { invoke, Channel } from "@tauri-apps/api/core";
+import type { ChatArtifact } from "../types/agent";
 
 // ============ Types ============
 
@@ -2452,6 +2453,7 @@ export interface PersistedChatMessage {
   chat_scope_id: string;
   role: "user" | "assistant" | "system";
   content: string;
+  artifacts?: ChatArtifact[] | null;
   created_at: string;
   cursor_rowid: number;
 }
@@ -2616,6 +2618,10 @@ export async function getChatHistoryWindow(
     cursorRowid,
     limit,
   });
+}
+
+export async function openChatArtifact(path: string): Promise<void> {
+  return invoke<void>("open_chat_artifact", { path });
 }
 
 export interface AttachmentPreview {

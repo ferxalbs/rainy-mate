@@ -137,12 +137,28 @@ export interface ChatAttachment {
   thumbnailDataUri?: string;
 }
 
+export type ChatArtifactKind = "image" | "pdf" | "docx" | "xlsx";
+export type ChatArtifactOpenMode = "inline" | "preview" | "system_default";
+export type ChatArtifactAction = "open";
+
+export interface ChatArtifact {
+  id: string;
+  path: string;
+  filename: string;
+  kind: ChatArtifactKind;
+  mimeType: string;
+  openMode: ChatArtifactOpenMode;
+  availableActions: ChatArtifactAction[];
+  originTool: string;
+}
+
 export interface AgentMessage {
   id: string;
   type: "user" | "agent" | "system";
   content: string;
   /** Files attached to this message (user messages only). */
   attachments?: ChatAttachment[];
+  artifacts?: ChatArtifact[];
   isLoading?: boolean;
   timestamp: Date;
   thought?: string;

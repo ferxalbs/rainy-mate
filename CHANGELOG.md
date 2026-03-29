@@ -5,6 +5,36 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-29 - PROJECT KINGFALL PHASE 3D: GENERATED ARTIFACT BADGES + NATIVE OPEN
+
+### Added
+
+- **Generated artifact badges in agent chat** — assistant messages can now surface created PDFs, DOCX files, XLSX files, and images directly below the chat bubble as compact artifact cards:
+  - `src/components/agent-chat/ArtifactBadgeRow.tsx` — new below-bubble artifact row with inline image rendering, explicit `Preview`/`Open` actions for non-image files, and per-artifact open failure feedback
+  - `src/components/agent-chat/MessageBubble.tsx` — assistant bubbles now render persisted/live `artifacts` directly under the response body
+  - `src/components/agent-chat/AgentChatPanel.tsx` — transcript virtualization sizing now accounts for artifact cards so long chats stay stable while badges are present
+  - `src/types/agent.ts` — new `ChatArtifact`, `ChatArtifactKind`, `ChatArtifactOpenMode`, and `AgentMessage.artifacts`
+  - `src/lib/chat-artifacts.ts` — frontend artifact normalization helpers for live runtime events
+
+- **Native macOS open flow for generated files** — non-image artifacts can now launch directly from chat using system-native behavior:
+  - `src-tauri/src/commands/chat_artifacts.rs` — new `open_chat_artifact` Tauri command validates the path and opens PDFs in Apple Preview while DOCX/XLSX use the platform default app
+  - `src/services/tauri.ts` — new `openChatArtifact()` wrapper for the chat UI
+
+### Changed
+
+- **Assistant message persistence now includes artifact metadata** — generated-file badges survive chat reloads instead of existing only during the live run:
+  - `src-tauri/src/services/chat_artifacts.rs` — new canonical Rust-side artifact model plus normalization from document/file tool outputs
+  - `src-tauri/src/ai/agent/manager.rs` — chat message history DTOs now carry optional artifact metadata; message persistence writes `artifacts_json`
+  - `src-tauri/src/ai/agent/chat_sessions.rs` — `save_chat_message` now accepts optional artifact metadata
+  - `src-tauri/src/commands/agent.rs` — native agent workflow now correlates `tool_call` and `tool_result` events, captures created-file artifacts, and persists them with the final assistant message
+  - `src/services/tauri.ts`, `src/hooks/useAgentChat.ts` — chat history hydration and live runtime event handling now load and merge artifacts into assistant messages
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+- `cd src-tauri && cargo test chat_artifacts -- --nocapture` → pass
+
 ## [0.6.3] - 2026-03-28 - PROJECT KINGFALL PHASE 3C: MACOS BRIDGE BUNDLE ENFORCEMENT
 
 ### Fixed

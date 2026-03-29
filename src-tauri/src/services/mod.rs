@@ -12,6 +12,7 @@ pub mod atm_auth;
 pub mod atm_client;
 pub mod audit_emitter;
 pub mod browser_controller;
+pub mod chat_artifacts;
 pub mod cloud_bridge;
 pub mod command_poller;
 pub mod command_poller_agent;

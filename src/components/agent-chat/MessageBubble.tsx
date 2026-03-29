@@ -18,6 +18,7 @@ import { Card } from "../ui/card";
 import type { AgentMessage, TaskPlan } from "../../types/agent";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { PlanConfirmationCard } from "./PlanConfirmationCard";
+import { ArtifactBadgeRow } from "./ArtifactBadgeRow";
 import {
   type NeuralState,
   TOOL_STATE_MAP,
@@ -219,6 +220,10 @@ function MessageBubbleComponent({
         </div>
 
         {/* Thought/Reasoning Display (Only for Agent with thinking) */}
+        {!isUser && message.artifacts && message.artifacts.length > 0 && (
+          <ArtifactBadgeRow artifacts={message.artifacts} />
+        )}
+
         {!isUser && message.thought && (
           <ThoughtDisplay
             thought={message.thought}

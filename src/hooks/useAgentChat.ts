@@ -15,6 +15,10 @@ import {
   getToolDisplayName,
 } from "../components/agent-chat/neural-config";
 import { updateMessageById } from "./agent-chat/messageState";
+import {
+  appendUniqueArtifact,
+  artifactFromToolResult,
+} from "../lib/chat-artifacts";
 
 type RuntimeAgentEventData = {
   [key: string]: unknown;
@@ -230,6 +234,7 @@ export function useAgentChat(
         id: msg.id,
         type: mapPersistedRoleToUiType(msg.role),
         content: msg.content,
+        artifacts: msg.artifacts ?? undefined,
         timestamp: new Date(msg.created_at),
         ragTelemetry:
           msg.role === "assistant"
@@ -317,6 +322,7 @@ export function useAgentChat(
         id: msg.id,
         type: mapPersistedRoleToUiType(msg.role),
         content: msg.content,
+        artifacts: msg.artifacts ?? undefined,
         timestamp: new Date(msg.created_at),
         ragTelemetry:
           msg.role === "assistant"
@@ -784,6 +790,7 @@ export function useAgentChat(
       let unlisten: (() => void) | null = null;
       let queuedRuntimeEvents: RuntimeAgentEvent[] = [];
       let runtimeEventFrame: number | null = null;
+      const toolCallIndex = new Map<string, { name: string; arguments?: string }>();
       let applyRuntimeEventToMessage:
         | ((message: AgentMessage, payload: RuntimeAgentEvent) => AgentMessage)
         | null = null;
@@ -996,6 +1003,12 @@ export function useAgentChat(
             }
             case "tool_call": {
               const functionName = payload.data?.function?.name || "";
+              if (payload.data?.id) {
+                toolCallIndex.set(payload.data.id, {
+                  name: functionName,
+                  arguments: payload.data?.function?.arguments,
+                });
+              }
               void captureForgeStep("tool_call", functionName || "tool_call", {
                 toolCallId: payload.data?.id ?? null,
                 arguments: payload.data?.function?.arguments ?? null,
@@ -1019,6 +1032,17 @@ export function useAgentChat(
               };
             }
             case "tool_result": {
+              const toolCall = payload.data?.id
+                ? toolCallIndex.get(payload.data.id)
+                : undefined;
+              const artifact =
+                toolCall && typeof payload.data?.result === "string"
+                  ? artifactFromToolResult(
+                      toolCall.name,
+                      toolCall.arguments,
+                      payload.data.result,
+                    )
+                  : null;
               void captureForgeStep(
                 "tool_result",
                 payload.data?.id || "tool_result",
@@ -1029,6 +1053,9 @@ export function useAgentChat(
               );
               return {
                 ...message,
+                artifacts: artifact
+                  ? appendUniqueArtifact(message.artifacts, artifact)
+                  : message.artifacts,
                 neuralState: "thinking",
                 trace: [
                   ...(message.trace || []),

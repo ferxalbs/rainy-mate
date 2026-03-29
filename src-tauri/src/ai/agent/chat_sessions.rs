@@ -6,6 +6,7 @@ use crate::ai::agent::manager::{
     ChatRuntimeTelemetryDto, DEFAULT_LONG_CHAT_SCOPE_ID,
 };
 use crate::ai::specs::manifest::AgentSpec;
+use crate::services::chat_artifacts::ChatArtifact;
 use tauri::State;
 
 const DEFAULT_WORKSPACE_ID: &str = "default";
@@ -58,9 +59,10 @@ pub async fn save_chat_message(
     chat_id: String,
     role: String,
     content: String,
+    artifacts: Option<Vec<ChatArtifact>>,
 ) -> Result<String, String> {
     state
-        .save_message(&chat_id, &role, &content)
+        .save_message_with_artifacts(&chat_id, &role, &content, artifacts.as_deref())
         .await
         .map_err(|e| e.to_string())
 }

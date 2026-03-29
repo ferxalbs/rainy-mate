@@ -752,6 +752,7 @@ pub fn run() {
             commands::agent::ensure_chat_title,
             commands::agent::list_active_sessions,
             commands::agent::prepare_attachment_previews,
+            commands::chat_artifacts::open_chat_artifact,
             // Workflow Factory (THE FORGE foundation)
             commands::start_workflow_recording,
             commands::record_workflow_step,

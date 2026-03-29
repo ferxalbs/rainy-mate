@@ -8,6 +8,7 @@ pub mod ai;
 pub mod ai_providers;
 pub mod airlock;
 pub mod atm;
+pub mod chat_artifacts;
 pub mod deployment;
 
 pub mod document;
