@@ -365,6 +365,7 @@ impl MacOSNativeNotificationBridge {
 pub struct MacOSNativeNotificationBridge;
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 impl MacOSNativeNotificationBridge {
     pub fn is_runtime_supported() -> bool {
         false

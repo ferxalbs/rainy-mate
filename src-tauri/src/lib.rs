@@ -813,6 +813,7 @@ pub fn run() {
         }
     };
 
+    #[allow(unused_variables)]
     tauri_app.run(|app_handle, event| {
         #[cfg(target_os = "macos")]
         if let tauri::RunEvent::Ready = event {

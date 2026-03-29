@@ -258,6 +258,7 @@ impl MacOSQuickDelegateBridge {
 pub struct MacOSQuickDelegateBridge;
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 impl MacOSQuickDelegateBridge {
     pub fn is_runtime_supported() -> bool {
         false

@@ -17,10 +17,12 @@ pub struct QuickDelegateStatus {
 }
 
 pub struct QuickDelegateModalService {
+    #[allow(dead_code)]
     app_handle: AppHandle,
     busy: AtomicBool,
 }
 
+#[allow(dead_code)]
 impl QuickDelegateModalService {
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
@@ -109,6 +111,7 @@ impl QuickDelegateModalService {
     }
 }
 
+#[allow(dead_code)]
 async fn execute_native_modal_prompt(app_handle: AppHandle, prompt: String) -> Result<(), String> {
     let file_manager = app_handle.state::<Arc<FileManager>>();
     let workspace_id = file_manager
@@ -166,6 +169,7 @@ async fn execute_native_modal_prompt(app_handle: AppHandle, prompt: String) -> R
     }
 }
 
+#[allow(dead_code)]
 fn emit_finish_notification(
     app_handle: &AppHandle,
     title: &str,
@@ -204,6 +208,7 @@ fn emit_finish_notification(
         .map_err(|e| format!("Failed to emit finish notification: {}", e))
 }
 
+#[allow(dead_code)]
 fn truncate_message(value: &str, max_chars: usize) -> String {
     let trimmed = value.trim();
     if trimmed.chars().count() <= max_chars {
@@ -218,6 +223,7 @@ fn truncate_message(value: &str, max_chars: usize) -> String {
     out
 }
 
+#[allow(dead_code)]
 fn build_summary(response: &str) -> String {
     let compact = response.split_whitespace().collect::<Vec<_>>().join(" ");
     truncate_message(&compact, 90)

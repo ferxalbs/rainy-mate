@@ -423,6 +423,7 @@ pub struct EnsureChatTitleResponse {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum WorkflowInvocationSource {
     Local,
+    #[allow(dead_code)]
     NativeModal,
 }
 
