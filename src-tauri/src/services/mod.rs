@@ -39,6 +39,7 @@ pub mod neural_service;
 pub mod persistent_scheduler;
 pub mod prompt_skills;
 pub mod quick_delegate_modal;
+pub mod remote_workspace_grants;
 pub mod security;
 pub mod session_coordinator;
 pub mod settings;
@@ -75,6 +76,7 @@ pub use prompt_skills::{
     DiscoveredPromptSkill, PromptSkillBinding, PromptSkillDiscoveryService, PromptSkillRegistry,
 };
 pub use quick_delegate_modal::{QuickDelegateModalService, QuickDelegateStatus};
+pub use remote_workspace_grants::RemoteWorkspaceGrantStore;
 pub use security::NodeAuthenticator;
 pub use skill_executor::SkillExecutor;
 

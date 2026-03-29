@@ -130,6 +130,7 @@ pub fn run() {
     // API Key will be loaded/set via commands later
     let llm_client = Arc::new(Mutex::new(LLMClient::new("".to_string())));
     let workflow_recorder = Arc::new(WorkflowRecorderService::new());
+    let remote_workspace_grants = Arc::new(services::RemoteWorkspaceGrantStore::new());
     let agent_library = match AgentLibraryService::new_default() {
         Ok(service) => Arc::new(service),
         Err(error) => {
@@ -177,6 +178,7 @@ pub fn run() {
         .manage(socket_client) // SocketClient
         .manage(llm_client) // Arc<Mutex<LLMClient>>
         .manage(workflow_recorder) // Arc<WorkflowRecorderService>
+        .manage(remote_workspace_grants.clone()) // Arc<RemoteWorkspaceGrantStore>
         .manage(agent_library) // Arc<AgentLibraryService>
         .manage(commands::airlock::AirlockServiceState(Arc::new(
             Mutex::new(None),
@@ -424,6 +426,7 @@ pub fn run() {
             app.manage(session_coordinator.clone());
 
             let session_coordinator_for_poller = session_coordinator.clone();
+            let app_handle_for_poller = app.handle().clone();
 
             // Readiness signal: replaces fixed sleep timers in spawned tasks.
             // Notified once all core services are registered below.
@@ -440,12 +443,14 @@ pub fn run() {
                 // Inject agent context for agent.run commands
                 poller
                     .set_agent_context(
+                        app_handle_for_poller,
                         router_for_poller,
                         app_data_for_poller,
                         agent_manager_for_poller,
                         runtime_registry_for_poller,
                         memory_manager_for_poller,
                         session_coordinator_for_poller,
+                        remote_workspace_grants.clone(),
                     )
                     .await;
 

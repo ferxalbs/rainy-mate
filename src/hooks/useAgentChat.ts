@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useStreaming } from "./useStreaming";
 import { useTauriTask } from "./useTauriTask";
 import type {
@@ -19,6 +20,7 @@ import {
   appendUniqueArtifact,
   artifactFromToolResult,
 } from "../lib/chat-artifacts";
+import type { RemoteSessionBinding } from "../services/tauri";
 
 type RuntimeAgentEventData = {
   [key: string]: unknown;
@@ -54,6 +56,8 @@ type RuntimeAgentEventData = {
   };
   id?: string;
   result?: string;
+  text?: string;
+  airlock_level?: number;
   history_source?: string;
   retrieval_mode?: string;
   embedding_profile?: string;
@@ -86,9 +90,47 @@ type RuntimeAgentEvent =
       data?: RuntimeAgentEventData;
     };
 
+type RuntimeToolCallIndex = Map<
+  string,
+  { name: string; arguments?: string }
+>;
+
+function mergeDefinedFields<T>(current: T, next: Partial<T>): T {
+  const merged = { ...(current as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(next as Record<string, unknown>)) {
+    if (value !== undefined) {
+      merged[key] = value;
+    }
+  }
+  return merged as T;
+}
+
+function upsertSpecialistState(
+  specialists: SpecialistRunState[] | undefined,
+  next: Partial<SpecialistRunState> & {
+    agentId: string;
+    role: SpecialistRunState["role"];
+    status: SpecialistRunState["status"];
+  },
+): SpecialistRunState[] {
+  const current = specialists ? [...specialists] : [];
+  const idx = current.findIndex((item) => item.agentId === next.agentId);
+  const merged = mergeDefinedFields(
+    idx >= 0 ? current[idx] : ({} as SpecialistRunState),
+    next,
+  ) as SpecialistRunState;
+  if (idx >= 0) {
+    current[idx] = merged;
+  } else {
+    current.push(merged);
+  }
+  return current;
+}
+
 export function useAgentChat(
   initialChatScopeId?: string | null,
   onSessionChanged?: () => void | Promise<void>,
+  remoteSessionBinding?: RemoteSessionBinding | null,
 ) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isPlanning, setIsPlanning] = useState(false);
@@ -108,6 +150,9 @@ export function useAgentChat(
   const isHydratingRef = useRef(false);
   const hasHydratedRef = useRef(false);
   const messagesRef = useRef(messages);
+  const remoteRunMessageIdRef = useRef<string | null>(null);
+  const remoteRunIdRef = useRef<string | null>(null);
+  const remoteToolCallIndexRef = useRef<RuntimeToolCallIndex>(new Map());
   messagesRef.current = messages;
 
   const { streamWithRouting } = useStreaming();
@@ -154,6 +199,387 @@ export function useAgentChat(
       }
     },
     [],
+  );
+
+  const applyRuntimeEventToMessage = useCallback(
+    (
+      message: AgentMessage,
+      payload: RuntimeAgentEvent,
+      toolCallIndex: RuntimeToolCallIndex,
+    ): AgentMessage => {
+      const upsert = (next: Partial<SpecialistRunState> & {
+        agentId: string;
+        role: SpecialistRunState["role"];
+        status: SpecialistRunState["status"];
+      }) => upsertSpecialistState(message.specialists, next);
+
+      switch (payload.type) {
+        case "supervisor_plan_created": {
+          void captureForgeStep(
+            "decision",
+            payload.data?.summary || "supervisor_plan_created",
+            {
+              steps: Array.isArray(payload.data?.steps)
+                ? payload.data.steps.length
+                : 0,
+            },
+          );
+          return {
+            ...message,
+            neuralState: "planning",
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                "act",
+                payload.data?.summary || "Supervisor plan created",
+                undefined,
+                payload.timestampMs,
+              ),
+            ],
+            supervisorPlan: {
+              summary: payload.data?.summary || "Supervisor plan ready",
+              steps: Array.isArray(payload.data?.steps)
+                ? payload.data.steps
+                : [],
+              verificationRequired: payload.data?.verificationRequired || false,
+              mode: payload.data?.mode,
+              delegationPolicy: payload.data?.delegationPolicy,
+              maxDepth: payload.data?.maxDepth,
+              maxThreads: payload.data?.maxThreads,
+              maxParallelSubagents: payload.data?.maxParallelSubagents,
+              internalCoordinationLanguage:
+                payload.data?.internalCoordinationLanguage,
+              finalResponseLanguageMode:
+                payload.data?.finalResponseLanguageMode,
+            },
+          };
+        }
+        case "specialist_spawned":
+        case "specialist_status_changed": {
+          const activeTool = payload.data?.activeTool || undefined;
+          const waitingOnAirlock =
+            payload.data?.status === "waiting_on_airlock";
+          return {
+            ...message,
+            neuralState: waitingOnAirlock
+              ? "planning"
+              : activeTool
+                ? resolveNeuralState(activeTool)
+                : "planning",
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                waitingOnAirlock ? "approval" : "act",
+                `${payload.data?.role || "specialist"}: ${payload.data?.status || "running"}`,
+                { toolName: activeTool || undefined },
+                payload.timestampMs,
+              ),
+            ],
+            activeToolName: waitingOnAirlock
+              ? "Awaiting Airlock approval"
+              : activeTool
+                ? getToolDisplayName(activeTool)
+                : undefined,
+            specialists: upsert({
+              agentId: payload.data?.agentId ?? "unknown",
+              role: payload.data?.role ?? "specialist",
+              status: payload.data?.status ?? "planning",
+              detail: payload.data?.detail,
+              activeTool,
+              dependsOn: payload.data?.dependsOn || [],
+              startedAtMs: payload.data?.startedAtMs,
+              finishedAtMs: payload.data?.finishedAtMs,
+              toolCount: payload.data?.toolCount,
+              writeLikeUsed: payload.data?.writeLikeUsed,
+              parentAgentId: payload.data?.parentAgentId,
+              depth: payload.data?.depth,
+              branchId: payload.data?.branchId,
+              spawnReason: payload.data?.spawnReason,
+            }),
+          };
+        }
+        case "specialist_completed": {
+          return {
+            ...message,
+            neuralState: "thinking",
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                "act",
+                `${payload.data?.role || "specialist"} completed`,
+                {
+                  preview: payload.data?.summary || payload.data?.responsePreview,
+                },
+                payload.timestampMs,
+              ),
+            ],
+            activeToolName: undefined,
+            specialists: upsert({
+              agentId: payload.data?.agentId ?? "unknown",
+              role: payload.data?.role ?? "specialist",
+              status: "completed",
+              summary: payload.data?.summary,
+              responsePreview: payload.data?.responsePreview,
+              dependsOn: payload.data?.dependsOn || [],
+              startedAtMs: payload.data?.startedAtMs,
+              finishedAtMs: payload.data?.finishedAtMs,
+              toolCount: payload.data?.toolCount,
+              writeLikeUsed: payload.data?.writeLikeUsed,
+              parentAgentId: payload.data?.parentAgentId,
+              depth: payload.data?.depth,
+              branchId: payload.data?.branchId,
+              spawnReason: payload.data?.spawnReason,
+            }),
+          };
+        }
+        case "specialist_failed": {
+          void captureForgeStep(
+            "error",
+            payload.data?.error || "specialist_failed",
+            {
+              agentId: payload.data?.agentId ?? null,
+              role: payload.data?.role ?? null,
+            },
+          );
+          return {
+            ...message,
+            neuralState: "thinking",
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                "error",
+                `${payload.data?.role || "specialist"} failed`,
+                { preview: payload.data?.error },
+                payload.timestampMs,
+              ),
+            ],
+            activeToolName: undefined,
+            specialists: upsert({
+              agentId: payload.data?.agentId ?? "unknown",
+              role: payload.data?.role ?? "specialist",
+              status: "failed",
+              error: payload.data?.error,
+              dependsOn: payload.data?.dependsOn || [],
+              startedAtMs: payload.data?.startedAtMs,
+              finishedAtMs: payload.data?.finishedAtMs,
+              toolCount: payload.data?.toolCount,
+              writeLikeUsed: payload.data?.writeLikeUsed,
+              parentAgentId: payload.data?.parentAgentId,
+              depth: payload.data?.depth,
+              branchId: payload.data?.branchId,
+              spawnReason: payload.data?.spawnReason,
+            }),
+          };
+        }
+        case "tool_call": {
+          const functionName = payload.data?.function?.name || "";
+          if (payload.data?.id) {
+            toolCallIndex.set(payload.data.id, {
+              name: functionName,
+              arguments: payload.data?.function?.arguments,
+            });
+          }
+          void captureForgeStep("tool_call", functionName || "tool_call", {
+            toolCallId: payload.data?.id ?? null,
+            arguments: payload.data?.function?.arguments ?? null,
+          });
+          const incomingLevel: number =
+            (payload.data?.airlock_level as number | undefined) ?? 0;
+          return {
+            ...message,
+            neuralState: resolveNeuralState(functionName),
+            airlockLevel: Math.max(message.airlockLevel ?? 0, incomingLevel),
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                "tool",
+                `Tool call: ${getToolDisplayName(functionName)}`,
+                { toolName: functionName },
+                payload.timestampMs,
+              ),
+            ],
+            activeToolName: getToolDisplayName(functionName),
+          };
+        }
+        case "tool_result": {
+          const toolCall = payload.data?.id
+            ? toolCallIndex.get(payload.data.id)
+            : undefined;
+          const artifact =
+            toolCall && typeof payload.data?.result === "string"
+              ? artifactFromToolResult(
+                  toolCall.name,
+                  toolCall.arguments,
+                  payload.data.result,
+                )
+              : null;
+          void captureForgeStep(
+            "tool_result",
+            payload.data?.id || "tool_result",
+            {
+              toolCallId: payload.data?.id ?? null,
+              resultPreview: payload.data?.result ?? null,
+            },
+          );
+          return {
+            ...message,
+            artifacts: artifact
+              ? appendUniqueArtifact(message.artifacts, artifact)
+              : message.artifacts,
+            neuralState: "thinking",
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                "tool",
+                `Tool result: ${payload.data?.id || "completed"}`,
+                {
+                  preview:
+                    typeof payload.data?.result === "string"
+                      ? payload.data.result.slice(0, 180)
+                      : undefined,
+                },
+                payload.timestampMs,
+              ),
+            ],
+            activeToolName: undefined,
+          };
+        }
+        case "thought":
+        case "stream_chunk":
+        case "supervisor_summary":
+          return {
+            ...message,
+            content:
+              payload.type === "stream_chunk" &&
+              typeof payload.data?.text === "string" &&
+              payload.data.text.trim().length > 0
+                ? `${message.content}${message.content ? "\n" : ""}${payload.data.text}`
+                : message.content,
+            neuralState: "thinking",
+            activeToolName: undefined,
+          };
+        case "status": {
+          const statusText = String(payload.data || "");
+          const lower = statusText.toLowerCase();
+          if (lower.includes("retry")) {
+            void captureForgeStep("retry", statusText, {});
+          } else if (
+            lower.includes("error") ||
+            lower.includes("failed") ||
+            lower.includes("exception")
+          ) {
+            void captureForgeStep("error", statusText, {});
+          }
+          if (statusText.startsWith("RAG_TELEMETRY:")) {
+            try {
+              const raw = statusText.slice("RAG_TELEMETRY:".length);
+              const parsed = JSON.parse(raw) as {
+                history_source?: string;
+                retrieval_mode?: string;
+                embedding_profile?: string;
+              };
+              const nextTelemetry = {
+                historySource:
+                  parsed.history_source ||
+                  message.ragTelemetry?.historySource ||
+                  defaultRagTelemetry.historySource,
+                retrievalMode:
+                  parsed.retrieval_mode ||
+                  message.ragTelemetry?.retrievalMode ||
+                  defaultRagTelemetry.retrievalMode,
+                embeddingProfile:
+                  parsed.embedding_profile ||
+                  message.ragTelemetry?.embeddingProfile ||
+                  defaultRagTelemetry.embeddingProfile,
+                compressionApplied: message.ragTelemetry?.compressionApplied,
+                compressionTriggerTokens:
+                  message.ragTelemetry?.compressionTriggerTokens,
+              };
+              if (
+                message.ragTelemetry?.historySource ===
+                  nextTelemetry.historySource &&
+                message.ragTelemetry?.retrievalMode ===
+                  nextTelemetry.retrievalMode &&
+                message.ragTelemetry?.embeddingProfile ===
+                  nextTelemetry.embeddingProfile
+              ) {
+                return message;
+              }
+              return {
+                ...message,
+                ragTelemetry: nextTelemetry,
+              };
+            } catch {
+              return message;
+            }
+          }
+          if (statusText.startsWith("CONTEXT_COMPACTION:")) {
+            try {
+              const raw = statusText.slice("CONTEXT_COMPACTION:".length);
+              const parsed = JSON.parse(raw) as {
+                applied?: boolean;
+                trigger_tokens?: number;
+              };
+              return {
+                ...message,
+                ragTelemetry: {
+                  ...message.ragTelemetry,
+                  compressionApplied:
+                    parsed.applied ?? message.ragTelemetry?.compressionApplied,
+                  compressionTriggerTokens:
+                    parsed.trigger_tokens ||
+                    message.ragTelemetry?.compressionTriggerTokens,
+                },
+              };
+            } catch {
+              return message;
+            }
+          }
+          const waitingOnMcpApproval =
+            statusText.toLowerCase().includes("approval") &&
+            statusText.toLowerCase().includes("mcp");
+          const waitingOnAirlockApproval =
+            statusText.toLowerCase().includes("awaiting airlock approval");
+          const statusLower = statusText.toLowerCase();
+          const isRetry = statusLower.includes("retry");
+          const isError =
+            statusLower.includes("error") ||
+            statusLower.includes("failed") ||
+            statusLower.includes("exception");
+          const isCancelled =
+            statusLower.includes("terminated by fleet kill switch") ||
+            statusLower.includes("terminated by user") ||
+            statusLower.includes("cancelled by user");
+          const tracePhase: AgentTraceEntry["phase"] =
+            waitingOnMcpApproval || waitingOnAirlockApproval
+              ? "approval"
+              : isRetry
+                ? "retry"
+                : isError
+                  ? "error"
+                  : isCancelled
+                    ? "cancelled"
+                    : "think";
+          return {
+            ...message,
+            neuralState: "planning",
+            runState: isCancelled ? "cancelled" : message.runState,
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(tracePhase, statusText, undefined, payload.timestampMs),
+            ],
+            activeToolName: waitingOnMcpApproval
+              ? "Awaiting MCP approval"
+              : waitingOnAirlockApproval
+                ? "Awaiting Airlock approval"
+                : undefined,
+          };
+        }
+        default:
+          return message;
+      }
+    },
+    [captureForgeStep, createTraceEntry],
   );
 
   const clearMessages = useCallback(() => {
@@ -211,6 +637,92 @@ export function useAgentChat(
     [ensureChatScope, onSessionChanged],
   );
 
+  useEffect(() => {
+    const runId = remoteSessionBinding?.runId ?? null;
+    const previousRunId = remoteRunIdRef.current;
+    remoteRunIdRef.current = runId;
+
+    if (previousRunId !== runId) {
+      remoteRunMessageIdRef.current = null;
+      remoteToolCallIndexRef.current.clear();
+    }
+
+    if (!runId) {
+      remoteRunMessageIdRef.current = null;
+      remoteToolCallIndexRef.current.clear();
+      return;
+    }
+
+    if (isHydratingRef.current || isHydratingHistory) {
+      return;
+    }
+
+    const existing = messagesRef.current.find(
+      (message) => message.requestContext?.runId === runId,
+    );
+    if (existing) {
+      remoteRunMessageIdRef.current = existing.id;
+      return;
+    }
+
+    if (!remoteRunMessageIdRef.current) {
+      remoteRunMessageIdRef.current = crypto.randomUUID();
+    }
+
+    const placeholderId = remoteRunMessageIdRef.current;
+    remoteToolCallIndexRef.current = new Map();
+    setMessages((prev) => {
+      if (
+        prev.some(
+          (message) =>
+            message.id === placeholderId ||
+            message.requestContext?.runId === runId,
+        )
+      ) {
+        return prev;
+      }
+
+      const placeholder: AgentMessage = {
+        id: placeholderId,
+        type: "agent",
+        content:
+          remoteSessionBinding?.workspaceName?.trim().length
+            ? `Remote session running in ${remoteSessionBinding.workspaceName}.`
+            : "Remote session running.",
+        isLoading: true,
+        timestamp: new Date(),
+        neuralState: "thinking",
+        runState: "running",
+        requestContext: {
+          runId,
+          workspaceId:
+            remoteSessionBinding?.workspacePath || remoteSessionBinding?.workspaceId,
+          chatScopeId: remoteSessionBinding?.chatId || chatScopeId || undefined,
+          startedAtMs: Date.now(),
+        },
+        trace: [
+          createTraceEntry(
+            "think",
+            "Remote session bound. Streaming live updates.",
+          ),
+        ],
+      };
+
+      return [...prev, placeholder];
+    });
+
+    void onSessionChanged?.();
+  }, [
+    chatScopeId,
+    createTraceEntry,
+    isHydratingHistory,
+    onSessionChanged,
+    remoteSessionBinding?.chatId,
+    remoteSessionBinding?.runId,
+    remoteSessionBinding?.workspaceId,
+    remoteSessionBinding?.workspaceName,
+  ]);
+
   const clearMessagesAndContext = useCallback(async (chatId: string) => {
     await tauri.clearChatHistory(chatScopeId || chatId);
     setMessages([]);
@@ -221,6 +733,122 @@ export function useAgentChat(
     hasHydratedRef.current = true;
     await refreshChatSession(chatScopeId || chatId);
   }, [chatScopeId, refreshChatSession]);
+
+  useEffect(() => {
+    const runId = remoteSessionBinding?.runId ?? null;
+    if (!runId) {
+      remoteRunMessageIdRef.current = null;
+      remoteToolCallIndexRef.current.clear();
+      return;
+    }
+
+    remoteToolCallIndexRef.current = new Map();
+
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+    let queuedRuntimeEvents: RuntimeAgentEvent[] = [];
+    let runtimeEventFrame: number | null = null;
+
+    const flushRuntimeEvents = () => {
+      runtimeEventFrame = null;
+      if (!remoteRunMessageIdRef.current || !queuedRuntimeEvents.length) return;
+      const batch = queuedRuntimeEvents;
+      queuedRuntimeEvents = [];
+      setMessages((prev) =>
+        updateMessageById(prev, remoteRunMessageIdRef.current as string, (message) =>
+          batch.reduce(
+            (current, payload) =>
+              applyRuntimeEventToMessage(
+                current,
+                payload,
+                remoteToolCallIndexRef.current,
+              ),
+            message,
+          ),
+        ),
+      );
+    };
+
+    const scheduleRuntimeEvent = (payload: RuntimeAgentEvent) => {
+      queuedRuntimeEvents.push(payload);
+      if (runtimeEventFrame != null) return;
+      runtimeEventFrame = window.requestAnimationFrame(flushRuntimeEvents);
+    };
+
+    void listen<RuntimeAgentEvent>("agent://event", (event) => {
+      if (cancelled) return;
+      if (event.payload?.runId && event.payload.runId !== runId) return;
+      if (!remoteRunMessageIdRef.current) return;
+      scheduleRuntimeEvent(event.payload);
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      if (runtimeEventFrame != null) {
+        window.cancelAnimationFrame(runtimeEventFrame);
+      }
+    };
+  }, [applyRuntimeEventToMessage, remoteSessionBinding?.runId]);
+
+  useEffect(() => {
+    const runId = remoteSessionBinding?.runId ?? null;
+    if (!runId) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+
+    void listen<{
+      chatId: string;
+      workspaceId?: string;
+      workspacePath?: string;
+      runId?: string;
+      source?: string;
+    }>("session://finished", (event) => {
+      if (cancelled) return;
+      const payload = event.payload;
+      if (payload.source && payload.source !== "remote") return;
+
+      const matchesRun = payload.runId ? payload.runId === runId : false;
+      const matchesChat =
+        remoteSessionBinding?.chatId && payload.chatId === remoteSessionBinding.chatId;
+      if (!matchesRun && !matchesChat) return;
+
+      const messageId = remoteRunMessageIdRef.current;
+      if (!messageId) return;
+
+      setMessages((prev) =>
+        updateMessageById(prev, messageId, (message) => ({
+          ...message,
+          isLoading: false,
+          runState: message.runState === "cancelled" ? "cancelled" : "completed",
+          neuralState: undefined,
+          activeToolName: undefined,
+          trace: [
+            ...(message.trace || []),
+            createTraceEntry("done", "Remote session finished."),
+          ],
+        })),
+      );
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [createTraceEntry, remoteSessionBinding?.chatId, remoteSessionBinding?.runId]);
 
   const hydrateLongChatHistory = useCallback(async () => {
     if (isHydratingRef.current || hasHydratedRef.current) return;
@@ -1227,7 +1855,6 @@ export function useAgentChat(
           runtimeEventFrame = window.requestAnimationFrame(flushRuntimeEvents);
         };
 
-        const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen<RuntimeAgentEvent>("agent://event", (event) => {
           const payload = event.payload;
           if (payload?.runId && payload.runId !== clientRunId) return;

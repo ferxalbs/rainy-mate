@@ -11,7 +11,7 @@ use crate::services::session_coordinator::SessionCoordinator;
 use crate::services::settings::SettingsManager;
 use crate::services::skill_executor::SkillExecutor;
 use crate::services::tool_manifest::build_skill_manifest_from_runtime;
-use crate::services::MemoryManager;
+use crate::services::{MemoryManager, RemoteWorkspaceGrantStore};
 use dashmap::DashSet;
 use rand::Rng;
 use std::path::PathBuf;
@@ -62,12 +62,14 @@ use crate::ai::agent::manager::AgentManager;
 
 /// Context needed to create AgentRuntime instances on-demand
 pub struct AgentRuntimeContext {
+    pub app_handle: tauri::AppHandle,
     pub router: Arc<RwLock<IntelligentRouter>>,
     pub app_data_dir: PathBuf,
     pub agent_manager: Arc<AgentManager>,
     pub runtime_registry: Arc<RuntimeRegistry>,
     pub memory_manager: Arc<MemoryManager>,
     pub session_coordinator: Arc<SessionCoordinator>,
+    pub remote_workspace_grants: Arc<RemoteWorkspaceGrantStore>,
 }
 
 #[derive(Clone)]
@@ -144,21 +146,25 @@ impl CommandPoller {
     /// Set the context needed to create AgentRuntime instances
     pub async fn set_agent_context(
         &self,
+        app_handle: tauri::AppHandle,
         router: Arc<RwLock<IntelligentRouter>>,
         app_data_dir: PathBuf,
         agent_manager: Arc<AgentManager>,
         runtime_registry: Arc<RuntimeRegistry>,
         memory_manager: Arc<MemoryManager>,
         session_coordinator: Arc<SessionCoordinator>,
+        remote_workspace_grants: Arc<RemoteWorkspaceGrantStore>,
     ) {
         let mut lock = self.agent_context.write().await;
         *lock = Some(AgentRuntimeContext {
+            app_handle,
             router,
             app_data_dir,
             agent_manager,
             runtime_registry,
             memory_manager,
             session_coordinator,
+            remote_workspace_grants,
         });
     }
 

@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { Eraser, FileText, Gamepad2, Sparkles } from "lucide-react";
 
 import * as tauri from "../../services/tauri";
+import type { RemoteSessionBinding } from "../../services/tauri";
 import { cn } from "../../lib/utils";
 import { useAgentChat } from "../../hooks/useAgentChat";
 import type { Folder } from "../../types";
@@ -27,6 +29,7 @@ interface AgentChatPanelProps {
 
   // Multi-chat props
   chatScopeId?: string | null;
+  remoteSessionBinding?: RemoteSessionBinding | null;
   onNewChat?: () => void;
   onRefreshSessions?: () => Promise<void>;
 }
@@ -149,6 +152,7 @@ export function AgentChatPanel({
   onOpenSettings,
   className,
   chatScopeId: externalChatScopeId,
+  remoteSessionBinding,
   onNewChat: externalOnNewChat,
   // @RESERVED — will be used for sidebar title refresh after auto-title generation
   onRefreshSessions: _onRefreshSessions,
@@ -181,7 +185,7 @@ export function AgentChatPanel({
     isHydratingHistory,
     // @RESERVED — will be used for in-panel chat tab switching
     switchChat: _switchChat,
-  } = useAgentChat(externalChatScopeId, _onRefreshSessions);
+  } = useAgentChat(externalChatScopeId, _onRefreshSessions, remoteSessionBinding);
 
   const isProcessing = isPlanning || isExecuting;
   const reasoningOptions = useMemo(() => getReasoningOptions(selectedModel), [selectedModel]);
@@ -252,36 +256,36 @@ export function AgentChatPanel({
   }, []);
 
   const handleAddAttachments = useCallback(async () => {
-    try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: true,
-        filters: [
-          { name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp"] },
-          { name: "Documents", extensions: ["pdf", "docx", "xlsx", "xls", "txt", "md", "csv"] },
-          { name: "All Files", extensions: ["*"] },
-        ],
+    void open({
+      multiple: true,
+      filters: [
+        { name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp"] },
+        { name: "Documents", extensions: ["pdf", "docx", "xlsx", "xls", "txt", "md", "csv"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+    })
+      .then(async (selected) => {
+        if (!selected) return;
+        const paths = Array.isArray(selected) ? selected : [selected];
+        const previews = await tauri.prepareAttachmentPreviews(paths);
+        setPendingAttachments((prev) =>
+          [
+            ...prev,
+            ...previews.map((p) => ({
+              id: `${p.path}-${Date.now()}`,
+              path: p.path,
+              filename: p.filename,
+              mimeType: p.mime_type,
+              sizeBytes: p.size_bytes,
+              type: p.attachment_type,
+              thumbnailDataUri: p.thumbnail_data_uri ?? undefined,
+            })),
+          ].slice(0, 5),
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to open file picker:", error);
       });
-      if (!selected) return;
-      const paths = Array.isArray(selected) ? selected : [selected];
-      const previews = await tauri.prepareAttachmentPreviews(paths);
-      setPendingAttachments((prev) =>
-        [
-          ...prev,
-          ...previews.map((p) => ({
-            id: `${p.path}-${Date.now()}`,
-            path: p.path,
-            filename: p.filename,
-            mimeType: p.mime_type,
-            sizeBytes: p.size_bytes,
-            type: p.attachment_type,
-            thumbnailDataUri: p.thumbnail_data_uri ?? undefined,
-          })),
-        ].slice(0, 5),
-      );
-    } catch (error) {
-      console.error("Failed to open file picker:", error);
-    }
   }, []);
 
   const handleRemoveAttachment = useCallback((id: string) => {

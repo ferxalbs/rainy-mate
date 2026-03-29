@@ -3,7 +3,8 @@
 use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::AgentRuntime;
-use crate::models::neural::{CommandResult, QueuedCommand};
+use crate::models::folder::FolderAccess;
+use crate::models::neural::{AirlockLevel, CommandPriority, CommandResult, CommandStatus, QueuedCommand, RainyPayload};
 use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::airlock::AirlockService;
 use crate::services::audit_emitter::{AuditEmitter, FleetAuditEvent};
@@ -11,9 +12,12 @@ use crate::services::command_poller::{progress_preview, AgentRuntimeContext};
 use crate::services::neural_service::NeuralService;
 use crate::services::settings::SettingsManager;
 use crate::services::skill_executor::SkillExecutor;
+use crate::services::FolderManager;
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
+use tauri::Manager;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
 const AGENT_PROGRESS_CHANNEL_CAPACITY: usize = 128;
@@ -22,6 +26,14 @@ const AGENT_PROGRESS_MAX_SUPPRESSED: u32 = 12;
 pub(crate) const DEFAULT_REMOTE_AGENT_MAX_STEPS: usize = 80;
 pub(crate) const MIN_REMOTE_AGENT_MAX_STEPS: usize = 4;
 pub(crate) const MAX_REMOTE_AGENT_MAX_STEPS: usize = 200;
+const REMOTE_WORKSPACE_APPROVAL_METHOD: &str = "remote_workspace_access";
+
+#[derive(Debug, Clone)]
+struct RemoteWorkspaceResolution {
+    workspace_id: String,
+    display_name: String,
+    canonical_path: String,
+}
 
 fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
     match event {
@@ -220,6 +232,147 @@ async fn report_agent_progress_event(
         .await;
 }
 
+fn make_remote_workspace_command(
+    parent_command: &QueuedCommand,
+    requested_path: &str,
+) -> QueuedCommand {
+    QueuedCommand {
+        id: format!("{}::remote-workspace", parent_command.id),
+        workspace_id: parent_command.workspace_id.clone(),
+        desktop_node_id: parent_command.desktop_node_id.clone(),
+        intent: format!("remote.{}", REMOTE_WORKSPACE_APPROVAL_METHOD),
+        payload: RainyPayload {
+            skill: Some("remote".to_string()),
+            method: Some(REMOTE_WORKSPACE_APPROVAL_METHOD.to_string()),
+            params: Some(serde_json::json!({ "path": requested_path })),
+            connector_id: parent_command.payload.connector_id.clone(),
+            user_id: parent_command.payload.user_id.clone(),
+            ..Default::default()
+        },
+        priority: CommandPriority::High,
+        status: CommandStatus::Pending,
+        airlock_level: AirlockLevel::Dangerous,
+        approval_timeout_secs: Some(0),
+        approved_by: None,
+        result: None,
+        created_at: parent_command.created_at,
+        started_at: None,
+        completed_at: None,
+        schema_version: parent_command.schema_version.clone(),
+    }
+}
+
+fn canonicalize_remote_path(requested_path: &str) -> Result<String, String> {
+    let trimmed = requested_path.trim();
+    if trimmed.is_empty() {
+        return Err("Requested workspace path is empty".to_string());
+    }
+    let canonical = Path::new(trimmed)
+        .canonicalize()
+        .map_err(|error| format!("Cannot access requested path '{}': {}", trimmed, error))?;
+    if !canonical.is_dir() {
+        return Err(format!(
+            "Requested workspace path is not a directory: {}",
+            canonical.to_string_lossy()
+        ));
+    }
+    Ok(canonical.to_string_lossy().to_string())
+}
+
+async fn ensure_folder_visible(
+    folder_manager: &FolderManager,
+    canonical_path: &str,
+) -> Result<(), String> {
+    if let Some(folder) = folder_manager.get_folder_by_path(canonical_path).await {
+        folder_manager.update_last_accessed(&folder.id).await?;
+        return Ok(());
+    }
+
+    let name = Path::new(canonical_path)
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| canonical_path.to_string());
+
+    match folder_manager
+        .add_folder(canonical_path.to_string(), name, FolderAccess::FullAccess)
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(error) if error.contains("already added") => {
+            folder_manager.update_last_accessed_by_path(canonical_path).await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+async fn resolve_remote_workspace(
+    context: &AgentRuntimeContext,
+    airlock: Option<&AirlockService>,
+    command: &QueuedCommand,
+    cloud_workspace_id: &str,
+    connector_id: &str,
+    session_peer: &str,
+    requested_path: Option<&str>,
+) -> Result<Option<RemoteWorkspaceResolution>, String> {
+    let existing = context
+        .remote_workspace_grants
+        .get_active(cloud_workspace_id, connector_id, session_peer)
+        .await;
+
+    let canonical_path = if let Some(path) = requested_path {
+        let canonical = canonicalize_remote_path(path)?;
+        if existing
+            .as_ref()
+            .map(|grant| grant.canonical_path == canonical)
+            .unwrap_or(false)
+        {
+            context
+                .remote_workspace_grants
+                .touch(cloud_workspace_id, connector_id, session_peer)
+                .await;
+            canonical
+        } else {
+            let approval_command = make_remote_workspace_command(command, &canonical);
+            let Some(airlock) = airlock else {
+                return Err("Airlock service unavailable for remote workspace approval".to_string());
+            };
+            if !airlock.check_permission(&approval_command).await? {
+                return Err(format!(
+                    "Remote workspace access was not approved for {}",
+                    canonical
+                ));
+            }
+            context
+                .remote_workspace_grants
+                .insert(cloud_workspace_id, connector_id, session_peer, &canonical)
+                .await;
+            canonical
+        }
+    } else if let Some(grant) = context
+        .remote_workspace_grants
+        .touch(cloud_workspace_id, connector_id, session_peer)
+        .await
+    {
+        canonicalize_remote_path(&grant.canonical_path)?
+    } else {
+        return Ok(None);
+    };
+
+    let folder_manager = context.app_handle.state::<FolderManager>();
+    ensure_folder_visible(folder_manager.inner(), &canonical_path).await?;
+
+    Ok(Some(RemoteWorkspaceResolution {
+        display_name: Path::new(&canonical_path)
+            .file_name()
+            .map(|value| value.to_string_lossy().to_string())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| canonical_path.clone()),
+        workspace_id: canonical_path.clone(),
+        canonical_path,
+    }))
+}
+
 /// Execute an `agent.run` command by building an AgentRuntime and running the ReAct loop.
 pub(crate) async fn process_agent_run(
     command: &QueuedCommand,
@@ -250,7 +403,7 @@ pub(crate) async fn process_agent_run(
         .and_then(|v: &serde_json::Value| v.as_str())
         .unwrap_or("Hello, what can you help me with?");
 
-    // Get workspace_id for this command
+    // Get cloud workspace_id for this command (used for routing/grant keys)
     let workspace_id = command_for_execution
         .workspace_id
         .clone()
@@ -329,6 +482,31 @@ pub(crate) async fn process_agent_run(
         .map(|s| s.to_string())
         .or_else(|| command.payload.user_id.clone());
 
+    let requested_remote_workspace = command_for_execution
+        .payload
+        .params
+        .as_ref()
+        .and_then(|p| p.as_object())
+        .and_then(|params| {
+            params
+                .get("remoteWorkspacePath")
+                .or_else(|| params.get("remote_workspace_path"))
+                .or_else(|| params.get("workspacePath"))
+                .or_else(|| {
+                    params
+                        .get("telegramBootstrap")
+                        .and_then(|value| value.get("requestedPath"))
+                })
+                .or_else(|| {
+                    params
+                        .get("telegramBootstrap")
+                        .and_then(|value| value.get("canonicalPath"))
+                })
+        })
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
     let connector_id_for_session = command
         .payload
         .connector_id
@@ -356,11 +534,49 @@ pub(crate) async fn process_agent_run(
     // Create AgentRuntime on-demand
     let context_lock = agent_context.read().await;
     if let Some(ctx) = context_lock.as_ref() {
+        let airlock = airlock_service.read().await.clone();
+        let remote_workspace = if connector_id_for_session == "telegram"
+            || connector_id_for_session == "discord"
+            || connector_id_for_session == "whatsapp"
+        {
+            if let Some(session_peer) = session_peer.as_deref() {
+                match resolve_remote_workspace(
+                    ctx,
+                    airlock.as_ref(),
+                    command_for_execution,
+                    &workspace_id,
+                    &connector_id_for_session,
+                    session_peer,
+                    requested_remote_workspace.as_deref(),
+                )
+                .await
+                {
+                    Ok(resolution) => resolution,
+                    Err(error) => {
+                        return CommandResult {
+                            success: false,
+                            output: None,
+                            error: Some(error),
+                            exit_code: Some(1),
+                        };
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let runtime_workspace_id = remote_workspace
+            .as_ref()
+            .map(|value| value.workspace_id.clone())
+            .unwrap_or_else(|| workspace_id.clone());
+
         // Create memory for this workspace
         let vault = ctx.memory_manager.get_vault().await;
         let memory = Arc::new(
             AgentMemory::new(
-                &workspace_id,
+                &runtime_workspace_id,
                 ctx.app_data_dir.clone(),
                 ctx.memory_manager.clone(),
                 Some(ctx.router.clone()),
@@ -389,12 +605,14 @@ pub(crate) async fn process_agent_run(
 
         let options = RuntimeOptions {
             model: Some(model),
-            workspace_id: workspace_id.clone(),
+            workspace_id: runtime_workspace_id.clone(),
             // Cloud commands often require several think/act cycles.
             // Keep a bounded ceiling but avoid premature termination.
             max_steps: Some(max_steps),
             // Resolve allowed_paths: payload > spec airlock > None
-            allowed_paths: if !command.payload.allowed_paths.is_empty() {
+            allowed_paths: if let Some(remote_workspace) = remote_workspace.as_ref() {
+                Some(vec![remote_workspace.canonical_path.clone()])
+            } else if !command.payload.allowed_paths.is_empty() {
                 Some(command_for_execution.payload.allowed_paths.clone())
             } else {
                 None // will be resolved after spec is loaded
@@ -456,7 +674,7 @@ TOOL RELIABILITY RULES (MANDATORY):
 - If a tool fails or is blocked, report the exact failure to the user.
 - Do not invent file hashes, scan results, or command output after a tool failure.
 - If blocked, use another permitted tool or ask the user for data.",
-                workspace_id
+                runtime_workspace_id
             )
         });
 
@@ -524,7 +742,7 @@ GUIDELINES:
             let effective_policy = crate::services::LocalAgentSecurityService::resolve(
                 &workspace_manager,
                 &settings,
-                &workspace_id,
+                &runtime_workspace_id,
                 Some(&spec),
             );
 
@@ -557,7 +775,7 @@ GUIDELINES:
         let (session_chat_id, session_run_id) = session_coordinator
             .start_remote_session(
                 incoming_chat_id.clone(),
-                &workspace_id,
+                &runtime_workspace_id,
                 prompt,
                 &connector_id_for_session,
                 session_peer.as_deref().unwrap_or("unknown"),
@@ -724,6 +942,14 @@ GUIDELINES:
                 let output_with_chat_id = serde_json::json!({
                     "response": response,
                     "chatId": session_chat_id,
+                    "workspaceId": runtime_workspace_id,
+                    "workspaceName": remote_workspace.as_ref().map(|value| value.display_name.clone()),
+                    "bootstrap": remote_workspace.as_ref().map(|value| serde_json::json!({
+                        "requestedPath": requested_remote_workspace,
+                        "canonicalPath": value.canonical_path,
+                        "status": "active",
+                        "desktopChatId": session_chat_id,
+                    })),
                 })
                 .to_string();
                 CommandResult {

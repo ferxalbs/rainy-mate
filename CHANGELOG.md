@@ -5,6 +5,26 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-29 - PROJECT KINGFALL PHASE 3E: TELEGRAM WORKSPACE BRIDGE
+
+### Added
+
+- **Telegram remote workspace bridge for the default agent** — Telegram-originated default-agent runs can now acquire a user-supplied directory with explicit L2 Airlock approval, import that folder into MaTE automatically, bind the run into a visible desktop chat, and stream live progress there before returning the final result to Telegram:
+  - `src-tauri/src/services/remote_workspace_grants.rs` — new session-scoped remote path grant store for connector/peer-bound workspace access; grants are intentionally cleared on desktop restart
+  - `src-tauri/src/services/command_poller_agent.rs` — remote `agent.run` bootstrap now resolves Telegram/remote workspace paths, requests dangerous-level approval before path-sensitive work, auto-imports approved folders into the sidebar, and promotes the approved canonical path to the runtime workspace/chat scope
+  - `src-tauri/src/services/session_coordinator.rs` — remote session lifecycle events now emit workspace path/binding metadata so the frontend can open the correct chat thread directly
+  - `src/App.tsx`, `src/hooks/useChatSessions.ts`, `src/hooks/useAgentChat.ts`, `src/components/agent-chat/AgentChatPanel.tsx`, `src/services/tauri.ts` — remote session binding now imports/selects the approved folder, focuses the matching chat, and renders live `agent://event` streaming for Telegram-originated runs in that visible desktop thread
+
+### Changed
+
+- **Remote directory authorization is now constrained to the default Telegram bridge, not globally widened** — approved remote path access is session-scoped for the default agent and expires when the desktop process ends; agents with explicit directory configuration continue to rely on their own declared workspace/airlock scopes without behavior changes
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `cd src-tauri && cargo test` → 223 passed, 0 failed
+- `pnpm exec tsc --noEmit` → pass
+
 ## [Unreleased] - 2026-03-29 - PROJECT KINGFALL PHASE 3D: GENERATED ARTIFACT BADGES + NATIVE OPEN
 
 ### Added

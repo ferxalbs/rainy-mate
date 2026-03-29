@@ -7,6 +7,7 @@ pub enum ToolSkill {
     Shell,
     Web,
     Memory,
+    RemoteSession,
     /// IRONMILL — document generation and reading (KINGFALL Phase 1)
     Documents,
 }
@@ -19,6 +20,7 @@ impl ToolSkill {
             Self::Shell => "shell",
             Self::Web => "web",
             Self::Memory => "memory",
+            Self::RemoteSession => "remote_session",
             Self::Documents => "documents",
         }
     }
@@ -85,6 +87,10 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
         }
 
         // Level 2: destructive or external command execution
+        "remote_workspace_access" => ToolPolicy {
+            skill: ToolSkill::RemoteSession,
+            airlock_level: AirlockLevel::Dangerous,
+        },
         "execute_command" => ToolPolicy {
             skill: ToolSkill::Shell,
             airlock_level: AirlockLevel::Dangerous,

@@ -37,6 +37,7 @@ struct ActiveSession {
 pub struct ActiveSessionInfo {
     pub chat_id: String,
     pub run_id: String,
+    pub workspace_id: String,
     pub source: String,
     pub connector_id: Option<String>,
     pub elapsed_secs: u64,
@@ -117,8 +118,11 @@ impl SessionCoordinator {
                 "chatId": chat_id,
                 "runId": run_id,
                 "workspaceId": workspace_id,
+                "workspacePath": workspace_id,
                 "source": "remote",
                 "connectorId": connector_id,
+                "sessionPeer": session_peer,
+                "autoImportWorkspace": true,
             }),
         );
 
@@ -170,8 +174,11 @@ impl SessionCoordinator {
                 "chatId": chat_id,
                 "runId": run_id,
                 "workspaceId": workspace_id,
+                "workspacePath": workspace_id,
                 "source": "native_modal",
                 "connectorId": serde_json::Value::Null,
+                "sessionPeer": serde_json::Value::Null,
+                "autoImportWorkspace": false,
             }),
         );
 
@@ -230,6 +237,8 @@ impl SessionCoordinator {
                 "chatId": chat_id,
                 "runId": run_id,
                 "workspaceId": workspace_id,
+                "workspacePath": workspace_id,
+                "source": "remote",
             }),
         );
 
@@ -275,6 +284,8 @@ impl SessionCoordinator {
                 "chatId": chat_id,
                 "runId": run_id,
                 "workspaceId": workspace_id,
+                "workspacePath": workspace_id,
+                "source": "remote",
             }),
         );
     }
@@ -300,6 +311,7 @@ impl SessionCoordinator {
                 ActiveSessionInfo {
                     chat_id: entry.key().clone(),
                     run_id: entry.value().run_id.clone(),
+                    workspace_id: entry.value().workspace_id.clone(),
                     source,
                     connector_id,
                     elapsed_secs: entry.value().started_at.elapsed().as_secs(),

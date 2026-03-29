@@ -2494,6 +2494,28 @@ export interface ChatSession {
   last_message_at: string | null;
 }
 
+export interface RemoteSessionBinding {
+  workspaceId: string;
+  workspacePath?: string;
+  workspaceName?: string;
+  chatId?: string;
+  runId?: string;
+  source?: "local" | "remote" | "native_modal" | string;
+  connectorId?: string | null;
+  sessionPeer?: string | null;
+  autoImportWorkspace?: boolean;
+}
+
+export interface RemoteSessionStartedEvent extends RemoteSessionBinding {
+  chatId: string;
+  runId: string;
+}
+
+export interface RemoteSessionFinishedEvent extends RemoteSessionBinding {
+  chatId: string;
+  runId?: string;
+}
+
 export interface EnsureChatTitleResult {
   chat: ChatSession;
   status: "ready" | "generated" | "fallback";

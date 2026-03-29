@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import type { ChatSession } from "../services/tauri";
+import type {
+  ChatSession,
+  RemoteSessionFinishedEvent,
+  RemoteSessionStartedEvent,
+} from "../services/tauri";
 import * as tauri from "../services/tauri";
 
 interface UseChatSessionsOptions {
@@ -92,18 +96,21 @@ export function useChatSessions({
     let cancelled = false;
     const unlisteners: Array<() => void> = [];
 
-    void listen<{ chatId: string; workspaceId: string }>("session://started", (event) => {
+    void listen<RemoteSessionStartedEvent>("session://started", (event) => {
       if (cancelled) return;
-      const { chatId, workspaceId } = event.payload;
+      const { chatId } = event.payload;
+      const workspaceId = event.payload.workspacePath || event.payload.workspaceId;
+      if (!workspaceId) return;
       setActiveRunChatIds((prev) => new Set([...prev, chatId]));
       void refreshWorkspaceSessions(workspaceId);
     }).then((fn) => {
       if (cancelled) fn(); else unlisteners.push(fn);
     });
 
-    void listen<{ chatId: string; workspaceId?: string }>("session://finished", (event) => {
+    void listen<RemoteSessionFinishedEvent>("session://finished", (event) => {
       if (cancelled) return;
-      const { chatId, workspaceId } = event.payload;
+      const { chatId } = event.payload;
+      const workspaceId = event.payload.workspacePath || event.payload.workspaceId;
       setActiveRunChatIds((prev) => {
         const next = new Set(prev);
         next.delete(chatId);

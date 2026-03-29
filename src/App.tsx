@@ -20,6 +20,11 @@ import * as tauri from "./services/tauri";
 import { useCloudEvents } from "./hooks/useCloudEvents";
 import { Button } from "./components/ui/button";
 
+function deriveFolderNameFromPath(path: string): string {
+  const segments = path.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] || path;
+}
+
 function App() {
   const { refreshProviders } = useAIProvider();
   useCloudEvents();
@@ -48,6 +53,7 @@ function App() {
   const [agentBuilderInitialSpec, setAgentBuilderInitialSpec] = useState<
     AgentSpec | undefined
   >(undefined);
+  const [remoteSessionBinding, setRemoteSessionBinding] = useState<tauri.RemoteSessionBinding | null>(null);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -129,6 +135,26 @@ function App() {
     switchToChat(chatId);
   }, [activeFolder?.id, handleFolderSelect, switchToChat]);
 
+  const ensureImportedFolder = useCallback(
+    async (workspacePath: string, workspaceName?: string): Promise<Folder> => {
+      const existing = folders.find((folder) => folder.path === workspacePath);
+      if (existing) return existing;
+
+      const imported = await tauri.addUserFolder(
+        workspacePath,
+        workspaceName || deriveFolderNameFromPath(workspacePath),
+      );
+      void refreshFolders();
+      return {
+        id: imported.id,
+        path: imported.path,
+        name: imported.name,
+        accessType: imported.accessType,
+      };
+    },
+    [folders, refreshFolders],
+  );
+
   const handleCreateNewChat = useCallback(async () => {
     const workspaceId = activeFolder?.path || "default";
     const chat = await createNewChat(workspaceId);
@@ -177,6 +203,77 @@ function App() {
       unlisten?.();
     };
   }, [folders, handleSelectChatForFolder, refreshWorkspaceSessions, switchToChat]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let startedUnlisten: (() => void) | null = null;
+    let finishedUnlisten: (() => void) | null = null;
+
+    void listen<tauri.RemoteSessionStartedEvent>("session://started", async (event) => {
+      if (cancelled) return;
+      const payload = event.payload;
+      if (payload.source !== "remote") return;
+      const workspacePath = payload.workspacePath || payload.workspaceId;
+      if (!workspacePath) return;
+
+      setActiveSection("agent-chat");
+      void ensureImportedFolder(workspacePath, payload.workspaceName)
+        .then(async (folder) => {
+          if (cancelled) return;
+
+          setRemoteSessionBinding({
+            ...payload,
+            workspaceId: payload.workspaceId || workspacePath,
+            workspacePath,
+            workspaceName: payload.workspaceName || folder.name,
+          });
+
+          await handleSelectChatForFolder(folder, payload.chatId);
+        })
+        .catch((error) => {
+          console.error("Failed to bind remote session:", error);
+        });
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        startedUnlisten = fn;
+      }
+    });
+
+    void listen<tauri.RemoteSessionFinishedEvent>("session://finished", async (event) => {
+      if (cancelled) return;
+      const payload = event.payload;
+      if (payload.source !== "remote") return;
+      const finishedWorkspacePath = payload.workspacePath || payload.workspaceId;
+      if (!finishedWorkspacePath) return;
+
+      setRemoteSessionBinding((current) => {
+        if (!current) return null;
+        const matchesRun = payload.runId && current.runId === payload.runId;
+        const matchesChat = current.chatId && current.chatId === payload.chatId;
+        const matchesWorkspace =
+          current.workspacePath === finishedWorkspacePath ||
+          current.workspaceId === payload.workspaceId;
+        if (matchesRun || (matchesChat && matchesWorkspace)) {
+          return null;
+        }
+        return current;
+      });
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        finishedUnlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      startedUnlisten?.();
+      finishedUnlisten?.();
+    };
+  }, [ensureImportedFolder, handleSelectChatForFolder]);
 
   return (
     <>
@@ -305,7 +402,7 @@ function App() {
           {activeSection === "agent-chat" && (
             <div className="flex-1 h-full min-h-0">
               {activeFolder ? (
-                <AgentChatPanel
+              <AgentChatPanel
                   key={activeChatId || activeFolder.path}
                   workspacePath={activeFolder.path}
                   folders={folders}
@@ -314,6 +411,7 @@ function App() {
                   onAddWorkspace={addFolder}
                   onOpenSettings={handleSettingsClick}
                   chatScopeId={activeChatId}
+                  remoteSessionBinding={remoteSessionBinding}
                   onNewChat={handleCreateNewChat}
                   onRefreshSessions={async () => {
                     await refreshWorkspaceSessions(activeFolder?.path || "default");

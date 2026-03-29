@@ -110,6 +110,12 @@ impl FolderManager {
         folders.iter().find(|f| f.id == id).cloned()
     }
 
+    /// Get a folder by canonical path
+    pub async fn get_folder_by_path(&self, path: &str) -> Option<UserFolder> {
+        let folders = self.folders.read().await;
+        folders.iter().find(|f| f.path == path).cloned()
+    }
+
     /// Update last accessed timestamp for a folder
     pub async fn update_last_accessed(&self, id: &str) -> Result<(), String> {
         {
@@ -118,6 +124,19 @@ impl FolderManager {
                 folder.last_accessed = Utc::now();
             } else {
                 return Err(format!("Folder not found: {}", id));
+            }
+        }
+        self.persist().await?;
+        Ok(())
+    }
+
+    pub async fn update_last_accessed_by_path(&self, path: &str) -> Result<(), String> {
+        {
+            let mut folders = self.folders.write().await;
+            if let Some(folder) = folders.iter_mut().find(|f| f.path == path) {
+                folder.last_accessed = Utc::now();
+            } else {
+                return Err(format!("Folder not found for path: {}", path));
             }
         }
         self.persist().await?;
