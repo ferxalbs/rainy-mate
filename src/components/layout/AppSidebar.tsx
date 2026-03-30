@@ -307,7 +307,7 @@ export function AppSidebar({
 
             <NavItem
               id="neural-link"
-              label="Agents ATM"
+              label="Agent Bridge"
               icon={Clock}
               isActive={activeSection === "neural-link"}
               isCollapsed={isCollapsed}

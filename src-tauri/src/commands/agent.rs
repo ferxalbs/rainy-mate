@@ -17,11 +17,11 @@ use crate::commands::ai_providers::ProviderRegistryState;
 use crate::commands::airlock::AirlockServiceState;
 use crate::commands::memory::MemoryManagerState;
 use crate::commands::router::IntelligentRouterState;
+use crate::services::agent_kill_switch::AgentKillSwitch;
+use crate::services::agent_run_control::{AgentRunControl, CancelRunResult};
 use crate::services::chat_artifacts::{
     artifact_from_tool_result, push_unique_artifact, ChatArtifact,
 };
-use crate::services::agent_kill_switch::AgentKillSwitch;
-use crate::services::agent_run_control::{AgentRunControl, CancelRunResult};
 use crate::services::{KeychainAccessService, PromptSkillDiscoveryService, SkillExecutor};
 use chrono::Utc;
 use regex::Regex;
@@ -484,7 +484,8 @@ async fn generate_chat_title(
     seed_prompt: &str,
     assistant_response: Option<&str>,
 ) -> Result<String, String> {
-    ensure_provider_ready_for_model(CHAT_TITLE_MODEL_ID, provider_registry, router, keychain).await?;
+    ensure_provider_ready_for_model(CHAT_TITLE_MODEL_ID, provider_registry, router, keychain)
+        .await?;
 
     let response_excerpt = assistant_response
         .map(|value| truncate_text(value, 600))
@@ -775,8 +776,8 @@ async fn ensure_provider_ready_for_model(
         let mut api_key = None;
         for alias in key_aliases {
             let candidate = keychain.get(alias).await.map_err(|e| e.to_string())?;
-            if let Some(key) =
-                candidate.filter(|key| provider_factory_kind != "rainy" || is_valid_rainy_api_key(key))
+            if let Some(key) = candidate
+                .filter(|key| provider_factory_kind != "rainy" || is_valid_rainy_api_key(key))
             {
                 api_key = Some(key);
                 break;
@@ -1172,8 +1173,8 @@ pub async fn run_agent_workflow_internal(
         )
     };
 
-    let processed_attachments = attachments
-        .map(|inputs| crate::services::attachment::process_attachments(inputs));
+    let processed_attachments =
+        attachments.map(|inputs| crate::services::attachment::process_attachments(inputs));
 
     let options = RuntimeOptions {
         model: Some(selected_model_id),
@@ -1194,6 +1195,22 @@ pub async fn run_agent_workflow_internal(
         connector_id: None,
         user_id: None,
         attachments: processed_attachments,
+        workspace_memory_context: None,
+        workspace_memory_root: None,
+        workspace_memory_enabled: false,
+    };
+
+    let workspace_memory_bootstrap = crate::services::WorkspaceMemoryFiles::bootstrap(
+        &workspace_path,
+        options.allowed_paths.as_deref(),
+    )
+    .await?;
+
+    let options = RuntimeOptions {
+        workspace_memory_context: workspace_memory_bootstrap.context_block.clone(),
+        workspace_memory_root: workspace_memory_bootstrap.root.clone(),
+        workspace_memory_enabled: workspace_memory_bootstrap.enabled,
+        ..options
     };
 
     // Initialize Persistent Memory
@@ -1225,7 +1242,7 @@ pub async fn run_agent_workflow_internal(
 
     let runtime = AgentRuntime::new(
         spec,
-        options,
+        options.clone(),
         router.clone(),
         skills.clone(),
         memory,
@@ -1278,6 +1295,9 @@ pub async fn run_agent_workflow_internal(
             "persisted_long_chat",
             "unavailable",
             crate::services::memory_vault::types::EMBEDDING_MODEL,
+            "local",
+            options.workspace_memory_enabled,
+            options.workspace_memory_root.as_deref(),
         )
         .await;
 
@@ -1285,6 +1305,8 @@ pub async fn run_agent_workflow_internal(
     let agent_manager_clone = agent_manager.clone();
     let chat_id_for_events = chat_id.clone();
     let run_id_for_events = run_id.clone();
+    let telemetry_memory_root = options.workspace_memory_root.clone();
+    let telemetry_memory_enabled = options.workspace_memory_enabled;
     let frontend_event_projector = Arc::new(StdMutex::new(FrontendEventProjector::default()));
     let tool_call_index = Arc::new(StdMutex::new(HashMap::<String, (String, String)>::new()));
     let collected_artifacts = Arc::new(StdMutex::new(Vec::<ChatArtifact>::new()));
@@ -1317,10 +1339,7 @@ pub async fn run_agent_workflow_internal(
                             .expect("tool call index poisoned")
                             .insert(
                                 call.id.clone(),
-                                (
-                                    call.function.name.clone(),
-                                    call.function.arguments.clone(),
-                                ),
+                                (call.function.name.clone(), call.function.arguments.clone()),
                             );
                     }
                     AgentEvent::ToolResult { id, result } => {
@@ -1378,6 +1397,8 @@ pub async fn run_agent_workflow_internal(
                                 .to_string();
                             let manager = agent_manager_clone.clone();
                             let chat_id = chat_id_for_events.clone();
+                            let workspace_memory_root = telemetry_memory_root.clone();
+                            let workspace_memory_enabled = telemetry_memory_enabled;
                             tauri::async_runtime::spawn(async move {
                                 let _ = manager
                                     .upsert_chat_runtime_telemetry(
@@ -1385,6 +1406,9 @@ pub async fn run_agent_workflow_internal(
                                         &history_source,
                                         &retrieval_mode,
                                         &embedding_profile,
+                                        "local",
+                                        workspace_memory_enabled,
+                                        workspace_memory_root.as_deref(),
                                     )
                                     .await;
                             });
@@ -1418,11 +1442,20 @@ pub async fn run_agent_workflow_internal(
         Err(error) => {
             match invocation_source {
                 WorkflowInvocationSource::Local => session_coordinator.unregister(&chat_id),
-                WorkflowInvocationSource::NativeModal => session_coordinator.abort_session(&chat_id),
+                WorkflowInvocationSource::NativeModal => {
+                    session_coordinator.abort_session(&chat_id)
+                }
             }
             return Err(error);
         }
     };
+
+    let _ = crate::services::WorkspaceMemoryFiles::update_workstate(
+        options.workspace_memory_root.as_deref(),
+        &prompt,
+        &response,
+    )
+    .await;
 
     match invocation_source {
         WorkflowInvocationSource::Local => {

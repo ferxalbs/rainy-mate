@@ -61,7 +61,7 @@ export function AgentList({ onCreateClick }: AgentListProps) {
       ) {
         setAuthStatus("missing");
         setAgents([]);
-        toast.error("ATM admin key missing. Reconnect Neural Link.");
+        toast.error("Bridge admin key missing. Reconnect Neural Link.");
       } else {
         toast.error("Failed to load agents");
       }
@@ -104,7 +104,7 @@ export function AgentList({ onCreateClick }: AgentListProps) {
       {authStatus === "missing" ? (
         <Card className="p-8 text-center text-muted-foreground border-dashed">
           <Bot className="size-10 mx-auto mb-3 opacity-20" />
-          <p>ATM admin key not available.</p>
+          <p>Bridge admin key not available.</p>
           <p className="text-sm mt-1">
             Reconnect in Neural Link to restore access.
           </p>

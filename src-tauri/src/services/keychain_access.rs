@@ -187,7 +187,10 @@ impl KeychainAccessService {
         &self,
         keys: &[&str],
     ) -> KeychainOpResult<HashMap<String, Option<String>>> {
-        let owned = keys.iter().map(|key| (*key).to_string()).collect::<Vec<_>>();
+        let owned = keys
+            .iter()
+            .map(|key| (*key).to_string())
+            .collect::<Vec<_>>();
         let values = self
             .with_retry("get_many", move || {
                 let owned = owned.clone();
@@ -390,7 +393,10 @@ mod tests {
 
         let _ = service.delete(key).await;
         service.set(key, "value-1").await.expect("set");
-        assert_eq!(service.get(key).await.expect("get"), Some("value-1".to_string()));
+        assert_eq!(
+            service.get(key).await.expect("get"),
+            Some("value-1".to_string())
+        );
 
         service.delete(key).await.expect("delete");
         assert_eq!(service.get(key).await.expect("get after delete"), None);
@@ -414,7 +420,11 @@ mod tests {
         let snapshot = service.load_startup_snapshot().await.expect("snapshot");
         assert_eq!(snapshot.atm_admin_key, Some("admin-secret".to_string()));
         assert_eq!(
-            snapshot.provider_keys.get("rainy_api").cloned().unwrap_or(None),
+            snapshot
+                .provider_keys
+                .get("rainy_api")
+                .cloned()
+                .unwrap_or(None),
             Some("ra-test".to_string())
         );
     }

@@ -5,10 +5,10 @@ use crate::models::neural::{
 use crate::services::atm_auth::{
     clear_owner_auth_bundle, load_owner_auth_bundle, save_owner_auth_bundle, ATMOwnerAuthBundle,
 };
-use crate::services::KeychainAccessService;
 use crate::services::manifest_signing::sign_skills_manifest;
 use crate::services::security::NodeAuthenticator;
 use crate::services::tool_manifest::build_skill_manifest_from_runtime;
+use crate::services::KeychainAccessService;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -174,7 +174,11 @@ impl NeuralService {
         };
 
         // Keychain I/O outside the lock
-        if let Err(e) = self.keychain.set("neural_workspace_id", &workspace_id).await {
+        if let Err(e) = self
+            .keychain
+            .set("neural_workspace_id", &workspace_id)
+            .await
+        {
             eprintln!("Failed to persist neural workspace id: {}", e);
         }
 
@@ -214,11 +218,14 @@ impl NeuralService {
             .set("neural_user_api_key", &user_api_key)
             .await
             .map_err(|e| e.to_string())?;
-        save_owner_auth_bundle(&self.keychain, &ATMOwnerAuthBundle {
-            platform_key,
-            user_api_key,
-            workspace_id,
-        })
+        save_owner_auth_bundle(
+            &self.keychain,
+            &ATMOwnerAuthBundle {
+                platform_key,
+                user_api_key,
+                workspace_id,
+            },
+        )
         .await?;
 
         Ok(())

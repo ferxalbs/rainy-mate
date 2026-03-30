@@ -2,7 +2,6 @@
 // Business logic layer
 
 pub mod agent_kill_switch;
-pub mod attachment;
 pub mod agent_library;
 pub mod agent_run_control;
 pub mod airlock;
@@ -10,6 +9,7 @@ pub mod airlock_messages;
 pub mod app_identity;
 pub mod atm_auth;
 pub mod atm_client;
+pub mod attachment;
 pub mod audit_emitter;
 pub mod browser_controller;
 pub mod chat_artifacts;
@@ -51,6 +51,7 @@ pub mod third_party_skill_registry;
 pub mod tool_manifest;
 pub mod tool_policy;
 pub mod wasm_sandbox;
+pub mod workspace_memory_files;
 
 pub mod workflow_recorder;
 pub mod workspace;
@@ -96,3 +97,4 @@ pub use workspace::{
     ConfigFormat, PermissionOverride, Workspace, WorkspaceAnalytics, WorkspaceManager,
     WorkspacePermissions, WorkspaceTemplate,
 };
+pub use workspace_memory_files::WorkspaceMemoryFiles;

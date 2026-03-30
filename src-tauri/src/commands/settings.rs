@@ -245,7 +245,11 @@ pub async fn get_system_readiness(
         .iter()
         .map(|provider| ReadinessCredential {
             provider: (*provider).to_string(),
-            configured: provider_map.get(*provider).cloned().unwrap_or(None).is_some(),
+            configured: provider_map
+                .get(*provider)
+                .cloned()
+                .unwrap_or(None)
+                .is_some(),
         })
         .collect::<Vec<_>>();
 

@@ -38,6 +38,15 @@ pub struct RuntimeOptions {
     /// Pre-processed file attachments to inject into the first user message.
     #[serde(default)]
     pub attachments: Option<Vec<crate::services::attachment::ProcessedAttachment>>,
+    /// Optional human-auditable workspace memory overlay read from flat files.
+    #[serde(default)]
+    pub workspace_memory_context: Option<String>,
+    /// Root directory where workspace memory files live.
+    #[serde(default)]
+    pub workspace_memory_root: Option<String>,
+    /// Whether workspace memory overlay is active for this run.
+    #[serde(default)]
+    pub workspace_memory_enabled: bool,
 }
 
 /// The core runtime that orchestrates the agent's thinking process
@@ -184,10 +193,7 @@ fn build_user_content(
     for att in attachments {
         match &att.content {
             AttachmentContent::ExtractedText { text } => {
-                doc_blocks.push(format!(
-                    "[Attached file: {}]\n{}",
-                    att.filename, text
-                ));
+                doc_blocks.push(format!("[Attached file: {}]\n{}", att.filename, text));
             }
             AttachmentContent::UnsupportedBinary { summary } => {
                 doc_blocks.push(format!("[Attached file: {}] {}", att.filename, summary));
@@ -527,12 +533,13 @@ Memory:
 - strategy: {}
 - retention_days: {}
 - max_tokens: {}
+ - workspace_memory_overlay: {}
 
 Rules:
 1. Use tools and skills only within declared capabilities and workspace scope.
 2. Never fabricate file results.
 3. If a tool fails, explain and try the safest fallback.
-4. Never use workspace ID as a filesystem path. Only use explicit allowed filesystem scope paths.{}",
+4. Never use workspace ID as a filesystem path. Only use explicit allowed filesystem scope paths.{}{}",
             spec.soul.name,
             spec.soul.description,
             spec.soul.personality,
@@ -548,6 +555,15 @@ Rules:
             spec.memory_config.strategy,
             spec.memory_config.effective_retention_days(),
             spec.memory_config.effective_max_tokens(),
+            if self.options.workspace_memory_enabled {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            self.options
+                .workspace_memory_context
+                .as_deref()
+                .unwrap_or_default(),
             Self::runtime_truthfulness_appendix()
         )
     }

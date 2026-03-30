@@ -15,9 +15,9 @@ use crate::db::Database;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
     ATMClient, AgentLibraryService, AgentRunControl, BrowserController, CommandPoller,
-    DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService, LLMClient,
-    KeychainAccessService, ManagedResearchService, MemoryManager, NeuralService, NodeAuthenticator,
-    QuickDelegateModalService, SettingsManager, SkillExecutor, SocketClient,
+    DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService,
+    KeychainAccessService, LLMClient, ManagedResearchService, MemoryManager, NeuralService,
+    NodeAuthenticator, QuickDelegateModalService, SettingsManager, SkillExecutor, SocketClient,
     WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
@@ -205,7 +205,9 @@ pub fn run() {
                 .app_data_dir()
                 .map_err(|e| startup_error(format!("Failed to get app data dir: {}", e)))?;
 
-            app.manage(Arc::new(QuickDelegateModalService::new(app.handle().clone())));
+            app.manage(Arc::new(QuickDelegateModalService::new(
+                app.handle().clone(),
+            )));
 
             tauri::async_runtime::block_on(async {
                 mcp_service.set_app_handle(app.handle().clone()).await;
@@ -272,7 +274,12 @@ pub fn run() {
                     }
                 }
 
-                if let Some(api_key) = snapshot.provider_keys.get("rainy_api").cloned().unwrap_or(None) {
+                if let Some(api_key) = snapshot
+                    .provider_keys
+                    .get("rainy_api")
+                    .cloned()
+                    .unwrap_or(None)
+                {
                     let provider_id = ProviderId::new("rainy_api");
                     if registry.0.get(&provider_id).is_err() {
                         let config = ProviderConfig {
@@ -300,7 +307,12 @@ pub fn run() {
                     }
                 }
 
-                if let Some(api_key) = snapshot.provider_keys.get("gemini").cloned().unwrap_or(None) {
+                if let Some(api_key) = snapshot
+                    .provider_keys
+                    .get("gemini")
+                    .cloned()
+                    .unwrap_or(None)
+                {
                     let provider_id = ProviderId::new("gemini_byok");
                     if registry.0.get(&provider_id).is_err() {
                         let config = ProviderConfig {
@@ -363,10 +375,9 @@ pub fn run() {
             let airlock_message_store =
                 Arc::new(crate::services::AirlockMessageStore::new(db.pool.clone()));
             tauri::async_runtime::block_on(async {
-                airlock_message_store
-                    .init()
-                    .await
-                    .map_err(|e| startup_error(format!("Failed to initialize Airlock message store: {}", e)))
+                airlock_message_store.init().await.map_err(|e| {
+                    startup_error(format!("Failed to initialize Airlock message store: {}", e))
+                })
             })?;
 
             // Initialize Airlock Service with app handle + persistence
@@ -407,10 +418,12 @@ pub fn run() {
             // Check if we have credentials, if so start polling
             let poller = (*app.state::<Arc<CommandPoller>>()).clone();
             let router_for_poller = intelligent_router.clone();
-            let app_data_for_poller = app
-                .path()
-                .app_data_dir()
-                .map_err(|e| startup_error(format!("Failed to get app data dir for CommandPoller: {}", e)))?;
+            let app_data_for_poller = app.path().app_data_dir().map_err(|e| {
+                startup_error(format!(
+                    "Failed to get app data dir for CommandPoller: {}",
+                    e
+                ))
+            })?;
 
             let agent_manager_for_poller = Arc::new(agent_manager);
             let runtime_registry_for_poller = runtime_registry.clone();

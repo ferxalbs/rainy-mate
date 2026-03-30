@@ -196,7 +196,7 @@ export function AgentStorePage({
       const hasCredentials = await tauri.ensureAtmCredentialsLoaded();
       if (!hasCredentials) {
         throw new Error(
-          "Rainy-ATM is not authenticated. Configure ATM credentials first.",
+          "MaTE Bridge is not authenticated. Configure Bridge credentials first.",
         );
       }
       const result = await tauri.deployAgentSpec(draft, workspacePath);
@@ -206,8 +206,8 @@ export function AgentStorePage({
           : "";
       toast.success(
         action === "updated"
-          ? "Agent updated in Rainy-ATM"
-          : "Agent deployed to Rainy-ATM",
+          ? "Agent updated in MaTE Bridge"
+          : "Agent deployed to MaTE Bridge",
       );
     } catch (error) {
       console.error("Failed to deploy agent:", error);

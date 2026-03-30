@@ -4,7 +4,9 @@ use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::AgentRuntime;
 use crate::models::folder::FolderAccess;
-use crate::models::neural::{AirlockLevel, CommandPriority, CommandResult, CommandStatus, QueuedCommand, RainyPayload};
+use crate::models::neural::{
+    AirlockLevel, CommandPriority, CommandResult, CommandStatus, QueuedCommand, RainyPayload,
+};
 use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::airlock::AirlockService;
 use crate::services::audit_emitter::{AuditEmitter, FleetAuditEvent};
@@ -300,7 +302,9 @@ async fn ensure_folder_visible(
     {
         Ok(_) => Ok(()),
         Err(error) if error.contains("already added") => {
-            folder_manager.update_last_accessed_by_path(canonical_path).await
+            folder_manager
+                .update_last_accessed_by_path(canonical_path)
+                .await
         }
         Err(error) => Err(error),
     }
@@ -654,6 +658,9 @@ pub(crate) async fn process_agent_run(
                         .collect::<Vec<_>>()
                 })
             },
+            workspace_memory_context: None,
+            workspace_memory_root: None,
+            workspace_memory_enabled: false,
         };
 
         // Create config
@@ -758,10 +765,23 @@ GUIDELINES:
             options
         };
 
+        let workspace_memory_bootstrap = crate::services::WorkspaceMemoryFiles::bootstrap(
+            &final_options.workspace_id,
+            final_options.allowed_paths.as_deref(),
+        )
+        .await
+        .unwrap_or_default();
+        let final_options = RuntimeOptions {
+            workspace_memory_context: workspace_memory_bootstrap.context_block.clone(),
+            workspace_memory_root: workspace_memory_bootstrap.root.clone(),
+            workspace_memory_enabled: workspace_memory_bootstrap.enabled,
+            ..final_options
+        };
+
         let airlock = airlock_service.read().await.clone();
         let runtime = AgentRuntime::new(
             spec,
-            final_options,
+            final_options.clone(),
             ctx.router.clone(),
             skill_executor,
             memory,
@@ -792,6 +812,18 @@ GUIDELINES:
                     uuid::Uuid::new_v4().to_string(),
                 )
             });
+        let _ = ctx
+            .agent_manager
+            .upsert_chat_runtime_telemetry(
+                &session_chat_id,
+                "persisted_long_chat",
+                "unavailable",
+                crate::services::memory_vault::types::EMBEDDING_MODEL,
+                "local",
+                final_options.workspace_memory_enabled,
+                final_options.workspace_memory_root.as_deref(),
+            )
+            .await;
         let session_coordinator_for_events = session_coordinator.clone();
         let session_run_id_for_events = session_run_id.clone();
 
@@ -938,6 +970,12 @@ GUIDELINES:
                 let _ = session_coordinator
                     .finish_remote_session(&session_chat_id, &response, prompt)
                     .await;
+                let _ = crate::services::WorkspaceMemoryFiles::update_workstate(
+                    final_options.workspace_memory_root.as_deref(),
+                    prompt,
+                    &response,
+                )
+                .await;
                 // Include chatId in output for ATM continuity
                 let output_with_chat_id = serde_json::json!({
                     "response": response,

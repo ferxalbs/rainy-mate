@@ -199,6 +199,9 @@ export interface AgentMessage {
     historySource?: string;
     retrievalMode?: string;
     embeddingProfile?: string;
+    executionMode?: string;
+    workspaceMemoryEnabled?: boolean;
+    workspaceMemoryRoot?: string;
     compressionApplied?: boolean;
     compressionTriggerTokens?: number;
   };

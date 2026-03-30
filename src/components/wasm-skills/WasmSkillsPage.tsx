@@ -346,11 +346,11 @@ function InstallAtmPanel({ onInstalled }: InstallAtmPanelProps) {
         skillId: skillId.trim(),
         platformKey: "",
       });
-      toast.success(`Installed "${rec.name} v${rec.version}" from ATM`);
+      toast.success(`Installed "${rec.name} v${rec.version}" from MaTE Bridge`);
       setSkillId("");
       onInstalled();
     } catch (err: any) {
-      toast.error(err?.message ?? "ATM install failed");
+      toast.error(err?.message ?? "Bridge install failed");
     } finally {
       setBusy(false);
     }
@@ -360,7 +360,7 @@ function InstallAtmPanel({ onInstalled }: InstallAtmPanelProps) {
     <div className="rounded-2xl border border-border/30 bg-card/20 backdrop-blur-sm p-5 space-y-4">
       <div className="flex items-center gap-2 mb-1">
         <ShieldCheck className="size-4 text-primary" />
-        <SectionLabel>Install from ATM</SectionLabel>
+        <SectionLabel>Install from Bridge</SectionLabel>
       </div>
 
       <input
@@ -386,7 +386,7 @@ function InstallAtmPanel({ onInstalled }: InstallAtmPanelProps) {
         ) : (
           <ShieldCheck className="size-4" />
         )}
-        {busy ? "Installing…" : "Install From ATM"}
+        {busy ? "Installing…" : "Install From Bridge"}
       </Button>
     </div>
   );

@@ -68,6 +68,9 @@ pub struct ChatRuntimeTelemetryDto {
     pub history_source: String,
     pub retrieval_mode: String,
     pub embedding_profile: String,
+    pub execution_mode: String,
+    pub workspace_memory_enabled: bool,
+    pub workspace_memory_root: Option<String>,
     pub updated_at: String,
 }
 
@@ -219,16 +222,18 @@ impl AgentManager {
         let mut messages: Vec<ChatHistoryMessageDto> = rows
             .into_iter()
             .map(
-                |(cursor_rowid, id, chat_id, role, content, artifacts_json, created_at)| ChatHistoryMessageDto {
-                    id,
-                    chat_scope_id: chat_id,
-                    role,
-                    content,
-                    artifacts: artifacts_json
-                        .as_deref()
-                        .and_then(|value| serde_json::from_str::<Vec<ChatArtifact>>(value).ok()),
-                    created_at,
-                    cursor_rowid,
+                |(cursor_rowid, id, chat_id, role, content, artifacts_json, created_at)| {
+                    ChatHistoryMessageDto {
+                        id,
+                        chat_scope_id: chat_id,
+                        role,
+                        content,
+                        artifacts: artifacts_json.as_deref().and_then(|value| {
+                            serde_json::from_str::<Vec<ChatArtifact>>(value).ok()
+                        }),
+                        created_at,
+                        cursor_rowid,
+                    }
                 },
             )
             .collect();
@@ -397,21 +402,30 @@ impl AgentManager {
         history_source: &str,
         retrieval_mode: &str,
         embedding_profile: &str,
+        execution_mode: &str,
+        workspace_memory_enabled: bool,
+        workspace_memory_root: Option<&str>,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO chat_runtime_telemetry
-                (chat_id, history_source, retrieval_mode, embedding_profile, updated_at)
-             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                (chat_id, history_source, retrieval_mode, embedding_profile, execution_mode, workspace_memory_enabled, workspace_memory_root, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
              ON CONFLICT(chat_id) DO UPDATE SET
                 history_source = excluded.history_source,
                 retrieval_mode = excluded.retrieval_mode,
                 embedding_profile = excluded.embedding_profile,
+                execution_mode = excluded.execution_mode,
+                workspace_memory_enabled = excluded.workspace_memory_enabled,
+                workspace_memory_root = excluded.workspace_memory_root,
                 updated_at = CURRENT_TIMESTAMP",
         )
         .bind(chat_id)
         .bind(history_source)
         .bind(retrieval_mode)
         .bind(embedding_profile)
+        .bind(execution_mode)
+        .bind(workspace_memory_enabled)
+        .bind(workspace_memory_root)
         .execute(&*self.db)
         .await?;
         Ok(())
@@ -427,6 +441,9 @@ impl AgentManager {
                 history_source,
                 retrieval_mode,
                 embedding_profile,
+                execution_mode,
+                workspace_memory_enabled,
+                workspace_memory_root,
                 updated_at
              FROM chat_runtime_telemetry
              WHERE chat_id = ?",
@@ -816,6 +833,9 @@ mod tests {
                 history_source TEXT NOT NULL,
                 retrieval_mode TEXT NOT NULL,
                 embedding_profile TEXT NOT NULL,
+                execution_mode TEXT NOT NULL DEFAULT 'local',
+                workspace_memory_enabled INTEGER NOT NULL DEFAULT 0,
+                workspace_memory_root TEXT,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )",
         )

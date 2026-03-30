@@ -134,7 +134,10 @@ fn capability_flag_enabled(flag: Option<&CapabilityFlag>) -> bool {
 /// `model_id` is used as a last-resort heuristic when the catalog omits explicit
 /// level arrays AND profiles (e.g. the generic `deriveRainyCapabilitiesV2` fallback
 /// path sets `profiles: []` and only marks `reasoning_toggle: true`).
-fn reasoning_from_v2(v2: Option<&RainyCapabilitiesV2>, model_id: &str) -> (Vec<String>, Option<String>) {
+fn reasoning_from_v2(
+    v2: Option<&RainyCapabilitiesV2>,
+    model_id: &str,
+) -> (Vec<String>, Option<String>) {
     let reasoning = match v2.map(|v| &v.reasoning) {
         Some(r) if r.supported => r,
         _ => return (vec![], None),
@@ -160,11 +163,7 @@ fn reasoning_from_v2(v2: Option<&RainyCapabilitiesV2>, model_id: &str) -> (Vec<S
     }
     if controls.reasoning_effort == Some(true) {
         // Generic effort toggle — use standard set
-        let mut options = vec![
-            "low".to_string(),
-            "medium".to_string(),
-            "high".to_string(),
-        ];
+        let mut options = vec!["low".to_string(), "medium".to_string(), "high".to_string()];
         if has_toggle {
             options.push("none".to_string());
         }
@@ -284,7 +283,12 @@ fn dynamic_rainy_model_from_catalog(item: &ModelCatalogItem) -> UnifiedModel {
         .unwrap_or_else(|| capability_flag_enabled(caps.and_then(|c| c.reasoning.as_ref())));
 
     let has_vision = v2
-        .map(|v| v.multimodal.input.iter().any(|m| m.eq_ignore_ascii_case("image")))
+        .map(|v| {
+            v.multimodal
+                .input
+                .iter()
+                .any(|m| m.eq_ignore_ascii_case("image"))
+        })
         .unwrap_or_else(|| capability_flag_enabled(caps.and_then(|c| c.image_input.as_ref())));
 
     let multimodal_inputs = v2

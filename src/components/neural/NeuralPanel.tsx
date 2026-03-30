@@ -103,7 +103,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
         }
       } catch (error) {
         if (signal.aborted) return false;
-        console.error("Failed to verify ATM fleet readiness:", error);
+        console.error("Failed to verify Bridge fleet readiness:", error);
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -111,7 +111,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
 
     if (signal.aborted) return false;
     setNodeReady(false);
-    setNodeStatusLabel("Desktop node is still syncing with ATM.");
+    setNodeStatusLabel("Desktop node is still syncing with MaTE Bridge.");
     return false;
   };
 
@@ -123,7 +123,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       try {
         await hasAtmCredentials();
       } catch (err) {
-        console.error("Failed to check ATM admin key:", err);
+        console.error("Failed to check Bridge admin key:", err);
       }
 
       try {
@@ -140,8 +140,8 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
 
             let effectiveWorkspace: WorkspaceAuth | null = null;
 
-            // Always refresh canonical workspace identity from ATM.
-            // Workspace name defaults to "Desktop Workspace" — ATM returns the real name.
+            // Always refresh canonical workspace identity from the Bridge.
+            // Workspace name defaults to "Desktop Workspace" — the Bridge returns the real name.
             try {
               const ws = await bootstrapAtm(
                 platform,
@@ -150,7 +150,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
               );
               effectiveWorkspace = ws;
             } catch (err) {
-              console.error("Failed to restore ATM admin key:", err);
+              console.error("Failed to restore Bridge admin key:", err);
               // Do not auto-fallback to a stale local workspace id, as it can split
               // admin workspace and node workspace contexts.
             }

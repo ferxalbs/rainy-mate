@@ -62,7 +62,8 @@ fn compile_swift_bridge(module_name: &str, swift_file: &str, extra_frameworks: &
 
     fs::create_dir_all(&target_deps_dir).expect("failed to create Cargo deps dir");
     fs::create_dir_all(&target_frameworks_dir).expect("failed to create Cargo Frameworks dir");
-    fs::create_dir_all(&staged_frameworks_dir).expect("failed to create staged macOS Frameworks dir");
+    fs::create_dir_all(&staged_frameworks_dir)
+        .expect("failed to create staged macOS Frameworks dir");
     fs::copy(&dylib_path, &debug_dylib_path)
         .expect("failed to copy Swift bridge dylib to target dir");
     fs::copy(&dylib_path, &debug_deps_dylib_path)
@@ -88,8 +89,7 @@ fn compile_swift_bridge(module_name: &str, swift_file: &str, extra_frameworks: &
 
     fs::create_dir_all(&target_resources_dir).expect("failed to create Cargo Resources dir");
     fs::copy(&whale_src, &debug_whale_path).expect("failed to copy whale icon to target dir");
-    fs::copy(&whale_src, &resource_whale_path)
-        .expect("failed to copy whale icon to Resources dir");
+    fs::copy(&whale_src, &resource_whale_path).expect("failed to copy whale icon to Resources dir");
     fs::copy(&whale_src, &framework_whale_path)
         .expect("failed to copy whale icon to Frameworks dir");
 }

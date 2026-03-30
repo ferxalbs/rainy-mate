@@ -117,9 +117,7 @@ pub fn prepare_previews(paths: Vec<String>) -> Vec<AttachmentPreview> {
 }
 
 /// Fully process a list of attachments for agent injection.
-pub fn process_attachments(
-    inputs: Vec<AttachmentInput>,
-) -> Vec<ProcessedAttachment> {
+pub fn process_attachments(inputs: Vec<AttachmentInput>) -> Vec<ProcessedAttachment> {
     inputs
         .into_iter()
         .take(MAX_ATTACHMENTS)
@@ -161,8 +159,9 @@ pub fn process_cloud_attachment(input: CloudAttachmentInput) -> Option<Processed
                 }
             };
             let img = resize_if_needed(img, MAX_IMAGE_DIMENSION);
-            let data_uri = encode_image_to_data_uri(&img, &input.mime_type)
-                .unwrap_or_else(|_| format!("data:{};base64,{}", input.mime_type, input.data_base64));
+            let data_uri = encode_image_to_data_uri(&img, &input.mime_type).unwrap_or_else(|_| {
+                format!("data:{};base64,{}", input.mime_type, input.data_base64)
+            });
             let thumb = {
                 let t = img.thumbnail(THUMBNAIL_DIMENSION, THUMBNAIL_DIMENSION);
                 encode_image_to_data_uri(&t, "image/jpeg").ok()
@@ -197,9 +196,8 @@ pub fn process_cloud_attachment(input: CloudAttachmentInput) -> Option<Processed
                         truncate_text(&t, MAX_EXTRACTED_TEXT_BYTES)
                     }
                 }
-                "docx" => extract_docx_text(&bytes).unwrap_or_else(|_| {
-                    format!("[DOCX '{}' — extraction failed]", input.filename)
-                }),
+                "docx" => extract_docx_text(&bytes)
+                    .unwrap_or_else(|_| format!("[DOCX '{}' — extraction failed]", input.filename)),
                 "xlsx" | "xls" => extract_xlsx_text_from_bytes(&bytes, &input.filename),
                 _ => {
                     let t = String::from_utf8_lossy(&bytes);
@@ -219,7 +217,10 @@ pub fn process_cloud_attachment(input: CloudAttachmentInput) -> Option<Processed
             mime_type: input.mime_type,
             size_bytes: input.size_bytes,
             content: AttachmentContent::UnsupportedBinary {
-                summary: format!("Binary file '{}' ({} bytes)", input.filename, input.size_bytes),
+                summary: format!(
+                    "Binary file '{}' ({} bytes)",
+                    input.filename, input.size_bytes
+                ),
             },
             thumbnail_data_uri: None,
         }),
@@ -244,9 +245,7 @@ fn process_single(input: &AttachmentInput) -> Result<ProcessedAttachment, String
         .unwrap_or("")
         .to_lowercase();
 
-    let size_bytes = std::fs::metadata(&input.path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let size_bytes = std::fs::metadata(&input.path).map(|m| m.len()).unwrap_or(0);
 
     if size_bytes > MAX_FILE_SIZE_BYTES {
         return Err(format!(
@@ -285,8 +284,8 @@ fn process_image(
     mime_type: String,
     size_bytes: u64,
 ) -> Result<ProcessedAttachment, String> {
-    let img = image::open(&input.path)
-        .map_err(|e| format!("Cannot open image '{}': {}", filename, e))?;
+    let img =
+        image::open(&input.path).map_err(|e| format!("Cannot open image '{}': {}", filename, e))?;
 
     let img = resize_if_needed(img, MAX_IMAGE_DIMENSION);
     let data_uri = encode_image_to_data_uri(&img, &mime_type)?;
@@ -308,8 +307,8 @@ fn process_text_file(
     mime_type: String,
     size_bytes: u64,
 ) -> Result<ProcessedAttachment, String> {
-    let raw = std::fs::read(&input.path)
-        .map_err(|e| format!("Cannot read '{}': {}", filename, e))?;
+    let raw =
+        std::fs::read(&input.path).map_err(|e| format!("Cannot read '{}': {}", filename, e))?;
 
     let text = String::from_utf8_lossy(&raw);
     let truncated = truncate_text(&text, MAX_EXTRACTED_TEXT_BYTES);
@@ -328,8 +327,8 @@ fn process_pdf(
     filename: String,
     size_bytes: u64,
 ) -> Result<ProcessedAttachment, String> {
-    let bytes = std::fs::read(&input.path)
-        .map_err(|e| format!("Cannot read PDF '{}': {}", filename, e))?;
+    let bytes =
+        std::fs::read(&input.path).map_err(|e| format!("Cannot read PDF '{}': {}", filename, e))?;
 
     let text = pdf_extract::extract_text_from_mem(&bytes)
         .unwrap_or_default()
@@ -337,7 +336,10 @@ fn process_pdf(
         .to_string();
 
     let text = if text.is_empty() {
-        format!("[PDF file '{}' — text extraction yielded no content]", filename)
+        format!(
+            "[PDF file '{}' — text extraction yielded no content]",
+            filename
+        )
     } else {
         truncate_text(&text, MAX_EXTRACTED_TEXT_BYTES)
     };
@@ -360,7 +362,10 @@ fn process_docx(
         .map_err(|e| format!("Cannot read DOCX '{}': {}", filename, e))?;
 
     let text = extract_docx_text(&bytes).unwrap_or_else(|_| {
-        format!("[DOCX file '{}' — content could not be extracted]", filename)
+        format!(
+            "[DOCX file '{}' — content could not be extracted]",
+            filename
+        )
     });
 
     Ok(ProcessedAttachment {
@@ -430,8 +435,7 @@ fn generate_thumbnail_data_uri(path: &str, max_dim: u32) -> Result<String, Strin
 
 fn extract_docx_text(bytes: &[u8]) -> Result<String, String> {
     let cursor = Cursor::new(bytes);
-    let mut archive =
-        zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP open error: {}", e))?;
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP open error: {}", e))?;
 
     let mut xml_content = String::new();
     let mut file = archive
@@ -442,10 +446,7 @@ fn extract_docx_text(bytes: &[u8]) -> Result<String, String> {
 
     // Strip XML tags, keep text content
     let text = strip_xml_tags(&xml_content);
-    let cleaned: String = text
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let cleaned: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
 
     Ok(truncate_text(&cleaned, MAX_EXTRACTED_TEXT_BYTES))
 }
@@ -490,9 +491,7 @@ fn mime_from_ext(ext: &str) -> String {
         "gif" => "image/gif",
         "webp" => "image/webp",
         "pdf" => "application/pdf",
-        "docx" => {
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        }
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "xls" => "application/vnd.ms-excel",
         "txt" | "md" | "csv" | "log" => "text/plain",
@@ -505,8 +504,8 @@ fn attachment_type_from_ext(ext: &str) -> String {
     match ext {
         "jpg" | "jpeg" | "png" | "gif" | "webp" => "image",
         "pdf" | "docx" | "xlsx" | "xls" => "document",
-        "txt" | "md" | "csv" | "log" | "json" | "yaml" | "toml" | "rs" | "ts" | "js"
-        | "py" | "rb" | "go" | "java" | "c" | "cpp" | "h" => "text",
+        "txt" | "md" | "csv" | "log" | "json" | "yaml" | "toml" | "rs" | "ts" | "js" | "py"
+        | "rb" | "go" | "java" | "c" | "cpp" | "h" => "text",
         _ => "unknown",
     }
     .to_string()
@@ -627,7 +626,12 @@ mod tests {
 
     // ── process_cloud_attachment: 7-branch regression coverage ──────────────
 
-    fn make_cloud_input(filename: &str, mime_type: &str, data_base64: &str, size_bytes: u64) -> CloudAttachmentInput {
+    fn make_cloud_input(
+        filename: &str,
+        mime_type: &str,
+        data_base64: &str,
+        size_bytes: u64,
+    ) -> CloudAttachmentInput {
         CloudAttachmentInput {
             filename: filename.to_string(),
             mime_type: mime_type.to_string(),
@@ -641,34 +645,30 @@ mod tests {
     fn cloud_attachment_jpeg_returns_image_data_uri() {
         // Minimal 1×1 JPEG (valid, 107 bytes)
         let jpeg_bytes: &[u8] = &[
-            0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
-            0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43,
-            0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
-            0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D, 0x0C, 0x0B, 0x0B, 0x0C, 0x19, 0x12,
-            0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E, 0x1D, 0x1A, 0x1C, 0x1C, 0x20,
-            0x24, 0x2E, 0x27, 0x20, 0x22, 0x2C, 0x23, 0x1C, 0x1C, 0x28, 0x37, 0x29,
-            0x2C, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1F, 0x27, 0x39, 0x3D, 0x38, 0x32,
-            0x3C, 0x2E, 0x33, 0x34, 0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01,
-            0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x1F, 0x00, 0x00,
-            0x01, 0x05, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-            0x09, 0x0A, 0x0B, 0xFF, 0xC4, 0x00, 0xB5, 0x10, 0x00, 0x02, 0x01, 0x03,
-            0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00, 0x01, 0x7D,
-            0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06,
-            0x13, 0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xA1, 0x08,
-            0x23, 0x42, 0xB1, 0xC1, 0x15, 0x52, 0xD1, 0xF0, 0x24, 0x33, 0x62, 0x72,
-            0x82, 0x09, 0x0A, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x25, 0x26, 0x27, 0x28,
-            0x29, 0x2A, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45,
-            0x46, 0x47, 0x48, 0x49, 0x4A, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59,
-            0x5A, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x73, 0x74, 0x75,
-            0x76, 0x77, 0x78, 0x79, 0x7A, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
-            0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3,
-            0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6,
-            0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9,
-            0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xE1, 0xE2,
-            0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF1, 0xF2, 0xF3, 0xF4,
-            0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01,
-            0x00, 0x00, 0x3F, 0x00, 0xFB, 0xD7, 0xFF, 0xD9,
+            0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00,
+            0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06,
+            0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09, 0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D,
+            0x0C, 0x0B, 0x0B, 0x0C, 0x19, 0x12, 0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E, 0x1D,
+            0x1A, 0x1C, 0x1C, 0x20, 0x24, 0x2E, 0x27, 0x20, 0x22, 0x2C, 0x23, 0x1C, 0x1C, 0x28,
+            0x37, 0x29, 0x2C, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1F, 0x27, 0x39, 0x3D, 0x38, 0x32,
+            0x3C, 0x2E, 0x33, 0x34, 0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01, 0x00, 0x01,
+            0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x1F, 0x00, 0x00, 0x01, 0x05, 0x01, 0x01,
+            0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02,
+            0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0xFF, 0xC4, 0x00, 0xB5, 0x10,
+            0x00, 0x02, 0x01, 0x03, 0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00,
+            0x01, 0x7D, 0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06,
+            0x13, 0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xA1, 0x08, 0x23, 0x42,
+            0xB1, 0xC1, 0x15, 0x52, 0xD1, 0xF0, 0x24, 0x33, 0x62, 0x72, 0x82, 0x09, 0x0A, 0x16,
+            0x17, 0x18, 0x19, 0x1A, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x34, 0x35, 0x36, 0x37,
+            0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x53, 0x54, 0x55,
+            0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x73,
+            0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+            0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3, 0xA4, 0xA5,
+            0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA,
+            0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6,
+            0xD7, 0xD8, 0xD9, 0xDA, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA,
+            0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFF, 0xDA, 0x00, 0x08,
+            0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0xFB, 0xD7, 0xFF, 0xD9,
         ];
         let b64 = BASE64.encode(jpeg_bytes);
         let input = make_cloud_input("photo.jpg", "image/jpeg", &b64, jpeg_bytes.len() as u64);
@@ -676,7 +676,10 @@ mod tests {
         assert!(result.is_some(), "JPEG should produce Some");
         let pa = result.unwrap();
         matches!(pa.content, AttachmentContent::ImageDataUri { .. });
-        assert!(matches!(pa.content, AttachmentContent::ImageDataUri { .. }), "JPEG should be ImageDataUri");
+        assert!(
+            matches!(pa.content, AttachmentContent::ImageDataUri { .. }),
+            "JPEG should be ImageDataUri"
+        );
     }
 
     /// Branch 2: DOCX → ExtractedText
@@ -693,11 +696,19 @@ mod tests {
             zip.finish().unwrap();
         }
         let b64 = BASE64.encode(&buf);
-        let input = make_cloud_input("doc.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", &b64, buf.len() as u64);
+        let input = make_cloud_input(
+            "doc.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            &b64,
+            buf.len() as u64,
+        );
         let result = process_cloud_attachment(input);
         assert!(result.is_some(), "DOCX should produce Some");
         let pa = result.unwrap();
-        assert!(matches!(pa.content, AttachmentContent::ExtractedText { .. }), "DOCX should be ExtractedText");
+        assert!(
+            matches!(pa.content, AttachmentContent::ExtractedText { .. }),
+            "DOCX should be ExtractedText"
+        );
         if let AttachmentContent::ExtractedText { text } = &pa.content {
             assert!(text.contains("Hello DOCX"), "DOCX text should be extracted");
         }
@@ -712,10 +723,24 @@ mod tests {
         // which is still ExtractedText, so we can test with any bytes.
         let fake_xlsx = b"PK\x03\x04"; // Not a valid xlsx — triggers parse error path
         let b64 = BASE64.encode(fake_xlsx);
-        let input = make_cloud_input("data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", &b64, fake_xlsx.len() as u64);
+        let input = make_cloud_input(
+            "data.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            &b64,
+            fake_xlsx.len() as u64,
+        );
         let result = process_cloud_attachment(input);
-        assert!(result.is_some(), "XLSX (even malformed) should produce Some");
-        assert!(matches!(result.unwrap().content, AttachmentContent::ExtractedText { .. }), "XLSX should be ExtractedText");
+        assert!(
+            result.is_some(),
+            "XLSX (even malformed) should produce Some"
+        );
+        assert!(
+            matches!(
+                result.unwrap().content,
+                AttachmentContent::ExtractedText { .. }
+            ),
+            "XLSX should be ExtractedText"
+        );
     }
 
     /// Branch 4: PDF → ExtractedText
@@ -727,7 +752,13 @@ mod tests {
         let input = make_cloud_input("doc.pdf", "application/pdf", &b64, pdf_bytes.len() as u64);
         let result = process_cloud_attachment(input);
         assert!(result.is_some(), "PDF should produce Some");
-        assert!(matches!(result.unwrap().content, AttachmentContent::ExtractedText { .. }), "PDF should be ExtractedText");
+        assert!(
+            matches!(
+                result.unwrap().content,
+                AttachmentContent::ExtractedText { .. }
+            ),
+            "PDF should be ExtractedText"
+        );
     }
 
     /// Branch 5: Oversized file → None
@@ -735,7 +766,10 @@ mod tests {
     fn cloud_attachment_oversized_returns_none() {
         let input = make_cloud_input("big.jpg", "image/jpeg", "YQ==", MAX_FILE_SIZE_BYTES + 1);
         let result = process_cloud_attachment(input);
-        assert!(result.is_none(), "File exceeding 10MB limit should return None");
+        assert!(
+            result.is_none(),
+            "File exceeding 10MB limit should return None"
+        );
     }
 
     /// Branch 6: Malformed base64 → None
@@ -752,6 +786,12 @@ mod tests {
         let input = make_cloud_input("archive.bin", "application/octet-stream", "AAAA", 3);
         let result = process_cloud_attachment(input);
         assert!(result.is_some(), "Unknown binary should produce Some");
-        assert!(matches!(result.unwrap().content, AttachmentContent::UnsupportedBinary { .. }), "Unknown type should be UnsupportedBinary");
+        assert!(
+            matches!(
+                result.unwrap().content,
+                AttachmentContent::UnsupportedBinary { .. }
+            ),
+            "Unknown type should be UnsupportedBinary"
+        );
     }
 }

@@ -1,6 +1,8 @@
 use crate::commands::agent::{run_agent_workflow_internal, WorkflowInvocationSource};
 use crate::commands::settings::DesktopNotificationRequest;
-use crate::services::{FileManager, MacOSNativeNotificationBridge, MacOSQuickDelegateBridge, SettingsManager};
+use crate::services::{
+    FileManager, MacOSNativeNotificationBridge, MacOSQuickDelegateBridge, SettingsManager,
+};
 use serde::Serialize;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -92,7 +94,8 @@ impl QuickDelegateModalService {
                     );
                     let _ = MacOSQuickDelegateBridge::hide();
 
-                    let result = execute_native_modal_prompt(app_handle.clone(), prompt.clone()).await;
+                    let result =
+                        execute_native_modal_prompt(app_handle.clone(), prompt.clone()).await;
                     if let Err(error) = result {
                         let _ = MacOSQuickDelegateBridge::show(
                             Some("error"),
@@ -145,7 +148,10 @@ async fn execute_native_modal_prompt(app_handle: AppHandle, prompt: String) -> R
             emit_finish_notification(
                 &app_handle,
                 "Rainy MaTE",
-                &format!("Quick delegation finished: {}", build_summary(&response.response)),
+                &format!(
+                    "Quick delegation finished: {}",
+                    build_summary(&response.response)
+                ),
                 "agent_finish",
                 Some(workspace_id),
                 Some(chat_id),

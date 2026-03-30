@@ -12,10 +12,12 @@ pub async fn open_chat_artifact(path: String) -> Result<(), String> {
                 .args(["-a", "Preview", &artifact.path])
                 .status()
                 .map_err(|error| format!("Failed to launch Preview: {}", error))?,
-            ChatArtifactOpenMode::Inline | ChatArtifactOpenMode::SystemDefault => Command::new("open")
-                .arg(&artifact.path)
-                .status()
-                .map_err(|error| format!("Failed to open artifact: {}", error))?,
+            ChatArtifactOpenMode::Inline | ChatArtifactOpenMode::SystemDefault => {
+                Command::new("open")
+                    .arg(&artifact.path)
+                    .status()
+                    .map_err(|error| format!("Failed to open artifact: {}", error))?
+            }
         };
 
         if status.success() {

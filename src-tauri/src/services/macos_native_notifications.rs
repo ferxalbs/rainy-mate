@@ -1,7 +1,7 @@
 #[cfg(target_os = "macos")]
-use libloading::Library;
-#[cfg(target_os = "macos")]
 use crate::commands::airlock::AirlockServiceState;
+#[cfg(target_os = "macos")]
+use libloading::Library;
 #[cfg(target_os = "macos")]
 use std::ffi::{c_char, CStr, CString};
 #[cfg(target_os = "macos")]
@@ -79,18 +79,27 @@ fn notification_bridge() -> Result<&'static NotificationBridgeSymbols, String> {
                 )
                 .map_err(|e| e.to_string())?;
             let runtime_supported = *library
-                .get::<unsafe extern "C" fn() -> i32>(b"rainy_notification_bridge_runtime_supported\0")
+                .get::<unsafe extern "C" fn() -> i32>(
+                    b"rainy_notification_bridge_runtime_supported\0",
+                )
                 .map_err(|e| e.to_string())?;
             let request_authorization = *library
-                .get::<unsafe extern "C" fn() -> i32>(b"rainy_notification_bridge_request_authorization\0")
+                .get::<unsafe extern "C" fn() -> i32>(
+                    b"rainy_notification_bridge_request_authorization\0",
+                )
                 .map_err(|e| e.to_string())?;
             let authorization_status = *library
-                .get::<unsafe extern "C" fn() -> i32>(b"rainy_notification_bridge_authorization_status\0")
+                .get::<unsafe extern "C" fn() -> i32>(
+                    b"rainy_notification_bridge_authorization_status\0",
+                )
                 .map_err(|e| e.to_string())?;
             let send = *library
-                .get::<unsafe extern "C" fn(*const c_char, *const c_char, *const c_char, *const c_char) -> i32>(
-                    b"rainy_notification_bridge_send\0",
-                )
+                .get::<unsafe extern "C" fn(
+                    *const c_char,
+                    *const c_char,
+                    *const c_char,
+                    *const c_char,
+                ) -> i32>(b"rainy_notification_bridge_send\0")
                 .map_err(|e| e.to_string())?;
             let activate_app = *library
                 .get::<unsafe extern "C" fn()>(b"rainy_notification_bridge_activate_app\0")

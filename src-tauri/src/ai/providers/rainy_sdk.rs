@@ -166,7 +166,11 @@ impl RainySDKProvider {
         }
 
         // "enabled" with a toggle-only model — resolve to a sensible default level.
-        let resolved_effort = if effort_lower == "enabled" { "medium" } else { effort };
+        let resolved_effort = if effort_lower == "enabled" {
+            "medium"
+        } else {
+            effort
+        };
 
         let mode = ReasoningMode::ThinkingLevel;
         let preference = ReasoningPreference {
@@ -326,14 +330,17 @@ impl RainySDKProvider {
         // When model is a plain base slug (no thinking level encoded), try to derive
         // ThinkingConfig from v2 catalog capabilities using the reasoning_effort field.
         if thinking_config.is_none() {
-            if let Some(effort) = request.reasoning_effort.as_deref().filter(|s| !s.is_empty()) {
-                thinking_config =
-                    Self::thinking_config_from_catalog(&model_id, effort, catalog);
+            if let Some(effort) = request
+                .reasoning_effort
+                .as_deref()
+                .filter(|s| !s.is_empty())
+            {
+                thinking_config = Self::thinking_config_from_catalog(&model_id, effort, catalog);
             }
         }
 
-        let is_anthropic = crate::ai::model_catalog::normalize_model_slug(&model_id)
-            .starts_with("anthropic/");
+        let is_anthropic =
+            crate::ai::model_catalog::normalize_model_slug(&model_id).starts_with("anthropic/");
 
         let mut sdk_request = OpenAIChatCompletionRequest::new(
             model_id,
@@ -887,8 +894,7 @@ impl AIProvider for RainySDKProvider {
         match Self::resolve_transport_for_request(&request) {
             RainyTransport::ChatCompletions => {
                 let catalog = self.cached_catalog.read().await;
-                let api_request =
-                    Self::build_openai_request(&request, &catalog).with_stream(true);
+                let api_request = Self::build_openai_request(&request, &catalog).with_stream(true);
 
                 let mut stream = self
                     .client

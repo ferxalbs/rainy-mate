@@ -115,6 +115,9 @@ mod tests {
             connector_id: None,
             user_id: None,
             attachments: None,
+            workspace_memory_context: None,
+            workspace_memory_root: None,
+            workspace_memory_enabled: false,
         };
 
         // We can't easily run() without a real SkillExecutor/Router,

@@ -1,7 +1,7 @@
 #[cfg(target_os = "macos")]
-use libloading::Library;
-#[cfg(target_os = "macos")]
 use crate::services::QuickDelegateModalService;
+#[cfg(target_os = "macos")]
+use libloading::Library;
 #[cfg(target_os = "macos")]
 use std::ffi::{c_char, CStr, CString};
 #[cfg(target_os = "macos")]
@@ -79,7 +79,9 @@ fn quick_delegate_bridge() -> Result<&'static QuickDelegateBridgeSymbols, String
                 )
                 .map_err(|e| e.to_string())?;
             let runtime_supported = *library
-                .get::<unsafe extern "C" fn() -> i32>(b"rainy_quick_delegate_bridge_runtime_supported\0")
+                .get::<unsafe extern "C" fn() -> i32>(
+                    b"rainy_quick_delegate_bridge_runtime_supported\0",
+                )
                 .map_err(|e| e.to_string())?;
             let show = *library
                 .get::<unsafe extern "C" fn(*const c_char, *const c_char) -> i32>(
@@ -149,7 +151,8 @@ extern "C" fn quick_delegate_callback(action: *const c_char, payload: *const c_c
 
 #[cfg(target_os = "macos")]
 fn c_string(input: &str) -> Result<CString, String> {
-    CString::new(input).map_err(|_| "Quick delegate payload contains interior null byte".to_string())
+    CString::new(input)
+        .map_err(|_| "Quick delegate payload contains interior null byte".to_string())
 }
 
 #[cfg(target_os = "macos")]
@@ -169,7 +172,9 @@ impl MacOSQuickDelegateBridge {
 
     pub fn initialize(_app: AppHandle, quick_delegate: Arc<QuickDelegateModalService>) {
         if !Self::is_runtime_supported() {
-            tracing::warn!("macOS quick delegate bridge disabled because AppKit runtime is unavailable");
+            tracing::warn!(
+                "macOS quick delegate bridge disabled because AppKit runtime is unavailable"
+            );
             return;
         }
 
@@ -201,12 +206,11 @@ impl MacOSQuickDelegateBridge {
         });
     }
 
-    pub fn show(
-        state: Option<&str>,
-        message: Option<&str>,
-    ) -> Result<(), String> {
+    pub fn show(state: Option<&str>, message: Option<&str>) -> Result<(), String> {
         if !Self::is_runtime_supported() {
-            return Err("Native macOS quick delegate is unavailable in the current runtime".to_string());
+            return Err(
+                "Native macOS quick delegate is unavailable in the current runtime".to_string(),
+            );
         }
 
         let state = c_string(state.unwrap_or("idle"))?;
@@ -222,7 +226,9 @@ impl MacOSQuickDelegateBridge {
 
     pub fn hide() -> Result<(), String> {
         if !Self::is_runtime_supported() {
-            return Err("Native macOS quick delegate is unavailable in the current runtime".to_string());
+            return Err(
+                "Native macOS quick delegate is unavailable in the current runtime".to_string(),
+            );
         }
 
         let bridge = quick_delegate_bridge()?;
@@ -234,12 +240,11 @@ impl MacOSQuickDelegateBridge {
         }
     }
 
-    pub fn set_state(
-        state: &str,
-        message: Option<&str>,
-    ) -> Result<(), String> {
+    pub fn set_state(state: &str, message: Option<&str>) -> Result<(), String> {
         if !Self::is_runtime_supported() {
-            return Err("Native macOS quick delegate is unavailable in the current runtime".to_string());
+            return Err(
+                "Native macOS quick delegate is unavailable in the current runtime".to_string(),
+            );
         }
 
         let state = c_string(state)?;

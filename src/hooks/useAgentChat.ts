@@ -161,6 +161,8 @@ export function useAgentChat(
     historySource: "persisted_long_chat",
     retrievalMode: "unavailable",
     embeddingProfile: "gemini-embedding-2-preview",
+    executionMode: "local",
+    workspaceMemoryEnabled: false,
   } as const;
 
   const createTraceEntry = useCallback(
@@ -491,6 +493,13 @@ export function useAgentChat(
                   parsed.embedding_profile ||
                   message.ragTelemetry?.embeddingProfile ||
                   defaultRagTelemetry.embeddingProfile,
+                executionMode:
+                  message.ragTelemetry?.executionMode ||
+                  defaultRagTelemetry.executionMode,
+                workspaceMemoryEnabled:
+                  message.ragTelemetry?.workspaceMemoryEnabled ??
+                  defaultRagTelemetry.workspaceMemoryEnabled,
+                workspaceMemoryRoot: message.ragTelemetry?.workspaceMemoryRoot,
                 compressionApplied: message.ragTelemetry?.compressionApplied,
                 compressionTriggerTokens:
                   message.ragTelemetry?.compressionTriggerTokens,
@@ -883,6 +892,13 @@ export function useAgentChat(
                 embeddingProfile:
                   runtimeTelemetry.embedding_profile ||
                   defaultRagTelemetry.embeddingProfile,
+                executionMode:
+                  runtimeTelemetry.execution_mode || defaultRagTelemetry.executionMode,
+                workspaceMemoryEnabled:
+                  runtimeTelemetry.workspace_memory_enabled ??
+                  defaultRagTelemetry.workspaceMemoryEnabled,
+                workspaceMemoryRoot:
+                  runtimeTelemetry.workspace_memory_root ?? undefined,
               },
             };
             break;
@@ -1404,11 +1420,7 @@ export function useAgentChat(
         trace: [
           createTraceEntry("think", "Task received. Starting agent workflow."),
         ],
-        ragTelemetry: {
-          historySource: "persisted_long_chat",
-          retrievalMode: "unavailable",
-          embeddingProfile: "gemini-embedding-2-preview",
-        },
+        ragTelemetry: { ...defaultRagTelemetry },
       };
       setMessages((prev) => [...prev, initialAgentMsg]);
 
@@ -1743,6 +1755,13 @@ export function useAgentChat(
                       parsed.embedding_profile ||
                       message.ragTelemetry?.embeddingProfile ||
                       defaultRagTelemetry.embeddingProfile,
+                    executionMode:
+                      message.ragTelemetry?.executionMode ||
+                      defaultRagTelemetry.executionMode,
+                    workspaceMemoryEnabled:
+                      message.ragTelemetry?.workspaceMemoryEnabled ??
+                      defaultRagTelemetry.workspaceMemoryEnabled,
+                    workspaceMemoryRoot: message.ragTelemetry?.workspaceMemoryRoot,
                     compressionApplied: message.ragTelemetry?.compressionApplied,
                     compressionTriggerTokens:
                       message.ragTelemetry?.compressionTriggerTokens,

@@ -1,10 +1,10 @@
 // Rainy MaTE - AI Provider Trait and Manager
 // Unified abstraction layer using rainy-sdk for premium features
 
+use crate::ai::gemini::GeminiProvider;
 use crate::ai::provider_trait::AIProvider;
 use crate::ai::provider_types::{ProviderConfig, ProviderId};
 use crate::ai::providers::moonshot::MoonshotProvider;
-use crate::ai::gemini::GeminiProvider;
 use crate::models::{AIProviderConfig, ProviderType};
 use crate::services::KeychainAccessService;
 use futures::StreamExt;
@@ -367,7 +367,12 @@ impl AIProviderManager {
                     }
                 }
 
-                if let Ok(api_key) = self.keychain.get("rainy_api").await.map_err(|e| e.to_string()) {
+                if let Ok(api_key) = self
+                    .keychain
+                    .get("rainy_api")
+                    .await
+                    .map_err(|e| e.to_string())
+                {
                     if let Some(key) = api_key {
                         if let Ok(client) = RainyClient::with_api_key(&key) {
                             if let Ok(available) = client.list_available_models().await {

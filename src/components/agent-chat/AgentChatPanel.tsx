@@ -105,12 +105,26 @@ const TelemetryBar = React.memo(function TelemetryBar({
     historySource?: string;
     retrievalMode?: string;
     embeddingProfile?: string;
+    executionMode?: string;
+    workspaceMemoryEnabled?: boolean;
     compressionApplied?: boolean;
     compressionTriggerTokens?: number;
   } | undefined;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
+      <Badge
+        variant="outline"
+        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+      >
+        Compute: {telemetry?.executionMode || "local"}
+      </Badge>
+      <Badge
+        variant="outline"
+        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+      >
+        Memory Files: {telemetry?.workspaceMemoryEnabled ? "active" : "off"}
+      </Badge>
       <Badge
         variant="outline"
         className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"

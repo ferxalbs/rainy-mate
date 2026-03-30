@@ -353,10 +353,8 @@ mod tests {
 
     #[test]
     fn atm_queued_command_fixture_round_trips_without_field_loss() {
-        let cmd: QueuedCommand =
-            serde_json::from_str(FIXTURE).expect("fixture must deserialize");
-        let re_serialized =
-            serde_json::to_value(&cmd).expect("re-serialize must succeed");
+        let cmd: QueuedCommand = serde_json::from_str(FIXTURE).expect("fixture must deserialize");
+        let re_serialized = serde_json::to_value(&cmd).expect("re-serialize must succeed");
         let fixture_value: serde_json::Value =
             serde_json::from_str(FIXTURE).expect("fixture must be valid JSON");
 

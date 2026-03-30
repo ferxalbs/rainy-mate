@@ -11,7 +11,7 @@ export interface CloudBridgeStatus {
 const DEFAULT_STATUS: CloudBridgeStatus = {
   connected: false,
   mode: "http_poll",
-  message: "Checking Rainy-ATM bridge...",
+  message: "Checking MaTE Bridge...",
 };
 
 export function useCloudBridgeStatus() {
@@ -33,14 +33,14 @@ export function useCloudBridgeStatus() {
           setStatus({
             connected: false,
             mode: "http_poll",
-            message: "Waiting for Rainy-ATM credentials",
+            message: "Waiting for MaTE Bridge credentials",
           });
         }
       } catch {
         setStatus({
           connected: false,
           mode: "http_poll",
-          message: "Unable to verify Rainy-ATM credentials",
+          message: "Unable to verify MaTE Bridge credentials",
         });
       }
 

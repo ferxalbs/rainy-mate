@@ -558,6 +558,9 @@ mod tests {
             connector_id: None,
             user_id: None,
             attachments: None,
+            workspace_memory_context: None,
+            workspace_memory_root: None,
+            workspace_memory_enabled: false,
         };
 
         let mut workflow = Workflow::new(spec.clone(), options, "start".to_string());

@@ -127,8 +127,7 @@ pub fn ensure_openable_artifact_path(path: &str) -> Result<ChatArtifact, String>
     if !normalized.exists() {
         return Err("Artifact file does not exist".to_string());
     }
-    artifact_from_path(path, "chat_artifact")
-        .ok_or_else(|| "Unsupported artifact type".to_string())
+    artifact_from_path(path, "chat_artifact").ok_or_else(|| "Unsupported artifact type".to_string())
 }
 
 fn extract_path_from_result(result: &str) -> Option<String> {

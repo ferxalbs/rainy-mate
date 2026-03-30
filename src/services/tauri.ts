@@ -2481,6 +2481,9 @@ export interface ChatRuntimeTelemetry {
   history_source: string;
   retrieval_mode: string;
   embedding_profile: string;
+  execution_mode: string;
+  workspace_memory_enabled: boolean;
+  workspace_memory_root?: string | null;
   updated_at: string;
 }
 
