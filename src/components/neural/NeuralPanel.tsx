@@ -63,7 +63,7 @@ export function NeuralPanel({ onNavigate }: NeuralPanelProps) {
       }
       return result;
     } catch (error) {
-      console.error("Failed to ensure default ATM agent:", error);
+      console.error("Failed to ensure default Bridge agent:", error);
       const message =
         error instanceof Error
           ? error.message

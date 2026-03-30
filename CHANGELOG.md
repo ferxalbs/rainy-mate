@@ -55,6 +55,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pnpm exec tsc --noEmit` → pass
 - `cd src-tauri && cargo test chat_artifacts -- --nocapture` → pass
 
+## [0.6.4] - 2026-03-29 - PROJECT KINGFALL PHASE 3F: WORKSPACE MEMORY OVERLAY + RUNTIME TELEMETRY
+
+### Added
+
+- **Workspace memory overlay for human-curated continuity** — MaTE now bootstraps a managed `.rainy-mate/` overlay inside the effective workspace so operators can keep explicit long-lived context without bypassing the vault architecture:
+  - `src-tauri/src/services/workspace_memory_files.rs` — new workspace overlay service creates and maintains `.rainy-mate/MEMORY.md`, `.rainy-mate/GUARDRAILS.md`, and `.rainy-mate/WORKSTATE.md`, builds a bounded prompt snapshot, and updates `WORKSTATE.md` after runs
+  - `src-tauri/src/commands/agent.rs`, `src-tauri/src/services/command_poller_agent.rs` — local and remote agent execution paths now bootstrap the overlay and persist the latest workstate after successful responses
+
+- **Persisted runtime telemetry for chat sessions** — desktop chat history now stores run-path and model-usage details without inventing local pricing logic:
+  - `src-tauri/migrations/20260329113000_expand_chat_runtime_telemetry.sql` — adds `execution_mode`, `workspace_memory_enabled`, `workspace_memory_root`, `last_model`, `prompt_tokens`, `completion_tokens`, and `total_tokens`
+  - `src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/ai/agent/workflow.rs` — ThinkStep emits provider usage events when available and persisted chat telemetry now tracks model/token/runtime state for both local and remote runs
+  - `src/hooks/useAgentChat.ts`, `src/components/agent-chat/AgentChatPanel.tsx`, `src/services/tauri.ts`, `src/types/agent.ts` — chat UI now surfaces `Run Path`, `Memory Files`, `Model`, and `Tokens` badges from live and persisted telemetry
+
+### Changed
+
+- **Workspace memory overlay now reinforces, rather than replaces, MaTE's existing semantic vault** — the flat files are treated as a human-auditable supplement and synced back into the embedded memory store so the encrypted local database remains the canonical retrieval engine:
+  - `src-tauri/src/ai/agent/runtime.rs` — runtime prompt assembly now injects the overlay explicitly as operator intent and durable task context while preserving tool outputs and semantic memory as the real source of truth
+  - `src-tauri/src/services/workspace_memory_files.rs` — overlay snapshots are stored into workspace memory via the existing memory manager so vault retrieval can recall them semantically
+
+- **Desktop bridge terminology is now consistent across the app surface** — remaining `ATM` wording in the main desktop UI was renamed to `Bridge` or neutral cloud-agent language:
+  - `src/components/agent-chat/neural-config.ts`, `src/components/neural/CreateAgentForm.tsx`, `src/components/neural/NeuralPanel.tsx`, `src/components/neural/modules/NeuralDashboard.tsx`, `src/services/tauri.ts`, `src/types/index.ts`
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `cd src-tauri && cargo test` → 225 passed, 0 failed
+- `cd src-tauri && cargo test workspace_memory_files -- --nocapture` → pass
+- `pnpm exec tsc --noEmit` → pass
+
 ## [0.6.3] - 2026-03-28 - PROJECT KINGFALL PHASE 3C: MACOS BRIDGE BUNDLE ENFORCEMENT
 
 ### Fixed

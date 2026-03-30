@@ -78,7 +78,7 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
           setModel(atmModels[0].id);
         }
       } catch (error) {
-        console.error("Failed to load ATM models:", error);
+        console.error("Failed to load bridge models:", error);
         if (!cancelled) {
           setAvailableModels([]);
         }
@@ -127,7 +127,7 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
         soul: prompt,
       });
 
-      // 2. Deploy to Cloud (ATM)
+      // 2. Deploy to the Bridge
       await createAtmAgent(name, type, config);
 
       toast.success(`Agent "${name}" deployed and saved locally`);
@@ -219,7 +219,7 @@ export function CreateAgentForm({ onSuccess, onCancel }: CreateAgentFormProps) {
           </Select.Indicator>
         </Select.Trigger>
         <Description className="text-[10px] mt-1.5 text-muted-foreground ml-1 font-medium">
-          Select the explicit Rainy API v3 model this ATM agent will use
+          Select the explicit Rainy API v3 model this Bridge agent will use
         </Description>
         <Select.Popover className="bg-background/60 dark:bg-background/20 backdrop-blur-sm dark:border-white/10 rounded-xl">
           <ListBox

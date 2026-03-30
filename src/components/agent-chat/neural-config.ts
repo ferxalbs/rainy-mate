@@ -124,7 +124,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   screenshot: "Taking Screenshot",
   list_installed_skills: "Listing Installed Skills",
   install_local_skill: "Installing Local Skill",
-  install_skill_from_atm: "Installing Skill From ATM",
+  install_skill_from_atm: "Installing Skill From Bridge",
   set_installed_skill_enabled: "Updating Skill State",
   remove_installed_skill: "Removing Installed Skill",
   save_memory: "Saving to Memory",

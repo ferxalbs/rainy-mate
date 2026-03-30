@@ -141,8 +141,8 @@ export const AI_PROVIDERS: AIProvider[] = [
 export const PROVIDER_MODELS: Record<ProviderType, string[]> = {
   rainyapi: [
     // OpenAI Models (Hidden)
-    // "gpt-5-nano", // ATM Basic
-    // "inception/mercury-2", // ATM Advanced
+    // "gpt-5-nano", // Bridge Basic
+    // "inception/mercury-2", // Bridge Advanced
     // "gpt-4o",
     // "gpt-4o-mini",
     // "gpt-4-turbo",

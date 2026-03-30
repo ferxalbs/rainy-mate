@@ -2140,7 +2140,7 @@ export async function loadGeneratedAgent(agentId: string): Promise<any> {
   return invoke("load_generated_agent", { agentId });
 }
 
-// ============ ATM Bootstrap Commands ============
+// ============ Bridge Bootstrap Commands ============
 
 export interface WorkspaceAuth {
   id: string;

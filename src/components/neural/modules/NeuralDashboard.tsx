@@ -49,7 +49,7 @@ export function NeuralDashboard({
     try {
       if (!nodeReady) {
         toast.error(
-          "Desktop node is still syncing with ATM. Wait a moment and try again.",
+          "Desktop node is still syncing with Bridge. Wait a moment and try again.",
           { id: "node-not-ready" },
         );
         return;
