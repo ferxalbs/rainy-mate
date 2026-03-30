@@ -163,6 +163,9 @@ export function useAgentChat(
     embeddingProfile: "gemini-embedding-2-preview",
     executionMode: "local",
     workspaceMemoryEnabled: false,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
   } as const;
 
   const createTraceEntry = useCallback(
@@ -500,6 +503,16 @@ export function useAgentChat(
                   message.ragTelemetry?.workspaceMemoryEnabled ??
                   defaultRagTelemetry.workspaceMemoryEnabled,
                 workspaceMemoryRoot: message.ragTelemetry?.workspaceMemoryRoot,
+                lastModel: message.ragTelemetry?.lastModel,
+                promptTokens:
+                  message.ragTelemetry?.promptTokens ??
+                  defaultRagTelemetry.promptTokens,
+                completionTokens:
+                  message.ragTelemetry?.completionTokens ??
+                  defaultRagTelemetry.completionTokens,
+                totalTokens:
+                  message.ragTelemetry?.totalTokens ??
+                  defaultRagTelemetry.totalTokens,
                 compressionApplied: message.ragTelemetry?.compressionApplied,
                 compressionTriggerTokens:
                   message.ragTelemetry?.compressionTriggerTokens,
@@ -517,6 +530,35 @@ export function useAgentChat(
               return {
                 ...message,
                 ragTelemetry: nextTelemetry,
+              };
+            } catch {
+              return message;
+            }
+          }
+          if (statusText.startsWith("RUN_USAGE:")) {
+            try {
+              const raw = statusText.slice("RUN_USAGE:".length);
+              const parsed = JSON.parse(raw) as {
+                model?: string;
+                prompt_tokens?: number;
+                completion_tokens?: number;
+                total_tokens?: number;
+              };
+              return {
+                ...message,
+                ragTelemetry: {
+                  ...message.ragTelemetry,
+                  lastModel:
+                    parsed.model || message.ragTelemetry?.lastModel,
+                  promptTokens:
+                    parsed.prompt_tokens ?? message.ragTelemetry?.promptTokens ?? 0,
+                  completionTokens:
+                    parsed.completion_tokens ??
+                    message.ragTelemetry?.completionTokens ??
+                    0,
+                  totalTokens:
+                    parsed.total_tokens ?? message.ragTelemetry?.totalTokens ?? 0,
+                },
               };
             } catch {
               return message;
@@ -899,6 +941,14 @@ export function useAgentChat(
                   defaultRagTelemetry.workspaceMemoryEnabled,
                 workspaceMemoryRoot:
                   runtimeTelemetry.workspace_memory_root ?? undefined,
+                lastModel: runtimeTelemetry.last_model ?? undefined,
+                promptTokens:
+                  runtimeTelemetry.prompt_tokens ?? defaultRagTelemetry.promptTokens,
+                completionTokens:
+                  runtimeTelemetry.completion_tokens ??
+                  defaultRagTelemetry.completionTokens,
+                totalTokens:
+                  runtimeTelemetry.total_tokens ?? defaultRagTelemetry.totalTokens,
               },
             };
             break;
@@ -1762,6 +1812,16 @@ export function useAgentChat(
                       message.ragTelemetry?.workspaceMemoryEnabled ??
                       defaultRagTelemetry.workspaceMemoryEnabled,
                     workspaceMemoryRoot: message.ragTelemetry?.workspaceMemoryRoot,
+                    lastModel: message.ragTelemetry?.lastModel,
+                    promptTokens:
+                      message.ragTelemetry?.promptTokens ??
+                      defaultRagTelemetry.promptTokens,
+                    completionTokens:
+                      message.ragTelemetry?.completionTokens ??
+                      defaultRagTelemetry.completionTokens,
+                    totalTokens:
+                      message.ragTelemetry?.totalTokens ??
+                      defaultRagTelemetry.totalTokens,
                     compressionApplied: message.ragTelemetry?.compressionApplied,
                     compressionTriggerTokens:
                       message.ragTelemetry?.compressionTriggerTokens,
@@ -1779,6 +1839,37 @@ export function useAgentChat(
                   return {
                     ...message,
                     ragTelemetry: nextTelemetry,
+                  };
+                } catch {
+                  return message;
+                }
+              }
+              if (statusText.startsWith("RUN_USAGE:")) {
+                try {
+                  const raw = statusText.slice("RUN_USAGE:".length);
+                  const parsed = JSON.parse(raw) as {
+                    model?: string;
+                    prompt_tokens?: number;
+                    completion_tokens?: number;
+                    total_tokens?: number;
+                  };
+                  return {
+                    ...message,
+                    ragTelemetry: {
+                      ...message.ragTelemetry,
+                      lastModel:
+                        parsed.model || message.ragTelemetry?.lastModel,
+                      promptTokens:
+                        parsed.prompt_tokens ??
+                        message.ragTelemetry?.promptTokens ??
+                        0,
+                      completionTokens:
+                        parsed.completion_tokens ??
+                        message.ragTelemetry?.completionTokens ??
+                        0,
+                      totalTokens:
+                        parsed.total_tokens ?? message.ragTelemetry?.totalTokens ?? 0,
+                    },
                   };
                 } catch {
                   return message;

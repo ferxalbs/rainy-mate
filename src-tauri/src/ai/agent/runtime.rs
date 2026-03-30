@@ -692,6 +692,17 @@ Rules:
             });
         }
 
+        if self.options.workspace_memory_enabled {
+            let manager = self.memory.manager();
+            let effective_workspace_id = self.effective_workspace_id();
+            let _ = crate::services::WorkspaceMemoryFiles::sync_overlay_to_memory(
+                manager,
+                &effective_workspace_id,
+                self.options.workspace_memory_root.as_deref(),
+            )
+            .await;
+        }
+
         // 1. Initialize State
         let mut state = AgentState::new(
             self.options.workspace_id.clone(),

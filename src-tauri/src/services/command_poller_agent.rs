@@ -822,10 +822,19 @@ GUIDELINES:
                 "local",
                 final_options.workspace_memory_enabled,
                 final_options.workspace_memory_root.as_deref(),
+                final_options.model.as_deref(),
+                0,
+                0,
+                0,
             )
             .await;
         let session_coordinator_for_events = session_coordinator.clone();
         let session_run_id_for_events = session_run_id.clone();
+        let telemetry_memory_root = final_options.workspace_memory_root.clone();
+        let telemetry_memory_enabled = final_options.workspace_memory_enabled;
+        let telemetry_model = final_options.model.clone();
+        let telemetry_chat_id = session_chat_id.clone();
+        let telemetry_agent_manager = ctx.agent_manager.clone();
 
         // Run the agent with bounded event streaming to avoid ATM overload under heavy loops.
         let command_id = command.id.clone();
@@ -879,6 +888,52 @@ GUIDELINES:
                 // Emit to frontend for live streaming
                 session_coordinator_for_events
                     .emit_agent_event(&session_run_id_for_events, event.clone());
+
+                if let AgentEvent::Status(text) = &event {
+                    if text.starts_with("RUN_USAGE:") {
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(
+                            &text["RUN_USAGE:".len()..],
+                        ) {
+                            let prompt_tokens = value
+                                .get("prompt_tokens")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0);
+                            let completion_tokens = value
+                                .get("completion_tokens")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0);
+                            let total_tokens = value
+                                .get("total_tokens")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0);
+                            let last_model = value
+                                .get("model")
+                                .and_then(|v| v.as_str())
+                                .map(|v| v.to_string())
+                                .or_else(|| telemetry_model.clone());
+                            let manager = telemetry_agent_manager.clone();
+                            let chat_id = telemetry_chat_id.clone();
+                            let workspace_memory_root = telemetry_memory_root.clone();
+                            tokio::spawn(async move {
+                                let _ = manager
+                                    .upsert_chat_runtime_telemetry(
+                                        &chat_id,
+                                        "persisted_long_chat",
+                                        "unavailable",
+                                        crate::services::memory_vault::types::EMBEDDING_MODEL,
+                                        "local",
+                                        telemetry_memory_enabled,
+                                        workspace_memory_root.as_deref(),
+                                        last_model.as_deref(),
+                                        prompt_tokens,
+                                        completion_tokens,
+                                        total_tokens,
+                                    )
+                                    .await;
+                            });
+                        }
+                    }
+                }
 
                 match event {
                     AgentEvent::ToolCall(ref call) => {

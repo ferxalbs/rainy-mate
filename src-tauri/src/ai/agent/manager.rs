@@ -71,6 +71,10 @@ pub struct ChatRuntimeTelemetryDto {
     pub execution_mode: String,
     pub workspace_memory_enabled: bool,
     pub workspace_memory_root: Option<String>,
+    pub last_model: Option<String>,
+    pub prompt_tokens: i64,
+    pub completion_tokens: i64,
+    pub total_tokens: i64,
     pub updated_at: String,
 }
 
@@ -405,11 +409,15 @@ impl AgentManager {
         execution_mode: &str,
         workspace_memory_enabled: bool,
         workspace_memory_root: Option<&str>,
+        last_model: Option<&str>,
+        prompt_tokens: i64,
+        completion_tokens: i64,
+        total_tokens: i64,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO chat_runtime_telemetry
-                (chat_id, history_source, retrieval_mode, embedding_profile, execution_mode, workspace_memory_enabled, workspace_memory_root, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                (chat_id, history_source, retrieval_mode, embedding_profile, execution_mode, workspace_memory_enabled, workspace_memory_root, last_model, prompt_tokens, completion_tokens, total_tokens, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
              ON CONFLICT(chat_id) DO UPDATE SET
                 history_source = excluded.history_source,
                 retrieval_mode = excluded.retrieval_mode,
@@ -417,6 +425,10 @@ impl AgentManager {
                 execution_mode = excluded.execution_mode,
                 workspace_memory_enabled = excluded.workspace_memory_enabled,
                 workspace_memory_root = excluded.workspace_memory_root,
+                last_model = excluded.last_model,
+                prompt_tokens = excluded.prompt_tokens,
+                completion_tokens = excluded.completion_tokens,
+                total_tokens = excluded.total_tokens,
                 updated_at = CURRENT_TIMESTAMP",
         )
         .bind(chat_id)
@@ -426,6 +438,10 @@ impl AgentManager {
         .bind(execution_mode)
         .bind(workspace_memory_enabled)
         .bind(workspace_memory_root)
+        .bind(last_model)
+        .bind(prompt_tokens)
+        .bind(completion_tokens)
+        .bind(total_tokens)
         .execute(&*self.db)
         .await?;
         Ok(())
@@ -444,6 +460,10 @@ impl AgentManager {
                 execution_mode,
                 workspace_memory_enabled,
                 workspace_memory_root,
+                last_model,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
                 updated_at
              FROM chat_runtime_telemetry
              WHERE chat_id = ?",
@@ -836,6 +856,10 @@ mod tests {
                 execution_mode TEXT NOT NULL DEFAULT 'local',
                 workspace_memory_enabled INTEGER NOT NULL DEFAULT 0,
                 workspace_memory_root TEXT,
+                last_model TEXT,
+                prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                completion_tokens INTEGER NOT NULL DEFAULT 0,
+                total_tokens INTEGER NOT NULL DEFAULT 0,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )",
         )

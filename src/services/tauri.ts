@@ -2484,6 +2484,10 @@ export interface ChatRuntimeTelemetry {
   execution_mode: string;
   workspace_memory_enabled: boolean;
   workspace_memory_root?: string | null;
+  last_model?: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
   updated_at: string;
 }
 

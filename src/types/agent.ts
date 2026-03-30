@@ -202,6 +202,10 @@ export interface AgentMessage {
     executionMode?: string;
     workspaceMemoryEnabled?: boolean;
     workspaceMemoryRoot?: string;
+    lastModel?: string;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
     compressionApplied?: boolean;
     compressionTriggerTokens?: number;
   };

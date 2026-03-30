@@ -107,6 +107,8 @@ const TelemetryBar = React.memo(function TelemetryBar({
     embeddingProfile?: string;
     executionMode?: string;
     workspaceMemoryEnabled?: boolean;
+    lastModel?: string;
+    totalTokens?: number;
     compressionApplied?: boolean;
     compressionTriggerTokens?: number;
   } | undefined;
@@ -117,7 +119,7 @@ const TelemetryBar = React.memo(function TelemetryBar({
         variant="outline"
         className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
       >
-        Compute: {telemetry?.executionMode || "local"}
+        Run Path: {telemetry?.executionMode || "local"}
       </Badge>
       <Badge
         variant="outline"
@@ -125,6 +127,22 @@ const TelemetryBar = React.memo(function TelemetryBar({
       >
         Memory Files: {telemetry?.workspaceMemoryEnabled ? "active" : "off"}
       </Badge>
+      {telemetry?.lastModel && (
+        <Badge
+          variant="outline"
+          className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+        >
+          Model: {telemetry.lastModel}
+        </Badge>
+      )}
+      {typeof telemetry?.totalTokens === "number" && telemetry.totalTokens > 0 && (
+        <Badge
+          variant="outline"
+          className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+        >
+          Tokens: {telemetry.totalTokens.toLocaleString()}
+        </Badge>
+      )}
       <Badge
         variant="outline"
         className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"

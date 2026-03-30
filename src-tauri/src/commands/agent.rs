@@ -1298,6 +1298,10 @@ pub async fn run_agent_workflow_internal(
             "local",
             options.workspace_memory_enabled,
             options.workspace_memory_root.as_deref(),
+            options.model.as_deref(),
+            0,
+            0,
+            0,
         )
         .await;
 
@@ -1307,6 +1311,7 @@ pub async fn run_agent_workflow_internal(
     let run_id_for_events = run_id.clone();
     let telemetry_memory_root = options.workspace_memory_root.clone();
     let telemetry_memory_enabled = options.workspace_memory_enabled;
+    let telemetry_model = options.model.clone();
     let frontend_event_projector = Arc::new(StdMutex::new(FrontendEventProjector::default()));
     let tool_call_index = Arc::new(StdMutex::new(HashMap::<String, (String, String)>::new()));
     let collected_artifacts = Arc::new(StdMutex::new(Vec::<ChatArtifact>::new()));
@@ -1399,6 +1404,7 @@ pub async fn run_agent_workflow_internal(
                             let chat_id = chat_id_for_events.clone();
                             let workspace_memory_root = telemetry_memory_root.clone();
                             let workspace_memory_enabled = telemetry_memory_enabled;
+                            let last_model = telemetry_model.clone();
                             tauri::async_runtime::spawn(async move {
                                 let _ = manager
                                     .upsert_chat_runtime_telemetry(
@@ -1409,6 +1415,53 @@ pub async fn run_agent_workflow_internal(
                                         "local",
                                         workspace_memory_enabled,
                                         workspace_memory_root.as_deref(),
+                                        last_model.as_deref(),
+                                        0,
+                                        0,
+                                        0,
+                                    )
+                                    .await;
+                            });
+                        }
+                    } else if text.starts_with("RUN_USAGE:") {
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(
+                            &text["RUN_USAGE:".len()..],
+                        ) {
+                            let prompt_tokens = value
+                                .get("prompt_tokens")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0);
+                            let completion_tokens = value
+                                .get("completion_tokens")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0);
+                            let total_tokens = value
+                                .get("total_tokens")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0);
+                            let last_model = value
+                                .get("model")
+                                .and_then(|v| v.as_str())
+                                .map(|v| v.to_string());
+                            let manager = agent_manager_clone.clone();
+                            let chat_id = chat_id_for_events.clone();
+                            let workspace_memory_root = telemetry_memory_root.clone();
+                            let workspace_memory_enabled = telemetry_memory_enabled;
+                            let last_model = last_model.or_else(|| telemetry_model.clone());
+                            tauri::async_runtime::spawn(async move {
+                                let _ = manager
+                                    .upsert_chat_runtime_telemetry(
+                                        &chat_id,
+                                        "persisted_long_chat",
+                                        "unavailable",
+                                        crate::services::memory_vault::types::EMBEDDING_MODEL,
+                                        "local",
+                                        workspace_memory_enabled,
+                                        workspace_memory_root.as_deref(),
+                                        last_model.as_deref(),
+                                        prompt_tokens,
+                                        completion_tokens,
+                                        total_tokens,
                                     )
                                     .await;
                             });

@@ -383,6 +383,16 @@ impl WorkflowStep for ThinkStep {
                 .await
                 .map_err(|e| format!("ThinkStep Failed: {}", e))?;
 
+            event_fn(AgentEvent::Status(format!(
+                "RUN_USAGE:{}",
+                serde_json::json!({
+                    "model": response.model,
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                })
+            )));
+
             let mut content = response.content.clone().unwrap_or_default();
             let mut resolved_tool_calls = response.tool_calls.clone();
 
@@ -406,6 +416,16 @@ impl WorkflowStep for ThinkStep {
                     .complete(recovery_request)
                     .await
                     .map_err(|e| format!("ThinkStep Recovery Failed: {}", e))?;
+
+                event_fn(AgentEvent::Status(format!(
+                    "RUN_USAGE:{}",
+                    serde_json::json!({
+                        "model": recovery.model,
+                        "prompt_tokens": recovery.usage.prompt_tokens,
+                        "completion_tokens": recovery.usage.completion_tokens,
+                        "total_tokens": recovery.usage.total_tokens,
+                    })
+                )));
 
                 if let Some(recovered_text) = recovery.content {
                     content = recovered_text;
