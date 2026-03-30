@@ -1,6 +1,7 @@
 import { Modal, Button } from "@heroui/react";
-import { useAirlock } from "../../hooks";
 import { ShieldCheck, ShieldAlert, Terminal } from "lucide-react";
+
+import { useAirlock } from "../../hooks";
 import { AirlockLevel } from "../../types";
 
 export function AirlockEvents() {
@@ -8,39 +9,34 @@ export function AirlockEvents() {
 
   if (pendingRequests.length === 0) return null;
 
-  // Process the first request in the queue
   const request = pendingRequests[0];
-
-  // Format info
   const isDangerous = request.airlockLevel === AirlockLevel.Dangerous;
   const hasExpiry = typeof request.timeoutSecs === "number" && request.timeoutSecs > 0;
 
-  // Try to format JSON payload if possible
   let formattedPayload = request.payloadSummary;
   try {
     const parsed = JSON.parse(request.payloadSummary);
     formattedPayload = JSON.stringify(parsed, null, 2);
-  } catch (e) {
-    // Keep as is
+  } catch {
+    // Keep the original summary when it is not JSON.
   }
 
   return (
     <Modal.Backdrop
       isOpen={true}
       onOpenChange={() => {}}
-      className="backdrop-blur-3xl bg-black/60 z-50"
+      className="z-50 bg-background/55 dark:bg-background/25 backdrop-blur-3xl"
     >
       <Modal.Container className="scale-100 opacity-100">
         <Modal.Dialog
-          className={`border relative overflow-hidden transition-all duration-300 rounded-[28px] shadow-2xl max-w-lg w-full ${
+          className={`relative w-full max-w-lg overflow-hidden rounded-[28px] border shadow-2xl transition-all duration-300 ${
             isDangerous
-              ? "border-red-500/30 shadow-[0_0_80px_-20px_rgba(239,68,68,0.2)] bg-zinc-950/80 backdrop-blur-3xl"
-              : "border-white/10 shadow-[0_0_80px_-20px_rgba(255,255,255,0.05)] bg-zinc-950/80 backdrop-blur-3xl"
+              ? "border-red-500/30 bg-background/70 dark:bg-background/30 backdrop-blur-3xl"
+              : "border-white/10 bg-background/70 dark:bg-background/30 backdrop-blur-3xl"
           }`}
         >
-          {/* Subtle Gradient Glow */}
           <div
-            className={`absolute top-0 inset-x-0 h-32 bg-gradient-to-b opacity-20 pointer-events-none ${
+            className={`pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b opacity-20 ${
               isDangerous ? "from-red-500/30" : "from-blue-500/20"
             }`}
           />
@@ -48,10 +44,10 @@ export function AirlockEvents() {
           <Modal.Header className="relative z-10 p-6 pb-2">
             <div className="flex items-center gap-3">
               <div
-                className={`flex items-center justify-center size-10 rounded-full border ${
+                className={`flex size-10 items-center justify-center rounded-full border ${
                   isDangerous
-                    ? "bg-red-500/10 border-red-500/20 text-red-500"
-                    : "bg-blue-500/10 border-blue-500/20 text-blue-500"
+                    ? "border-red-500/20 bg-red-500/10 text-red-500"
+                    : "border-blue-500/20 bg-blue-500/10 text-blue-500"
                 }`}
               >
                 {isDangerous ? (
@@ -61,15 +57,13 @@ export function AirlockEvents() {
                 )}
               </div>
               <div>
-                <Modal.Heading className="text-xl font-semibold tracking-tight text-white">
-                  {isDangerous
-                    ? "Critical Operation"
-                    : "Authentication Required"}
+                <Modal.Heading className="text-xl font-semibold tracking-tight text-foreground">
+                  {isDangerous ? "Critical Operation" : "Authentication Required"}
                 </Modal.Heading>
-                <p className="text-xs text-white/50 font-medium">
+                <p className="text-xs font-medium text-muted-foreground">
                   {request.commandId}
                 </p>
-                <p className="text-[11px] text-white/40">
+                <p className="text-[11px] text-muted-foreground/80">
                   {hasExpiry
                     ? `Expires in ${request.timeoutSecs}s if unresolved`
                     : "Awaiting explicit approval"}
@@ -78,12 +72,12 @@ export function AirlockEvents() {
             </div>
           </Modal.Header>
 
-          <Modal.Body className="relative z-10 px-6 py-4 space-y-5">
-            <p className="text-sm text-white/70 leading-relaxed">
+          <Modal.Body className="relative z-10 space-y-5 px-6 py-4">
+            <p className="text-sm leading-relaxed text-foreground/80">
               An agent is requesting permission to execute the following
               <span
-                className={`font-semibold ml-1 ${
-                  isDangerous ? "text-red-400" : "text-blue-400"
+                className={`ml-1 font-semibold ${
+                  isDangerous ? "text-red-400 dark:text-red-300" : "text-blue-500 dark:text-blue-300"
                 }`}
               >
                 {request.intent}
@@ -91,47 +85,47 @@ export function AirlockEvents() {
               action.
             </p>
 
-            <div className="rounded-2xl border border-white/5 bg-black/40 overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-white/5">
-                <Terminal className="size-3 text-white/30" />
-                <span className="text-[10px] font-medium text-white/40 uppercase tracking-wider">
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-background/45 dark:bg-background/20">
+              <div className="flex items-center gap-2 border-b border-border/50 bg-foreground/[0.03] px-4 py-2 dark:bg-white/[0.03]">
+                <Terminal className="size-3 text-muted-foreground" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Payload Preview
                 </span>
               </div>
               <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                <pre className="p-4 text-[11px] leading-relaxed font-mono text-white/80 whitespace-pre-wrap font-variant-ligatures-none">
+                <pre className="p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/85 [font-variant-ligatures:none]">
                   {formattedPayload}
                 </pre>
               </div>
             </div>
 
             {isDangerous && (
-              <div className="flex gap-3 items-start p-3 rounded-xl border border-red-500/20 bg-red-500/5">
-                <ShieldAlert className="size-4 text-red-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-red-200/80 leading-relaxed">
+              <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0 text-red-500" />
+                <p className="text-xs leading-relaxed text-red-600 dark:text-red-200/80">
                   This action can modify system state or files. Only approve if
-                  you are confident in the agent's intent.
+                  you are confident in the agent&apos;s intent.
                 </p>
               </div>
             )}
           </Modal.Body>
 
           <Modal.Footer className="relative z-10 p-6 pt-2">
-            <div className="flex gap-3 justify-end w-full">
+            <div className="flex w-full justify-end gap-3">
               <Button
                 variant="ghost"
                 onPress={() => respond(request.commandId, false)}
-                className="rounded-full px-6 h-10 text-sm font-medium text-white/60 hover:text-white hover:bg-white/5"
+                className="h-10 rounded-full px-6 text-sm font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
               >
                 Reject
               </Button>
               <Button
                 variant="primary"
                 onPress={() => respond(request.commandId, true)}
-                className={`rounded-full px-6 h-10 text-sm font-medium shadow-lg transition-all active:scale-95 ${
+                className={`h-10 rounded-full px-6 text-sm font-medium shadow-lg transition-all active:scale-95 ${
                   isDangerous
-                    ? "bg-red-600 hover:bg-red-500 text-white shadow-red-500/20"
-                    : "bg-white text-black hover:bg-white/90 shadow-white/10"
+                    ? "bg-red-600 text-white shadow-red-500/20 hover:bg-red-500"
+                    : "bg-foreground text-background hover:opacity-90"
                 }`}
               >
                 {isDangerous ? "Authorize Execution" : "Approve Action"}
