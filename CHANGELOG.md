@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Airlock approval modal now follows the app theme tokens instead of rendering as an isolated black panel** — the modal keeps its compact layout but uses theme-derived surfaces for light and dark mode:
   - `src/components/neural/AirlockEvents.tsx` — updated the approval dialog surface to `bg-background/70` with `dark:bg-background/30`, adjusted payload container contrast, and aligned text/button colors with the current shell theme
 
+### Fixed
+
+- **Airlock modal rendering context missing and overflow issues** — resolved an issue where `AirlockEvents.tsx` did not wrap the content in the required `<Modal>` parent causing broken positioning, and added `break-all` to JSON payload display to prevent overflow.
+
 ### Validation
 
 - `pnpm exec tsc --noEmit` → pass

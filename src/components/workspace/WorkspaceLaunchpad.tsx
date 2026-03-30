@@ -134,7 +134,8 @@ export function WorkspaceLaunchpad({
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-auto p-6">
+    <div className="relative h-full w-full overflow-y-auto overflow-x-hidden bg-background">
+      <div className="mx-auto flex max-w-7xl flex-col gap-8 p-6 lg:p-10">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -331,6 +332,7 @@ export function WorkspaceLaunchpad({
           </div>
         </Card>
       </div>
+    </div>
     </div>
   );
 }

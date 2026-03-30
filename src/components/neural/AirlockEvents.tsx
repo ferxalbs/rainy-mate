@@ -22,19 +22,16 @@ export function AirlockEvents() {
   }
 
   return (
-    <Modal.Backdrop
-      isOpen={true}
-      onOpenChange={() => {}}
-      className="z-50 bg-background/55 dark:bg-background/25 backdrop-blur-3xl"
-    >
-      <Modal.Container className="scale-100 opacity-100">
-        <Modal.Dialog
-          className={`relative w-full max-w-lg overflow-hidden rounded-[28px] border shadow-2xl transition-all duration-300 ${
-            isDangerous
-              ? "border-red-500/30 bg-background/70 dark:bg-background/30 backdrop-blur-3xl"
-              : "border-white/10 bg-background/70 dark:bg-background/30 backdrop-blur-3xl"
-          }`}
-        >
+    <Modal isOpen={true} onOpenChange={() => {}}>
+      <Modal.Backdrop className="z-50 bg-background/55 dark:bg-background/25 backdrop-blur-3xl">
+        <Modal.Container>
+          <Modal.Dialog
+            className={`relative w-full max-w-lg overflow-hidden rounded-[28px] border shadow-2xl transition-all duration-300 ${
+              isDangerous
+                ? "border-red-500/30 bg-background/70 dark:bg-background/30 backdrop-blur-3xl"
+                : "border-white/10 bg-background/70 dark:bg-background/30 backdrop-blur-3xl"
+            }`}
+          >
           <div
             className={`pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b opacity-20 ${
               isDangerous ? "from-red-500/30" : "from-blue-500/20"
@@ -93,7 +90,7 @@ export function AirlockEvents() {
                 </span>
               </div>
               <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                <pre className="p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/85 [font-variant-ligatures:none]">
+                <pre className="p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-foreground/85 [font-variant-ligatures:none]">
                   {formattedPayload}
                 </pre>
               </div>
@@ -132,8 +129,9 @@ export function AirlockEvents() {
               </Button>
             </div>
           </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }
