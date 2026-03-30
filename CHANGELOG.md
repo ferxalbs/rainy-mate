@@ -77,6 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Desktop bridge terminology is now consistent across the app surface** — remaining `ATM` wording in the main desktop UI was renamed to `Bridge` or neutral cloud-agent language:
   - `src/components/agent-chat/neural-config.ts`, `src/components/neural/CreateAgentForm.tsx`, `src/components/neural/NeuralPanel.tsx`, `src/components/neural/modules/NeuralDashboard.tsx`, `src/services/tauri.ts`, `src/types/index.ts`
 
+### Fixed
+
+- **Local startup crash on machines that had already applied migration `20260329113000`** — `pnpm tauri dev` no longer aborts during setup with `migration 20260329113000 was previously applied but has been modified`:
+  - `src-tauri/migrations/20260329113000_expand_chat_runtime_telemetry.sql` — restored to its original checksum-safe three-column migration
+  - `src-tauri/migrations/20260329114500_add_chat_usage_columns.sql` — new follow-up migration adds `last_model`, `prompt_tokens`, `completion_tokens`, and `total_tokens` without invalidating already-applied local databases
+
 ### Validation
 
 - `cd src-tauri && cargo check -q` → pass
