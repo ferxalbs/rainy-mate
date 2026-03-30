@@ -65,6 +65,7 @@ pub async fn create_task(
                     auto_save: true,
                     notifications_enabled: true,
                 },
+                launchpad: crate::services::mate_launchpad::WorkspaceLaunchSettings::default(),
             };
 
             task_manager.set_workspace(workspace).await;
@@ -117,6 +118,7 @@ pub async fn set_task_manager_workspace(
             auto_save: true,
             notifications_enabled: true,
         },
+        launchpad: crate::services::mate_launchpad::WorkspaceLaunchSettings::default(),
     };
 
     task_manager.set_workspace(workspace).await;

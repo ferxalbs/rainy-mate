@@ -3,8 +3,11 @@ use dirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use uuid::Uuid;
+
+use crate::services::mate_launchpad::WorkspaceLaunchSettings;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workspace {
@@ -16,6 +19,8 @@ pub struct Workspace {
     pub agents: Vec<AgentConfig>,
     pub memory: WorkspaceMemory,
     pub settings: WorkspaceSettings,
+    #[serde(default)]
+    pub launchpad: WorkspaceLaunchSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,6 +139,7 @@ impl WorkspaceManager {
                 auto_save: true,
                 notifications_enabled: true,
             },
+            launchpad: WorkspaceLaunchSettings::default(),
         };
 
         // Save the workspace
@@ -155,6 +161,42 @@ impl WorkspaceManager {
         } else {
             Err(format!("Workspace with id {} not found", id).into())
         }
+    }
+
+    pub fn find_workspace_by_path(
+        &self,
+        workspace_path: &str,
+    ) -> Result<Option<Workspace>, Box<dyn std::error::Error>> {
+        for workspace_id in self.list_workspaces()? {
+            let workspace = self.load_workspace(&workspace_id)?;
+            if workspace
+                .allowed_paths
+                .iter()
+                .any(|allowed| allowed == workspace_path)
+            {
+                return Ok(Some(workspace));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn ensure_workspace_for_path(
+        &self,
+        workspace_path: &str,
+    ) -> Result<Workspace, Box<dyn std::error::Error>> {
+        if let Some(existing) = self.find_workspace_by_path(workspace_path)? {
+            return Ok(existing);
+        }
+
+        let name = Path::new(workspace_path)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty())
+            .unwrap_or("Workspace")
+            .to_string();
+
+        self.create_workspace(name, vec![workspace_path.to_string()])
     }
 
     pub fn save_workspace(
@@ -511,6 +553,7 @@ impl WorkspaceManager {
             agents: Vec::new(),
             memory: template.default_memory.clone(),
             settings: template.default_settings.clone(),
+            launchpad: WorkspaceLaunchSettings::default(),
         };
 
         // Save the workspace

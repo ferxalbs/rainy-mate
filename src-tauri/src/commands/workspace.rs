@@ -2,8 +2,9 @@
 // Tauri commands for advanced workspace management
 
 use crate::services::{
-    EffectiveLocalAgentPolicy, LocalAgentSecurityService, PermissionOverride, SettingsManager,
-    Workspace, WorkspaceManager, WorkspacePermissions,
+    EffectiveLocalAgentPolicy, LocalAgentSecurityService, MateLaunchpadService,
+    PermissionOverride, SettingsManager, Workspace, WorkspaceLaunchpadSummary, WorkspaceManager,
+    WorkspacePermissions,
 };
 use std::sync::Arc;
 use tauri::State;
@@ -212,4 +213,77 @@ pub async fn get_workspace_analytics(
     workspace_manager
         .get_analytics(&workspace_id)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_mate_pack_definitions(
+) -> Result<Vec<crate::services::MatePackDefinition>, String> {
+    Ok(MateLaunchpadService::pack_definitions())
+}
+
+#[tauri::command]
+pub async fn list_first_run_scenarios(
+) -> Result<Vec<crate::services::FirstRunScenarioDefinition>, String> {
+    Ok(MateLaunchpadService::first_run_scenarios())
+}
+
+#[tauri::command]
+pub async fn get_workspace_launchpad(
+    workspace_path: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+) -> Result<WorkspaceLaunchpadSummary, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    Ok(MateLaunchpadService::get_workspace_summary(&workspace))
+}
+
+#[tauri::command]
+pub async fn update_workspace_launch_config(
+    workspace_path: String,
+    trust_preset: String,
+    enabled_pack_ids: Vec<String>,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+) -> Result<WorkspaceLaunchpadSummary, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    MateLaunchpadService::update_workspace_launch_config(
+        workspace_manager.inner(),
+        &workspace.id,
+        &trust_preset,
+        &enabled_pack_ids,
+    )
+}
+
+#[tauri::command]
+pub async fn build_workspace_first_run_prompt(
+    workspace_path: String,
+    scenario_id: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+) -> Result<String, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    MateLaunchpadService::build_first_run_prompt(&workspace, &scenario_id)
+}
+
+#[tauri::command]
+pub async fn record_workspace_launch_result(
+    workspace_path: String,
+    scenario_id: String,
+    chat_id: Option<String>,
+    success: bool,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+) -> Result<WorkspaceLaunchpadSummary, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    MateLaunchpadService::record_workspace_launch(
+        workspace_manager.inner(),
+        &workspace.id,
+        &scenario_id,
+        chat_id.as_deref(),
+        success,
+    )
 }

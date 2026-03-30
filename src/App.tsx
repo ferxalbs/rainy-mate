@@ -5,6 +5,7 @@ import { TahoeLayout, AIDocumentPanel, AIResearchPanel } from "./components";
 import { SettingsPage } from "./components/settings";
 import { AgentChatPanel } from "./components/agent-chat/AgentChatPanel";
 import { NeuralPanel, AirlockEvents, McpApprovalEvents } from "./components/neural";
+import { WorkspaceLaunchpad } from "./components/workspace";
 import { AgentBuilder } from "./components/agents/builder/AgentBuilder";
 import { AgentStorePage } from "./components/agents/store/AgentStorePage";
 import { WasmSkillsPage } from "./components/wasm-skills/WasmSkillsPage";
@@ -56,6 +57,14 @@ function App() {
   const [remoteSessionBinding, setRemoteSessionBinding] = useState<tauri.RemoteSessionBinding | null>(null);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [pendingWorkspaceLaunch, setPendingWorkspaceLaunch] = useState<{
+    requestId: string;
+    prompt: string;
+    scenarioId: string;
+    workspaceId: string;
+    chatId: string;
+  } | null>(null);
+  const consumedLaunchRequestIdsRef = useRef<Set<string>>(new Set());
 
   const {
     sessionsByWorkspace,
@@ -162,6 +171,29 @@ function App() {
       switchToChat(chat.id);
     }
   }, [activeFolder?.path, createNewChat, switchToChat]);
+
+  const handleRunWorkspaceScenario = useCallback(async (scenarioId: string) => {
+    if (!activeFolder) return;
+    try {
+      const workspacePath = activeFolder.path;
+      const prompt = await tauri.buildWorkspaceFirstRunPrompt(workspacePath, scenarioId);
+      const chat = await createNewChat(activeFolder.path);
+      if (!chat) {
+        throw new Error("Failed to create or reuse a chat for the guided run.");
+      }
+      switchToChat(chat.id);
+      setActiveSection("agent-chat");
+      setPendingWorkspaceLaunch({
+        requestId: crypto.randomUUID(),
+        prompt,
+        scenarioId,
+        workspaceId: workspacePath,
+        chatId: chat.id,
+      });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Failed to launch workspace scenario.");
+    }
+  }, [activeFolder, createNewChat, switchToChat]);
 
   // Check if we're in Settings section
   const isSettingsSection = activeSection.startsWith("settings-");
@@ -291,7 +323,8 @@ function App() {
         isImmersive={
           activeSection !== "documents" &&
           activeSection !== "research" &&
-          activeSection !== "atm-bootstrap"
+          activeSection !== "atm-bootstrap" &&
+          activeSection !== "workspace-launchpad"
         }
         chatSessionsByWorkspace={sessionsByWorkspace}
         activeWorkspacePath={activeFolder?.path}
@@ -349,6 +382,19 @@ function App() {
           {activeSection === "neural-link" && (
             <div className="flex-1 overflow-auto bg-content1/50">
               <NeuralPanel onNavigate={handleNavigate} />
+            </div>
+          )}
+
+          {activeSection === "workspace-launchpad" && (
+            <div className="flex-1 h-full min-h-0 overflow-hidden">
+              {activeFolder ? (
+                <WorkspaceLaunchpad
+                  workspacePath={activeFolder.path}
+                  onRunScenario={handleRunWorkspaceScenario}
+                />
+              ) : (
+                <NoFolderGate onAddFolder={addFolder} />
+              )}
             </div>
           )}
 
@@ -412,6 +458,26 @@ function App() {
                   onOpenSettings={handleSettingsClick}
                   chatScopeId={activeChatId}
                   remoteSessionBinding={remoteSessionBinding}
+                  pendingLaunch={pendingWorkspaceLaunch}
+                  onPendingLaunchConsumed={(requestId) => {
+                    if (consumedLaunchRequestIdsRef.current.has(requestId)) {
+                      return false;
+                    }
+
+                    consumedLaunchRequestIdsRef.current.add(requestId);
+                    setPendingWorkspaceLaunch((current) =>
+                      current?.requestId === requestId ? null : current,
+                    );
+                    return true;
+                  }}
+                  onPendingLaunchCompleted={async (result) => {
+                    await tauri.recordWorkspaceLaunchResult(
+                      result.workspaceId,
+                      result.scenarioId,
+                      result.chatId,
+                      result.success,
+                    );
+                  }}
                   onNewChat={handleCreateNewChat}
                   onRefreshSessions={async () => {
                     await refreshWorkspaceSessions(activeFolder?.path || "default");

@@ -323,6 +323,14 @@ export function AppSidebar({
               onNavigate={onNavigate}
             />
             <NavItem
+              id="workspace-launchpad"
+              label="Workspace Launchpad"
+              icon={BrainCircuit}
+              isActive={activeSection === "workspace-launchpad"}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+            <NavItem
               id="agent-store"
               label="Agents Store"
               icon={Library}

@@ -663,6 +663,12 @@ pub fn run() {
             commands::save_workspace_template,
             commands::delete_workspace_template,
             commands::get_workspace_analytics,
+            commands::list_mate_pack_definitions,
+            commands::list_first_run_scenarios,
+            commands::get_workspace_launchpad,
+            commands::update_workspace_launch_config,
+            commands::build_workspace_first_run_prompt,
+            commands::record_workspace_launch_result,
             // Router commands (PHASE 3 - Intelligent Routing)
             commands::get_router_config,
             commands::update_router_config,

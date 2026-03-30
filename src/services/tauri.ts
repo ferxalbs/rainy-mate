@@ -590,6 +590,61 @@ export interface AdvancedWorkspace {
     autoSave: boolean;
     notificationsEnabled: boolean;
   };
+  launchpad?: {
+    trustPreset: "conservative" | "balanced" | "elevated";
+    enabledPackIds: string[];
+    firstRunCompletedAt?: string | null;
+    firstRunScenarioId?: string | null;
+    launchCount: number;
+    successfulLaunchCount: number;
+    lastLaunchAt?: string | null;
+    lastLaunchChatId?: string | null;
+  };
+}
+
+export interface MatePackDefinition {
+  id: string;
+  title: string;
+  summary: string;
+  recommendedFor: string;
+  expectedOutputs: string[];
+  defaultTrustPreset: "conservative" | "balanced" | "elevated";
+  toolIds: string[];
+}
+
+export interface FirstRunScenarioDefinition {
+  id: string;
+  title: string;
+  summary: string;
+  recommendedPackIds: string[];
+  suggestedOutputs: string[];
+}
+
+export interface WorkspaceLaunchpadSummary {
+  workspaceId: string;
+  workspaceName: string;
+  trustPreset: "conservative" | "balanced" | "elevated";
+  enabledPackIds: string[];
+  firstRunCompletedAt?: string | null;
+  firstRunScenarioId?: string | null;
+  launchCount: number;
+  successfulLaunchCount: number;
+  lastLaunchAt?: string | null;
+  lastLaunchChatId?: string | null;
+  capabilitySummary: {
+    label: string;
+    effectiveToolPolicyMode: string;
+    allowedPathsCount: number;
+    permissions: {
+      canRead: boolean;
+      canWrite: boolean;
+      canExecute: boolean;
+      canDelete: boolean;
+      canCreateAgents: boolean;
+    };
+    enabledCapabilities: string[];
+    cautions: string[];
+  };
 }
 
 // ============ Workspace Commands ============
@@ -753,6 +808,56 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<{
     memoryUsed: analytics.memoryUsed,
     lastActivity: analytics.lastActivity,
   };
+}
+
+export async function listMatePackDefinitions(): Promise<MatePackDefinition[]> {
+  return invoke<MatePackDefinition[]>("list_mate_pack_definitions");
+}
+
+export async function listFirstRunScenarios(): Promise<FirstRunScenarioDefinition[]> {
+  return invoke<FirstRunScenarioDefinition[]>("list_first_run_scenarios");
+}
+
+export async function getWorkspaceLaunchpad(
+  workspacePath: string,
+): Promise<WorkspaceLaunchpadSummary> {
+  return invoke<WorkspaceLaunchpadSummary>("get_workspace_launchpad", { workspacePath });
+}
+
+export async function updateWorkspaceLaunchConfig(
+  workspacePath: string,
+  trustPreset: "conservative" | "balanced" | "elevated",
+  enabledPackIds: string[],
+): Promise<WorkspaceLaunchpadSummary> {
+  return invoke<WorkspaceLaunchpadSummary>("update_workspace_launch_config", {
+    workspacePath,
+    trustPreset,
+    enabledPackIds,
+  });
+}
+
+export async function buildWorkspaceFirstRunPrompt(
+  workspacePath: string,
+  scenarioId: string,
+): Promise<string> {
+  return invoke<string>("build_workspace_first_run_prompt", {
+    workspacePath,
+    scenarioId,
+  });
+}
+
+export async function recordWorkspaceLaunchResult(
+  workspacePath: string,
+  scenarioId: string,
+  chatId: string | null,
+  success: boolean,
+): Promise<WorkspaceLaunchpadSummary> {
+  return invoke<WorkspaceLaunchpadSummary>("record_workspace_launch_result", {
+    workspacePath,
+    scenarioId,
+    chatId,
+    success,
+  });
 }
 
 export async function addPermissionOverride(

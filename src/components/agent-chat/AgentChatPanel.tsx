@@ -30,6 +30,21 @@ interface AgentChatPanelProps {
   // Multi-chat props
   chatScopeId?: string | null;
   remoteSessionBinding?: RemoteSessionBinding | null;
+  pendingLaunch?: {
+    requestId: string;
+    prompt: string;
+    scenarioId: string;
+    workspaceId: string;
+    chatId: string;
+  } | null;
+  onPendingLaunchConsumed?: (requestId: string) => boolean | Promise<boolean>;
+  onPendingLaunchCompleted?: (result: {
+    requestId: string;
+    scenarioId: string;
+    workspaceId: string;
+    chatId: string | null;
+    success: boolean;
+  }) => void | Promise<void>;
   onNewChat?: () => void;
   onRefreshSessions?: () => Promise<void>;
 }
@@ -185,6 +200,9 @@ export function AgentChatPanel({
   className,
   chatScopeId: externalChatScopeId,
   remoteSessionBinding,
+  pendingLaunch,
+  onPendingLaunchConsumed,
+  onPendingLaunchCompleted,
   onNewChat: externalOnNewChat,
   // @RESERVED — will be used for sidebar title refresh after auto-title generation
   onRefreshSessions: _onRefreshSessions,
@@ -197,6 +215,7 @@ export function AgentChatPanel({
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastLaunchRequestIdRef = useRef<string | null>(null);
 
   const {
     messages,
@@ -222,6 +241,24 @@ export function AgentChatPanel({
   const isProcessing = isPlanning || isExecuting;
   const reasoningOptions = useMemo(() => getReasoningOptions(selectedModel), [selectedModel]);
   const stableReasoningOptions = reasoningOptions.length > 0 ? reasoningOptions : EMPTY_REASONING;
+
+  const resolveActiveModelId = useCallback(async (): Promise<string | null> => {
+    if (currentModelId.trim()) {
+      return currentModelId;
+    }
+
+    try {
+      const persistedModelId = (await tauri.getSelectedModel()).trim();
+      if (!persistedModelId) {
+        return null;
+      }
+      setCurrentModelId((prev) => prev || persistedModelId);
+      return persistedModelId;
+    } catch (error) {
+      console.error("Failed to resolve selected model", error);
+      return null;
+    }
+  }, [currentModelId]);
 
   const latestTelemetry = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -328,18 +365,24 @@ export function AgentChatPanel({
     const instruction = input.trim();
     if ((!instruction && pendingAttachments.length === 0) || isProcessing) return;
 
+    const activeModelId = await resolveActiveModelId();
+    if (!activeModelId) {
+      console.error("Cannot start agent run without a selected model");
+      return;
+    }
+
     const attachmentsToSend = pendingAttachments.slice();
     setInput("");
     setPendingAttachments([]);
     await runNativeAgent(
       instruction,
-      currentModelId,
+      activeModelId,
       workspacePath,
       selectedAgentId || undefined,
       stableReasoningOptions.length ? reasoningEffort : undefined,
       attachmentsToSend.length ? attachmentsToSend : undefined,
     );
-  }, [input, pendingAttachments, isProcessing, runNativeAgent, currentModelId, workspacePath, selectedAgentId, stableReasoningOptions, reasoningEffort]);
+  }, [input, isProcessing, pendingAttachments, reasoningEffort, resolveActiveModelId, runNativeAgent, selectedAgentId, stableReasoningOptions, workspacePath]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -363,6 +406,54 @@ export function AgentChatPanel({
   const handleComposerSubmit = useCallback(() => {
     void handleSubmit();
   }, [handleSubmit]);
+
+  useEffect(() => {
+    if (!pendingLaunch) return;
+    if (pendingLaunch.chatId !== externalChatScopeId) return;
+    if (isHydratingHistory) return;
+    if (lastLaunchRequestIdRef.current === pendingLaunch.requestId) return;
+
+    void (async () => {
+      const activeModelId = await resolveActiveModelId();
+      if (!activeModelId) {
+        return;
+      }
+
+      const consumed = await onPendingLaunchConsumed?.(pendingLaunch.requestId);
+      if (consumed === false) {
+        return;
+      }
+
+      lastLaunchRequestIdRef.current = pendingLaunch.requestId;
+      const result = await runNativeAgent(
+        pendingLaunch.prompt,
+        activeModelId,
+        workspacePath,
+        selectedAgentId || undefined,
+        stableReasoningOptions.length ? reasoningEffort : undefined,
+      );
+
+      await onPendingLaunchCompleted?.({
+        requestId: pendingLaunch.requestId,
+        scenarioId: pendingLaunch.scenarioId,
+        workspaceId: pendingLaunch.workspaceId,
+        chatId: result.chatScopeId,
+        success: result.ok,
+      });
+    })();
+  }, [
+    externalChatScopeId,
+    isHydratingHistory,
+    onPendingLaunchCompleted,
+    onPendingLaunchConsumed,
+    pendingLaunch,
+    reasoningEffort,
+    resolveActiveModelId,
+    runNativeAgent,
+    selectedAgentId,
+    stableReasoningOptions.length,
+    workspacePath,
+  ]);
 
   // ─── Render ────────────────────────────────────────────────────────
   const hasMessages = messages.length > 0;

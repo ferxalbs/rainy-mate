@@ -402,11 +402,45 @@ fn normalize_gemini_type(value: &str) -> Option<&'static str> {
     }
 }
 
+fn resolve_local_refs(
+    value: &mut serde_json::Value,
+    definitions: Option<&serde_json::Map<String, serde_json::Value>>,
+) {
+    match value {
+        serde_json::Value::Object(map) => {
+            if let Some(reference) = map.get("$ref").and_then(|value| value.as_str()) {
+                if let Some(def_name) = reference.strip_prefix("#/definitions/") {
+                    if let Some(definitions) = definitions {
+                        if let Some(resolved) = definitions.get(def_name) {
+                            let mut cloned = resolved.clone();
+                            resolve_local_refs(&mut cloned, Some(definitions));
+                            *value = cloned;
+                            return;
+                        }
+                    }
+                }
+            }
+
+            for nested in map.values_mut() {
+                resolve_local_refs(nested, definitions);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items.iter_mut() {
+                resolve_local_refs(item, definitions);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Recursively clean JSON Schema to match Gemini's strict OpenAPI 3.0 subset requirements.
 fn clean_schema_for_gemini(value: &mut serde_json::Value) {
     if let serde_json::Value::Object(map) = value {
         // Remove unsupported JSON Schema features
         map.remove("$schema");
+        map.remove("definitions");
+        map.remove("$ref");
         map.remove("default");
         map.remove("additionalProperties");
         map.remove("oneOf");
@@ -489,6 +523,12 @@ fn build_gemini_tools(
 
     for tool in tools {
         let mut parameters = tool.function.parameters.clone();
+        let definitions = parameters
+            .as_object()
+            .and_then(|root| root.get("definitions"))
+            .and_then(|value| value.as_object())
+            .cloned();
+        resolve_local_refs(&mut parameters, definitions.as_ref());
         clean_schema_for_gemini(&mut parameters);
         let Some(root) = parameters.as_object_mut() else {
             return Err(AIError::InvalidRequest(format!(
@@ -518,6 +558,81 @@ fn build_gemini_tools(
 }
 
 // ─── Adapter struct ──────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::{build_gemini_tools, clean_schema_for_gemini, resolve_local_refs};
+    use crate::ai::provider_types::{FunctionDefinition, Tool};
+
+    #[test]
+    fn clean_schema_removes_definitions_and_refs_after_resolution() {
+        let mut schema = serde_json::json!({
+            "type": "object",
+            "definitions": {
+                "PathEntry": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string" }
+                    },
+                    "required": ["path"]
+                }
+            },
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/PathEntry" }
+                }
+            }
+        });
+
+        let definitions = schema
+            .as_object()
+            .and_then(|root| root.get("definitions"))
+            .and_then(|value| value.as_object())
+            .cloned();
+        resolve_local_refs(&mut schema, definitions.as_ref());
+        clean_schema_for_gemini(&mut schema);
+
+        let schema_text = schema.to_string();
+        assert!(!schema_text.contains("definitions"));
+        assert!(!schema_text.contains("$ref"));
+        assert!(schema_text.contains("\"ARRAY\""));
+        assert!(schema_text.contains("\"OBJECT\""));
+    }
+
+    #[test]
+    fn build_gemini_tools_accepts_ref_based_schema() {
+        let tool = Tool {
+            r#type: "function".to_string(),
+            function: FunctionDefinition {
+                name: "test_tool".to_string(),
+                description: "Test tool".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "definitions": {
+                        "Item": {
+                            "type": "object",
+                            "properties": {
+                                "value": { "type": "string" }
+                            }
+                        }
+                    },
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": { "$ref": "#/definitions/Item" }
+                        }
+                    }
+                }),
+            },
+        };
+
+        let built = build_gemini_tools(&[tool]).expect("schema should sanitize");
+        let json = serde_json::to_string(&built).expect("serialize");
+        assert!(!json.contains("definitions"));
+        assert!(!json.contains("$ref"));
+    }
+}
 
 pub struct GeminiProviderAdapter {
     config: ProviderConfig,

@@ -31,6 +31,19 @@ export interface WorkspaceSettings {
     notificationsEnabled: boolean;
 }
 
+export type WorkspaceTrustPreset = "conservative" | "balanced" | "elevated";
+
+export interface WorkspaceLaunchpadState {
+    trustPreset: WorkspaceTrustPreset;
+    enabledPackIds: string[];
+    firstRunCompletedAt?: string | null;
+    firstRunScenarioId?: string | null;
+    launchCount: number;
+    successfulLaunchCount: number;
+    lastLaunchAt?: string | null;
+    lastLaunchChatId?: string | null;
+}
+
 /**
  * Agent configuration within a workspace
  */
@@ -62,6 +75,54 @@ export interface Workspace {
     agents: AgentConfig[];
     memory: WorkspaceMemory;
     settings: WorkspaceSettings;
+    launchpad?: WorkspaceLaunchpadState;
+}
+
+export interface MatePackDefinition {
+    id: string;
+    title: string;
+    summary: string;
+    recommendedFor: string;
+    expectedOutputs: string[];
+    defaultTrustPreset: WorkspaceTrustPreset;
+    toolIds: string[];
+}
+
+export interface FirstRunScenarioDefinition {
+    id: string;
+    title: string;
+    summary: string;
+    recommendedPackIds: string[];
+    suggestedOutputs: string[];
+}
+
+export interface WorkspaceCapabilitySummary {
+    label: string;
+    effectiveToolPolicyMode: string;
+    allowedPathsCount: number;
+    permissions: {
+        canRead: boolean;
+        canWrite: boolean;
+        canExecute: boolean;
+        canDelete: boolean;
+        canCreateAgents: boolean;
+    };
+    enabledCapabilities: string[];
+    cautions: string[];
+}
+
+export interface WorkspaceLaunchpadSummary {
+    workspaceId: string;
+    workspaceName: string;
+    trustPreset: WorkspaceTrustPreset;
+    enabledPackIds: string[];
+    firstRunCompletedAt?: string | null;
+    firstRunScenarioId?: string | null;
+    launchCount: number;
+    successfulLaunchCount: number;
+    lastLaunchAt?: string | null;
+    lastLaunchChatId?: string | null;
+    capabilitySummary: WorkspaceCapabilitySummary;
 }
 
 /**

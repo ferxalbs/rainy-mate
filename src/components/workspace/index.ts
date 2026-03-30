@@ -5,3 +5,4 @@ export { WorkspaceSelector } from './WorkspaceSelector';
 export { WorkspaceCreator } from './WorkspaceCreator';
 export { WorkspaceSettings } from './WorkspaceSettings';
 export { WorkspaceList } from './WorkspaceList';
+export { WorkspaceLaunchpad } from './WorkspaceLaunchpad';

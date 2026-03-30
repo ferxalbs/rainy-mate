@@ -648,6 +648,12 @@ export function useAgentChat(
   );
 
   const ensureChatScope = useCallback(async () => {
+    // When the parent switches threads, prefer the externally-selected scope
+    // immediately instead of reusing a stale previous chatScopeId mid-transition.
+    if (initialChatScopeId && initialChatScopeId !== chatScopeId) {
+      setChatScopeId(initialChatScopeId);
+      return initialChatScopeId;
+    }
     if (chatScopeId) return chatScopeId;
     if (initialChatScopeId) {
       setChatScopeId(initialChatScopeId);
@@ -955,7 +961,30 @@ export function useAgentChat(
           }
         }
       }
-      setMessages(hydratedMessages);
+      setMessages((prev) => {
+        if (prev.length === 0) return hydratedMessages;
+
+        const merged = new Map<string, AgentMessage>();
+        for (const message of hydratedMessages) {
+          merged.set(message.id, message);
+        }
+
+        for (const message of prev) {
+          // Preserve optimistic/live messages while hydration catches up.
+          if (
+            message.isLoading ||
+            message.runState === "running" ||
+            message.runState === "failed" ||
+            !merged.has(message.id)
+          ) {
+            merged.set(message.id, message);
+          }
+        }
+
+        return Array.from(merged.values()).sort(
+          (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+        );
+      });
       setHistoryCursorRowid(window.next_cursor_rowid ?? null);
       setHasMoreHistory(window.has_more);
       hasHydratedRef.current = true;
@@ -1432,7 +1461,12 @@ export function useAgentChat(
       agentSpecId?: string,
       reasoningEffort?: string,
       attachments?: ChatAttachment[],
-    ) => {
+    ): Promise<{
+      ok: boolean;
+      chatScopeId: string | null;
+      runId?: string;
+      error?: string;
+    }> => {
       const resolvedChatScopeId = await ensureChatScope().catch((error) => {
         console.error("Failed to resolve chat scope:", error);
         throw error;
@@ -2033,6 +2067,11 @@ export function useAgentChat(
             setChatTitleStatus(refreshed?.title?.trim() ? "ready" : "fallback");
           }
         }
+        return {
+          ok: true,
+          chatScopeId: resolvedChatScopeId,
+          runId: result.runId || clientRunId,
+        };
       } catch (err: any) {
         console.error("Native agent error:", err);
         setMessages((prev) =>
@@ -2059,6 +2098,11 @@ export function useAgentChat(
             supervisorPlan: message.supervisorPlan,
           })),
         );
+        return {
+          ok: false,
+          chatScopeId: resolvedChatScopeId,
+          error: String(err?.message || err),
+        };
       } finally {
         forgeRecordingIdRef.current = null;
         setIsExecuting(false);
