@@ -69,6 +69,7 @@ function MessageBubbleComponent({
   const isUser = message.type === "user";
   const isSystem = message.type === "system";
 
+  // ⚡ Bolt Optimization: Stabilize function reference to prevent child re-renders
   const handleExecuteToolCalls = useCallback(() => {
     if (message.toolCalls && onExecuteToolCalls && workspaceId) {
       onExecuteToolCalls(message.id, message.toolCalls, workspaceId);
@@ -361,6 +362,7 @@ export const MessageBubble = React.memo(
 // Re-export with a name hint for the parent to avoid confusion
 export { MessageBubble as MemoizedMessageBubble };
 
+// ⚡ Bolt Optimization: Memoize complex child component to avoid re-renders on token stream updates
 const SupervisorRail = React.memo(function SupervisorRail({
   summary,
   steps,
@@ -476,6 +478,7 @@ const SupervisorRail = React.memo(function SupervisorRail({
   );
 });
 
+// ⚡ Bolt Optimization: Memoize complex child component to avoid re-renders on token stream updates
 const TraceAccordion = React.memo(function TraceAccordion({
   trace,
   runState,
@@ -579,6 +582,7 @@ const TraceAccordion = React.memo(function TraceAccordion({
   );
 });
 
+// ⚡ Bolt Optimization: Memoize complex child component to avoid re-renders on token stream updates
 const PlanCard = React.memo(function PlanCard({
   plan,
   onExecute,

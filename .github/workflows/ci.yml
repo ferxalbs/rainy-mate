@@ -151,11 +151,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Create CI Config
-        if: matrix.platform == 'macos-latest'
         run: echo '{"bundle":{"createUpdaterArtifacts":false}}' > ci-config.json
 
       - name: Tauri Build
-        run: pnpm run tauri build ${{ matrix.args }} ${{ matrix.platform == 'macos-latest' && '--config ci-config.json' || '' }}
+        run: pnpm run tauri build ${{ matrix.args }} --config ci-config.json
 
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'

@@ -32,6 +32,7 @@ const methodColors: Record<string, string> = {
   default: "text-gray-400 bg-gray-400/10 border-gray-400/20",
 };
 
+// ⚡ Bolt Optimization: Memoize complex child component to avoid re-renders on token stream updates
 export const PlanConfirmationCard = React.memo(function PlanConfirmationCard({
   toolCalls,
   onExecute,
