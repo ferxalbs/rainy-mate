@@ -77,6 +77,40 @@ export function WorkspaceLaunchpad({
     () => launchpad?.recentRuns[0] ?? null,
     [launchpad?.recentRuns],
   );
+  const latestSuccessfulRun = useMemo(
+    () => launchpad?.recentRuns.find((run) => run.success) ?? null,
+    [launchpad?.recentRuns],
+  );
+  const latestRunOutOfContractTools = useMemo(() => {
+    if (!latestContractRun) return [];
+    const approved = new Set(latestContractRun.approvedToolIds);
+    return latestContractRun.actualToolIds.filter((toolId) => !approved.has(toolId));
+  }, [latestContractRun]);
+  const latestRunProducedOutputs = latestContractRun?.producedArtifactPaths.length ?? 0;
+  const latestRunOutputStatus = useMemo(() => {
+    if (!latestContractRun) {
+      return {
+        label: "Awaiting first governed run",
+        tone: "text-muted-foreground",
+      };
+    }
+    if (latestRunProducedOutputs > 0) {
+      return {
+        label: `${latestRunProducedOutputs} artifact${latestRunProducedOutputs === 1 ? "" : "s"} produced`,
+        tone: "text-green-500",
+      };
+    }
+    if (latestContractRun.status === "completed") {
+      return {
+        label: "Run completed without generated artifacts",
+        tone: "text-foreground/80",
+      };
+    }
+    return {
+      label: "Outputs pending until the run completes",
+      tone: "text-muted-foreground",
+    };
+  }, [latestContractRun, latestRunProducedOutputs]);
 
   const handlePresetChange = useCallback(
     async (trustPreset: "conservative" | "balanced" | "elevated") => {
@@ -373,6 +407,59 @@ export function WorkspaceLaunchpad({
               </div>
 
               <div className="space-y-3 pt-3 border-t border-white/5">
+                <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Launch Proof</p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <ProofCard
+                    title="Control"
+                    value={`L${launchpad.capabilitySummary.highestAirlockLevel}`}
+                    detail={
+                      latestContractRun?.requiresExplicitApproval
+                        ? "Explicit approval is part of this run path."
+                        : "Current scope stays inside non-dangerous execution."
+                    }
+                    tone={
+                      launchpad.capabilitySummary.highestAirlockLevel >= 2
+                        ? "amber"
+                        : "emerald"
+                    }
+                  />
+                  <ProofCard
+                    title="Continuity"
+                    value={latestSuccessfulRun ? "Ledger active" : "No completed run yet"}
+                    detail={
+                      latestSuccessfulRun?.completedAt
+                        ? `Last successful run: ${new Date(latestSuccessfulRun.completedAt).toLocaleString()}`
+                        : "Prepared launches will accumulate evidence here."
+                    }
+                    tone={latestSuccessfulRun ? "emerald" : "slate"}
+                  />
+                  <ProofCard
+                    title="Outputs"
+                    value={latestRunOutputStatus.label}
+                    detail={
+                      latestContractRun?.expectedOutputs.length
+                        ? `Contract expects ${latestContractRun.expectedOutputs.join(", ")}.`
+                        : "No explicit output contract yet."
+                    }
+                    tone={latestRunProducedOutputs > 0 ? "emerald" : "slate"}
+                  />
+                </div>
+                {latestRunOutOfContractTools.length > 0 && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3">
+                    <p className="text-[10px] font-semibold tracking-widest text-red-500/80 uppercase mb-1.5">
+                      Contract Drift
+                    </p>
+                    <p className="text-[12.5px] leading-relaxed text-foreground/90">
+                      The latest run recorded tool activity outside the approved preflight set:{" "}
+                      <span className="font-medium text-red-500">
+                        {latestRunOutOfContractTools.join(", ")}
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 pt-3 border-t border-white/5">
                 <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Execution Contract</p>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-xl border border-white/5 bg-background/30 p-3">
@@ -502,6 +589,27 @@ export function WorkspaceLaunchpad({
                         <p className="text-[12px] leading-relaxed text-muted-foreground">
                           {run.effectiveToolPolicyMode} · {run.expectedOutputs.join(", ") || "No explicit outputs"}
                         </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <RunEvidencePill
+                            label={`${run.approvedToolIds.length} approved`}
+                            tone="slate"
+                          />
+                          <RunEvidencePill
+                            label={`${run.actualToolIds.length} actual`}
+                            tone="slate"
+                          />
+                          <RunEvidencePill
+                            label={`${run.actualTouchedPaths.length} paths`}
+                            tone="slate"
+                          />
+                          <RunEvidencePill
+                            label={`${run.producedArtifactPaths.length} artifacts`}
+                            tone={run.producedArtifactPaths.length > 0 ? "emerald" : "slate"}
+                          />
+                          {run.success === false && (
+                            <RunEvidencePill label="Review required" tone="amber" />
+                          )}
+                        </div>
                         {run.actualToolIds.length > 0 && (
                           <div className="mt-2">
                             <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-1.5">
@@ -603,5 +711,59 @@ function ContractActionCard({
         <p className="text-[12px] leading-relaxed text-muted-foreground">{fallback}</p>
       )}
     </div>
+  );
+}
+
+function ProofCard({
+  title,
+  value,
+  detail,
+  tone,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  tone: "emerald" | "amber" | "slate";
+}) {
+  const toneClass =
+    tone === "emerald"
+      ? "border-green-500/20 bg-green-500/10"
+      : tone === "amber"
+        ? "border-yellow-500/20 bg-yellow-500/10"
+        : "border-white/5 bg-background/30";
+  const valueClass =
+    tone === "emerald"
+      ? "text-green-500"
+      : tone === "amber"
+        ? "text-yellow-500"
+        : "text-foreground";
+
+  return (
+    <div className={`rounded-xl border p-3 ${toneClass}`}>
+      <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-2">
+        {title}
+      </p>
+      <p className={`text-[13px] font-semibold tracking-tight ${valueClass}`}>{value}</p>
+      <p className="mt-1 text-[12px] leading-relaxed text-foreground/80">{detail}</p>
+    </div>
+  );
+}
+
+function RunEvidencePill({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "emerald" | "amber" | "slate";
+}) {
+  const className =
+    tone === "emerald"
+      ? "bg-green-500/10 text-green-500"
+      : tone === "amber"
+        ? "bg-yellow-500/10 text-yellow-500"
+        : "bg-white/5 border border-white/5 text-foreground/80";
+
+  return (
+    <div className={`rounded-lg px-2 py-0.5 text-[11px] font-medium ${className}`}>{label}</div>
   );
 }

@@ -5,6 +5,29 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5] - 2026-04-01 - MATE REBORN: DEFINITIVE DEVELOPER COCKPIT
+
+### Added
+
+- **Canonical `0.6.5` launch/application brief grounded in the real shipped runtime** — the repo now includes a concise release narrative for Canopy / Speedrun / YC-style applications that maps directly to the current MaTE architecture instead of relying on fragmented research notes:
+  - `docs/MATE_0_6_5_LAUNCH_BRIEF.md` — new product, architecture, demo, and narrative brief centered on governed execution, workspace continuity, native artifacts, and session-scoped remote bridging
+
+### Changed
+
+- **Workspace Launchpad now reads like a proof surface instead of a configuration panel** — operators can see the current launch story in one glance through explicit cards for control, continuity, and outputs, while recent runs now summarize approved tools, actual tools, touched paths, and artifact counts as evidence:
+  - `src/components/workspace/WorkspaceLaunchpad.tsx` — added launch-proof cards, output status summarization, run-evidence pills, and visible contract-drift warnings when actual tool usage falls outside the approved contract
+
+- **Roadmap truth is now aligned to the shipped product instead of the obsolete pre-Launchpad era** — the roadmap no longer advertises `v0.3.0` document/image plans that understate the current product:
+  - `ROADMAP.md` — replaced the stale roadmap with a `0.6.5` developer-cockpit roadmap focused on governed execution, workspace-safe autonomy, native deliverables, and near-term hardening
+
+- **Version metadata is now synchronized for the `0.6.5` release train** — desktop, Rust, and package manifests now point to the same major release:
+  - `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` — bumped version from `0.6.4` to `0.6.5`
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+
 ## [Unreleased] - 2026-04-01 - MATE REBORN PHASE 3: LAUNCHPAD HANDOFF SANITY + DOCUMENT OUTPUT HARDENING
 
 ### Changed
