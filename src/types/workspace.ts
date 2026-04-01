@@ -42,6 +42,7 @@ export interface WorkspaceLaunchpadState {
     successfulLaunchCount: number;
     lastLaunchAt?: string | null;
     lastLaunchChatId?: string | null;
+    recentRuns?: WorkspaceLaunchRunRecord[];
 }
 
 /**
@@ -109,6 +110,11 @@ export interface WorkspaceCapabilitySummary {
     };
     enabledCapabilities: string[];
     cautions: string[];
+    enforcedPackIds: string[];
+    activeToolIds: string[];
+    requiresExplicitApproval: boolean;
+    highestAirlockLevel: number;
+    suggestedOutputs: string[];
 }
 
 export interface WorkspaceLaunchpadSummary {
@@ -122,7 +128,27 @@ export interface WorkspaceLaunchpadSummary {
     successfulLaunchCount: number;
     lastLaunchAt?: string | null;
     lastLaunchChatId?: string | null;
+    recentRuns: WorkspaceLaunchRunRecord[];
     capabilitySummary: WorkspaceCapabilitySummary;
+}
+
+export interface WorkspaceLaunchRunRecord {
+    requestId: string;
+    scenarioId: string;
+    scenarioTitle: string;
+    trustPreset: WorkspaceTrustPreset;
+    enabledPackIds: string[];
+    approvedToolIds: string[];
+    touchedPaths: string[];
+    expectedOutputs: string[];
+    effectiveToolPolicyMode: string;
+    highestAirlockLevel: number;
+    requiresExplicitApproval: boolean;
+    status: string;
+    createdAt: string;
+    completedAt?: string | null;
+    chatId?: string | null;
+    success?: boolean | null;
 }
 
 /**

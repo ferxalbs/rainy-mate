@@ -2,9 +2,9 @@
 // Tauri commands for advanced workspace management
 
 use crate::services::{
-    EffectiveLocalAgentPolicy, LocalAgentSecurityService, MateLaunchpadService,
-    PermissionOverride, SettingsManager, Workspace, WorkspaceLaunchpadSummary, WorkspaceManager,
-    WorkspacePermissions,
+    EffectiveLocalAgentPolicy, LocalAgentSecurityService, MateLaunchpadService, PermissionOverride,
+    SettingsManager, Workspace, WorkspaceLaunchpadSummary, WorkspaceManager, WorkspacePermissions,
+    WorkspacePreparedLaunch,
 };
 use std::sync::Arc;
 use tauri::State;
@@ -269,8 +269,25 @@ pub async fn build_workspace_first_run_prompt(
 }
 
 #[tauri::command]
+pub async fn prepare_workspace_launch(
+    workspace_path: String,
+    scenario_id: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+) -> Result<WorkspacePreparedLaunch, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    MateLaunchpadService::prepare_workspace_launch(
+        workspace_manager.inner(),
+        &workspace.id,
+        &scenario_id,
+    )
+}
+
+#[tauri::command]
 pub async fn record_workspace_launch_result(
     workspace_path: String,
+    request_id: String,
     scenario_id: String,
     chat_id: Option<String>,
     success: bool,
@@ -282,6 +299,7 @@ pub async fn record_workspace_launch_result(
     MateLaunchpadService::record_workspace_launch(
         workspace_manager.inner(),
         &workspace.id,
+        &request_id,
         &scenario_id,
         chat_id.as_deref(),
         success,

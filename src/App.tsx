@@ -60,6 +60,7 @@ function App() {
   const [pendingWorkspaceLaunch, setPendingWorkspaceLaunch] = useState<{
     requestId: string;
     prompt: string;
+    preflight: tauri.WorkspaceLaunchPreflight;
     scenarioId: string;
     workspaceId: string;
     chatId: string;
@@ -176,7 +177,7 @@ function App() {
     if (!activeFolder) return;
     try {
       const workspacePath = activeFolder.path;
-      const prompt = await tauri.buildWorkspaceFirstRunPrompt(workspacePath, scenarioId);
+      const prepared = await tauri.prepareWorkspaceLaunch(workspacePath, scenarioId);
       const chat = await createNewChat(activeFolder.path);
       if (!chat) {
         throw new Error("Failed to create or reuse a chat for the guided run.");
@@ -184,8 +185,9 @@ function App() {
       switchToChat(chat.id);
       setActiveSection("agent-chat");
       setPendingWorkspaceLaunch({
-        requestId: crypto.randomUUID(),
-        prompt,
+        requestId: prepared.requestId,
+        prompt: prepared.prompt,
+        preflight: prepared.preflight,
         scenarioId,
         workspaceId: workspacePath,
         chatId: chat.id,
@@ -473,6 +475,7 @@ function App() {
                   onPendingLaunchCompleted={async (result) => {
                     await tauri.recordWorkspaceLaunchResult(
                       result.workspaceId,
+                      result.requestId,
                       result.scenarioId,
                       result.chatId,
                       result.success,

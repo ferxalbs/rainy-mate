@@ -668,6 +668,7 @@ pub fn run() {
             commands::get_workspace_launchpad,
             commands::update_workspace_launch_config,
             commands::build_workspace_first_run_prompt,
+            commands::prepare_workspace_launch,
             commands::record_workspace_launch_result,
             // Router commands (PHASE 3 - Intelligent Routing)
             commands::get_router_config,

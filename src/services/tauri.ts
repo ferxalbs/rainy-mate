@@ -599,6 +599,7 @@ export interface AdvancedWorkspace {
     successfulLaunchCount: number;
     lastLaunchAt?: string | null;
     lastLaunchChatId?: string | null;
+    recentRuns?: WorkspaceLaunchRunRecord[];
   };
 }
 
@@ -631,6 +632,7 @@ export interface WorkspaceLaunchpadSummary {
   successfulLaunchCount: number;
   lastLaunchAt?: string | null;
   lastLaunchChatId?: string | null;
+  recentRuns: WorkspaceLaunchRunRecord[];
   capabilitySummary: {
     label: string;
     effectiveToolPolicyMode: string;
@@ -644,7 +646,52 @@ export interface WorkspaceLaunchpadSummary {
     };
     enabledCapabilities: string[];
     cautions: string[];
+    enforcedPackIds: string[];
+    activeToolIds: string[];
+    requiresExplicitApproval: boolean;
+    highestAirlockLevel: number;
+    suggestedOutputs: string[];
   };
+}
+
+export interface WorkspaceLaunchPreflight {
+  scenarioId: string;
+  scenarioTitle: string;
+  trustPreset: "conservative" | "balanced" | "elevated";
+  enabledPackIds: string[];
+  enabledPackTitles: string[];
+  approvedToolIds: string[];
+  touchedPaths: string[];
+  expectedOutputs: string[];
+  effectiveToolPolicyMode: string;
+  highestAirlockLevel: number;
+  requiresExplicitApproval: boolean;
+}
+
+export interface WorkspaceLaunchRunRecord {
+  requestId: string;
+  scenarioId: string;
+  scenarioTitle: string;
+  trustPreset: "conservative" | "balanced" | "elevated";
+  enabledPackIds: string[];
+  approvedToolIds: string[];
+  touchedPaths: string[];
+  expectedOutputs: string[];
+  effectiveToolPolicyMode: string;
+  highestAirlockLevel: number;
+  requiresExplicitApproval: boolean;
+  status: string;
+  createdAt: string;
+  completedAt?: string | null;
+  chatId?: string | null;
+  success?: boolean | null;
+}
+
+export interface WorkspacePreparedLaunch {
+  requestId: string;
+  prompt: string;
+  preflight: WorkspaceLaunchPreflight;
+  launchpad: WorkspaceLaunchpadSummary;
 }
 
 // ============ Workspace Commands ============
@@ -846,14 +893,26 @@ export async function buildWorkspaceFirstRunPrompt(
   });
 }
 
+export async function prepareWorkspaceLaunch(
+  workspacePath: string,
+  scenarioId: string,
+): Promise<WorkspacePreparedLaunch> {
+  return invoke<WorkspacePreparedLaunch>("prepare_workspace_launch", {
+    workspacePath,
+    scenarioId,
+  });
+}
+
 export async function recordWorkspaceLaunchResult(
   workspacePath: string,
+  requestId: string,
   scenarioId: string,
   chatId: string | null,
   success: boolean,
 ): Promise<WorkspaceLaunchpadSummary> {
   return invoke<WorkspaceLaunchpadSummary>("record_workspace_launch_result", {
     workspacePath,
+    requestId,
     scenarioId,
     chatId,
     success,

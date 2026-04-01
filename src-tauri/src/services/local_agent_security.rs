@@ -1,6 +1,6 @@
 use crate::ai::specs::manifest::{AgentSpec, AirlockToolPolicy};
 use crate::models::neural::ToolAccessPolicy;
-use crate::services::settings::SettingsManager;
+use crate::services::{settings::SettingsManager, MateLaunchpadService, Workspace};
 use crate::services::workspace::{WorkspaceManager, WorkspacePermissions};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -83,14 +83,15 @@ impl LocalAgentSecurityService {
         workspace_id: &str,
         spec: Option<&AgentSpec>,
     ) -> EffectiveLocalAgentPolicy {
+        let resolved_workspace = Self::resolve_workspace(workspace_manager, workspace_id);
         let (workspace_allowed_paths, workspace_permissions, workspace_notifications) =
-            match workspace_manager.load_workspace(workspace_id) {
-                Ok(workspace) => (
-                    workspace.allowed_paths,
-                    workspace.permissions,
+            match resolved_workspace.as_ref() {
+                Some(workspace) => (
+                    workspace.allowed_paths.clone(),
+                    workspace.permissions.clone(),
                     workspace.settings.notifications_enabled,
                 ),
-                Err(_) => (
+                None => (
                     Self::fallback_allowed_paths(workspace_id),
                     Self::fallback_permissions(),
                     settings.get_settings().notifications_enabled,
@@ -126,6 +127,12 @@ impl LocalAgentSecurityService {
             tool_access_policy =
                 Self::merge_tool_policy(tool_access_policy, &spec.airlock.tool_policy);
             source.push_str("+spec");
+        }
+        if let Some(workspace) = resolved_workspace.as_ref() {
+            let (launchpad_policy, launchpad_source) =
+                MateLaunchpadService::constrain_tool_policy_for_workspace(workspace, tool_access_policy);
+            tool_access_policy = launchpad_policy;
+            source.push_str(&launchpad_source);
         }
 
         EffectiveLocalAgentPolicy {
@@ -262,6 +269,22 @@ impl LocalAgentSecurityService {
             .collect()
     }
 
+    fn resolve_workspace(
+        workspace_manager: &Arc<WorkspaceManager>,
+        workspace_id: &str,
+    ) -> Option<Workspace> {
+        if let Ok(workspace) = workspace_manager.load_workspace(workspace_id) {
+            return Some(workspace);
+        }
+        if Path::new(workspace_id).is_absolute() {
+            return workspace_manager
+                .find_workspace_by_path(workspace_id)
+                .ok()
+                .flatten();
+        }
+        None
+    }
+
     fn fallback_allowed_paths(workspace_id: &str) -> Vec<String> {
         if Path::new(workspace_id).is_absolute() {
             vec![workspace_id.to_string()]
@@ -284,7 +307,9 @@ impl LocalAgentSecurityService {
 #[cfg(test)]
 mod tests {
     use super::LocalAgentSecurityService;
-    use crate::services::workspace::WorkspacePermissions;
+    use crate::models::neural::ToolAccessPolicy;
+    use crate::services::{mate_launchpad::WorkspaceLaunchSettings, Workspace};
+    use crate::services::workspace::{WorkspaceMemory, WorkspacePermissions, WorkspaceSettings};
 
     #[test]
     fn permissions_disable_mutating_tools() {
@@ -301,5 +326,54 @@ mod tests {
         assert!(policy.deny.iter().any(|item| item == "execute_command"));
         assert!(policy.deny.iter().any(|item| item == "delete_file"));
         assert!(!policy.deny.iter().any(|item| item == "read_file"));
+    }
+
+    #[test]
+    fn launchpad_constrains_policy_to_selected_packs() {
+        let workspace = Workspace {
+            id: "ws".to_string(),
+            name: "Workspace".to_string(),
+            allowed_paths: vec!["/tmp/ws".to_string()],
+            permissions: WorkspacePermissions {
+                can_read: true,
+                can_write: true,
+                can_execute: true,
+                can_delete: true,
+                can_create_agents: true,
+            },
+            permission_overrides: Vec::new(),
+            agents: Vec::new(),
+            memory: WorkspaceMemory {
+                max_size: 1,
+                current_size: 0,
+                retention_policy: "fifo".to_string(),
+            },
+            settings: WorkspaceSettings {
+                theme: "default".to_string(),
+                language: "en".to_string(),
+                auto_save: true,
+                notifications_enabled: true,
+            },
+            launchpad: WorkspaceLaunchSettings {
+                trust_preset: "balanced".to_string(),
+                enabled_pack_ids: vec!["repo_guardian".to_string()],
+                ..WorkspaceLaunchSettings::default()
+            },
+        };
+
+        let (policy, source) = crate::services::MateLaunchpadService::constrain_tool_policy_for_workspace(
+            &workspace,
+            ToolAccessPolicy {
+                enabled: true,
+                mode: "all".to_string(),
+                allow: Vec::new(),
+                deny: Vec::new(),
+            },
+        );
+
+        assert_eq!(policy.mode, "allowlist");
+        assert!(policy.allow.iter().any(|tool| tool == "git_diff"));
+        assert!(!policy.allow.iter().any(|tool| tool == "execute_command"));
+        assert_eq!(source, "+launchpad");
     }
 }

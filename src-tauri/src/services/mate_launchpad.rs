@@ -1,12 +1,35 @@
+use std::collections::BTreeSet;
+
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::services::{Workspace, WorkspaceManager};
+use crate::models::neural::{AirlockLevel, ToolAccessPolicy};
+use crate::services::{get_tool_policy, LocalAgentSecurityService, Workspace, WorkspaceManager};
+
+const MAX_RECENT_RUNS: usize = 8;
+
+const EXECUTE_RISK_TOOLS: &[&str] = &[
+    "execute_command",
+    "browse_url",
+    "open_new_tab",
+    "click_element",
+    "type_text",
+    "go_back",
+    "submit_form",
+    "http_post_json",
+];
+
+const DELETE_RISK_TOOLS: &[&str] = &["delete_file", "move_file"];
 
 const REPO_GUARDIAN_TOOLS: &[&str] = &[
     "read_file",
     "read_many_files",
+    "read_file_chunk",
     "list_files",
+    "list_files_detailed",
     "search_files",
+    "file_exists",
+    "get_file_info",
     "git_status",
     "git_diff",
     "git_log",
@@ -15,6 +38,7 @@ const REPO_GUARDIAN_TOOLS: &[&str] = &[
     "web_search",
     "read_web_page",
     "write_file",
+    "append_file",
 ];
 
 const WORKSPACE_FORGER_TOOLS: &[&str] = &[
@@ -45,6 +69,8 @@ const INCIDENT_SCRIBE_TOOLS: &[&str] = &[
 const KNOWLEDGE_WEAVER_TOOLS: &[&str] = &[
     "read_file",
     "read_many_files",
+    "read_file_chunk",
+    "list_files",
     "search_files",
     "ingest_document",
     "save_memory",
@@ -78,6 +104,52 @@ pub struct FirstRunScenarioDefinition {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceLaunchPreflight {
+    pub scenario_id: String,
+    pub scenario_title: String,
+    pub trust_preset: String,
+    pub enabled_pack_ids: Vec<String>,
+    pub enabled_pack_titles: Vec<String>,
+    pub approved_tool_ids: Vec<String>,
+    pub touched_paths: Vec<String>,
+    pub expected_outputs: Vec<String>,
+    pub effective_tool_policy_mode: String,
+    pub highest_airlock_level: u8,
+    pub requires_explicit_approval: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceLaunchRunRecord {
+    pub request_id: String,
+    pub scenario_id: String,
+    pub scenario_title: String,
+    pub trust_preset: String,
+    pub enabled_pack_ids: Vec<String>,
+    pub approved_tool_ids: Vec<String>,
+    pub touched_paths: Vec<String>,
+    pub expected_outputs: Vec<String>,
+    pub effective_tool_policy_mode: String,
+    pub highest_airlock_level: u8,
+    pub requires_explicit_approval: bool,
+    pub status: String,
+    pub created_at: String,
+    pub completed_at: Option<String>,
+    pub chat_id: Option<String>,
+    pub success: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspacePreparedLaunch {
+    pub request_id: String,
+    pub prompt: String,
+    pub preflight: WorkspaceLaunchPreflight,
+    pub launchpad: WorkspaceLaunchpadSummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceLaunchpadSummary {
     pub workspace_id: String,
     pub workspace_name: String,
@@ -90,6 +162,7 @@ pub struct WorkspaceLaunchpadSummary {
     pub last_launch_at: Option<String>,
     pub last_launch_chat_id: Option<String>,
     pub capability_summary: WorkspaceCapabilitySummary,
+    pub recent_runs: Vec<WorkspaceLaunchRunRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,6 +174,11 @@ pub struct WorkspaceCapabilitySummary {
     pub permissions: WorkspaceCapabilityPermissions,
     pub enabled_capabilities: Vec<String>,
     pub cautions: Vec<String>,
+    pub enforced_pack_ids: Vec<String>,
+    pub active_tool_ids: Vec<String>,
+    pub requires_explicit_approval: bool,
+    pub highest_airlock_level: u8,
+    pub suggested_outputs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,12 +196,13 @@ pub struct WorkspaceCapabilityPermissions {
 pub struct WorkspaceLaunchSettings {
     pub trust_preset: String,
     pub enabled_pack_ids: Vec<String>,
-    pub first_run_completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub first_run_completed_at: Option<DateTime<Utc>>,
     pub first_run_scenario_id: Option<String>,
     pub launch_count: u64,
     pub successful_launch_count: u64,
-    pub last_launch_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_launch_at: Option<DateTime<Utc>>,
     pub last_launch_chat_id: Option<String>,
+    pub recent_runs: Vec<WorkspaceLaunchRunRecord>,
 }
 
 impl Default for WorkspaceLaunchSettings {
@@ -141,6 +220,7 @@ impl Default for WorkspaceLaunchSettings {
             successful_launch_count: 0,
             last_launch_at: None,
             last_launch_chat_id: None,
+            recent_runs: Vec::new(),
         }
     }
 }
@@ -161,7 +241,7 @@ impl MateLaunchpadService {
                     "Patch suggestions".to_string(),
                 ],
                 default_trust_preset: "balanced".to_string(),
-                tool_ids: REPO_GUARDIAN_TOOLS.iter().map(|tool| tool.to_string()).collect(),
+                tool_ids: REPO_GUARDIAN_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
             },
             MatePackDefinition {
                 id: "workspace_forger".to_string(),
@@ -174,7 +254,7 @@ impl MateLaunchpadService {
                     "Archive bundle".to_string(),
                 ],
                 default_trust_preset: "balanced".to_string(),
-                tool_ids: WORKSPACE_FORGER_TOOLS.iter().map(|tool| tool.to_string()).collect(),
+                tool_ids: WORKSPACE_FORGER_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
             },
             MatePackDefinition {
                 id: "incident_scribe".to_string(),
@@ -187,7 +267,7 @@ impl MateLaunchpadService {
                     "Follow-up checklist".to_string(),
                 ],
                 default_trust_preset: "conservative".to_string(),
-                tool_ids: INCIDENT_SCRIBE_TOOLS.iter().map(|tool| tool.to_string()).collect(),
+                tool_ids: INCIDENT_SCRIBE_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
             },
             MatePackDefinition {
                 id: "knowledge_weaver".to_string(),
@@ -200,10 +280,7 @@ impl MateLaunchpadService {
                     "Workspace memory refresh".to_string(),
                 ],
                 default_trust_preset: "conservative".to_string(),
-                tool_ids: KNOWLEDGE_WEAVER_TOOLS
-                    .iter()
-                    .map(|tool| tool.to_string())
-                    .collect(),
+                tool_ids: KNOWLEDGE_WEAVER_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
             },
         ]
     }
@@ -266,6 +343,7 @@ impl MateLaunchpadService {
             last_launch_at: workspace.launchpad.last_launch_at.map(|value| value.to_rfc3339()),
             last_launch_chat_id: workspace.launchpad.last_launch_chat_id.clone(),
             capability_summary: capability_summary(workspace, trust),
+            recent_runs: workspace.launchpad.recent_runs.clone(),
         }
     }
 
@@ -286,9 +364,57 @@ impl MateLaunchpadService {
         Ok(Self::get_workspace_summary(&workspace))
     }
 
+    pub fn prepare_workspace_launch(
+        workspace_manager: &WorkspaceManager,
+        workspace_id: &str,
+        scenario_id: &str,
+    ) -> Result<WorkspacePreparedLaunch, String> {
+        let mut workspace = workspace_manager
+            .load_workspace(workspace_id)
+            .map_err(|e| e.to_string())?;
+        let preflight = build_launch_preflight(&workspace, scenario_id)?;
+        let request_id = format!("launch_{}", uuid::Uuid::new_v4());
+        let created_at = Utc::now();
+        let prompt = build_first_run_prompt(&workspace, scenario_id, &preflight)?;
+
+        workspace.launchpad.recent_runs.insert(
+            0,
+            WorkspaceLaunchRunRecord {
+                request_id: request_id.clone(),
+                scenario_id: preflight.scenario_id.clone(),
+                scenario_title: preflight.scenario_title.clone(),
+                trust_preset: preflight.trust_preset.clone(),
+                enabled_pack_ids: preflight.enabled_pack_ids.clone(),
+                approved_tool_ids: preflight.approved_tool_ids.clone(),
+                touched_paths: preflight.touched_paths.clone(),
+                expected_outputs: preflight.expected_outputs.clone(),
+                effective_tool_policy_mode: preflight.effective_tool_policy_mode.clone(),
+                highest_airlock_level: preflight.highest_airlock_level,
+                requires_explicit_approval: preflight.requires_explicit_approval,
+                status: "prepared".to_string(),
+                created_at: created_at.to_rfc3339(),
+                completed_at: None,
+                chat_id: None,
+                success: None,
+            },
+        );
+        trim_recent_runs(&mut workspace.launchpad.recent_runs);
+        workspace_manager
+            .save_workspace(&workspace, crate::services::ConfigFormat::Json)
+            .map_err(|e| e.to_string())?;
+
+        Ok(WorkspacePreparedLaunch {
+            request_id,
+            prompt,
+            preflight,
+            launchpad: Self::get_workspace_summary(&workspace),
+        })
+    }
+
     pub fn record_workspace_launch(
         workspace_manager: &WorkspaceManager,
         workspace_id: &str,
+        request_id: &str,
         scenario_id: &str,
         chat_id: Option<&str>,
         success: bool,
@@ -296,7 +422,7 @@ impl MateLaunchpadService {
         let mut workspace = workspace_manager
             .load_workspace(workspace_id)
             .map_err(|e| e.to_string())?;
-        let now = chrono::Utc::now();
+        let now = Utc::now();
         workspace.launchpad.launch_count = workspace.launchpad.launch_count.saturating_add(1);
         if success {
             workspace.launchpad.successful_launch_count = workspace
@@ -308,6 +434,23 @@ impl MateLaunchpadService {
         }
         workspace.launchpad.last_launch_at = Some(now);
         workspace.launchpad.last_launch_chat_id = chat_id.map(|value| value.to_string());
+
+        if let Some(run) = workspace
+            .launchpad
+            .recent_runs
+            .iter_mut()
+            .find(|record| record.request_id == request_id)
+        {
+            run.status = if success {
+                "completed".to_string()
+            } else {
+                "failed".to_string()
+            };
+            run.completed_at = Some(now.to_rfc3339());
+            run.chat_id = chat_id.map(|value| value.to_string());
+            run.success = Some(success);
+        }
+
         workspace_manager
             .save_workspace(&workspace, crate::services::ConfigFormat::Json)
             .map_err(|e| e.to_string())?;
@@ -315,31 +458,46 @@ impl MateLaunchpadService {
     }
 
     pub fn build_first_run_prompt(workspace: &Workspace, scenario_id: &str) -> Result<String, String> {
-        let allowed_paths = if workspace.allowed_paths.is_empty() {
-            "No explicit allowed paths were configured yet.".to_string()
+        let preflight = build_launch_preflight(workspace, scenario_id)?;
+        build_first_run_prompt(workspace, scenario_id, &preflight)
+    }
+
+    pub fn constrain_tool_policy_for_workspace(
+        workspace: &Workspace,
+        base: ToolAccessPolicy,
+    ) -> (ToolAccessPolicy, String) {
+        let enabled_pack_ids = sanitize_pack_ids(&workspace.launchpad.enabled_pack_ids);
+        if enabled_pack_ids.is_empty() {
+            return (base, String::new());
+        }
+
+        let active_tool_ids = effective_launch_tool_ids(
+            workspace,
+            &enabled_pack_ids,
+            normalize_trust_preset(&workspace.launchpad.trust_preset),
+        );
+        if active_tool_ids.is_empty() {
+            return (base, String::new());
+        }
+
+        let allow = if base.mode == "allowlist" && !base.allow.is_empty() {
+            active_tool_ids
+                .into_iter()
+                .filter(|tool| base.allow.iter().any(|allowed| allowed == tool))
+                .collect::<Vec<_>>()
         } else {
-            workspace.allowed_paths.join(", ")
+            active_tool_ids
         };
 
-        let trust_preset = normalize_trust_preset(&workspace.launchpad.trust_preset);
-        let enabled_packs = sanitize_pack_ids(&workspace.launchpad.enabled_pack_ids);
-        let pack_text = if enabled_packs.is_empty() {
-            "No packs are enabled yet.".to_string()
-        } else {
-            enabled_packs.join(", ")
-        };
-
-        let scenario_prompt = match scenario_id {
-            "codebase_copilot" => "Analyze this workspace like a senior engineer inheriting a production codebase. Read the repo shape, recent changelog context, and workspace memory overlay. Produce: 1) the most important current system truths, 2) the top product or technical risks, and 3) the next concrete engineering actions. Update WORKSTATE if useful.",
-            "file_organizer" => "Inspect this workspace as an operations-focused file organizer. Identify clutter, stale artifacts, naming inconsistencies, and obvious archival candidates. Produce a concrete cleanup plan first; if safe, perform bounded organization work and explain every action. Update WORKSTATE with the resulting state.",
-            "docs_builder" => "Read the current workspace, changelog context, and any durable memory files. Produce a polished project brief suitable for a technical founder or investor. Generate a native document artifact if the workspace contents support it, and update workspace memory with the decisive summary.",
-            _ => return Err(format!("Unknown first-run scenario '{}'", scenario_id)),
-        };
-
-        Ok(format!(
-            "You are running a guided MaTE launch scenario.\n\nWorkspace: {}\nTrust preset: {}\nEnabled packs: {}\nAllowed paths: {}\n\nConstraints:\n- Treat this as a production-grade workspace.\n- Prefer stable, auditable actions.\n- Use the current workspace files and memory overlay as the source of truth.\n- If you generate a document or archive, keep it inside the active workspace.\n\nTask:\n{}",
-            workspace.name, trust_preset, pack_text, allowed_paths, scenario_prompt
-        ))
+        (
+            ToolAccessPolicy {
+                enabled: base.enabled,
+                mode: "allowlist".to_string(),
+                allow,
+                deny: base.deny,
+            },
+            "+launchpad".to_string(),
+        )
     }
 }
 
@@ -367,7 +525,193 @@ fn sanitize_pack_ids(ids: &[String]) -> Vec<String> {
     values
 }
 
+fn pack_by_id(pack_id: &str) -> Option<MatePackDefinition> {
+    MateLaunchpadService::pack_definitions()
+        .into_iter()
+        .find(|pack| pack.id == pack_id)
+}
+
+fn scenario_by_id(scenario_id: &str) -> Option<FirstRunScenarioDefinition> {
+    MateLaunchpadService::first_run_scenarios()
+        .into_iter()
+        .find(|scenario| scenario.id == scenario_id)
+}
+
+fn effective_pack_ids_for_scenario(workspace: &Workspace, scenario_id: &str) -> Result<Vec<String>, String> {
+    let scenario = scenario_by_id(scenario_id)
+        .ok_or_else(|| format!("Unknown first-run scenario '{}'", scenario_id))?;
+    let enabled = sanitize_pack_ids(&workspace.launchpad.enabled_pack_ids);
+    let mut effective = enabled
+        .iter()
+        .filter(|pack_id| scenario.recommended_pack_ids.iter().any(|value| value == *pack_id))
+        .cloned()
+        .collect::<Vec<_>>();
+    if effective.is_empty() {
+        effective = scenario.recommended_pack_ids;
+    }
+    effective.sort();
+    effective.dedup();
+    Ok(effective)
+}
+
+fn active_tool_ids(enabled_pack_ids: &[String], trust_preset: &str) -> Vec<String> {
+    let base_tools = enabled_pack_ids
+        .iter()
+        .filter_map(|pack_id| pack_by_id(pack_id))
+        .flat_map(|pack| pack.tool_ids)
+        .collect::<BTreeSet<_>>();
+
+    base_tools
+        .into_iter()
+        .filter(|tool| match trust_preset {
+            "conservative" => {
+                !EXECUTE_RISK_TOOLS.iter().any(|value| value == tool)
+                    && !DELETE_RISK_TOOLS.iter().any(|value| value == tool)
+            }
+            "balanced" => !EXECUTE_RISK_TOOLS.iter().any(|value| value == tool),
+            _ => true,
+        })
+        .collect()
+}
+
+fn effective_launch_tool_ids(
+    workspace: &Workspace,
+    enabled_pack_ids: &[String],
+    trust_preset: &str,
+) -> Vec<String> {
+    let candidate_tool_ids = active_tool_ids(enabled_pack_ids, trust_preset);
+    let workspace_policy =
+        LocalAgentSecurityService::tool_policy_from_permissions(&workspace.permissions);
+
+    candidate_tool_ids
+        .into_iter()
+        .filter(|tool| {
+            if !workspace_policy.enabled {
+                return false;
+            }
+            if workspace_policy.deny.iter().any(|denied| denied == tool) {
+                return false;
+            }
+            if workspace_policy.mode == "allowlist" {
+                return workspace_policy.allow.iter().any(|allowed| allowed == tool);
+            }
+            true
+        })
+        .collect()
+}
+
+fn expected_outputs_for_pack_ids(pack_ids: &[String]) -> Vec<String> {
+    let mut outputs = BTreeSet::new();
+    for pack_id in pack_ids {
+        if let Some(pack) = pack_by_id(pack_id) {
+            outputs.extend(pack.expected_outputs);
+        }
+    }
+    outputs.into_iter().collect()
+}
+
+fn highest_airlock_level(tool_ids: &[String]) -> AirlockLevel {
+    tool_ids
+        .iter()
+        .filter_map(|tool| get_tool_policy(tool))
+        .map(|policy| policy.airlock_level)
+        .max_by_key(|level| *level as u8)
+        .unwrap_or(AirlockLevel::Safe)
+}
+
+fn build_launch_preflight(
+    workspace: &Workspace,
+    scenario_id: &str,
+) -> Result<WorkspaceLaunchPreflight, String> {
+    let scenario = scenario_by_id(scenario_id)
+        .ok_or_else(|| format!("Unknown first-run scenario '{}'", scenario_id))?;
+    let trust_preset = normalize_trust_preset(&workspace.launchpad.trust_preset);
+    let enabled_pack_ids = effective_pack_ids_for_scenario(workspace, scenario_id)?;
+    let enabled_pack_titles = enabled_pack_ids
+        .iter()
+        .filter_map(|pack_id| pack_by_id(pack_id).map(|pack| pack.title))
+        .collect::<Vec<_>>();
+    let approved_tool_ids = effective_launch_tool_ids(workspace, &enabled_pack_ids, trust_preset);
+    let mut expected_outputs = expected_outputs_for_pack_ids(&enabled_pack_ids);
+    expected_outputs.extend(scenario.suggested_outputs.clone());
+    expected_outputs.sort();
+    expected_outputs.dedup();
+    let highest_level = highest_airlock_level(&approved_tool_ids);
+
+    Ok(WorkspaceLaunchPreflight {
+        scenario_id: scenario.id,
+        scenario_title: scenario.title,
+        trust_preset: trust_preset.to_string(),
+        enabled_pack_ids,
+        enabled_pack_titles,
+        approved_tool_ids,
+        touched_paths: workspace.allowed_paths.clone(),
+        expected_outputs,
+        effective_tool_policy_mode: trust_mode_label(trust_preset).to_string(),
+        highest_airlock_level: highest_level as u8,
+        requires_explicit_approval: highest_level >= AirlockLevel::Dangerous,
+    })
+}
+
+fn build_first_run_prompt(
+    workspace: &Workspace,
+    scenario_id: &str,
+    preflight: &WorkspaceLaunchPreflight,
+) -> Result<String, String> {
+    let allowed_paths = if workspace.allowed_paths.is_empty() {
+        "No explicit allowed paths were configured yet.".to_string()
+    } else {
+        workspace.allowed_paths.join(", ")
+    };
+
+    let pack_text = if preflight.enabled_pack_titles.is_empty() {
+        "No packs are enabled yet.".to_string()
+    } else {
+        preflight.enabled_pack_titles.join(", ")
+    };
+
+    let scenario_prompt = match scenario_id {
+        "codebase_copilot" => "Analyze this workspace like a senior engineer inheriting a production codebase. Read the repo shape, recent changelog context, and workspace memory overlay. Produce: 1) the most important current system truths, 2) the top product or technical risks, and 3) the next concrete engineering actions. Update WORKSTATE if useful.",
+        "file_organizer" => "Inspect this workspace as an operations-focused file organizer. Identify clutter, stale artifacts, naming inconsistencies, and obvious archival candidates. Produce a concrete cleanup plan first; if safe, perform bounded organization work and explain every action. Update WORKSTATE with the resulting state.",
+        "docs_builder" => "Read the current workspace, changelog context, and any durable memory files. Produce a polished project brief suitable for a technical founder or investor. Generate a native document artifact if the workspace contents support it, and update workspace memory with the decisive summary.",
+        _ => return Err(format!("Unknown first-run scenario '{}'", scenario_id)),
+    };
+
+    let expected_outputs = if preflight.expected_outputs.is_empty() {
+        "No explicit output contract was configured.".to_string()
+    } else {
+        preflight.expected_outputs.join(", ")
+    };
+
+    Ok(format!(
+        "You are running a guided MaTE launch scenario.\n\nWorkspace: {}\nTrust preset: {}\nEnabled packs: {}\nAllowed paths: {}\nExecution contract: {}\nExpected outputs: {}\nHighest Airlock level in scope: L{}\n\nConstraints:\n- Treat this as a production-grade workspace.\n- Prefer stable, auditable actions.\n- Use the current workspace files and memory overlay as the source of truth.\n- Stay inside the approved tool set for this launch.\n- Show a concrete plan before the first mutating action.\n- If you generate a document or archive, keep it inside the active workspace.\n\nTask:\n{}",
+            workspace.name,
+            preflight.trust_preset,
+            pack_text,
+            allowed_paths,
+            preflight.effective_tool_policy_mode,
+            expected_outputs,
+            preflight.highest_airlock_level,
+            scenario_prompt
+        ))
+}
+
+fn trust_mode_label(trust_preset: &str) -> &'static str {
+    match trust_preset {
+        "conservative" => "pack_allowlist_safe",
+        "elevated" => "pack_allowlist_elevated",
+        _ => "pack_allowlist_balanced",
+    }
+}
+
+fn trim_recent_runs(recent_runs: &mut Vec<WorkspaceLaunchRunRecord>) {
+    recent_runs.truncate(MAX_RECENT_RUNS);
+}
+
 fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCapabilitySummary {
+    let enabled_pack_ids = sanitize_pack_ids(&workspace.launchpad.enabled_pack_ids);
+    let active_tool_ids = effective_launch_tool_ids(workspace, &enabled_pack_ids, trust_preset);
+    let highest_level = highest_airlock_level(&active_tool_ids);
     let mut enabled_capabilities = vec!["Workspace memory overlay".to_string()];
     let mut cautions = Vec::new();
 
@@ -392,13 +736,9 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
     if workspace.allowed_paths.is_empty() {
         cautions.push("No allowed paths are configured yet.".to_string());
     }
-
-    let effective_tool_policy_mode = match trust_preset {
-        "conservative" => "allowlist",
-        "elevated" => "all",
-        _ => "balanced_allowlist",
+    if highest_level >= AirlockLevel::Dangerous {
+        cautions.push("Some selected pack actions will require explicit Airlock approval.".to_string());
     }
-    .to_string();
 
     WorkspaceCapabilitySummary {
         label: match trust_preset {
@@ -406,7 +746,7 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
             "elevated" => "Elevated".to_string(),
             _ => "Balanced".to_string(),
         },
-        effective_tool_policy_mode,
+        effective_tool_policy_mode: trust_mode_label(trust_preset).to_string(),
         allowed_paths_count: workspace.allowed_paths.len(),
         permissions: WorkspaceCapabilityPermissions {
             can_read: workspace.permissions.can_read,
@@ -417,5 +757,10 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
         },
         enabled_capabilities,
         cautions,
+        enforced_pack_ids: enabled_pack_ids.clone(),
+        active_tool_ids,
+        requires_explicit_approval: highest_level >= AirlockLevel::Dangerous,
+        highest_airlock_level: highest_level as u8,
+        suggested_outputs: expected_outputs_for_pack_ids(&enabled_pack_ids),
     }
 }

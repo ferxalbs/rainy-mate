@@ -69,6 +69,10 @@ export function WorkspaceLaunchpad({
     () => new Set(launchpad?.enabledPackIds ?? []),
     [launchpad?.enabledPackIds],
   );
+  const toolPreview = useMemo(
+    () => (launchpad?.capabilitySummary.activeToolIds ?? []).slice(0, 8),
+    [launchpad?.capabilitySummary.activeToolIds],
+  );
 
   const handlePresetChange = useCallback(
     async (trustPreset: "conservative" | "balanced" | "elevated") => {
@@ -253,9 +257,15 @@ export function WorkspaceLaunchpad({
                   <div className="flex flex-col gap-3 pt-2 border-t border-white/5">
                     <div className="flex flex-wrap items-center gap-4">
                       <div className="flex items-center">
-                        <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mr-2">Packs</span>
+                        <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mr-2">Trust</span>
                         <div className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
                           {pack.defaultTrustPreset}
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mr-2">Tools</span>
+                        <div className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                          {pack.toolIds.length}
                         </div>
                       </div>
                     </div>
@@ -346,6 +356,63 @@ export function WorkspaceLaunchpad({
                 <div className="rounded-lg bg-white/5 border border-white/5 px-2.5 py-1 text-[12px] text-foreground/80">
                   <span className="text-muted-foreground mr-1.5">Paths:</span> <span className="font-medium">{launchpad.capabilitySummary.allowedPathsCount}</span>
                 </div>
+                <div className="rounded-lg bg-white/5 border border-white/5 px-2.5 py-1 text-[12px] text-foreground/80">
+                  <span className="text-muted-foreground mr-1.5">Airlock:</span> <span className="font-medium">L{launchpad.capabilitySummary.highestAirlockLevel}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-3 border-t border-white/5">
+                <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Execution Contract</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-xl border border-white/5 bg-background/30 p-3">
+                    <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-2">Enforced Packs</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {launchpad.capabilitySummary.enforcedPackIds.length ? (
+                        launchpad.capabilitySummary.enforcedPackIds.map((packId) => (
+                          <div key={packId} className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                            {packId}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-[12px] text-muted-foreground">No pack allowlist active.</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-white/5 bg-background/30 p-3">
+                    <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-2">Expected Outputs</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {launchpad.capabilitySummary.suggestedOutputs.length ? (
+                        launchpad.capabilitySummary.suggestedOutputs.map((output) => (
+                          <div key={output} className="rounded-lg bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                            {output}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-[12px] text-muted-foreground">No output contract yet.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/5 bg-background/30 p-3">
+                  <div className="flex items-center justify-between gap-4 mb-2">
+                    <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Approved Tools</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {launchpad.capabilitySummary.activeToolIds.length} tools in scope
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {toolPreview.map((toolId) => (
+                      <div key={toolId} className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                        {toolId}
+                      </div>
+                    ))}
+                    {launchpad.capabilitySummary.activeToolIds.length > toolPreview.length && (
+                      <div className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        +{launchpad.capabilitySummary.activeToolIds.length - toolPreview.length} more
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
               
               <div className="space-y-3 pt-3 border-t border-white/5">
@@ -372,6 +439,38 @@ export function WorkspaceLaunchpad({
                     <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-3 text-[12.5px] text-green-500 leading-relaxed flex items-center gap-2">
                       <CheckCircle2 className="size-4 shrink-0" />
                       No immediate launchpad cautions.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-3 border-t border-white/5">
+                <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Recent Runs</p>
+                <div className="flex flex-col gap-2">
+                  {launchpad.recentRuns.length ? (
+                    launchpad.recentRuns.map((run) => (
+                      <div key={run.requestId} className="rounded-xl border border-white/5 bg-background/30 p-3">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <div className="text-[12px] font-medium text-foreground">{run.scenarioTitle}</div>
+                          <div className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                            {run.status}
+                          </div>
+                          <div className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                            L{run.highestAirlockLevel}
+                          </div>
+                        </div>
+                        <p className="text-[12px] leading-relaxed text-muted-foreground">
+                          {run.effectiveToolPolicyMode} · {run.expectedOutputs.join(", ") || "No explicit outputs"}
+                        </p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          {new Date(run.createdAt).toLocaleString()}
+                          {run.completedAt ? ` -> ${new Date(run.completedAt).toLocaleString()}` : ""}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-transparent p-3 text-[12.5px] text-muted-foreground text-center">
+                      No launch contracts recorded yet.
                     </div>
                   )}
                 </div>

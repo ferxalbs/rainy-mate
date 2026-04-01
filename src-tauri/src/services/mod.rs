@@ -88,6 +88,7 @@ pub use macos_native_notifications::MacOSNativeNotificationBridge;
 pub use macos_quick_delegate::MacOSQuickDelegateBridge;
 pub use mate_launchpad::{
     FirstRunScenarioDefinition, MateLaunchpadService, MatePackDefinition, WorkspaceLaunchpadSummary,
+    WorkspacePreparedLaunch,
 };
 pub use settings::SettingsManager;
 pub use skill_installer::SkillInstaller;

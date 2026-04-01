@@ -33,6 +33,7 @@ interface AgentChatPanelProps {
   pendingLaunch?: {
     requestId: string;
     prompt: string;
+    preflight: tauri.WorkspaceLaunchPreflight;
     scenarioId: string;
     workspaceId: string;
     chatId: string;

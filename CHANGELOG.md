@@ -5,6 +5,35 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-31 - MATE REBORN PHASE 2: LAUNCHPAD POLICY ENFORCEMENT + RUN CONTRACTS
+
+### Added
+
+- **Launchpad-guided runs now persist a real execution contract before the chat starts** — guided scenarios no longer rely on prompt text alone; MaTE records a prepared launch request with scenario metadata, approved tools, expected outputs, touched paths, and effective Airlock level:
+  - `src-tauri/src/services/mate_launchpad.rs` — new `WorkspaceLaunchPreflight`, `WorkspaceLaunchRunRecord`, and `WorkspacePreparedLaunch` models plus persisted recent-run tracking in workspace launch state
+  - `src-tauri/src/commands/workspace.rs`, `src-tauri/src/lib.rs` — new `prepare_workspace_launch` Tauri command wired into the invoke surface
+  - `src/services/tauri.ts`, `src/types/workspace.ts`, `src/App.tsx` — desktop launch flow now prepares a launch contract first, then opens the chat with the persisted request id and preflight payload
+
+### Changed
+
+- **Workspace Launchpad trust presets and selected packs now constrain the real local runtime policy** — launchpad configuration is no longer descriptive-only; selected packs are converted into a runtime allowlist and merged with workspace permissions before execution:
+  - `src-tauri/src/services/local_agent_security.rs` — local policy resolution now finds workspaces by absolute path, applies launchpad pack constraints, and preserves workspace/spec policy merging
+  - `src-tauri/src/services/mate_launchpad.rs` — launchpad pack tool sets are intersected with workspace permissions so preflight and summary surfaces reflect the final effective tool scope
+
+- **Launchpad UI now shows the actual execution contract instead of only static pack descriptions** — operators can inspect enforced packs, approved tools, expected outputs, Airlock level, and recent prepared/completed runs from the workspace surface:
+  - `src/components/workspace/WorkspaceLaunchpad.tsx` — capability summary expanded with enforced pack ids, approved tool previews, output contract, Airlock level, and recent run ledger cards
+  - `src/components/agent-chat/AgentChatPanel.tsx` — pending launch payload now carries the prepared preflight contract through the guided-run handoff
+
+### Fixed
+
+- **Launchpad summary mismatch between cautions and approved tools** — the workspace launchpad no longer shows blocked delete/execute tools in `Approved Tools` when the workspace disables those capabilities:
+  - `src-tauri/src/services/mate_launchpad.rs` — approved-tool and Airlock-level calculation now derive from the workspace-permission-filtered tool set rather than pack/trust preset alone
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+
 ## [Unreleased] - 2026-03-30 - MATE REBORN PHASE 1: WORKSPACE LAUNCHPAD + CHAT HANDOFF HARDENING
 
 ### Added
