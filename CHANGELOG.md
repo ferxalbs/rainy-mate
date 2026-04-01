@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Workspace Launchpad Design Overhaul** — completely redesigned the launchpad interface adopting the application's clean, native HeroUI aesthetic:
+  - `src/components/workspace/WorkspaceLaunchpad.tsx` — removed heavy styling, neon glows, and custom glassmorphic containers in favor of standard `bg-content1` tokens, perfectly aligned clean grids, unified typographic flow, and inline icon headers without bounding boxes, fully resolving all React Aria / HeroUI v3 typings.
+
 - **Guided launch scenarios now execute through the real chat runtime instead of a parallel path** — first-run scenarios open a real thread, bind to the selected workspace/chat, and complete through the same runtime used for normal agent sessions:
   - `src/App.tsx`, `src/components/agent-chat/AgentChatPanel.tsx`, `src/hooks/useAgentChat.ts` — pending launch requests are created from the launchpad, routed into the active thread, and recorded back into workspace launch state after completion
 

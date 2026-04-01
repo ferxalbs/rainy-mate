@@ -113,7 +113,11 @@ export function PermissionsTab() {
             isDisabled={isBusy}
             isSelected={notificationsEnabled}
             onChange={handleNotificationToggle}
-          />
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch>
         </div>
 
         <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">
@@ -126,7 +130,11 @@ export function PermissionsTab() {
               Level 0 tools stay automatic. Sensitive and dangerous work still goes through Airlock.
             </span>
           </div>
-          <Switch isSelected isDisabled />
+          <Switch isSelected isDisabled>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch>
         </div>
 
         <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">

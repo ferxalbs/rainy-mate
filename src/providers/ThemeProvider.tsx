@@ -22,12 +22,10 @@ interface ThemeContextType {
   theme: ThemeName;
   mode: ThemeMode;
   enableAnimations: boolean;
-  enableCompactMode: boolean;
   config: ThemeConfig;
   setTheme: (theme: ThemeName) => void;
   setMode: (mode: ThemeMode) => void;
   setEnableAnimations: (enable: boolean) => void;
-  setEnableCompactMode: (enable: boolean) => void;
   toggleMode: () => void;
   toggleModeWithTransition: (event?: React.MouseEvent | { x: number; y: number }) => void;
   themes: Theme[];
@@ -90,11 +88,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return stored === "true";
   });
 
-  const [enableCompactMode, setEnableCompactModeState] = useState<boolean>(() => {
-    const stored = getStoredValue(CURRENT_STORAGE_KEYS.compact);
-    return stored === "true";
-  });
-
   // Apply theme IMMEDIATELY on first render (synchronous)
   if (!hasAppliedInitial.current) {
     hasAppliedInitial.current = true;
@@ -133,11 +126,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setEnableAnimations = useCallback((enable: boolean) => {
     setEnableAnimationsState(enable);
     setStoredValue(CURRENT_STORAGE_KEYS.animations, String(enable));
-  }, []);
-
-  const setEnableCompactMode = useCallback((enable: boolean) => {
-    setEnableCompactModeState(enable);
-    setStoredValue(CURRENT_STORAGE_KEYS.compact, String(enable));
   }, []);
 
   const toggleMode = useCallback(() => {
@@ -189,18 +177,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   }, [toggleMode]);
 
-  const config: ThemeConfig = { theme, mode, enableAnimations, enableCompactMode };
+  const config: ThemeConfig = { theme, mode, enableAnimations };
 
   const value = {
     theme,
     mode,
     enableAnimations,
-    enableCompactMode,
     config,
     setTheme,
     setMode,
     setEnableAnimations,
-    setEnableCompactMode,
     toggleMode,
     toggleModeWithTransition,
     themes: Object.values(themes),
