@@ -838,7 +838,7 @@ pub fn run() {
         }
     };
 
-    tauri_app.run(|app_handle, event| {
+    tauri_app.run(|#[allow(unused_variables)] app_handle, #[allow(unused_variables)] event| {
         #[cfg(target_os = "macos")]
         if let tauri::RunEvent::Ready = event {
             let airlock_state = app_handle.state::<commands::airlock::AirlockServiceState>();
