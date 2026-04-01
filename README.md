@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <strong>Native agent runtime for desktop, built with Tauri 2, Rust, and React 19.</strong>
+  <strong>Local-first developer agent cockpit built with Tauri 2, Rust, and React 19.</strong>
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.5.96-0f766e" />
+  <img alt="Version" src="https://img.shields.io/badge/version-0.6.5-0f766e" />
   <img alt="Status" src="https://img.shields.io/badge/status-beta-f59e0b" />
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-tauri_2-2563eb" />
   <img alt="Engine" src="https://img.shields.io/badge/engine-rust-111827" />
@@ -24,7 +24,9 @@
 
 ## Project Overview
 
-Rainy MaTE is a high-performance, locally-orchestrated desktop AI agent runtime.
+Rainy MaTE is a high-performance, locally-orchestrated desktop runtime for developers who want agents to operate on real workspaces without surrendering control.
+
+MaTE is not a generic chatbot wrapper and not an always-on agent OS. It is a governed cockpit for serious local execution: pick a workspace, inspect the contract, run the agent, approve risky actions through Airlock, and review the artifacts and touched paths it leaves behind.
 
 While many AI agent platforms are constructed entirely within interpreted environments like Python or Node.js, MaTE adopts a fundamentally different architectural philosophy: maximum native performance, strict security borders, and absolute layer separation.
 
@@ -41,8 +43,17 @@ MaTE was built to solve specific challenges with existing agent platforms:
 1. **Security Escapes:** Agents executing outside of hardware-level isolation often operate with the full permissions of the user. MaTE sandboxes and gates capabilities before the tool is ever executed.
 2. **Context Amnesia:** Long-running conversations collapse as context windows fill. MaTE implements continuous rolling summarization and hybrid vector-lexical memory retrieval to preserve state over days or weeks of runtime.
 3. **Execution Latency:** Local file I/O and process execution heavily dictate agent speed. Rust provides predictable, low-overhead system interfaces compared to interpreted language counterparts.
+4. **Operator Blindness:** Most agent products hide what the system is allowed to do and what it actually did. MaTE makes execution scope, Airlock level, touched paths, and generated artifacts visible in the product.
 
 ## Core Architecture & Capabilities
+
+### Governed Workspace Launchpad
+
+MaTE prepares guided runs through a persisted execution contract before the chat starts.
+
+- **Execution contracts:** scenario metadata, approved tools, expected outputs, touched path scope, and effective Airlock level are recorded before the run begins.
+- **Proof surface:** Launchpad summaries now expose control, continuity, outputs, recent runs, and contract drift directly in the desktop UI.
+- **Workspace-safe enforcement:** selected packs are constrained by local workspace permissions and canonical tool policy before the runtime executes anything.
 
 ### Native Agent Supervisor
 
@@ -62,13 +73,30 @@ MaTE enforces a rigid, 3-tier permission gate at the Rust level before any tool 
 
 *Law: No tool can be registered in the system without an explicit, hardened security policy block. Unregistered tools fail closed.*
 
+### Workspace Memory Overlay
+
+Each governed workspace can maintain a `.rainy-mate/` overlay with:
+
+- `MEMORY.md`
+- `GUARDRAILS.md`
+- `WORKSTATE.md`
+
+This gives the agent a human-auditable continuity layer while the encrypted local vault remains the semantic retrieval engine.
+
 ### Built-in Tool Arsenal
 
 The runtime ships with a compiled suite of capabilities:
 
-- **Filesystem & Documents:** Read, write, list, search, and parse documents natively (including built-in PDF and Markdown extraction).
+- **Filesystem & Documents:** Read, write, list, search, and parse documents natively, plus create PDFs, DOCX files, XLSX files, and archives inside the workspace.
 - **Shell & Git:** Execute commands (against a strict binary allowlist) and manage version control wrappers natively.
 - **Web & Browser:** Headless reading, arbitrary HTTP fetches, or fully visible Chrome DevTools Protocol (CDP) automation (clicking, typing, navigation, screenshots).
+
+### Artifact-Native Runs
+
+Generated files are persisted as artifacts in the chat history so the operator can inspect what a run actually produced instead of relying on transcript text alone.
+
+- PDF, DOCX, XLSX, and image artifacts appear directly below assistant messages.
+- Native open flows let operators preview or open deliverables using the platform default app.
 
 ### The Quarantine Zone (WASM Extensibility)
 
@@ -90,6 +118,7 @@ The desktop runtime is entirely local, but it isn't isolated. **Rainy ATM** serv
 
 - Seamless webhook polling and routing from Telegram, Discord, and WhatsApp directly into your local desktop agents.
 - Fleet command capabilities, including cryptographic policy verification.
+- Session-scoped remote workspace binding with explicit approval so remote continuation does not become a permanent backdoor.
 
 ---
 
@@ -170,5 +199,6 @@ pnpm exec tsc --noEmit
 - [**Agent Architecture & Rules (AGENTS.md)**](./AGENTS.md)
 - [**Historical Record (CHANGELOG.md)**](./CHANGELOG.md)
 - [**Development Roadmap (ROADMAP.md)**](./ROADMAP.md)
+- [**0.6.5 Launch Brief**](./docs/MATE_0_6_5_LAUNCH_BRIEF.md)
 
 Rainy MaTE is licensed under the [MIT License](./LICENSE).

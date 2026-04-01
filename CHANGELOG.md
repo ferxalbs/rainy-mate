@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Roadmap truth is now aligned to the shipped product instead of the obsolete pre-Launchpad era** — the roadmap no longer advertises `v0.3.0` document/image plans that understate the current product:
   - `ROADMAP.md` — replaced the stale roadmap with a `0.6.5` developer-cockpit roadmap focused on governed execution, workspace-safe autonomy, native deliverables, and near-term hardening
 
+- **README now presents the real `0.6.5` wedge instead of an outdated generic runtime description** — the first-touch repo narrative now matches the shipped product and version:
+  - `README.md` — updated the version badge, developer-cockpit positioning, Launchpad/Airlock/workspace-memory/artifact framing, and linked the new launch brief
+
 - **Version metadata is now synchronized for the `0.6.5` release train** — desktop, Rust, and package manifests now point to the same major release:
   - `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` — bumped version from `0.6.4` to `0.6.5`
 
@@ -27,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `cd src-tauri && cargo check -q` → pass
 - `pnpm exec tsc --noEmit` → pass
+- `pnpm run build` → pass
+- `cd src-tauri && cargo test mate_launchpad -- --nocapture` → pass
+- `cd src-tauri && cargo test chat_artifacts -- --nocapture` → pass
+- `cd src-tauri && cargo test workspace_memory_files -- --nocapture` → pass
+- `cd src-tauri && cargo test airlock -- --nocapture` → pass
+- `cd src-tauri && cargo test local_agent_security -- --nocapture` → pass
 
 ## [Unreleased] - 2026-04-01 - MATE REBORN PHASE 3: LAUNCHPAD HANDOFF SANITY + DOCUMENT OUTPUT HARDENING
 
