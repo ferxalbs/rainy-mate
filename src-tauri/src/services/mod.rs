@@ -29,9 +29,9 @@ pub mod llm_client;
 pub mod local_agent_security;
 pub mod macos_native_notifications;
 pub mod macos_quick_delegate;
-pub mod mate_launchpad;
 pub mod managed_research; // Phase 3 AI Research
 pub mod manifest_signing;
+pub mod mate_launchpad;
 pub mod mcp_http;
 pub mod mcp_service;
 pub mod memory;
@@ -87,8 +87,8 @@ pub use local_agent_security::{EffectiveLocalAgentPolicy, LocalAgentSecurityServ
 pub use macos_native_notifications::MacOSNativeNotificationBridge;
 pub use macos_quick_delegate::MacOSQuickDelegateBridge;
 pub use mate_launchpad::{
-    FirstRunScenarioDefinition, MateLaunchpadService, MatePackDefinition, WorkspaceLaunchpadSummary,
-    WorkspacePreparedLaunch,
+    FirstRunScenarioDefinition, MateLaunchpadService, MatePackDefinition,
+    WorkspaceLaunchpadSummary, WorkspacePreparedLaunch,
 };
 pub use settings::SettingsManager;
 pub use skill_installer::SkillInstaller;

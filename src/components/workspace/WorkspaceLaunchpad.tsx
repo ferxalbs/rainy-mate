@@ -73,6 +73,10 @@ export function WorkspaceLaunchpad({
     () => (launchpad?.capabilitySummary.activeToolIds ?? []).slice(0, 8),
     [launchpad?.capabilitySummary.activeToolIds],
   );
+  const latestContractRun = useMemo(
+    () => launchpad?.recentRuns[0] ?? null,
+    [launchpad?.recentRuns],
+  );
 
   const handlePresetChange = useCallback(
     async (trustPreset: "conservative" | "balanced" | "elevated") => {
@@ -297,7 +301,14 @@ export function WorkspaceLaunchpad({
                 <div key={scenario.id} className="rounded-2xl border border-white/5 bg-white/5 p-5 flex flex-col gap-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1 flex-1">
-                      <h3 className="text-[14px] font-semibold tracking-tight text-foreground">{scenario.title}</h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-[14px] font-semibold tracking-tight text-foreground">{scenario.title}</h3>
+                        {scenario.id === "release_readiness" && (
+                          <div className="rounded-lg bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                            Launch Proof
+                          </div>
+                        )}
+                      </div>
                       <p className="text-[13px] leading-relaxed text-muted-foreground">{scenario.summary}</p>
                     </div>
                     <Button
@@ -394,6 +405,13 @@ export function WorkspaceLaunchpad({
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/5 bg-background/30 p-3">
+                  <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-2">Intent Summary</p>
+                  <p className="text-[12.5px] leading-relaxed text-foreground/85">
+                    {latestContractRun?.intentSummary ||
+                      "Guided runs are bounded to workspace-safe execution with explicit output expectations."}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/5 bg-background/30 p-3">
                   <div className="flex items-center justify-between gap-4 mb-2">
                     <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Approved Tools</p>
                     <p className="text-[11px] text-muted-foreground">
@@ -412,6 +430,28 @@ export function WorkspaceLaunchpad({
                       </div>
                     )}
                   </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <ContractActionCard
+                    title="Create / Update"
+                    items={latestContractRun?.plannedActions.createOrUpdate ?? []}
+                    fallback="No create/update actions are in the current contract."
+                  />
+                  <ContractActionCard
+                    title="Move / Delete"
+                    items={latestContractRun?.plannedActions.moveOrDelete ?? []}
+                    fallback="No destructive actions are implied by default."
+                  />
+                  <ContractActionCard
+                    title="External"
+                    items={latestContractRun?.plannedActions.externalActions ?? []}
+                    fallback="External actions stay gated behind Airlock."
+                  />
+                  <ContractActionCard
+                    title="Memory"
+                    items={latestContractRun?.plannedActions.memoryActions ?? []}
+                    fallback="Workspace memory remains in scope when enabled."
+                  />
                 </div>
               </div>
               
@@ -462,6 +502,47 @@ export function WorkspaceLaunchpad({
                         <p className="text-[12px] leading-relaxed text-muted-foreground">
                           {run.effectiveToolPolicyMode} · {run.expectedOutputs.join(", ") || "No explicit outputs"}
                         </p>
+                        {run.actualToolIds.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-1.5">
+                              Actual Tools
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {run.actualToolIds.slice(0, 6).map((toolId) => (
+                                <div key={`${run.requestId}-${toolId}`} className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                                  {toolId}
+                                </div>
+                              ))}
+                              {run.actualToolIds.length > 6 && (
+                                <div className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                  +{run.actualToolIds.length - 6} more
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {run.actualTouchedPaths.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-1.5">
+                              Actual Paths
+                            </p>
+                            <p className="text-[12px] leading-relaxed text-foreground/80 break-all">
+                              {run.actualTouchedPaths.slice(0, 3).join(" · ")}
+                              {run.actualTouchedPaths.length > 3 ? " · ..." : ""}
+                            </p>
+                          </div>
+                        )}
+                        {run.producedArtifactPaths.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-1.5">
+                              Artifacts
+                            </p>
+                            <p className="text-[12px] leading-relaxed text-primary break-all">
+                              {run.producedArtifactPaths.slice(0, 2).join(" · ")}
+                              {run.producedArtifactPaths.length > 2 ? " · ..." : ""}
+                            </p>
+                          </div>
+                        )}
                         <p className="mt-2 text-[11px] text-muted-foreground">
                           {new Date(run.createdAt).toLocaleString()}
                           {run.completedAt ? ` -> ${new Date(run.completedAt).toLocaleString()}` : ""}
@@ -492,6 +573,35 @@ export function WorkspaceLaunchpad({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ContractActionCard({
+  title,
+  items,
+  fallback,
+}: {
+  title: string;
+  items: string[];
+  fallback: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/5 bg-background/30 p-3">
+      <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-2">
+        {title}
+      </p>
+      {items.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((item) => (
+            <div key={`${title}-${item}`} className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+              {item}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[12px] leading-relaxed text-muted-foreground">{fallback}</p>
+      )}
     </div>
   );
 }

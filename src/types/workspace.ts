@@ -140,6 +140,16 @@ export interface WorkspaceLaunchRunRecord {
     enabledPackIds: string[];
     approvedToolIds: string[];
     touchedPaths: string[];
+    intentSummary: string;
+    plannedActions: {
+        createOrUpdate: string[];
+        moveOrDelete: string[];
+        externalActions: string[];
+        memoryActions: string[];
+    };
+    actualToolIds: string[];
+    actualTouchedPaths: string[];
+    producedArtifactPaths: string[];
     expectedOutputs: string[];
     effectiveToolPolicyMode: string;
     highestAirlockLevel: number;

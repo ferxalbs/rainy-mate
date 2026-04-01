@@ -45,6 +45,9 @@ interface AgentChatPanelProps {
     workspaceId: string;
     chatId: string | null;
     success: boolean;
+    actualToolIds: string[];
+    actualTouchedPaths: string[];
+    producedArtifactPaths: string[];
   }) => void | Promise<void>;
   onNewChat?: () => void;
   onRefreshSessions?: () => Promise<void>;
@@ -432,6 +435,8 @@ export function AgentChatPanel({
         workspacePath,
         selectedAgentId || undefined,
         stableReasoningOptions.length ? reasoningEffort : undefined,
+        undefined,
+        `Launchpad: ${pendingLaunch.preflight.scenarioTitle}\n${pendingLaunch.preflight.intentSummary}`,
       );
 
       await onPendingLaunchCompleted?.({
@@ -440,6 +445,9 @@ export function AgentChatPanel({
         workspaceId: pendingLaunch.workspaceId,
         chatId: result.chatScopeId,
         success: result.ok,
+        actualToolIds: result.actualToolIds,
+        actualTouchedPaths: result.actualTouchedPaths,
+        producedArtifactPaths: result.producedArtifactPaths,
       });
     })();
   }, [

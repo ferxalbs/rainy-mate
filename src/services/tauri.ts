@@ -662,6 +662,13 @@ export interface WorkspaceLaunchPreflight {
   enabledPackTitles: string[];
   approvedToolIds: string[];
   touchedPaths: string[];
+  intentSummary: string;
+  plannedActions: {
+    createOrUpdate: string[];
+    moveOrDelete: string[];
+    externalActions: string[];
+    memoryActions: string[];
+  };
   expectedOutputs: string[];
   effectiveToolPolicyMode: string;
   highestAirlockLevel: number;
@@ -676,6 +683,16 @@ export interface WorkspaceLaunchRunRecord {
   enabledPackIds: string[];
   approvedToolIds: string[];
   touchedPaths: string[];
+  intentSummary: string;
+  plannedActions: {
+    createOrUpdate: string[];
+    moveOrDelete: string[];
+    externalActions: string[];
+    memoryActions: string[];
+  };
+  actualToolIds: string[];
+  actualTouchedPaths: string[];
+  producedArtifactPaths: string[];
   expectedOutputs: string[];
   effectiveToolPolicyMode: string;
   highestAirlockLevel: number;
@@ -909,6 +926,9 @@ export async function recordWorkspaceLaunchResult(
   scenarioId: string,
   chatId: string | null,
   success: boolean,
+  actualToolIds?: string[],
+  actualTouchedPaths?: string[],
+  producedArtifactPaths?: string[],
 ): Promise<WorkspaceLaunchpadSummary> {
   return invoke<WorkspaceLaunchpadSummary>("record_workspace_launch_result", {
     workspacePath,
@@ -916,6 +936,9 @@ export async function recordWorkspaceLaunchResult(
     scenarioId,
     chatId,
     success,
+    actualToolIds,
+    actualTouchedPaths,
+    producedArtifactPaths,
   });
 }
 
@@ -2702,6 +2725,9 @@ export interface AgentEventEnvelope {
 export interface RunAgentWorkflowResponse {
   runId: string;
   response: string;
+  actualToolIds: string[];
+  actualTouchedPaths: string[];
+  producedArtifactPaths: string[];
 }
 
 export interface CancelAgentRunResponse {

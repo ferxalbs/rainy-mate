@@ -104,6 +104,27 @@ pub struct FirstRunScenarioDefinition {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
+pub struct WorkspacePlannedActionSummary {
+    pub create_or_update: Vec<String>,
+    pub move_or_delete: Vec<String>,
+    pub external_actions: Vec<String>,
+    pub memory_actions: Vec<String>,
+}
+
+impl Default for WorkspacePlannedActionSummary {
+    fn default() -> Self {
+        Self {
+            create_or_update: Vec::new(),
+            move_or_delete: Vec::new(),
+            external_actions: Vec::new(),
+            memory_actions: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceLaunchPreflight {
     pub scenario_id: String,
     pub scenario_title: String,
@@ -112,6 +133,8 @@ pub struct WorkspaceLaunchPreflight {
     pub enabled_pack_titles: Vec<String>,
     pub approved_tool_ids: Vec<String>,
     pub touched_paths: Vec<String>,
+    pub intent_summary: String,
+    pub planned_actions: WorkspacePlannedActionSummary,
     pub expected_outputs: Vec<String>,
     pub effective_tool_policy_mode: String,
     pub highest_airlock_level: u8,
@@ -120,6 +143,7 @@ pub struct WorkspaceLaunchPreflight {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct WorkspaceLaunchRunRecord {
     pub request_id: String,
     pub scenario_id: String,
@@ -128,6 +152,11 @@ pub struct WorkspaceLaunchRunRecord {
     pub enabled_pack_ids: Vec<String>,
     pub approved_tool_ids: Vec<String>,
     pub touched_paths: Vec<String>,
+    pub intent_summary: String,
+    pub planned_actions: WorkspacePlannedActionSummary,
+    pub actual_tool_ids: Vec<String>,
+    pub actual_touched_paths: Vec<String>,
+    pub produced_artifact_paths: Vec<String>,
     pub expected_outputs: Vec<String>,
     pub effective_tool_policy_mode: String,
     pub highest_airlock_level: u8,
@@ -137,6 +166,34 @@ pub struct WorkspaceLaunchRunRecord {
     pub completed_at: Option<String>,
     pub chat_id: Option<String>,
     pub success: Option<bool>,
+}
+
+impl Default for WorkspaceLaunchRunRecord {
+    fn default() -> Self {
+        Self {
+            request_id: String::new(),
+            scenario_id: String::new(),
+            scenario_title: String::new(),
+            trust_preset: "balanced".to_string(),
+            enabled_pack_ids: Vec::new(),
+            approved_tool_ids: Vec::new(),
+            touched_paths: Vec::new(),
+            intent_summary: String::new(),
+            planned_actions: WorkspacePlannedActionSummary::default(),
+            actual_tool_ids: Vec::new(),
+            actual_touched_paths: Vec::new(),
+            produced_artifact_paths: Vec::new(),
+            expected_outputs: Vec::new(),
+            effective_tool_policy_mode: String::new(),
+            highest_airlock_level: 0,
+            requires_explicit_approval: false,
+            status: "prepared".to_string(),
+            created_at: String::new(),
+            completed_at: None,
+            chat_id: None,
+            success: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -288,6 +345,20 @@ impl MateLaunchpadService {
     pub fn first_run_scenarios() -> Vec<FirstRunScenarioDefinition> {
         vec![
             FirstRunScenarioDefinition {
+                id: "release_readiness".to_string(),
+                title: "Release Readiness".to_string(),
+                summary: "Audit the repo like a launch owner, surface the real release blockers, and leave behind a decisive ship/no-ship brief.".to_string(),
+                recommended_pack_ids: vec![
+                    "repo_guardian".to_string(),
+                    "knowledge_weaver".to_string(),
+                ],
+                suggested_outputs: vec![
+                    "Release brief".to_string(),
+                    "Risk register".to_string(),
+                    "Ship checklist".to_string(),
+                ],
+            },
+            FirstRunScenarioDefinition {
                 id: "codebase_copilot".to_string(),
                 title: "Codebase Copilot".to_string(),
                 summary: "Audit the current repo, update workspace memory, and produce a decisive engineering brief for what matters next.".to_string(),
@@ -340,7 +411,10 @@ impl MateLaunchpadService {
             first_run_scenario_id: workspace.launchpad.first_run_scenario_id.clone(),
             launch_count: workspace.launchpad.launch_count,
             successful_launch_count: workspace.launchpad.successful_launch_count,
-            last_launch_at: workspace.launchpad.last_launch_at.map(|value| value.to_rfc3339()),
+            last_launch_at: workspace
+                .launchpad
+                .last_launch_at
+                .map(|value| value.to_rfc3339()),
             last_launch_chat_id: workspace.launchpad.last_launch_chat_id.clone(),
             capability_summary: capability_summary(workspace, trust),
             recent_runs: workspace.launchpad.recent_runs.clone(),
@@ -387,6 +461,11 @@ impl MateLaunchpadService {
                 enabled_pack_ids: preflight.enabled_pack_ids.clone(),
                 approved_tool_ids: preflight.approved_tool_ids.clone(),
                 touched_paths: preflight.touched_paths.clone(),
+                intent_summary: preflight.intent_summary.clone(),
+                planned_actions: preflight.planned_actions.clone(),
+                actual_tool_ids: Vec::new(),
+                actual_touched_paths: Vec::new(),
+                produced_artifact_paths: Vec::new(),
                 expected_outputs: preflight.expected_outputs.clone(),
                 effective_tool_policy_mode: preflight.effective_tool_policy_mode.clone(),
                 highest_airlock_level: preflight.highest_airlock_level,
@@ -418,6 +497,9 @@ impl MateLaunchpadService {
         scenario_id: &str,
         chat_id: Option<&str>,
         success: bool,
+        actual_tool_ids: &[String],
+        actual_touched_paths: &[String],
+        produced_artifact_paths: &[String],
     ) -> Result<WorkspaceLaunchpadSummary, String> {
         let mut workspace = workspace_manager
             .load_workspace(workspace_id)
@@ -449,6 +531,9 @@ impl MateLaunchpadService {
             run.completed_at = Some(now.to_rfc3339());
             run.chat_id = chat_id.map(|value| value.to_string());
             run.success = Some(success);
+            run.actual_tool_ids = actual_tool_ids.to_vec();
+            run.actual_touched_paths = actual_touched_paths.to_vec();
+            run.produced_artifact_paths = produced_artifact_paths.to_vec();
         }
 
         workspace_manager
@@ -457,7 +542,10 @@ impl MateLaunchpadService {
         Ok(Self::get_workspace_summary(&workspace))
     }
 
-    pub fn build_first_run_prompt(workspace: &Workspace, scenario_id: &str) -> Result<String, String> {
+    pub fn build_first_run_prompt(
+        workspace: &Workspace,
+        scenario_id: &str,
+    ) -> Result<String, String> {
         let preflight = build_launch_preflight(workspace, scenario_id)?;
         build_first_run_prompt(workspace, scenario_id, &preflight)
     }
@@ -537,13 +625,21 @@ fn scenario_by_id(scenario_id: &str) -> Option<FirstRunScenarioDefinition> {
         .find(|scenario| scenario.id == scenario_id)
 }
 
-fn effective_pack_ids_for_scenario(workspace: &Workspace, scenario_id: &str) -> Result<Vec<String>, String> {
+fn effective_pack_ids_for_scenario(
+    workspace: &Workspace,
+    scenario_id: &str,
+) -> Result<Vec<String>, String> {
     let scenario = scenario_by_id(scenario_id)
         .ok_or_else(|| format!("Unknown first-run scenario '{}'", scenario_id))?;
     let enabled = sanitize_pack_ids(&workspace.launchpad.enabled_pack_ids);
     let mut effective = enabled
         .iter()
-        .filter(|pack_id| scenario.recommended_pack_ids.iter().any(|value| value == *pack_id))
+        .filter(|pack_id| {
+            scenario
+                .recommended_pack_ids
+                .iter()
+                .any(|value| value == *pack_id)
+        })
         .cloned()
         .collect::<Vec<_>>();
     if effective.is_empty() {
@@ -632,6 +728,7 @@ fn build_launch_preflight(
         .filter_map(|pack_id| pack_by_id(pack_id).map(|pack| pack.title))
         .collect::<Vec<_>>();
     let approved_tool_ids = effective_launch_tool_ids(workspace, &enabled_pack_ids, trust_preset);
+    let planned_actions = summarize_planned_actions(&approved_tool_ids);
     let mut expected_outputs = expected_outputs_for_pack_ids(&enabled_pack_ids);
     expected_outputs.extend(scenario.suggested_outputs.clone());
     expected_outputs.sort();
@@ -639,13 +736,15 @@ fn build_launch_preflight(
     let highest_level = highest_airlock_level(&approved_tool_ids);
 
     Ok(WorkspaceLaunchPreflight {
-        scenario_id: scenario.id,
+        scenario_id: scenario.id.clone(),
         scenario_title: scenario.title,
         trust_preset: trust_preset.to_string(),
         enabled_pack_ids,
         enabled_pack_titles,
         approved_tool_ids,
         touched_paths: workspace.allowed_paths.clone(),
+        intent_summary: scenario_intent_summary(&scenario.id),
+        planned_actions,
         expected_outputs,
         effective_tool_policy_mode: trust_mode_label(trust_preset).to_string(),
         highest_airlock_level: highest_level as u8,
@@ -671,6 +770,7 @@ fn build_first_run_prompt(
     };
 
     let scenario_prompt = match scenario_id {
+        "release_readiness" => "Review this repository like the final launch owner for a serious production release. Inspect the current codebase shape, recent changelog truth, and workspace memory overlay. Produce: 1) the release-critical system truths, 2) the highest-risk blockers or regressions, 3) a ship/no-ship recommendation with explicit reasons, and 4) a concrete checklist of what must happen next. Update WORKSTATE with the decisive release state.",
         "codebase_copilot" => "Analyze this workspace like a senior engineer inheriting a production codebase. Read the repo shape, recent changelog context, and workspace memory overlay. Produce: 1) the most important current system truths, 2) the top product or technical risks, and 3) the next concrete engineering actions. Update WORKSTATE if useful.",
         "file_organizer" => "Inspect this workspace as an operations-focused file organizer. Identify clutter, stale artifacts, naming inconsistencies, and obvious archival candidates. Produce a concrete cleanup plan first; if safe, perform bounded organization work and explain every action. Update WORKSTATE with the resulting state.",
         "docs_builder" => "Read the current workspace, changelog context, and any durable memory files. Produce a polished project brief suitable for a technical founder or investor. Generate a native document artifact if the workspace contents support it, and update workspace memory with the decisive summary.",
@@ -684,16 +784,79 @@ fn build_first_run_prompt(
     };
 
     Ok(format!(
-        "You are running a guided MaTE launch scenario.\n\nWorkspace: {}\nTrust preset: {}\nEnabled packs: {}\nAllowed paths: {}\nExecution contract: {}\nExpected outputs: {}\nHighest Airlock level in scope: L{}\n\nConstraints:\n- Treat this as a production-grade workspace.\n- Prefer stable, auditable actions.\n- Use the current workspace files and memory overlay as the source of truth.\n- Stay inside the approved tool set for this launch.\n- Show a concrete plan before the first mutating action.\n- If you generate a document or archive, keep it inside the active workspace.\n\nTask:\n{}",
+        "You are running a guided MaTE launch scenario.\n\nWorkspace: {}\nTrust preset: {}\nEnabled packs: {}\nAllowed paths: {}\nExecution contract: {}\nIntent summary: {}\nPlanned action groups:\n- Create or update: {}\n- Move or delete: {}\n- External actions: {}\n- Memory actions: {}\nExpected outputs: {}\nHighest Airlock level in scope: L{}\n\nConstraints:\n- Treat this as a production-grade workspace.\n- Prefer stable, auditable actions.\n- Use the current workspace files and memory overlay as the source of truth.\n- Stay inside the approved tool set for this launch.\n- Show a concrete plan before the first mutating action.\n- If you generate a document or archive, keep it inside the active workspace.\n\nTask:\n{}",
             workspace.name,
             preflight.trust_preset,
             pack_text,
             allowed_paths,
             preflight.effective_tool_policy_mode,
+            preflight.intent_summary,
+            join_or_none(&preflight.planned_actions.create_or_update),
+            join_or_none(&preflight.planned_actions.move_or_delete),
+            join_or_none(&preflight.planned_actions.external_actions),
+            join_or_none(&preflight.planned_actions.memory_actions),
             expected_outputs,
             preflight.highest_airlock_level,
             scenario_prompt
         ))
+}
+
+fn scenario_intent_summary(scenario_id: &str) -> String {
+    match scenario_id {
+        "release_readiness" => {
+            "Bound the run to repo-safe release analysis and a decisive ship-readiness brief."
+                .to_string()
+        }
+        "codebase_copilot" => {
+            "Audit the current codebase and leave behind a grounded engineering brief."
+                .to_string()
+        }
+        "file_organizer" => {
+            "Inspect the workspace, propose cleanup first, then perform only bounded organization work."
+                .to_string()
+        }
+        "docs_builder" => {
+            "Turn the current workspace into a polished summary with durable memory updates."
+                .to_string()
+        }
+        _ => "Run a governed workspace scenario inside the approved tool scope.".to_string(),
+    }
+}
+
+fn summarize_planned_actions(tool_ids: &[String]) -> WorkspacePlannedActionSummary {
+    let mut create_or_update = Vec::new();
+    let mut move_or_delete = Vec::new();
+    let mut external_actions = Vec::new();
+    let mut memory_actions = Vec::new();
+
+    for tool in tool_ids {
+        match tool.as_str() {
+            "write_file" | "append_file" | "mkdir" | "pdf_create" | "excel_write"
+            | "docx_create" | "archive_create" => create_or_update.push(tool.clone()),
+            "move_file" | "delete_file" => move_or_delete.push(tool.clone()),
+            "execute_command" | "browse_url" | "open_new_tab" | "click_element" | "type_text"
+            | "go_back" | "submit_form" | "http_post_json" => external_actions.push(tool.clone()),
+            "save_memory" | "recall_memory" | "ingest_document" => {
+                memory_actions.push(tool.clone())
+            }
+            _ => {}
+        }
+    }
+
+    WorkspacePlannedActionSummary {
+        create_or_update,
+        move_or_delete,
+        external_actions,
+        memory_actions,
+    }
+}
+
+fn join_or_none(values: &[String]) -> String {
+    if values.is_empty() {
+        "none".to_string()
+    } else {
+        values.join(", ")
+    }
 }
 
 fn trust_mode_label(trust_preset: &str) -> &'static str {
@@ -737,7 +900,8 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
         cautions.push("No allowed paths are configured yet.".to_string());
     }
     if highest_level >= AirlockLevel::Dangerous {
-        cautions.push("Some selected pack actions will require explicit Airlock approval.".to_string());
+        cautions
+            .push("Some selected pack actions will require explicit Airlock approval.".to_string());
     }
 
     WorkspaceCapabilitySummary {
@@ -762,5 +926,34 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
         requires_explicit_approval: highest_level >= AirlockLevel::Dangerous,
         highest_airlock_level: highest_level as u8,
         suggested_outputs: expected_outputs_for_pack_ids(&enabled_pack_ids),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{scenario_intent_summary, summarize_planned_actions};
+
+    #[test]
+    fn release_readiness_has_explicit_launch_intent() {
+        let summary = scenario_intent_summary("release_readiness");
+        assert!(summary.contains("ship-readiness"));
+    }
+
+    #[test]
+    fn planned_actions_group_tools_by_risk_and_type() {
+        let summary = summarize_planned_actions(&[
+            "write_file".to_string(),
+            "delete_file".to_string(),
+            "execute_command".to_string(),
+            "save_memory".to_string(),
+        ]);
+
+        assert_eq!(summary.create_or_update, vec!["write_file".to_string()]);
+        assert_eq!(summary.move_or_delete, vec!["delete_file".to_string()]);
+        assert_eq!(
+            summary.external_actions,
+            vec!["execute_command".to_string()]
+        );
+        assert_eq!(summary.memory_actions, vec!["save_memory".to_string()]);
     }
 }

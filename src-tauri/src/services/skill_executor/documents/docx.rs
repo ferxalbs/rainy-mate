@@ -1,6 +1,7 @@
 use super::super::args::{DocxCreateArgs, DocxParagraph, DocxReadArgs};
 use super::super::SkillExecutor;
 use super::limits::{ensure_output_extension, validate_docx_create};
+use super::text::normalize_document_text;
 use crate::models::neural::CommandResult;
 use regex::Regex;
 use serde_json::Value;
@@ -119,16 +120,21 @@ fn build_docx(paragraphs: &[DocxParagraph], output_path: &PathBuf) -> Result<Str
     let mut docx = Docx::new();
 
     for paragraph in paragraphs {
+        let normalized_text = normalize_document_text(&paragraph.text);
+        if normalized_text.is_empty() {
+            continue;
+        }
+
         if let Some(level) = paragraph.heading_level {
             let style_id = format!("Heading{}", level);
             let doc_paragraph = Paragraph::new()
-                .add_run(Run::new().add_text(&paragraph.text))
+                .add_run(Run::new().add_text(&normalized_text))
                 .style(&style_id);
             docx = docx.add_paragraph(doc_paragraph);
             continue;
         }
 
-        let mut run = Run::new().add_text(&paragraph.text);
+        let mut run = Run::new().add_text(&normalized_text);
         if paragraph.bold.unwrap_or(false) {
             run = run.bold();
         }

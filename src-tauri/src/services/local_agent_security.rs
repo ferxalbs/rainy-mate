@@ -1,7 +1,7 @@
 use crate::ai::specs::manifest::{AgentSpec, AirlockToolPolicy};
 use crate::models::neural::ToolAccessPolicy;
-use crate::services::{settings::SettingsManager, MateLaunchpadService, Workspace};
 use crate::services::workspace::{WorkspaceManager, WorkspacePermissions};
+use crate::services::{settings::SettingsManager, MateLaunchpadService, Workspace};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -130,7 +130,10 @@ impl LocalAgentSecurityService {
         }
         if let Some(workspace) = resolved_workspace.as_ref() {
             let (launchpad_policy, launchpad_source) =
-                MateLaunchpadService::constrain_tool_policy_for_workspace(workspace, tool_access_policy);
+                MateLaunchpadService::constrain_tool_policy_for_workspace(
+                    workspace,
+                    tool_access_policy,
+                );
             tool_access_policy = launchpad_policy;
             source.push_str(&launchpad_source);
         }
@@ -308,8 +311,8 @@ impl LocalAgentSecurityService {
 mod tests {
     use super::LocalAgentSecurityService;
     use crate::models::neural::ToolAccessPolicy;
-    use crate::services::{mate_launchpad::WorkspaceLaunchSettings, Workspace};
     use crate::services::workspace::{WorkspaceMemory, WorkspacePermissions, WorkspaceSettings};
+    use crate::services::{mate_launchpad::WorkspaceLaunchSettings, Workspace};
 
     #[test]
     fn permissions_disable_mutating_tools() {
@@ -361,15 +364,16 @@ mod tests {
             },
         };
 
-        let (policy, source) = crate::services::MateLaunchpadService::constrain_tool_policy_for_workspace(
-            &workspace,
-            ToolAccessPolicy {
-                enabled: true,
-                mode: "all".to_string(),
-                allow: Vec::new(),
-                deny: Vec::new(),
-            },
-        );
+        let (policy, source) =
+            crate::services::MateLaunchpadService::constrain_tool_policy_for_workspace(
+                &workspace,
+                ToolAccessPolicy {
+                    enabled: true,
+                    mode: "all".to_string(),
+                    allow: Vec::new(),
+                    deny: Vec::new(),
+                },
+            );
 
         assert_eq!(policy.mode, "allowlist");
         assert!(policy.allow.iter().any(|tool| tool == "git_diff"));

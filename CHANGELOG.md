@@ -5,6 +5,33 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-04-01 - MATE REBORN PHASE 3: LAUNCHPAD HANDOFF SANITY + DOCUMENT OUTPUT HARDENING
+
+### Changed
+
+- **Guided Launchpad runs now hide the raw internal contract prompt from the visible chat thread** — launch scenarios still execute through the normal agent runtime, but operators now see a compact launch summary instead of the full internal execution prompt dumped as a user-facing message:
+  - `src/components/agent-chat/AgentChatPanel.tsx`, `src/hooks/useAgentChat.ts` — guided runs now pass a separate display message so the launch handoff remains legible while the real internal prompt still drives execution
+
+- **Launchpad run records now tolerate older persisted workspace state** — previously saved workspaces from older Launchpad versions no longer fail to deserialize when newer launch-contract fields are missing:
+  - `src-tauri/src/services/mate_launchpad.rs` — added default-backed compatibility for `WorkspacePlannedActionSummary` and `WorkspaceLaunchRunRecord` so legacy `recent_runs` payloads load cleanly
+
+### Fixed
+
+- **Artifact badges no longer resurrect stale files from old tool arguments** — generated DOCX/PDF/XLSX badges are now created only from real structured tool results, preventing older existing files from reappearing in the chat as if the current run had just created them:
+  - `src-tauri/src/services/chat_artifacts.rs`, `src/lib/chat-artifacts.ts` — artifact extraction now requires a concrete `path` in the tool result payload and ignores argument-only paths
+
+- **Native document outputs are cleaned before writing so generated files stop leaking Markdown and mojibake** — DOCX creation no longer writes raw Markdown markers like `**` / headings directly into the document, and PDF creation now normalizes problematic punctuation that previously rendered as sequences like `â€¢` and `â€”`:
+  - `src-tauri/src/services/skill_executor/documents/text.rs` — new normalization helper for Markdown stripping and punctuation cleanup
+  - `src-tauri/src/services/skill_executor/documents/docx.rs`, `src-tauri/src/services/skill_executor/documents/pdf.rs`, `src-tauri/src/services/skill_executor/documents/mod.rs` — document generators now normalize text before writing
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+- `cd src-tauri && cargo test chat_artifacts -- --nocapture` → pass
+- `cd src-tauri && cargo test mate_launchpad -- --nocapture` → pass
+- `cd src-tauri && cargo test collect_touched_paths_reads_args_and_result_payloads -- --nocapture` → pass
+
 ## [Unreleased] - 2026-03-31 - MATE REBORN PHASE 2: LAUNCHPAD POLICY ENFORCEMENT + RUN CONTRACTS
 
 ### Added

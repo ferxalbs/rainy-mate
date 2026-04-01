@@ -1461,11 +1461,15 @@ export function useAgentChat(
       agentSpecId?: string,
       reasoningEffort?: string,
       attachments?: ChatAttachment[],
+      displayInstruction?: string,
     ): Promise<{
       ok: boolean;
       chatScopeId: string | null;
       runId?: string;
       error?: string;
+      actualToolIds: string[];
+      actualTouchedPaths: string[];
+      producedArtifactPaths: string[];
     }> => {
       const resolvedChatScopeId = await ensureChatScope().catch((error) => {
         console.error("Failed to resolve chat scope:", error);
@@ -1475,7 +1479,7 @@ export function useAgentChat(
       const userMsg: AgentMessage = {
         id: crypto.randomUUID(),
         type: "user",
-        content: instruction,
+        content: displayInstruction ?? instruction,
         attachments: attachments?.length ? attachments : undefined,
         timestamp: new Date(),
       };
@@ -2071,6 +2075,9 @@ export function useAgentChat(
           ok: true,
           chatScopeId: resolvedChatScopeId,
           runId: result.runId || clientRunId,
+          actualToolIds: result.actualToolIds ?? [],
+          actualTouchedPaths: result.actualTouchedPaths ?? [],
+          producedArtifactPaths: result.producedArtifactPaths ?? [],
         };
       } catch (err: any) {
         console.error("Native agent error:", err);
@@ -2102,6 +2109,9 @@ export function useAgentChat(
           ok: false,
           chatScopeId: resolvedChatScopeId,
           error: String(err?.message || err),
+          actualToolIds: [],
+          actualTouchedPaths: [],
+          producedArtifactPaths: [],
         };
       } finally {
         forgeRecordingIdRef.current = null;

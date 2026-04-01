@@ -479,6 +479,9 @@ function App() {
                       result.scenarioId,
                       result.chatId,
                       result.success,
+                      result.actualToolIds,
+                      result.actualTouchedPaths,
+                      result.producedArtifactPaths,
                     );
                   }}
                   onNewChat={handleCreateNewChat}

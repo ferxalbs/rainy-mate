@@ -7,6 +7,7 @@ mod docx;
 mod excel;
 mod limits;
 mod pdf;
+mod text;
 
 use super::SkillExecutor;
 use crate::models::neural::CommandResult;

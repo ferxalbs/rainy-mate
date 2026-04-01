@@ -26,7 +26,7 @@ use crate::services::{KeychainAccessService, PromptSkillDiscoveryService, SkillE
 use chrono::Utc;
 use regex::Regex;
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex;
@@ -407,6 +407,9 @@ fn materialize_runtime_prompt_skills(
 pub struct RunAgentWorkflowResponse {
     pub run_id: String,
     pub response: String,
+    pub actual_tool_ids: Vec<String>,
+    pub actual_touched_paths: Vec<String>,
+    pub produced_artifact_paths: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -474,6 +477,53 @@ fn sanitize_chat_title(raw: &str, fallback_seed: &str) -> String {
     }
 
     truncate_plain_text(&single_line, MAX_CHAT_TITLE_CHARS)
+}
+
+fn extract_paths_from_json_value(value: &serde_json::Value, output: &mut BTreeSet<String>) {
+    match value {
+        serde_json::Value::String(text) => {
+            let looks_like_path = text.starts_with('/')
+                || text.starts_with("./")
+                || text.starts_with("../")
+                || text.contains('/')
+                || text.contains('\\');
+            if looks_like_path {
+                output.insert(text.to_string());
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                extract_paths_from_json_value(item, output);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, entry) in map {
+                let normalized = key.to_ascii_lowercase();
+                let path_like_key = normalized.contains("path")
+                    || normalized.contains("file")
+                    || normalized.contains("directory")
+                    || normalized.contains("output");
+                if path_like_key {
+                    extract_paths_from_json_value(entry, output);
+                } else if entry.is_array() || entry.is_object() {
+                    extract_paths_from_json_value(entry, output);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_touched_paths(args_json: Option<&str>, result_json: Option<&str>) -> Vec<String> {
+    let mut paths = BTreeSet::new();
+
+    for raw in [args_json, result_json].into_iter().flatten() {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            extract_paths_from_json_value(&value, &mut paths);
+        }
+    }
+
+    paths.into_iter().collect()
 }
 
 async fn generate_chat_title(
@@ -1159,7 +1209,13 @@ pub async fn run_agent_workflow_internal(
                     .await?;
             }
         }
-        return Ok(RunAgentWorkflowResponse { run_id, response });
+        return Ok(RunAgentWorkflowResponse {
+            run_id,
+            response,
+            actual_tool_ids: Vec::new(),
+            actual_touched_paths: Vec::new(),
+            produced_artifact_paths: Vec::new(),
+        });
     }
 
     let settings_manager = app_handle.state::<Arc<Mutex<crate::services::SettingsManager>>>();
@@ -1315,6 +1371,8 @@ pub async fn run_agent_workflow_internal(
     let frontend_event_projector = Arc::new(StdMutex::new(FrontendEventProjector::default()));
     let tool_call_index = Arc::new(StdMutex::new(HashMap::<String, (String, String)>::new()));
     let collected_artifacts = Arc::new(StdMutex::new(Vec::<ChatArtifact>::new()));
+    let actual_tool_ids = Arc::new(StdMutex::new(BTreeSet::<String>::new()));
+    let actual_touched_paths = Arc::new(StdMutex::new(BTreeSet::<String>::new()));
 
     // Persist Initial User Prompt
     if invocation_source == WorkflowInvocationSource::Local {
@@ -1327,6 +1385,8 @@ pub async fn run_agent_workflow_internal(
     let frontend_event_projector_for_events = frontend_event_projector.clone();
     let tool_call_index_for_events = tool_call_index.clone();
     let collected_artifacts_for_events = collected_artifacts.clone();
+    let actual_tool_ids_for_events = actual_tool_ids.clone();
+    let actual_touched_paths_for_events = actual_touched_paths.clone();
     let response_result = runtime
         .run(&prompt, move |event| {
             let projected_events = {
@@ -1339,6 +1399,10 @@ pub async fn run_agent_workflow_internal(
             for projected_event in projected_events {
                 match &projected_event {
                     AgentEvent::ToolCall(call) => {
+                        actual_tool_ids_for_events
+                            .lock()
+                            .expect("tool usage collector poisoned")
+                            .insert(call.function.name.clone());
                         tool_call_index_for_events
                             .lock()
                             .expect("tool call index poisoned")
@@ -1346,20 +1410,35 @@ pub async fn run_agent_workflow_internal(
                                 call.id.clone(),
                                 (call.function.name.clone(), call.function.arguments.clone()),
                             );
+                        for path in
+                            collect_touched_paths(Some(call.function.arguments.as_str()), None)
+                        {
+                            actual_touched_paths_for_events
+                                .lock()
+                                .expect("touched path collector poisoned")
+                                .insert(path);
+                        }
                     }
                     AgentEvent::ToolResult { id, result } => {
-                        let maybe_artifact = tool_call_index_for_events
+                        let tool_call = tool_call_index_for_events
                             .lock()
                             .expect("tool call index poisoned")
                             .get(id)
-                            .cloned()
-                            .and_then(|(tool_name, args_json)| {
-                                artifact_from_tool_result(
-                                    &tool_name,
-                                    Some(args_json.as_str()),
-                                    result,
-                                )
-                            });
+                            .cloned();
+                        if let Some((_, args_json)) = tool_call.as_ref() {
+                            for path in collect_touched_paths(
+                                Some(args_json.as_str()),
+                                Some(result.as_str()),
+                            ) {
+                                actual_touched_paths_for_events
+                                    .lock()
+                                    .expect("touched path collector poisoned")
+                                    .insert(path);
+                            }
+                        }
+                        let maybe_artifact = tool_call.and_then(|(tool_name, args_json)| {
+                            artifact_from_tool_result(&tool_name, Some(args_json.as_str()), result)
+                        });
 
                         if let Some(artifact) = maybe_artifact {
                             let mut artifacts = collected_artifacts_for_events
@@ -1424,9 +1503,9 @@ pub async fn run_agent_workflow_internal(
                             });
                         }
                     } else if text.starts_with("RUN_USAGE:") {
-                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(
-                            &text["RUN_USAGE:".len()..],
-                        ) {
+                        if let Ok(value) =
+                            serde_json::from_str::<serde_json::Value>(&text["RUN_USAGE:".len()..])
+                        {
                             let prompt_tokens = value
                                 .get("prompt_tokens")
                                 .and_then(|v| v.as_i64())
@@ -1534,7 +1613,32 @@ pub async fn run_agent_workflow_internal(
         }
     }
 
-    Ok(RunAgentWorkflowResponse { run_id, response })
+    let actual_tool_ids = actual_tool_ids
+        .lock()
+        .expect("tool usage collector poisoned")
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let actual_touched_paths = actual_touched_paths
+        .lock()
+        .expect("touched path collector poisoned")
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let produced_artifact_paths = collected_artifacts
+        .lock()
+        .expect("artifact collector poisoned")
+        .iter()
+        .map(|artifact| artifact.path.clone())
+        .collect::<Vec<_>>();
+
+    Ok(RunAgentWorkflowResponse {
+        run_id,
+        response,
+        actual_tool_ids,
+        actual_touched_paths,
+        produced_artifact_paths,
+    })
 }
 
 #[tauri::command]
@@ -1799,7 +1903,10 @@ pub async fn prepare_attachment_previews(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_fallback_chat_title, is_placeholder_chat_title, sanitize_chat_title};
+    use super::{
+        build_fallback_chat_title, collect_touched_paths, is_placeholder_chat_title,
+        sanitize_chat_title,
+    };
 
     #[test]
     fn placeholder_titles_are_detected() {
@@ -1821,5 +1928,22 @@ mod tests {
     fn sanitized_title_uses_fallback_when_empty() {
         let title = sanitize_chat_title("\"\"", "Create the new sidebar system");
         assert_eq!(title, "Create the new sidebar system");
+    }
+
+    #[test]
+    fn collect_touched_paths_reads_args_and_result_payloads() {
+        let paths = collect_touched_paths(
+            Some(r#"{"path":"/tmp/demo/report.md","files":["/tmp/demo/src/main.rs"]}"#),
+            Some(r#"{"path":"/tmp/demo/out.pdf","artifacts":[{"path":"/tmp/demo/out.pdf"}]}"#),
+        );
+
+        assert_eq!(
+            paths,
+            vec![
+                "/tmp/demo/out.pdf".to_string(),
+                "/tmp/demo/report.md".to_string(),
+                "/tmp/demo/src/main.rs".to_string(),
+            ]
+        );
     }
 }

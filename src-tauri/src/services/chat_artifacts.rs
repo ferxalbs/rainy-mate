@@ -39,10 +39,10 @@ pub struct ChatArtifact {
 
 pub fn artifact_from_tool_result(
     tool_name: &str,
-    args_json: Option<&str>,
+    _args_json: Option<&str>,
     result: &str,
 ) -> Option<ChatArtifact> {
-    let path = extract_path_from_result(result).or_else(|| extract_path_from_args(args_json))?;
+    let path = extract_path_from_result(result)?;
     artifact_from_path(&path, tool_name)
 }
 
@@ -137,17 +137,6 @@ fn extract_path_from_result(result: &str) -> Option<String> {
         .map(|value| value.to_string())
 }
 
-fn extract_path_from_args(args_json: Option<&str>) -> Option<String> {
-    let json = serde_json::from_str::<serde_json::Value>(args_json?).ok()?;
-    let path = json
-        .get("path")
-        .or_else(|| json.get("filename"))
-        .and_then(|value| value.as_str())
-        .map(|value| value.to_string())?;
-
-    Path::new(&path).is_absolute().then_some(path)
-}
-
 fn normalize_path(path: &str) -> String {
     PathBuf::from(path).to_string_lossy().to_string()
 }
@@ -171,16 +160,14 @@ mod tests {
     }
 
     #[test]
-    fn extracts_docx_artifact_from_args_when_result_has_no_path() {
+    fn ignores_args_without_structured_result_path() {
         let artifact = artifact_from_tool_result(
             "write_file",
             Some(r#"{"path":"/tmp/notes.docx"}"#),
             "File written successfully",
-        )
-        .expect("artifact");
+        );
 
-        assert_eq!(artifact.kind, ChatArtifactKind::Docx);
-        assert_eq!(artifact.open_mode, ChatArtifactOpenMode::SystemDefault);
+        assert!(artifact.is_none());
     }
 
     #[test]

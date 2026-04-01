@@ -891,9 +891,9 @@ GUIDELINES:
 
                 if let AgentEvent::Status(text) = &event {
                     if text.starts_with("RUN_USAGE:") {
-                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(
-                            &text["RUN_USAGE:".len()..],
-                        ) {
+                        if let Ok(value) =
+                            serde_json::from_str::<serde_json::Value>(&text["RUN_USAGE:".len()..])
+                        {
                             let prompt_tokens = value
                                 .get("prompt_tokens")
                                 .and_then(|v| v.as_i64())

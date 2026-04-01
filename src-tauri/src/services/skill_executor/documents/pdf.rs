@@ -1,6 +1,7 @@
 use super::super::args::{PdfCreateArgs, PdfReadArgs, PdfSection};
 use super::super::SkillExecutor;
 use super::limits::{ensure_output_extension, normalized_pdf_read_max_pages, validate_pdf_create};
+use super::text::normalize_document_text;
 use crate::models::neural::CommandResult;
 use serde_json::Value;
 use std::io::BufWriter;
@@ -166,7 +167,7 @@ fn build_pdf(
 
     push_text(
         &mut ops,
-        title,
+        &normalize_document_text(title),
         TITLE_FONT_SIZE,
         LEFT_MARGIN_MM,
         y,
@@ -176,6 +177,7 @@ fn build_pdf(
 
     for section in sections {
         if let Some(heading) = &section.heading {
+            let normalized_heading = normalize_document_text(heading);
             if !heading.is_empty() {
                 if y <= BOTTOM_MARGIN_MM {
                     flush_page(&mut ops, &mut pages);
@@ -183,7 +185,7 @@ fn build_pdf(
                 }
                 push_text(
                     &mut ops,
-                    heading,
+                    &normalized_heading,
                     HEADING_FONT_SIZE,
                     LEFT_MARGIN_MM,
                     y,
@@ -194,7 +196,9 @@ fn build_pdf(
         }
 
         let mut current_line = String::new();
-        for word in section.body.split_whitespace() {
+        let normalized_body = normalize_document_text(&section.body);
+
+        for word in normalized_body.split_whitespace() {
             if !current_line.is_empty() && current_line.len() + word.len() + 1 > MAX_CHARS_PER_LINE
             {
                 if y <= BOTTOM_MARGIN_MM {

@@ -86,26 +86,12 @@ function extractPathFromResult(result: string): string | null {
   }
 }
 
-function extractPathFromArgs(args?: string): string | null {
-  if (!args) return null;
-
-  try {
-    const parsed = JSON.parse(args) as { path?: unknown; filename?: unknown };
-    if (typeof parsed.path === "string") return parsed.path;
-    if (typeof parsed.filename === "string") return parsed.filename;
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 export function artifactFromToolResult(
   toolName: string,
-  args: string | undefined,
+  _args: string | undefined,
   result: string,
 ): ChatArtifact | null {
-  const path = extractPathFromResult(result) ?? extractPathFromArgs(args);
+  const path = extractPathFromResult(result);
   if (!path) return null;
   return artifactFromPath(path, toolName);
 }

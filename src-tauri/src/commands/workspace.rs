@@ -216,8 +216,8 @@ pub async fn get_workspace_analytics(
 }
 
 #[tauri::command]
-pub async fn list_mate_pack_definitions(
-) -> Result<Vec<crate::services::MatePackDefinition>, String> {
+pub async fn list_mate_pack_definitions() -> Result<Vec<crate::services::MatePackDefinition>, String>
+{
     Ok(MateLaunchpadService::pack_definitions())
 }
 
@@ -291,6 +291,9 @@ pub async fn record_workspace_launch_result(
     scenario_id: String,
     chat_id: Option<String>,
     success: bool,
+    actual_tool_ids: Option<Vec<String>>,
+    actual_touched_paths: Option<Vec<String>>,
+    produced_artifact_paths: Option<Vec<String>>,
     workspace_manager: State<'_, Arc<WorkspaceManager>>,
 ) -> Result<WorkspaceLaunchpadSummary, String> {
     let workspace = workspace_manager
@@ -303,5 +306,8 @@ pub async fn record_workspace_launch_result(
         &scenario_id,
         chat_id.as_deref(),
         success,
+        actual_tool_ids.as_deref().unwrap_or(&[]),
+        actual_touched_paths.as_deref().unwrap_or(&[]),
+        produced_artifact_paths.as_deref().unwrap_or(&[]),
     )
 }
