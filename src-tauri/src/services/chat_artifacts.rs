@@ -180,4 +180,32 @@ mod tests {
 
         assert!(artifact.is_none());
     }
+
+    #[test]
+    fn rejects_relative_paths_for_opening() {
+        let error = ensure_openable_artifact_path("notes.pdf").expect_err("relative path");
+
+        assert!(error.contains("absolute"));
+    }
+
+    #[test]
+    fn rejects_missing_files_for_opening() {
+        let error =
+            ensure_openable_artifact_path("/tmp/rainy-mate-missing-artifact.pdf").expect_err("missing");
+
+        assert!(error.contains("does not exist"));
+    }
+
+    #[test]
+    fn validates_existing_supported_artifact_paths() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let path = tempdir.path().join("brief.pdf");
+        std::fs::write(&path, b"fake pdf").expect("write");
+
+        let artifact =
+            ensure_openable_artifact_path(path.to_string_lossy().as_ref()).expect("artifact");
+
+        assert_eq!(artifact.kind, ChatArtifactKind::Pdf);
+        assert_eq!(artifact.filename, "brief.pdf");
+    }
 }

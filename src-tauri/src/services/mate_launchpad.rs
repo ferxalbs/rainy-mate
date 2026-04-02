@@ -363,6 +363,20 @@ impl MateLaunchpadService {
                 ],
             },
             FirstRunScenarioDefinition {
+                id: "codebase_audit".to_string(),
+                title: "Codebase Audit".to_string(),
+                summary: "Review the current codebase like a production steward, refresh workspace continuity, and leave behind a decisive engineering audit.".to_string(),
+                recommended_pack_ids: vec![
+                    "repo_guardian".to_string(),
+                    "knowledge_weaver".to_string(),
+                ],
+                suggested_outputs: vec![
+                    "Engineering audit".to_string(),
+                    "Risk map".to_string(),
+                    "Updated workspace memory".to_string(),
+                ],
+            },
+            FirstRunScenarioDefinition {
                 id: "codebase_copilot".to_string(),
                 title: "Codebase Copilot".to_string(),
                 summary: "Audit the current repo, update workspace memory, and produce a decisive engineering brief for what matters next.".to_string(),
@@ -388,6 +402,20 @@ impl MateLaunchpadService {
                 ],
             },
             FirstRunScenarioDefinition {
+                id: "incident_brief".to_string(),
+                title: "Incident Brief".to_string(),
+                summary: "Inspect logs, reports, and workspace evidence to produce a current incident narrative with operator-grade follow-up steps.".to_string(),
+                recommended_pack_ids: vec![
+                    "incident_scribe".to_string(),
+                    "knowledge_weaver".to_string(),
+                ],
+                suggested_outputs: vec![
+                    "Incident brief".to_string(),
+                    "Follow-up checklist".to_string(),
+                    "PDF or DOCX artifact".to_string(),
+                ],
+            },
+            FirstRunScenarioDefinition {
                 id: "docs_builder".to_string(),
                 title: "Docs Builder".to_string(),
                 summary: "Ingest the current workspace context and generate a polished summary document that a teammate or investor can understand fast.".to_string(),
@@ -396,6 +424,17 @@ impl MateLaunchpadService {
                     "Project brief".to_string(),
                     "PDF or DOCX artifact".to_string(),
                     "Updated knowledge state".to_string(),
+                ],
+            },
+            FirstRunScenarioDefinition {
+                id: "docs_to_artifacts".to_string(),
+                title: "Docs to Artifacts".to_string(),
+                summary: "Turn current workspace truth into polished native deliverables for teammates, founders, or investors without leaving the governed workspace flow.".to_string(),
+                recommended_pack_ids: vec!["knowledge_weaver".to_string()],
+                suggested_outputs: vec![
+                    "Project brief".to_string(),
+                    "PDF or DOCX artifact".to_string(),
+                    "Updated WORKSTATE.md".to_string(),
                 ],
             },
         ]
@@ -783,9 +822,12 @@ fn build_first_run_prompt(
 
     let scenario_prompt = match scenario_id {
         "release_readiness" => "Review this repository like the final launch owner for a serious production release. Inspect the current codebase shape, recent changelog truth, and workspace memory overlay. Produce: 1) the release-critical system truths, 2) the highest-risk blockers or regressions, 3) a ship/no-ship recommendation with explicit reasons, and 4) a concrete checklist of what must happen next. Update WORKSTATE with the decisive release state.",
+        "codebase_audit" => "Analyze this workspace like a senior engineer performing a production codebase audit. Read the repo shape, recent changelog context, and workspace memory overlay. Produce: 1) the most important current system truths, 2) the top product or technical risks, 3) the highest-leverage next engineering actions, and 4) a concise audit summary suitable for leadership. Update WORKSTATE with the decisive audit state.",
         "codebase_copilot" => "Analyze this workspace like a senior engineer inheriting a production codebase. Read the repo shape, recent changelog context, and workspace memory overlay. Produce: 1) the most important current system truths, 2) the top product or technical risks, and 3) the next concrete engineering actions. Update WORKSTATE if useful.",
         "file_organizer" => "Inspect this workspace as an operations-focused file organizer. Identify clutter, stale artifacts, naming inconsistencies, and obvious archival candidates. Produce a concrete cleanup plan first; if safe, perform bounded organization work and explain every action. Update WORKSTATE with the resulting state.",
+        "incident_brief" => "Inspect this workspace as an incident lead preparing a current production brief. Read logs, reports, changelog truth, and workspace memory. Produce: 1) the current incident narrative, 2) the strongest evidence and anomalies, 3) the most likely next checks or fixes, and 4) a compact incident brief suitable for handoff. Generate a native document artifact if the evidence supports it, and update WORKSTATE with the current status.",
         "docs_builder" => "Read the current workspace, changelog context, and any durable memory files. Produce a polished project brief suitable for a technical founder or investor. Generate a native document artifact if the workspace contents support it, and update workspace memory with the decisive summary.",
+        "docs_to_artifacts" => "Read the current workspace, changelog context, and durable memory files, then turn the strongest truths into polished native deliverables. Produce: 1) a concise written brief, 2) at least one native artifact when supported by the workspace contents, and 3) an updated WORKSTATE entry describing what was generated and why it matters.",
         _ => return Err(format!("Unknown first-run scenario '{}'", scenario_id)),
     };
 
@@ -819,6 +861,10 @@ fn scenario_intent_summary(scenario_id: &str) -> String {
             "Bound the run to repo-safe release analysis and a decisive ship-readiness brief."
                 .to_string()
         }
+        "codebase_audit" => {
+            "Audit the current codebase and leave behind a production-grade engineering brief."
+                .to_string()
+        }
         "codebase_copilot" => {
             "Audit the current codebase and leave behind a grounded engineering brief."
                 .to_string()
@@ -829,6 +875,14 @@ fn scenario_intent_summary(scenario_id: &str) -> String {
         }
         "docs_builder" => {
             "Turn the current workspace into a polished summary with durable memory updates."
+                .to_string()
+        }
+        "incident_brief" => {
+            "Turn current workspace evidence into an incident-ready brief with concrete next actions."
+                .to_string()
+        }
+        "docs_to_artifacts" => {
+            "Convert current workspace truth into polished native deliverables inside the governed run."
                 .to_string()
         }
         _ => "Run a governed workspace scenario inside the approved tool scope.".to_string(),
@@ -979,14 +1033,89 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
 #[cfg(test)]
 mod tests {
     use super::{
-        out_of_contract_paths, out_of_contract_tool_ids, scenario_intent_summary,
-        summarize_planned_actions, trim_recent_runs, WorkspaceLaunchRunRecord,
+        build_first_run_prompt, effective_pack_ids_for_scenario, out_of_contract_paths,
+        out_of_contract_tool_ids, scenario_intent_summary, summarize_planned_actions,
+        trim_recent_runs, MateLaunchpadService, WorkspaceLaunchRunRecord,
     };
+    use crate::services::workspace::{WorkspaceMemory, WorkspacePermissions, WorkspaceSettings};
+    use crate::services::{mate_launchpad::WorkspaceLaunchSettings, Workspace};
+
+    fn test_workspace(enabled_pack_ids: Vec<&str>) -> Workspace {
+        Workspace {
+            id: "ws".to_string(),
+            name: "Workspace".to_string(),
+            allowed_paths: vec!["/tmp/ws".to_string()],
+            permissions: WorkspacePermissions {
+                can_read: true,
+                can_write: true,
+                can_execute: true,
+                can_delete: false,
+                can_create_agents: true,
+            },
+            permission_overrides: Vec::new(),
+            agents: Vec::new(),
+            memory: WorkspaceMemory {
+                max_size: 1,
+                current_size: 0,
+                retention_policy: "fifo".to_string(),
+            },
+            settings: WorkspaceSettings {
+                theme: "default".to_string(),
+                language: "en".to_string(),
+                auto_save: true,
+                notifications_enabled: true,
+            },
+            launchpad: WorkspaceLaunchSettings {
+                trust_preset: "balanced".to_string(),
+                enabled_pack_ids: enabled_pack_ids.into_iter().map(str::to_string).collect(),
+                ..WorkspaceLaunchSettings::default()
+            },
+        }
+    }
 
     #[test]
     fn release_readiness_has_explicit_launch_intent() {
         let summary = scenario_intent_summary("release_readiness");
         assert!(summary.contains("ship-readiness"));
+    }
+
+    #[test]
+    fn new_first_party_playbooks_are_available() {
+        let scenarios = MateLaunchpadService::first_run_scenarios();
+        let scenario_ids = scenarios.iter().map(|scenario| scenario.id.as_str()).collect::<Vec<_>>();
+
+        assert!(scenario_ids.contains(&"codebase_audit"));
+        assert!(scenario_ids.contains(&"incident_brief"));
+        assert!(scenario_ids.contains(&"docs_to_artifacts"));
+    }
+
+    #[test]
+    fn scenario_falls_back_to_recommended_packs_when_workspace_selection_does_not_match() {
+        let workspace = test_workspace(vec!["workspace_forger"]);
+
+        let effective_pack_ids =
+            effective_pack_ids_for_scenario(&workspace, "release_readiness").expect("pack ids");
+
+        assert_eq!(
+            effective_pack_ids,
+            vec!["knowledge_weaver".to_string(), "repo_guardian".to_string()]
+        );
+    }
+
+    #[test]
+    fn new_playbook_prompt_mentions_native_artifacts_when_expected() {
+        let workspace = test_workspace(vec!["knowledge_weaver"]);
+        let preflight = crate::services::mate_launchpad::build_launch_preflight(
+            &workspace,
+            "docs_to_artifacts",
+        )
+        .expect("preflight");
+
+        let prompt =
+            build_first_run_prompt(&workspace, "docs_to_artifacts", &preflight).expect("prompt");
+
+        assert!(prompt.contains("native deliverables"));
+        assert!(prompt.contains("Expected outputs"));
     }
 
     #[test]

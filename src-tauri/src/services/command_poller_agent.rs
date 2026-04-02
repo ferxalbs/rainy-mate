@@ -1079,3 +1079,44 @@ GUIDELINES:
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::canonicalize_remote_path;
+
+    #[test]
+    fn canonicalize_remote_path_rejects_empty_input() {
+        let error = canonicalize_remote_path("   ").expect_err("empty path");
+
+        assert!(error.contains("empty"));
+    }
+
+    #[test]
+    fn canonicalize_remote_path_rejects_files() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let file_path = tempdir.path().join("notes.txt");
+        std::fs::write(&file_path, "hello").expect("file");
+
+        let error = canonicalize_remote_path(file_path.to_string_lossy().as_ref())
+            .expect_err("file path");
+
+        assert!(error.contains("not a directory"));
+    }
+
+    #[test]
+    fn canonicalize_remote_path_accepts_directories() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+
+        let canonical =
+            canonicalize_remote_path(tempdir.path().to_string_lossy().as_ref()).expect("dir");
+
+        assert_eq!(
+            canonical,
+            tempdir
+                .path()
+                .canonicalize()
+                .expect("canonical")
+                .to_string_lossy()
+        );
+    }
+}
