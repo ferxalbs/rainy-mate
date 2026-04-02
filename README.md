@@ -200,5 +200,6 @@ pnpm exec tsc --noEmit
 - [**Historical Record (CHANGELOG.md)**](./CHANGELOG.md)
 - [**Development Roadmap (ROADMAP.md)**](./ROADMAP.md)
 - [**0.6.5 Launch Brief**](./docs/MATE_0_6_5_LAUNCH_BRIEF.md)
+- [**0.6.5 Application Narrative**](./docs/MATE_0_6_5_APPLICATION_NARRATIVE.md)
 
 Rainy MaTE is licensed under the [MIT License](./LICENSE).

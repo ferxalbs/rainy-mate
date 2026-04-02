@@ -157,6 +157,8 @@ pub struct WorkspaceLaunchRunRecord {
     pub actual_tool_ids: Vec<String>,
     pub actual_touched_paths: Vec<String>,
     pub produced_artifact_paths: Vec<String>,
+    pub out_of_contract_tool_ids: Vec<String>,
+    pub out_of_contract_paths: Vec<String>,
     pub expected_outputs: Vec<String>,
     pub effective_tool_policy_mode: String,
     pub highest_airlock_level: u8,
@@ -183,6 +185,8 @@ impl Default for WorkspaceLaunchRunRecord {
             actual_tool_ids: Vec::new(),
             actual_touched_paths: Vec::new(),
             produced_artifact_paths: Vec::new(),
+            out_of_contract_tool_ids: Vec::new(),
+            out_of_contract_paths: Vec::new(),
             expected_outputs: Vec::new(),
             effective_tool_policy_mode: String::new(),
             highest_airlock_level: 0,
@@ -359,6 +363,20 @@ impl MateLaunchpadService {
                 ],
             },
             FirstRunScenarioDefinition {
+                id: "codebase_audit".to_string(),
+                title: "Codebase Audit".to_string(),
+                summary: "Review the current codebase like a production steward, refresh workspace continuity, and leave behind a decisive engineering audit.".to_string(),
+                recommended_pack_ids: vec![
+                    "repo_guardian".to_string(),
+                    "knowledge_weaver".to_string(),
+                ],
+                suggested_outputs: vec![
+                    "Engineering audit".to_string(),
+                    "Risk map".to_string(),
+                    "Updated workspace memory".to_string(),
+                ],
+            },
+            FirstRunScenarioDefinition {
                 id: "codebase_copilot".to_string(),
                 title: "Codebase Copilot".to_string(),
                 summary: "Audit the current repo, update workspace memory, and produce a decisive engineering brief for what matters next.".to_string(),
@@ -384,6 +402,20 @@ impl MateLaunchpadService {
                 ],
             },
             FirstRunScenarioDefinition {
+                id: "incident_brief".to_string(),
+                title: "Incident Brief".to_string(),
+                summary: "Inspect logs, reports, and workspace evidence to produce a current incident narrative with operator-grade follow-up steps.".to_string(),
+                recommended_pack_ids: vec![
+                    "incident_scribe".to_string(),
+                    "knowledge_weaver".to_string(),
+                ],
+                suggested_outputs: vec![
+                    "Incident brief".to_string(),
+                    "Follow-up checklist".to_string(),
+                    "PDF or DOCX artifact".to_string(),
+                ],
+            },
+            FirstRunScenarioDefinition {
                 id: "docs_builder".to_string(),
                 title: "Docs Builder".to_string(),
                 summary: "Ingest the current workspace context and generate a polished summary document that a teammate or investor can understand fast.".to_string(),
@@ -392,6 +424,17 @@ impl MateLaunchpadService {
                     "Project brief".to_string(),
                     "PDF or DOCX artifact".to_string(),
                     "Updated knowledge state".to_string(),
+                ],
+            },
+            FirstRunScenarioDefinition {
+                id: "docs_to_artifacts".to_string(),
+                title: "Docs to Artifacts".to_string(),
+                summary: "Turn current workspace truth into polished native deliverables for teammates, founders, or investors without leaving the governed workspace flow.".to_string(),
+                recommended_pack_ids: vec!["knowledge_weaver".to_string()],
+                suggested_outputs: vec![
+                    "Project brief".to_string(),
+                    "PDF or DOCX artifact".to_string(),
+                    "Updated WORKSTATE.md".to_string(),
                 ],
             },
         ]
@@ -466,6 +509,8 @@ impl MateLaunchpadService {
                 actual_tool_ids: Vec::new(),
                 actual_touched_paths: Vec::new(),
                 produced_artifact_paths: Vec::new(),
+                out_of_contract_tool_ids: Vec::new(),
+                out_of_contract_paths: Vec::new(),
                 expected_outputs: preflight.expected_outputs.clone(),
                 effective_tool_policy_mode: preflight.effective_tool_policy_mode.clone(),
                 highest_airlock_level: preflight.highest_airlock_level,
@@ -523,6 +568,10 @@ impl MateLaunchpadService {
             .iter_mut()
             .find(|record| record.request_id == request_id)
         {
+            let out_of_contract_tool_ids =
+                out_of_contract_tool_ids(&run.approved_tool_ids, actual_tool_ids);
+            let out_of_contract_paths =
+                out_of_contract_paths(&run.touched_paths, actual_touched_paths);
             run.status = if success {
                 "completed".to_string()
             } else {
@@ -534,6 +583,8 @@ impl MateLaunchpadService {
             run.actual_tool_ids = actual_tool_ids.to_vec();
             run.actual_touched_paths = actual_touched_paths.to_vec();
             run.produced_artifact_paths = produced_artifact_paths.to_vec();
+            run.out_of_contract_tool_ids = out_of_contract_tool_ids;
+            run.out_of_contract_paths = out_of_contract_paths;
         }
 
         workspace_manager
@@ -771,9 +822,12 @@ fn build_first_run_prompt(
 
     let scenario_prompt = match scenario_id {
         "release_readiness" => "Review this repository like the final launch owner for a serious production release. Inspect the current codebase shape, recent changelog truth, and workspace memory overlay. Produce: 1) the release-critical system truths, 2) the highest-risk blockers or regressions, 3) a ship/no-ship recommendation with explicit reasons, and 4) a concrete checklist of what must happen next. Update WORKSTATE with the decisive release state.",
+        "codebase_audit" => "Analyze this workspace like a senior engineer performing a production codebase audit. Read the repo shape, recent changelog context, and workspace memory overlay. Produce: 1) the most important current system truths, 2) the top product or technical risks, 3) the highest-leverage next engineering actions, and 4) a concise audit summary suitable for leadership. Update WORKSTATE with the decisive audit state.",
         "codebase_copilot" => "Analyze this workspace like a senior engineer inheriting a production codebase. Read the repo shape, recent changelog context, and workspace memory overlay. Produce: 1) the most important current system truths, 2) the top product or technical risks, and 3) the next concrete engineering actions. Update WORKSTATE if useful.",
         "file_organizer" => "Inspect this workspace as an operations-focused file organizer. Identify clutter, stale artifacts, naming inconsistencies, and obvious archival candidates. Produce a concrete cleanup plan first; if safe, perform bounded organization work and explain every action. Update WORKSTATE with the resulting state.",
+        "incident_brief" => "Inspect this workspace as an incident lead preparing a current production brief. Read logs, reports, changelog truth, and workspace memory. Produce: 1) the current incident narrative, 2) the strongest evidence and anomalies, 3) the most likely next checks or fixes, and 4) a compact incident brief suitable for handoff. Generate a native document artifact if the evidence supports it, and update WORKSTATE with the current status.",
         "docs_builder" => "Read the current workspace, changelog context, and any durable memory files. Produce a polished project brief suitable for a technical founder or investor. Generate a native document artifact if the workspace contents support it, and update workspace memory with the decisive summary.",
+        "docs_to_artifacts" => "Read the current workspace, changelog context, and durable memory files, then turn the strongest truths into polished native deliverables. Produce: 1) a concise written brief, 2) at least one native artifact when supported by the workspace contents, and 3) an updated WORKSTATE entry describing what was generated and why it matters.",
         _ => return Err(format!("Unknown first-run scenario '{}'", scenario_id)),
     };
 
@@ -807,6 +861,10 @@ fn scenario_intent_summary(scenario_id: &str) -> String {
             "Bound the run to repo-safe release analysis and a decisive ship-readiness brief."
                 .to_string()
         }
+        "codebase_audit" => {
+            "Audit the current codebase and leave behind a production-grade engineering brief."
+                .to_string()
+        }
         "codebase_copilot" => {
             "Audit the current codebase and leave behind a grounded engineering brief."
                 .to_string()
@@ -817,6 +875,14 @@ fn scenario_intent_summary(scenario_id: &str) -> String {
         }
         "docs_builder" => {
             "Turn the current workspace into a polished summary with durable memory updates."
+                .to_string()
+        }
+        "incident_brief" => {
+            "Turn current workspace evidence into an incident-ready brief with concrete next actions."
+                .to_string()
+        }
+        "docs_to_artifacts" => {
+            "Convert current workspace truth into polished native deliverables inside the governed run."
                 .to_string()
         }
         _ => "Run a governed workspace scenario inside the approved tool scope.".to_string(),
@@ -869,6 +935,41 @@ fn trust_mode_label(trust_preset: &str) -> &'static str {
 
 fn trim_recent_runs(recent_runs: &mut Vec<WorkspaceLaunchRunRecord>) {
     recent_runs.truncate(MAX_RECENT_RUNS);
+}
+
+fn out_of_contract_tool_ids(
+    approved_tool_ids: &[String],
+    actual_tool_ids: &[String],
+) -> Vec<String> {
+    let approved = approved_tool_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<String>>();
+    actual_tool_ids
+        .iter()
+        .filter(|tool_id| !approved.contains(*tool_id))
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn out_of_contract_paths(touched_paths: &[String], actual_touched_paths: &[String]) -> Vec<String> {
+    actual_touched_paths
+        .iter()
+        .filter(|path| !path_is_within_contract(path, touched_paths))
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn path_is_within_contract(path: &str, touched_paths: &[String]) -> bool {
+    let candidate = std::path::Path::new(path);
+    touched_paths
+        .iter()
+        .map(std::path::Path::new)
+        .any(|allowed| candidate.starts_with(allowed))
 }
 
 fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCapabilitySummary {
@@ -931,12 +1032,90 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
 
 #[cfg(test)]
 mod tests {
-    use super::{scenario_intent_summary, summarize_planned_actions};
+    use super::{
+        build_first_run_prompt, effective_pack_ids_for_scenario, out_of_contract_paths,
+        out_of_contract_tool_ids, scenario_intent_summary, summarize_planned_actions,
+        trim_recent_runs, MateLaunchpadService, WorkspaceLaunchRunRecord,
+    };
+    use crate::services::workspace::{WorkspaceMemory, WorkspacePermissions, WorkspaceSettings};
+    use crate::services::{mate_launchpad::WorkspaceLaunchSettings, Workspace};
+
+    fn test_workspace(enabled_pack_ids: Vec<&str>) -> Workspace {
+        Workspace {
+            id: "ws".to_string(),
+            name: "Workspace".to_string(),
+            allowed_paths: vec!["/tmp/ws".to_string()],
+            permissions: WorkspacePermissions {
+                can_read: true,
+                can_write: true,
+                can_execute: true,
+                can_delete: false,
+                can_create_agents: true,
+            },
+            permission_overrides: Vec::new(),
+            agents: Vec::new(),
+            memory: WorkspaceMemory {
+                max_size: 1,
+                current_size: 0,
+                retention_policy: "fifo".to_string(),
+            },
+            settings: WorkspaceSettings {
+                theme: "default".to_string(),
+                language: "en".to_string(),
+                auto_save: true,
+                notifications_enabled: true,
+            },
+            launchpad: WorkspaceLaunchSettings {
+                trust_preset: "balanced".to_string(),
+                enabled_pack_ids: enabled_pack_ids.into_iter().map(str::to_string).collect(),
+                ..WorkspaceLaunchSettings::default()
+            },
+        }
+    }
 
     #[test]
     fn release_readiness_has_explicit_launch_intent() {
         let summary = scenario_intent_summary("release_readiness");
         assert!(summary.contains("ship-readiness"));
+    }
+
+    #[test]
+    fn new_first_party_playbooks_are_available() {
+        let scenarios = MateLaunchpadService::first_run_scenarios();
+        let scenario_ids = scenarios.iter().map(|scenario| scenario.id.as_str()).collect::<Vec<_>>();
+
+        assert!(scenario_ids.contains(&"codebase_audit"));
+        assert!(scenario_ids.contains(&"incident_brief"));
+        assert!(scenario_ids.contains(&"docs_to_artifacts"));
+    }
+
+    #[test]
+    fn scenario_falls_back_to_recommended_packs_when_workspace_selection_does_not_match() {
+        let workspace = test_workspace(vec!["workspace_forger"]);
+
+        let effective_pack_ids =
+            effective_pack_ids_for_scenario(&workspace, "release_readiness").expect("pack ids");
+
+        assert_eq!(
+            effective_pack_ids,
+            vec!["knowledge_weaver".to_string(), "repo_guardian".to_string()]
+        );
+    }
+
+    #[test]
+    fn new_playbook_prompt_mentions_native_artifacts_when_expected() {
+        let workspace = test_workspace(vec!["knowledge_weaver"]);
+        let preflight = crate::services::mate_launchpad::build_launch_preflight(
+            &workspace,
+            "docs_to_artifacts",
+        )
+        .expect("preflight");
+
+        let prompt =
+            build_first_run_prompt(&workspace, "docs_to_artifacts", &preflight).expect("prompt");
+
+        assert!(prompt.contains("native deliverables"));
+        assert!(prompt.contains("Expected outputs"));
     }
 
     #[test]
@@ -955,5 +1134,46 @@ mod tests {
             vec!["execute_command".to_string()]
         );
         assert_eq!(summary.memory_actions, vec!["save_memory".to_string()]);
+    }
+
+    #[test]
+    fn computes_contract_drift_for_tools_and_paths() {
+        let approved_tool_ids = vec!["read_file".to_string(), "write_file".to_string()];
+        let actual_tool_ids = vec![
+            "read_file".to_string(),
+            "execute_command".to_string(),
+            "execute_command".to_string(),
+        ];
+        let touched_paths = vec!["/tmp/repo".to_string()];
+        let actual_touched_paths = vec![
+            "/tmp/repo/src/main.rs".to_string(),
+            "/tmp/outside/secrets.txt".to_string(),
+            "/tmp/outside/secrets.txt".to_string(),
+        ];
+
+        assert_eq!(
+            out_of_contract_tool_ids(&approved_tool_ids, &actual_tool_ids),
+            vec!["execute_command".to_string()]
+        );
+        assert_eq!(
+            out_of_contract_paths(&touched_paths, &actual_touched_paths),
+            vec!["/tmp/outside/secrets.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn trim_recent_runs_keeps_the_latest_eight_records() {
+        let mut recent_runs = (0..12)
+            .map(|index| WorkspaceLaunchRunRecord {
+                request_id: format!("run-{}", index),
+                ..WorkspaceLaunchRunRecord::default()
+            })
+            .collect::<Vec<_>>();
+
+        trim_recent_runs(&mut recent_runs);
+
+        assert_eq!(recent_runs.len(), 8);
+        assert_eq!(recent_runs[0].request_id, "run-0");
+        assert_eq!(recent_runs[7].request_id, "run-7");
     }
 }

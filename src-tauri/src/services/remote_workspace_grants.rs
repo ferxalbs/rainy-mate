@@ -107,3 +107,37 @@ impl RemoteWorkspaceGrantStore {
         grant
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{RemoteWorkspaceGrant, RemoteWorkspaceGrantStore};
+
+    #[tokio::test]
+    async fn insert_and_touch_keep_grant_active() {
+        let store = RemoteWorkspaceGrantStore::new();
+        let initial = store.insert("ws", "telegram", "peer-1", "/tmp/project").await;
+        let touched = store.touch("ws", "telegram", "peer-1").await.expect("grant");
+
+        assert_eq!(initial.canonical_path, "/tmp/project");
+        assert_eq!(touched.canonical_path, "/tmp/project");
+        assert!(touched.expires_at_ms >= initial.expires_at_ms);
+    }
+
+    #[tokio::test]
+    async fn expired_grants_are_removed_on_lookup() {
+        let store = RemoteWorkspaceGrantStore::new();
+        let mut grant = store.insert("ws", "telegram", "peer-1", "/tmp/project").await;
+        grant.expires_at_ms = 0;
+
+        store.grants.write().await.insert(
+            "ws::telegram::peer-1".to_string(),
+            RemoteWorkspaceGrant {
+                last_used_at_ms: 0,
+                ..grant
+            },
+        );
+
+        assert!(store.get_active("ws", "telegram", "peer-1").await.is_none());
+        assert!(store.touch("ws", "telegram", "peer-1").await.is_none());
+    }
+}

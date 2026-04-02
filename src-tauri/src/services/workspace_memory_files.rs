@@ -265,7 +265,7 @@ fn hash_key(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::WorkspaceMemoryFiles;
+    use super::{truncate_chars, WorkspaceMemoryFiles};
 
     #[tokio::test]
     async fn bootstrap_creates_memory_files_for_absolute_workspace() {
@@ -280,6 +280,32 @@ mod tests {
         assert!(tempdir.path().join(".rainy-mate/GUARDRAILS.md").exists());
         assert!(tempdir.path().join(".rainy-mate/WORKSTATE.md").exists());
         assert!(bootstrap.context_block.is_none());
+    }
+
+    #[tokio::test]
+    async fn bootstrap_reads_existing_overlay_content_into_context() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        WorkspaceMemoryFiles::bootstrap(tempdir.path().to_string_lossy().as_ref(), None)
+            .await
+            .expect("bootstrap");
+
+        std::fs::write(
+            tempdir.path().join(".rainy-mate/MEMORY.md"),
+            "# MEMORY\n\nRemember the definitive launch wedge.\n",
+        )
+        .expect("memory");
+
+        let bootstrap =
+            WorkspaceMemoryFiles::bootstrap(tempdir.path().to_string_lossy().as_ref(), None)
+                .await
+                .expect("bootstrap");
+
+        assert!(
+            bootstrap
+                .context_block
+                .as_deref()
+                .is_some_and(|block| block.contains("Remember the definitive launch wedge."))
+        );
     }
 
     #[tokio::test]
@@ -307,5 +333,13 @@ mod tests {
             .expect("read workstate");
         assert!(workstate.contains("Investigate invoice folder"));
         assert!(workstate.contains("Indexed PDFs and wrote summary.csv"));
+    }
+
+    #[test]
+    fn truncate_chars_marks_when_content_exceeds_limit() {
+        let truncated = truncate_chars("abcdefghijklmnop", 6);
+
+        assert!(truncated.starts_with("abcdef"));
+        assert!(truncated.contains("[TRUNCATED]"));
     }
 }

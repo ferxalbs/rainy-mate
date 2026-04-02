@@ -693,6 +693,8 @@ export interface WorkspaceLaunchRunRecord {
   actualToolIds: string[];
   actualTouchedPaths: string[];
   producedArtifactPaths: string[];
+  outOfContractToolIds: string[];
+  outOfContractPaths: string[];
   expectedOutputs: string[];
   effectiveToolPolicyMode: string;
   highestAirlockLevel: number;
