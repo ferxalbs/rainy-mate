@@ -86,6 +86,9 @@ impl SpecialistAgent {
                 "git_log",
                 "git_show",
                 "git_branch_list",
+                "list_recurring_tasks",
+                "schedule_recurring_task",
+                "delete_recurring_task",
                 "execute_command",
             ],
             SpecialistRole::Verifier => &[
@@ -107,6 +110,7 @@ impl SpecialistAgent {
                 "http_get_json",
                 "http_get_text",
                 "recall_memory",
+                "list_recurring_tasks",
             ],
             SpecialistRole::MemoryScribe => &[
                 "save_memory",

@@ -34,6 +34,7 @@ const READ_TOOLS: &[&str] = &[
     "pdf_read",
     "excel_read",
     "recall_memory",
+    "list_recurring_tasks",
 ];
 
 const WRITE_TOOLS: &[&str] = &[
@@ -45,6 +46,8 @@ const WRITE_TOOLS: &[&str] = &[
     "docx_create",
     "archive_create",
     "save_memory",
+    "schedule_recurring_task",
+    "delete_recurring_task",
 ];
 
 const DELETE_TOOLS: &[&str] = &["delete_file", "move_file"];

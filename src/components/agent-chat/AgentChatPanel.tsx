@@ -16,6 +16,7 @@ import { MemoizedMessageBubble } from "./MessageBubble";
 import { ChatComposer } from "./ChatComposer";
 import { ChatTopbar } from "./ChatTopbar";
 import { VirtualTranscript } from "./VirtualTranscript";
+import { ScheduleTaskDialog } from "../scheduling/ScheduleTaskDialog";
 
 interface AgentChatPanelProps {
   workspacePath: string;
@@ -218,6 +219,7 @@ export function AgentChatPanel({
   const [agentSpecs, setAgentSpecs] = useState<AgentSpec[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastLaunchRequestIdRef = useRef<string | null>(null);
 
@@ -272,6 +274,27 @@ export function AgentChatPanel({
     }
     return undefined;
   }, [messages]);
+
+  const schedulePromptSeed = useMemo(() => {
+    const composerDraft = input.trim();
+    if (composerDraft) {
+      return composerDraft;
+    }
+
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.type !== "user") {
+        continue;
+      }
+
+      const content = message.content.trim();
+      if (content) {
+        return content;
+      }
+    }
+
+    return "";
+  }, [input, messages]);
 
   // ─── Textarea auto-resize (external DOM mutation, not cascading setState) ──
   useEffect(() => {
@@ -508,7 +531,15 @@ export function AgentChatPanel({
         onAddFolder={onAddWorkspace}
         onNewChat={handleNewChat}
         onRefreshChat={handleRefreshChat}
+        onOpenSchedule={() => setScheduleDialogOpen(true)}
         onOpenSettings={onOpenSettings}
+      />
+
+      <ScheduleTaskDialog
+        open={scheduleDialogOpen}
+        workspacePath={workspacePath}
+        defaultPrompt={schedulePromptSeed}
+        onClose={() => setScheduleDialogOpen(false)}
       />
 
       {!hasMessages ? (

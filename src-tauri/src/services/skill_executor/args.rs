@@ -387,3 +387,40 @@ pub struct ArchiveCreateArgs {
     #[schemars(length(min = 1, max = 100), inner(length(min = 1, max = 4096)))]
     pub files: Vec<String>,
 }
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleRecurringTaskArgs {
+    /// Optional human-readable title for the scheduled run.
+    pub title: Option<String>,
+    /// Prompt MaTE should execute on each scheduled run.
+    pub task_prompt: Option<String>,
+    /// Optional first-party playbook id.
+    pub scenario_id: Option<String>,
+    /// Schedule preset: daily, weekdays, weekly, monthly, or custom.
+    pub schedule_kind: Option<String>,
+    /// Hour in 24h time for non-custom presets (0-23).
+    pub hour: Option<u8>,
+    /// Minute for non-custom presets (0-59).
+    pub minute: Option<u8>,
+    /// Day of week for weekly schedules (0=Sunday ... 6=Saturday).
+    pub day_of_week: Option<u8>,
+    /// Day of month for monthly schedules (1-28).
+    pub day_of_month: Option<u8>,
+    /// Seven-field cron expression. Required when schedule_kind is custom.
+    pub cron_expression: Option<String>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListRecurringTasksArgs {
+    /// Include full prompt text for prompt-based recurring tasks.
+    pub include_prompt_text: Option<bool>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteRecurringTaskArgs {
+    /// Scheduled run id to remove.
+    pub scheduled_run_id: String,
+}

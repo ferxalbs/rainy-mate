@@ -699,11 +699,35 @@ export interface WorkspaceLaunchRunRecord {
   effectiveToolPolicyMode: string;
   highestAirlockLevel: number;
   requiresExplicitApproval: boolean;
+  triggerSource: string;
   status: string;
   createdAt: string;
   completedAt?: string | null;
   chatId?: string | null;
   success?: boolean | null;
+}
+
+export interface WorkspaceScheduledRun {
+  id: string;
+  workspaceId: string;
+  workspacePath: string;
+  jobKind: string;
+  title: string;
+  scenarioId: string;
+  promptText?: string | null;
+  schedule: string;
+  trustPreset: "conservative" | "balanced" | "elevated" | string;
+  enabledPackIds: string[];
+  createdAt: number;
+  nextRunAt: number;
+  lastRunAt?: number | null;
+  lastStatus?: string | null;
+  lastChatId?: string | null;
+  lastError?: string | null;
+  lastRequestId?: string | null;
+  lastArtifactCount: number;
+  lastRequiresExplicitApproval: boolean;
+  lastBlockedByApproval: boolean;
 }
 
 export interface WorkspacePreparedLaunch {
@@ -941,6 +965,50 @@ export async function recordWorkspaceLaunchResult(
     actualToolIds,
     actualTouchedPaths,
     producedArtifactPaths,
+  });
+}
+
+export async function createWorkspaceScheduledRun(
+  workspacePath: string,
+  scenarioId: string,
+  schedule: string,
+): Promise<WorkspaceScheduledRun> {
+  return invoke<WorkspaceScheduledRun>("create_workspace_scheduled_run", {
+    workspacePath,
+    scenarioId,
+    schedule,
+  });
+}
+
+export async function createWorkspacePromptScheduledRun(
+  workspacePath: string,
+  title: string,
+  prompt: string,
+  schedule: string,
+): Promise<WorkspaceScheduledRun> {
+  return invoke<WorkspaceScheduledRun>("create_workspace_prompt_scheduled_run", {
+    workspacePath,
+    title,
+    prompt,
+    schedule,
+  });
+}
+
+export async function listWorkspaceScheduledRuns(
+  workspacePath: string,
+): Promise<WorkspaceScheduledRun[]> {
+  return invoke<WorkspaceScheduledRun[]>("list_workspace_scheduled_runs", {
+    workspacePath,
+  });
+}
+
+export async function deleteWorkspaceScheduledRun(
+  workspacePath: string,
+  scheduledRunId: string,
+): Promise<void> {
+  return invoke<void>("delete_workspace_scheduled_run", {
+    workspacePath,
+    scheduledRunId,
   });
 }
 
@@ -2730,6 +2798,7 @@ export interface RunAgentWorkflowResponse {
   actualToolIds: string[];
   actualTouchedPaths: string[];
   producedArtifactPaths: string[];
+  blockedByAirlock: boolean;
 }
 
 export interface CancelAgentRunResponse {

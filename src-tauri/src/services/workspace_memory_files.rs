@@ -300,12 +300,10 @@ mod tests {
                 .await
                 .expect("bootstrap");
 
-        assert!(
-            bootstrap
-                .context_block
-                .as_deref()
-                .is_some_and(|block| block.contains("Remember the definitive launch wedge."))
-        );
+        assert!(bootstrap
+            .context_block
+            .as_deref()
+            .is_some_and(|block| block.contains("Remember the definitive launch wedge.")));
     }
 
     #[tokio::test]

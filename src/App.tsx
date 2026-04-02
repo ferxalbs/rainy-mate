@@ -5,7 +5,7 @@ import { TahoeLayout, AIDocumentPanel, AIResearchPanel } from "./components";
 import { SettingsPage } from "./components/settings";
 import { AgentChatPanel } from "./components/agent-chat/AgentChatPanel";
 import { NeuralPanel, AirlockEvents, McpApprovalEvents } from "./components/neural";
-import { WorkspaceLaunchpad } from "./components/workspace";
+import { WorkspaceLaunchpad, WorkspaceRecurringRuns } from "./components/workspace";
 import { AgentBuilder } from "./components/agents/builder/AgentBuilder";
 import { AgentStorePage } from "./components/agents/store/AgentStorePage";
 import { WasmSkillsPage } from "./components/wasm-skills/WasmSkillsPage";
@@ -394,6 +394,16 @@ function App() {
                   workspacePath={activeFolder.path}
                   onRunScenario={handleRunWorkspaceScenario}
                 />
+              ) : (
+                <NoFolderGate onAddFolder={addFolder} />
+              )}
+            </div>
+          )}
+
+          {activeSection === "workspace-recurring-runs" && (
+            <div className="flex-1 h-full min-h-0 overflow-hidden">
+              {activeFolder ? (
+                <WorkspaceRecurringRuns workspacePath={activeFolder.path} />
               ) : (
                 <NoFolderGate onAddFolder={addFolder} />
               )}

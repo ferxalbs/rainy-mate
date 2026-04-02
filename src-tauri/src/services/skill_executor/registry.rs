@@ -203,6 +203,21 @@ pub fn registered_tool_definitions() -> Vec<Tool> {
             "Bundle workspace-scoped files into a .zip archive. Rejects directories and duplicate archive entry names.",
             schema_for!(ArchiveCreateArgs),
         ),
+        tool(
+            "schedule_recurring_task",
+            "Create a recurring workspace task or cron-style playbook. Prefer structured schedule fields (daily, weekdays, weekly, monthly) instead of raw cron when possible. Use task_prompt for recurring chat tasks or scenario_id for first-party playbooks.",
+            schema_for!(ScheduleRecurringTaskArgs),
+        ),
+        tool(
+            "list_recurring_tasks",
+            "List recurring tasks already scheduled for the current workspace.",
+            schema_for!(ListRecurringTasksArgs),
+        ),
+        tool(
+            "delete_recurring_task",
+            "Delete a recurring task from the current workspace by scheduled run id.",
+            schema_for!(DeleteRecurringTaskArgs),
+        ),
     ]
 }
 

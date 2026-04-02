@@ -404,9 +404,16 @@ pub fn run() {
             );
             tauri::async_runtime::block_on(async {
                 persistent_scheduler
+                    .set_app_handle(app.handle().clone())
+                    .await;
+                persistent_scheduler
                     .init()
                     .await
                     .map_err(|e| startup_error(format!("Failed to init scheduler: {}", e)))?;
+                {
+                    let se = app.state::<Arc<SkillExecutor>>();
+                    se.set_scheduler(persistent_scheduler.clone()).await;
+                }
                 persistent_scheduler.start_loop();
                 Ok::<(), std::io::Error>(())
             })?;
@@ -670,6 +677,10 @@ pub fn run() {
             commands::build_workspace_first_run_prompt,
             commands::prepare_workspace_launch,
             commands::record_workspace_launch_result,
+            commands::create_workspace_scheduled_run,
+            commands::create_workspace_prompt_scheduled_run,
+            commands::list_workspace_scheduled_runs,
+            commands::delete_workspace_scheduled_run,
             // Router commands (PHASE 3 - Intelligent Routing)
             commands::get_router_config,
             commands::update_router_config,

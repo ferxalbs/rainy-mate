@@ -3,6 +3,7 @@ mod browser;
 mod documents;
 mod filesystem;
 mod registry;
+mod scheduler;
 mod shell;
 mod web;
 
@@ -46,6 +47,7 @@ pub struct SkillExecutor {
     managed_research: Arc<ManagedResearchService>,
     browser: Arc<BrowserController>,
     memory_manager: Arc<RwLock<Option<Arc<MemoryManager>>>>,
+    scheduler: Arc<RwLock<Option<Arc<crate::services::persistent_scheduler::PersistentScheduler>>>>,
     third_party_registry: Arc<ThirdPartySkillRegistry>,
     wasm_sandbox: Arc<WasmSandboxService>,
     mcp_service: Arc<crate::services::mcp_service::McpService>,
@@ -113,6 +115,7 @@ impl SkillExecutor {
             managed_research,
             browser,
             memory_manager: Arc::new(RwLock::new(None)),
+            scheduler: Arc::new(RwLock::new(None)),
             third_party_registry,
             wasm_sandbox: Arc::new(WasmSandboxService::new()),
             mcp_service,
@@ -122,6 +125,14 @@ impl SkillExecutor {
     pub async fn set_memory_manager(&self, mm: Arc<MemoryManager>) {
         let mut lock = self.memory_manager.write().await;
         *lock = Some(mm);
+    }
+
+    pub async fn set_scheduler(
+        &self,
+        scheduler: Arc<crate::services::persistent_scheduler::PersistentScheduler>,
+    ) {
+        let mut lock = self.scheduler.write().await;
+        *lock = Some(scheduler);
     }
 
     #[cfg(test)]
@@ -140,6 +151,7 @@ impl SkillExecutor {
             managed_research: research,
             browser,
             memory_manager: Arc::new(RwLock::new(None)),
+            scheduler: Arc::new(RwLock::new(None)),
             third_party_registry: Arc::new(
                 ThirdPartySkillRegistry::new().expect("mock third-party registry"),
             ),
@@ -313,6 +325,10 @@ impl SkillExecutor {
                     blocked_paths,
                 )
                 .await
+            }
+            "workspace" => {
+                self.execute_workspace_tools(workspace_id, method, &payload.params)
+                    .await
             }
             _ => self
                 .execute_third_party_skill(

@@ -6,3 +6,4 @@ export { WorkspaceCreator } from './WorkspaceCreator';
 export { WorkspaceSettings } from './WorkspaceSettings';
 export { WorkspaceList } from './WorkspaceList';
 export { WorkspaceLaunchpad } from './WorkspaceLaunchpad';
+export { WorkspaceRecurringRuns } from './WorkspaceRecurringRuns';

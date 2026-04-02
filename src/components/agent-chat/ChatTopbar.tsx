@@ -1,4 +1,5 @@
 import {
+  CalendarClock,
   ChevronDown,
   Compass,
   FolderPlus,
@@ -25,6 +26,7 @@ interface ChatTopbarProps {
   onAddFolder?: () => void;
   onNewChat: () => void;
   onRefreshChat: () => void;
+  onOpenSchedule?: () => void;
   onOpenSettings?: () => void;
 }
 
@@ -49,6 +51,7 @@ export function ChatTopbar({
   onAddFolder,
   onNewChat,
   onRefreshChat,
+  onOpenSchedule,
   onOpenSettings,
 }: ChatTopbarProps) {
   const workspaceName = getWorkspaceName(workspacePath);
@@ -159,6 +162,22 @@ export function ChatTopbar({
               </TooltipTrigger>
               <TooltipContent>New chat</TooltipContent>
             </Tooltip>
+            {onOpenSchedule && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                      onClick={onOpenSchedule}
+                    />
+                  }
+                >
+                  <CalendarClock className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>Schedule recurring work</TooltipContent>
+              </Tooltip>
+            )}
           </TooltipProvider>
           {onOpenSettings && (
             <button

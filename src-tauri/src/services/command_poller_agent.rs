@@ -1097,8 +1097,8 @@ mod tests {
         let file_path = tempdir.path().join("notes.txt");
         std::fs::write(&file_path, "hello").expect("file");
 
-        let error = canonicalize_remote_path(file_path.to_string_lossy().as_ref())
-            .expect_err("file path");
+        let error =
+            canonicalize_remote_path(file_path.to_string_lossy().as_ref()).expect_err("file path");
 
         assert!(error.contains("not a directory"));
     }

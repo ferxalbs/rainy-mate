@@ -163,6 +163,7 @@ pub struct WorkspaceLaunchRunRecord {
     pub effective_tool_policy_mode: String,
     pub highest_airlock_level: u8,
     pub requires_explicit_approval: bool,
+    pub trigger_source: String,
     pub status: String,
     pub created_at: String,
     pub completed_at: Option<String>,
@@ -191,6 +192,7 @@ impl Default for WorkspaceLaunchRunRecord {
             effective_tool_policy_mode: String::new(),
             highest_airlock_level: 0,
             requires_explicit_approval: false,
+            trigger_source: "manual".to_string(),
             status: "prepared".to_string(),
             created_at: String::new(),
             completed_at: None,
@@ -440,6 +442,14 @@ impl MateLaunchpadService {
         ]
     }
 
+    pub fn has_scenario(scenario_id: &str) -> bool {
+        scenario_by_id(scenario_id).is_some()
+    }
+
+    pub fn scenario_title(scenario_id: &str) -> Option<String> {
+        scenario_by_id(scenario_id).map(|scenario| scenario.title)
+    }
+
     pub fn get_workspace_summary(workspace: &Workspace) -> WorkspaceLaunchpadSummary {
         let trust = normalize_trust_preset(&workspace.launchpad.trust_preset);
         WorkspaceLaunchpadSummary {
@@ -486,9 +496,35 @@ impl MateLaunchpadService {
         workspace_id: &str,
         scenario_id: &str,
     ) -> Result<WorkspacePreparedLaunch, String> {
+        Self::prepare_workspace_launch_with_config(
+            workspace_manager,
+            workspace_id,
+            scenario_id,
+            None,
+            None,
+            "manual",
+        )
+    }
+
+    pub fn prepare_workspace_launch_with_config(
+        workspace_manager: &WorkspaceManager,
+        workspace_id: &str,
+        scenario_id: &str,
+        trust_preset_override: Option<&str>,
+        enabled_pack_ids_override: Option<&[String]>,
+        trigger_source: &str,
+    ) -> Result<WorkspacePreparedLaunch, String> {
         let mut workspace = workspace_manager
             .load_workspace(workspace_id)
             .map_err(|e| e.to_string())?;
+
+        if let Some(trust_preset) = trust_preset_override {
+            workspace.launchpad.trust_preset = normalize_trust_preset(trust_preset).to_string();
+        }
+        if let Some(enabled_pack_ids) = enabled_pack_ids_override {
+            workspace.launchpad.enabled_pack_ids = sanitize_pack_ids(enabled_pack_ids);
+        }
+
         let preflight = build_launch_preflight(&workspace, scenario_id)?;
         let request_id = format!("launch_{}", uuid::Uuid::new_v4());
         let created_at = Utc::now();
@@ -515,6 +551,7 @@ impl MateLaunchpadService {
                 effective_tool_policy_mode: preflight.effective_tool_policy_mode.clone(),
                 highest_airlock_level: preflight.highest_airlock_level,
                 requires_explicit_approval: preflight.requires_explicit_approval,
+                trigger_source: trigger_source.to_string(),
                 status: "prepared".to_string(),
                 created_at: created_at.to_rfc3339(),
                 completed_at: None,
@@ -1082,7 +1119,10 @@ mod tests {
     #[test]
     fn new_first_party_playbooks_are_available() {
         let scenarios = MateLaunchpadService::first_run_scenarios();
-        let scenario_ids = scenarios.iter().map(|scenario| scenario.id.as_str()).collect::<Vec<_>>();
+        let scenario_ids = scenarios
+            .iter()
+            .map(|scenario| scenario.id.as_str())
+            .collect::<Vec<_>>();
 
         assert!(scenario_ids.contains(&"codebase_audit"));
         assert!(scenario_ids.contains(&"incident_brief"));

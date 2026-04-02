@@ -7,7 +7,7 @@ use crate::services::{
     WorkspacePreparedLaunch,
 };
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 /// Create a new workspace
@@ -310,4 +310,105 @@ pub async fn record_workspace_launch_result(
         actual_touched_paths.as_deref().unwrap_or(&[]),
         produced_artifact_paths.as_deref().unwrap_or(&[]),
     )
+}
+
+#[tauri::command]
+pub async fn create_workspace_scheduled_run(
+    workspace_path: String,
+    scenario_id: String,
+    schedule: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    scheduler: State<'_, Arc<crate::services::persistent_scheduler::PersistentScheduler>>,
+    app_handle: AppHandle,
+) -> Result<crate::services::persistent_scheduler::WorkspaceScheduledRun, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    let created = scheduler
+        .add_workspace_run(
+            workspace.id.clone(),
+            workspace_path.clone(),
+            scenario_id,
+            schedule,
+            workspace.launchpad.trust_preset.clone(),
+            workspace.launchpad.enabled_pack_ids.clone(),
+        )
+        .await?;
+    let _ = app_handle.emit(
+        "workspace://scheduled-runs-updated",
+        serde_json::json!({
+            "workspacePath": workspace_path,
+            "workspaceId": workspace.id,
+            "jobId": created.id,
+        }),
+    );
+    Ok(created)
+}
+
+#[tauri::command]
+pub async fn create_workspace_prompt_scheduled_run(
+    workspace_path: String,
+    title: String,
+    prompt: String,
+    schedule: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    scheduler: State<'_, Arc<crate::services::persistent_scheduler::PersistentScheduler>>,
+    app_handle: AppHandle,
+) -> Result<crate::services::persistent_scheduler::WorkspaceScheduledRun, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    let created = scheduler
+        .add_workspace_prompt_run(
+            workspace.id.clone(),
+            workspace_path.clone(),
+            title,
+            prompt,
+            schedule,
+        )
+        .await?;
+    let _ = app_handle.emit(
+        "workspace://scheduled-runs-updated",
+        serde_json::json!({
+            "workspacePath": workspace_path,
+            "workspaceId": workspace.id,
+            "jobId": created.id,
+        }),
+    );
+    Ok(created)
+}
+
+#[tauri::command]
+pub async fn list_workspace_scheduled_runs(
+    workspace_path: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    scheduler: State<'_, Arc<crate::services::persistent_scheduler::PersistentScheduler>>,
+) -> Result<Vec<crate::services::persistent_scheduler::WorkspaceScheduledRun>, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    scheduler.list_workspace_runs(&workspace.id).await
+}
+
+#[tauri::command]
+pub async fn delete_workspace_scheduled_run(
+    workspace_path: String,
+    scheduled_run_id: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    scheduler: State<'_, Arc<crate::services::persistent_scheduler::PersistentScheduler>>,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    scheduler.remove_workspace_run(&scheduled_run_id).await?;
+    let _ = app_handle.emit(
+        "workspace://scheduled-runs-updated",
+        serde_json::json!({
+            "workspacePath": workspace_path,
+            "workspaceId": workspace.id,
+            "jobId": scheduled_run_id,
+        }),
+    );
+    Ok(())
 }

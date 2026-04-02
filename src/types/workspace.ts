@@ -156,11 +156,35 @@ export interface WorkspaceLaunchRunRecord {
     effectiveToolPolicyMode: string;
     highestAirlockLevel: number;
     requiresExplicitApproval: boolean;
+    triggerSource: string;
     status: string;
     createdAt: string;
     completedAt?: string | null;
     chatId?: string | null;
     success?: boolean | null;
+}
+
+export interface WorkspaceScheduledRun {
+    id: string;
+    workspaceId: string;
+    workspacePath: string;
+    jobKind: string;
+    title: string;
+    scenarioId: string;
+    promptText?: string | null;
+    schedule: string;
+    trustPreset: WorkspaceTrustPreset | string;
+    enabledPackIds: string[];
+    createdAt: number;
+    nextRunAt: number;
+    lastRunAt?: number | null;
+    lastStatus?: string | null;
+    lastChatId?: string | null;
+    lastError?: string | null;
+    lastRequestId?: string | null;
+    lastArtifactCount: number;
+    lastRequiresExplicitApproval: boolean;
+    lastBlockedByApproval: boolean;
 }
 
 /**

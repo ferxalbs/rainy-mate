@@ -93,6 +93,9 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   pdf_read: "observing",
   excel_read: "observing",
   docx_read: "observing",
+  schedule_recurring_task: "creating",
+  list_recurring_tasks: "observing",
+  delete_recurring_task: "pruning",
 };
 
 /** Human-readable display names for raw tool function names */
@@ -137,6 +140,9 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   docx_create: "Generating Word Document",
   docx_read: "Reading Word Document",
   archive_create: "Bundling Archive",
+  schedule_recurring_task: "Scheduling Recurring Task",
+  list_recurring_tasks: "Listing Recurring Tasks",
+  delete_recurring_task: "Deleting Recurring Task",
 };
 
 /** Resolves a function name to a human-readable display name */

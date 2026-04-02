@@ -190,8 +190,8 @@ mod tests {
 
     #[test]
     fn rejects_missing_files_for_opening() {
-        let error =
-            ensure_openable_artifact_path("/tmp/rainy-mate-missing-artifact.pdf").expect_err("missing");
+        let error = ensure_openable_artifact_path("/tmp/rainy-mate-missing-artifact.pdf")
+            .expect_err("missing");
 
         assert!(error.contains("does not exist"));
     }

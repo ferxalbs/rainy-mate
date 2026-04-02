@@ -331,6 +331,14 @@ export function AppSidebar({
               onNavigate={onNavigate}
             />
             <NavItem
+              id="workspace-recurring-runs"
+              label="Recurring Runs"
+              icon={Clock}
+              isActive={activeSection === "workspace-recurring-runs"}
+              isCollapsed={isCollapsed}
+              onNavigate={onNavigate}
+            />
+            <NavItem
               id="agent-store"
               label="Agents Store"
               icon={Library}

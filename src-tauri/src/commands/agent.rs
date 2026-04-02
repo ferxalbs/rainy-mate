@@ -410,6 +410,7 @@ pub struct RunAgentWorkflowResponse {
     pub actual_tool_ids: Vec<String>,
     pub actual_touched_paths: Vec<String>,
     pub produced_artifact_paths: Vec<String>,
+    pub blocked_by_airlock: bool,
 }
 
 #[derive(Serialize)]
@@ -786,6 +787,7 @@ fn default_instructions(workspace_id: &str) -> String {
         - You can plan multi-step tasks.
         - You may use shell tools only when available through the provided tools.
         - Shell `execute_command` is restricted by an allowlist. Typical allowed commands include: `npm`, `cargo`, `git`, `ls`, `grep`, `echo`, `cat`. Commands like `find` may be blocked.
+        - You can create native recurring workspace tasks with `schedule_recurring_task`, inspect them with `list_recurring_tasks`, and remove them with `delete_recurring_task`.
         
         GUIDELINES:
         1. PLAN: Before executing, briefly state your plan.
@@ -795,6 +797,8 @@ fn default_instructions(workspace_id: &str) -> String {
         5. FAILURE HONESTY: If a tool fails or is blocked by policy, tell the user exactly what failed and why.
         6. NO FABRICATION: Do not invent scan results, file contents, diffs, hashes, or command output.
         7. FALLBACKS ONLY: After a tool failure, either try a permitted alternative tool or ask the user for the missing data.
+        8. SCHEDULING DEFAULT: When the user asks to create a cron, recurring task, scheduled run, or daily/weekly/monthly automation inside this workspace, use the native recurring-task tools first. Do not reach for `execute_command`, OS cron, or GitHub Actions unless the user explicitly asks for system cron or CI workflows.
+        9. MINIMAL CLARIFICATION: For scheduling requests, only ask follow-up questions if the action to run is actually missing. If the user clearly wants a recurring prompt-based task in this workspace, schedule it directly with a sensible default title and the stated frequency.
         
         Tools are provided natively. Use them for all file operations.
         Trust tool outputs over assumptions.
@@ -1215,6 +1219,7 @@ pub async fn run_agent_workflow_internal(
             actual_tool_ids: Vec::new(),
             actual_touched_paths: Vec::new(),
             produced_artifact_paths: Vec::new(),
+            blocked_by_airlock: false,
         });
     }
 
@@ -1373,6 +1378,7 @@ pub async fn run_agent_workflow_internal(
     let collected_artifacts = Arc::new(StdMutex::new(Vec::<ChatArtifact>::new()));
     let actual_tool_ids = Arc::new(StdMutex::new(BTreeSet::<String>::new()));
     let actual_touched_paths = Arc::new(StdMutex::new(BTreeSet::<String>::new()));
+    let blocked_by_airlock = Arc::new(StdMutex::new(false));
 
     // Persist Initial User Prompt
     if invocation_source == WorkflowInvocationSource::Local {
@@ -1387,6 +1393,7 @@ pub async fn run_agent_workflow_internal(
     let collected_artifacts_for_events = collected_artifacts.clone();
     let actual_tool_ids_for_events = actual_tool_ids.clone();
     let actual_touched_paths_for_events = actual_touched_paths.clone();
+    let blocked_by_airlock_for_events = blocked_by_airlock.clone();
     let response_result = runtime
         .run(&prompt, move |event| {
             let projected_events = {
@@ -1420,6 +1427,13 @@ pub async fn run_agent_workflow_internal(
                         }
                     }
                     AgentEvent::ToolResult { id, result } => {
+                        if result.contains("blocked by Airlock policy or user decision")
+                            || result.contains("blocked by Airlock error")
+                        {
+                            *blocked_by_airlock_for_events
+                                .lock()
+                                .expect("airlock collector poisoned") = true;
+                        }
                         let tool_call = tool_call_index_for_events
                             .lock()
                             .expect("tool call index poisoned")
@@ -1632,12 +1646,17 @@ pub async fn run_agent_workflow_internal(
         .map(|artifact| artifact.path.clone())
         .collect::<Vec<_>>();
 
+    let blocked_by_airlock = *blocked_by_airlock
+        .lock()
+        .expect("airlock collector poisoned");
+
     Ok(RunAgentWorkflowResponse {
         run_id,
         response,
         actual_tool_ids,
         actual_touched_paths,
         produced_artifact_paths,
+        blocked_by_airlock,
     })
 }
 

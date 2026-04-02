@@ -115,8 +115,13 @@ mod tests {
     #[tokio::test]
     async fn insert_and_touch_keep_grant_active() {
         let store = RemoteWorkspaceGrantStore::new();
-        let initial = store.insert("ws", "telegram", "peer-1", "/tmp/project").await;
-        let touched = store.touch("ws", "telegram", "peer-1").await.expect("grant");
+        let initial = store
+            .insert("ws", "telegram", "peer-1", "/tmp/project")
+            .await;
+        let touched = store
+            .touch("ws", "telegram", "peer-1")
+            .await
+            .expect("grant");
 
         assert_eq!(initial.canonical_path, "/tmp/project");
         assert_eq!(touched.canonical_path, "/tmp/project");
@@ -126,7 +131,9 @@ mod tests {
     #[tokio::test]
     async fn expired_grants_are_removed_on_lookup() {
         let store = RemoteWorkspaceGrantStore::new();
-        let mut grant = store.insert("ws", "telegram", "peer-1", "/tmp/project").await;
+        let mut grant = store
+            .insert("ws", "telegram", "peer-1", "/tmp/project")
+            .await;
         grant.expires_at_ms = 0;
 
         store.grants.write().await.insert(

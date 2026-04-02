@@ -10,6 +10,7 @@ pub enum ToolSkill {
     RemoteSession,
     /// IRONMILL — document generation and reading (KINGFALL Phase 1)
     Documents,
+    Workspace,
 }
 
 impl ToolSkill {
@@ -22,6 +23,7 @@ impl ToolSkill {
             Self::Memory => "memory",
             Self::RemoteSession => "remote_session",
             Self::Documents => "documents",
+            Self::Workspace => "workspace",
         }
     }
 }
@@ -127,6 +129,14 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
         // L1: Document creation (writes new files, non-destructive)
         "pdf_create" | "excel_write" | "docx_create" | "archive_create" => ToolPolicy {
             skill: ToolSkill::Documents,
+            airlock_level: AirlockLevel::Sensitive,
+        },
+        "list_recurring_tasks" => ToolPolicy {
+            skill: ToolSkill::Workspace,
+            airlock_level: AirlockLevel::Safe,
+        },
+        "schedule_recurring_task" | "delete_recurring_task" => ToolPolicy {
+            skill: ToolSkill::Workspace,
             airlock_level: AirlockLevel::Sensitive,
         },
 
