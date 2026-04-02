@@ -20,6 +20,11 @@ const EXECUTE_RISK_TOOLS: &[&str] = &[
 ];
 
 const DELETE_RISK_TOOLS: &[&str] = &["delete_file", "move_file"];
+const ALWAYS_AVAILABLE_WORKSPACE_CONTROL_TOOLS: &[&str] = &[
+    "list_recurring_tasks",
+    "schedule_recurring_task",
+    "delete_recurring_task",
+];
 
 const REPO_GUARDIAN_TOOLS: &[&str] = &[
     "read_file",
@@ -739,11 +744,16 @@ fn effective_pack_ids_for_scenario(
 }
 
 fn active_tool_ids(enabled_pack_ids: &[String], trust_preset: &str) -> Vec<String> {
-    let base_tools = enabled_pack_ids
+    let mut base_tools = enabled_pack_ids
         .iter()
         .filter_map(|pack_id| pack_by_id(pack_id))
         .flat_map(|pack| pack.tool_ids)
         .collect::<BTreeSet<_>>();
+    base_tools.extend(
+        ALWAYS_AVAILABLE_WORKSPACE_CONTROL_TOOLS
+            .iter()
+            .map(|tool| (*tool).to_string()),
+    );
 
     base_tools
         .into_iter()
@@ -1070,9 +1080,10 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
 #[cfg(test)]
 mod tests {
     use super::{
-        build_first_run_prompt, effective_pack_ids_for_scenario, out_of_contract_paths,
-        out_of_contract_tool_ids, scenario_intent_summary, summarize_planned_actions,
-        trim_recent_runs, MateLaunchpadService, WorkspaceLaunchRunRecord,
+        build_first_run_prompt, effective_launch_tool_ids, effective_pack_ids_for_scenario,
+        out_of_contract_paths, out_of_contract_tool_ids, scenario_intent_summary,
+        summarize_planned_actions, trim_recent_runs, MateLaunchpadService,
+        WorkspaceLaunchRunRecord,
     };
     use crate::services::workspace::{WorkspaceMemory, WorkspacePermissions, WorkspaceSettings};
     use crate::services::{mate_launchpad::WorkspaceLaunchSettings, Workspace};
@@ -1156,6 +1167,20 @@ mod tests {
 
         assert!(prompt.contains("native deliverables"));
         assert!(prompt.contains("Expected outputs"));
+    }
+
+    #[test]
+    fn launchpad_active_tools_keep_workspace_scheduler_available() {
+        let workspace = test_workspace(vec!["repo_guardian"]);
+        let active = effective_launch_tool_ids(
+            &workspace,
+            &workspace.launchpad.enabled_pack_ids,
+            &workspace.launchpad.trust_preset,
+        );
+
+        assert!(active.iter().any(|tool| tool == "schedule_recurring_task"));
+        assert!(active.iter().any(|tool| tool == "list_recurring_tasks"));
+        assert!(active.iter().any(|tool| tool == "delete_recurring_task"));
     }
 
     #[test]

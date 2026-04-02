@@ -98,6 +98,11 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         compile_swift_bridge(
+            "RainyAutoLaunch",
+            "RainyAutoLaunch.swift",
+            &["ServiceManagement", "AppKit"],
+        );
+        compile_swift_bridge(
             "RainyNativeNotifications",
             "RainyNativeNotifications.swift",
             &["UserNotifications"],

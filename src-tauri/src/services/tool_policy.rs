@@ -135,10 +135,12 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
             skill: ToolSkill::Workspace,
             airlock_level: AirlockLevel::Safe,
         },
-        "schedule_recurring_task" | "delete_recurring_task" => ToolPolicy {
-            skill: ToolSkill::Workspace,
-            airlock_level: AirlockLevel::Sensitive,
-        },
+        "schedule_recurring_task" | "delete_recurring_task" | "update_recurring_task" => {
+            ToolPolicy {
+                skill: ToolSkill::Workspace,
+                airlock_level: AirlockLevel::Sensitive,
+            }
+        }
 
         _ => return None,
     };

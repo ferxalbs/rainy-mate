@@ -707,7 +707,13 @@ impl AgentManager {
 
         sqlx::query(
             "INSERT INTO agents (id, name, description, soul, spec_json, version) VALUES (?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(id) DO NOTHING",
+             ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description,
+                soul = excluded.soul,
+                spec_json = excluded.spec_json,
+                version = excluded.version,
+                updated_at = CURRENT_TIMESTAMP",
         )
         .bind(default_agent_id)
         .bind(agent_name)
@@ -896,5 +902,43 @@ mod tests {
         let history = manager.get_history(chat_id).await.expect("load history");
         let contents: Vec<String> = history.into_iter().map(|(_, _, content)| content).collect();
         assert_eq!(contents, vec!["first", "second", "third"]);
+    }
+
+    #[tokio::test]
+    async fn ensure_default_local_agent_named_refreshes_existing_spec() {
+        let manager = setup_manager().await;
+        let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;
+
+        sqlx::query(
+            "INSERT INTO agents (id, name, description, soul, spec_json, version)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(default_agent_id)
+        .bind("Old Name")
+        .bind("Old description")
+        .bind("Old soul")
+        .bind("{\"id\":\"stale\"}")
+        .bind("0.0.1")
+        .execute(&*manager.db)
+        .await
+        .expect("seed stale default agent");
+
+        manager
+            .ensure_default_local_agent_named("Rainy Agent")
+            .await
+            .expect("refresh default agent");
+
+        let refreshed = manager
+            .get_agent(default_agent_id)
+            .await
+            .expect("fetch refreshed")
+            .expect("agent exists");
+
+        assert_eq!(refreshed.name, "Rainy Agent");
+        assert_eq!(refreshed.version.as_deref(), Some("3.0.0"));
+        assert!(refreshed
+            .spec_json
+            .as_deref()
+            .is_some_and(|json| json.contains("ParallelSupervisor")));
     }
 }

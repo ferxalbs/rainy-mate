@@ -16,9 +16,9 @@ use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
     ATMClient, AgentLibraryService, AgentRunControl, BrowserController, CommandPoller,
     DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService,
-    KeychainAccessService, LLMClient, ManagedResearchService, MemoryManager, NeuralService,
-    NodeAuthenticator, QuickDelegateModalService, SettingsManager, SkillExecutor, SocketClient,
-    WorkflowRecorderService, WorkspaceManager,
+    KeychainAccessService, LLMClient, MacOSAutoLaunchBridge, ManagedResearchService, MemoryManager,
+    NeuralService, NodeAuthenticator, QuickDelegateModalService, SettingsManager, SkillExecutor,
+    SocketClient, WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tauri::Manager;
@@ -394,6 +394,20 @@ pub fn run() {
             let agent_manager = AgentManager::new(db.pool.clone());
             app.manage(agent_manager.clone());
 
+            {
+                let settings_manager = app.state::<Arc<Mutex<SettingsManager>>>().inner().clone();
+                let launch_at_login_enabled = tauri::async_runtime::block_on(async {
+                    settings_manager
+                        .lock()
+                        .await
+                        .get_settings()
+                        .launch_at_login_enabled
+                });
+                if let Err(error) = MacOSAutoLaunchBridge::set_enabled(launch_at_login_enabled) {
+                    tracing::warn!("Failed to restore launch-at-login preference: {}", error);
+                }
+            }
+
             // Initialize Persistent Scheduler
             let persistent_scheduler = std::sync::Arc::new(
                 crate::services::persistent_scheduler::PersistentScheduler::new(
@@ -644,6 +658,9 @@ pub fn run() {
             commands::set_embedder_model,
             commands::set_theme,
             commands::set_notifications,
+            commands::get_launch_at_login_status,
+            commands::set_launch_at_login_enabled,
+            commands::open_launch_at_login_settings,
             commands::get_notification_status,
             commands::request_notification_permission,
             commands::send_test_notification,
@@ -679,6 +696,7 @@ pub fn run() {
             commands::record_workspace_launch_result,
             commands::create_workspace_scheduled_run,
             commands::create_workspace_prompt_scheduled_run,
+            commands::update_workspace_scheduled_run,
             commands::list_workspace_scheduled_runs,
             commands::delete_workspace_scheduled_run,
             // Router commands (PHASE 3 - Intelligent Routing)

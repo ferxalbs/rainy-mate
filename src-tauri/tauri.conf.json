@@ -40,6 +40,7 @@
     "targets": "all",
     "macOS": {
       "frameworks": [
+        "./gen/macos-frameworks/libRainyAutoLaunch.dylib",
         "./gen/macos-frameworks/libRainyNativeNotifications.dylib",
         "./gen/macos-frameworks/libRainyQuickDelegate.dylib"
       ]

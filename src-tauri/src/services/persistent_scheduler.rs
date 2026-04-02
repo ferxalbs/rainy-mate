@@ -10,7 +10,9 @@ use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
 
 use crate::commands::agent::{run_agent_workflow_internal, WorkflowInvocationSource};
-use crate::services::{MateLaunchpadService, SettingsManager, WorkspaceManager};
+use crate::services::{
+    MacOSNativeNotificationBridge, MateLaunchpadService, SettingsManager, WorkspaceManager,
+};
 
 const SCHEDULER_POLL_INTERVAL: Duration = Duration::from_secs(60);
 const MAX_SCHEDULED_RUN_TITLE_CHARS: usize = 120;
@@ -95,6 +97,16 @@ pub struct WorkspaceScheduledRun {
     pub last_artifact_count: u64,
     pub last_requires_explicit_approval: bool,
     pub last_blocked_by_approval: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceScheduledRunUpdate {
+    pub title: Option<String>,
+    pub prompt_text: Option<String>,
+    pub scenario_id: Option<String>,
+    pub schedule: String,
+    pub trust_preset: Option<String>,
+    pub enabled_pack_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -284,6 +296,16 @@ impl PersistentScheduler {
         Ok(())
     }
 
+    fn next_run_timestamp(schedule_str: &str) -> Result<i64, String> {
+        let schedule = Schedule::from_str(schedule_str)
+            .map_err(|e| format!("Invalid cron schedule: {}", e))?;
+        schedule
+            .upcoming(Utc)
+            .next()
+            .map(|next| next.timestamp())
+            .ok_or_else(|| "Cannot calculate next run".to_string())
+    }
+
     pub async fn list_jobs(&self) -> Result<Vec<ScheduledJob>, String> {
         sqlx::query_as::<_, ScheduledJob>("SELECT * FROM scheduled_jobs ORDER BY created_at DESC")
             .fetch_all(&*self.db)
@@ -309,8 +331,6 @@ impl PersistentScheduler {
         trust_preset: String,
         enabled_pack_ids: Vec<String>,
     ) -> Result<WorkspaceScheduledRun, String> {
-        let schedule = Schedule::from_str(&schedule_str)
-            .map_err(|e| format!("Invalid cron schedule: {}", e))?;
         if !MateLaunchpadService::has_scenario(&scenario_id) {
             return Err(format!("Unknown first-party scenario '{}'", scenario_id));
         }
@@ -320,10 +340,7 @@ impl PersistentScheduler {
         )?;
 
         let now = Utc::now();
-        let next_run = schedule
-            .upcoming(Utc)
-            .next()
-            .ok_or("Cannot calculate next run")?;
+        let next_run = Self::next_run_timestamp(&schedule_str)?;
         let id = format!("scheduled_{}", uuid::Uuid::new_v4());
         let enabled_pack_ids_json =
             serde_json::to_string(&enabled_pack_ids).map_err(|e| e.to_string())?;
@@ -356,7 +373,7 @@ impl PersistentScheduler {
         .bind(&trust_preset)
         .bind(enabled_pack_ids_json)
         .bind(now.timestamp())
-        .bind(next_run.timestamp())
+        .bind(next_run)
         .execute(&*self.db)
         .await
         .map_err(|e| e.to_string())?;
@@ -374,15 +391,10 @@ impl PersistentScheduler {
         prompt_text: String,
         schedule_str: String,
     ) -> Result<WorkspaceScheduledRun, String> {
-        let schedule = Schedule::from_str(&schedule_str)
-            .map_err(|e| format!("Invalid cron schedule: {}", e))?;
         let title = normalize_scheduled_run_title(&title)?;
         let prompt_text = normalize_scheduled_prompt(&prompt_text)?;
         let now = Utc::now();
-        let next_run = schedule
-            .upcoming(Utc)
-            .next()
-            .ok_or("Cannot calculate next run")?;
+        let next_run = Self::next_run_timestamp(&schedule_str)?;
         let id = format!("scheduled_{}", uuid::Uuid::new_v4());
         let enabled_pack_ids_json = "[]".to_string();
 
@@ -413,7 +425,7 @@ impl PersistentScheduler {
         .bind(&schedule_str)
         .bind(enabled_pack_ids_json)
         .bind(now.timestamp())
-        .bind(next_run.timestamp())
+        .bind(next_run)
         .execute(&*self.db)
         .await
         .map_err(|e| e.to_string())?;
@@ -472,6 +484,98 @@ impl PersistentScheduler {
             .await
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub async fn update_workspace_run(
+        &self,
+        id: &str,
+        update: WorkspaceScheduledRunUpdate,
+    ) -> Result<WorkspaceScheduledRun, String> {
+        let existing = self
+            .get_workspace_run(id)
+            .await?
+            .ok_or_else(|| format!("Scheduled run '{}' was not found", id))?;
+        let next_run_at = Self::next_run_timestamp(&update.schedule)?;
+
+        match existing.job_kind.as_str() {
+            "scenario" => {
+                let scenario_id = update
+                    .scenario_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(existing.scenario_id.as_str())
+                    .to_string();
+                if !MateLaunchpadService::has_scenario(&scenario_id) {
+                    return Err(format!("Unknown first-party scenario '{}'", scenario_id));
+                }
+                let title = normalize_scheduled_run_title(
+                    &MateLaunchpadService::scenario_title(&scenario_id)
+                        .unwrap_or_else(|| scenario_id.clone()),
+                )?;
+                let trust_preset = update.trust_preset.unwrap_or(existing.trust_preset);
+                let enabled_pack_ids = update.enabled_pack_ids.unwrap_or(existing.enabled_pack_ids);
+                let enabled_pack_ids_json =
+                    serde_json::to_string(&enabled_pack_ids).map_err(|e| e.to_string())?;
+
+                sqlx::query(
+                    "UPDATE workspace_scheduled_runs
+                     SET title = ?, scenario_id = ?, prompt_text = NULL, schedule = ?, trust_preset = ?,
+                         enabled_pack_ids_json = ?, next_run_at = ?, last_status = NULL, last_error = NULL,
+                         last_blocked_by_approval = 0
+                     WHERE id = ?",
+                )
+                .bind(title)
+                .bind(scenario_id)
+                .bind(&update.schedule)
+                .bind(trust_preset)
+                .bind(enabled_pack_ids_json)
+                .bind(next_run_at)
+                .bind(id)
+                .execute(&*self.db)
+                .await
+                .map_err(|e| e.to_string())?;
+            }
+            "prompt" => {
+                let title = normalize_scheduled_run_title(
+                    update.title.as_deref().unwrap_or(existing.title.as_str()),
+                )?;
+                let prompt_text = normalize_scheduled_prompt(
+                    update
+                        .prompt_text
+                        .as_deref()
+                        .or(existing.prompt_text.as_deref())
+                        .ok_or_else(|| {
+                            "Scheduled prompt task is missing prompt_text".to_string()
+                        })?,
+                )?;
+
+                sqlx::query(
+                    "UPDATE workspace_scheduled_runs
+                     SET title = ?, scenario_id = '', prompt_text = ?, schedule = ?, next_run_at = ?,
+                         last_status = NULL, last_error = NULL, last_blocked_by_approval = 0
+                     WHERE id = ?",
+                )
+                .bind(title)
+                .bind(prompt_text)
+                .bind(&update.schedule)
+                .bind(next_run_at)
+                .bind(id)
+                .execute(&*self.db)
+                .await
+                .map_err(|e| e.to_string())?;
+            }
+            other => {
+                return Err(format!(
+                    "Unsupported scheduled run kind '{}' for update",
+                    other
+                ));
+            }
+        }
+
+        self.get_workspace_run(id)
+            .await?
+            .ok_or_else(|| "Scheduled run was not found after update".to_string())
     }
 
     async fn get_workspace_run(&self, id: &str) -> Result<Option<WorkspaceScheduledRun>, String> {
@@ -753,13 +857,79 @@ impl PersistentScheduler {
         ))
     }
 
+    async fn notifications_enabled(app_handle: &tauri::AppHandle) -> bool {
+        let settings_manager: Arc<tokio::sync::Mutex<SettingsManager>> = app_handle
+            .state::<Arc<tokio::sync::Mutex<SettingsManager>>>()
+            .inner()
+            .clone();
+        let enabled = settings_manager
+            .lock()
+            .await
+            .get_settings()
+            .notifications_enabled;
+        enabled
+    }
+
+    async fn notify_workspace_run_result(
+        app_handle: &tauri::AppHandle,
+        job: &WorkspaceScheduledRun,
+        status: &str,
+        chat_id: Option<&str>,
+        artifact_count: u64,
+        error: Option<&str>,
+        blocked_by_approval: bool,
+    ) {
+        if !Self::notifications_enabled(app_handle).await {
+            return;
+        }
+
+        let (title, body) = match status {
+            "completed" => (
+                format!("Scheduled run completed: {}", job.title),
+                if artifact_count > 0 {
+                    format!(
+                        "Workspace task finished in {} and produced {} artifact{}.",
+                        job.workspace_path,
+                        artifact_count,
+                        if artifact_count == 1 { "" } else { "s" }
+                    )
+                } else {
+                    format!("Workspace task finished in {}.", job.workspace_path)
+                },
+            ),
+            _ if blocked_by_approval => (
+                format!("Scheduled run waiting for approval: {}", job.title),
+                "The recurring task reached an Airlock approval gate and needs your decision."
+                    .to_string(),
+            ),
+            _ => (
+                format!("Scheduled run failed: {}", job.title),
+                error.map(str::to_string).unwrap_or_else(|| {
+                    "The recurring task did not finish successfully.".to_string()
+                }),
+            ),
+        };
+
+        if let Err(notification_error) = MacOSNativeNotificationBridge::send_agent_notification(
+            &title,
+            &body,
+            Some(job.workspace_id.as_str()),
+            chat_id,
+        ) {
+            tracing::warn!(
+                "PersistentScheduler notification failed for {}: {}",
+                job.id,
+                notification_error
+            );
+        }
+    }
+
     pub fn start_loop(&self) {
         let db = self.db.clone();
         let task_manager = self.task_manager.clone();
         let app_handle = self.app_handle.clone();
         tokio::spawn(async move {
             loop {
-                sleep(SCHEDULER_POLL_INTERVAL).await;
                 let now = Utc::now().timestamp();
 
                 let due_jobs = match sqlx::query_as::<_, ScheduledJob>(
@@ -842,6 +1012,16 @@ impl PersistentScheduler {
                                 None,
                             )
                             .await;
+                            Self::notify_workspace_run_result(
+                                &app_handle,
+                                &job,
+                                &status,
+                                chat_id.as_deref(),
+                                artifact_count,
+                                None,
+                                blocked_by_approval,
+                            )
+                            .await;
                             let _ = app_handle.emit(
                                 "workspace://scheduled-runs-updated",
                                 serde_json::json!({
@@ -866,6 +1046,18 @@ impl PersistentScheduler {
                                 Some(error.as_str()),
                             )
                             .await;
+                            Self::notify_workspace_run_result(
+                                &app_handle,
+                                &job,
+                                "failed",
+                                None,
+                                0,
+                                Some(error.as_str()),
+                                error.contains("[Airlock]")
+                                    || error.contains("blocked by Airlock")
+                                    || error.contains("user decision"),
+                            )
+                            .await;
                             let _ = app_handle.emit(
                                 "workspace://scheduled-runs-updated",
                                 serde_json::json!({
@@ -877,6 +1069,8 @@ impl PersistentScheduler {
                         }
                     }
                 }
+
+                sleep(SCHEDULER_POLL_INTERVAL).await;
             }
         });
     }
@@ -910,7 +1104,7 @@ pub async fn remove_scheduled_job(
 
 #[cfg(test)]
 mod tests {
-    use super::PersistentScheduler;
+    use super::{PersistentScheduler, WorkspaceScheduledRunUpdate};
     use crate::ai::AIProviderManager;
     use crate::services::task_manager::TaskManager;
     use crate::services::KeychainAccessService;
@@ -978,5 +1172,82 @@ mod tests {
             .expect_err("invalid scenario");
 
         assert!(error.contains("Unknown first-party scenario"));
+    }
+
+    #[tokio::test]
+    async fn prompt_runs_can_be_updated() {
+        let scheduler = test_scheduler().await;
+        let created = scheduler
+            .add_workspace_prompt_run(
+                "ws-1".to_string(),
+                "/tmp/ws-1".to_string(),
+                "Daily check".to_string(),
+                "run release-readiness check".to_string(),
+                "0 0 9 * * * *".to_string(),
+            )
+            .await
+            .expect("create prompt run");
+
+        let updated = scheduler
+            .update_workspace_run(
+                &created.id,
+                WorkspaceScheduledRunUpdate {
+                    title: Some("Weekly release check".to_string()),
+                    prompt_text: Some("run weekly release review".to_string()),
+                    scenario_id: None,
+                    schedule: "0 30 10 * * 1 *".to_string(),
+                    trust_preset: None,
+                    enabled_pack_ids: None,
+                },
+            )
+            .await
+            .expect("update prompt run");
+
+        assert_eq!(updated.title, "Weekly release check");
+        assert_eq!(
+            updated.prompt_text.as_deref(),
+            Some("run weekly release review")
+        );
+        assert_eq!(updated.schedule, "0 30 10 * * 1 *");
+    }
+
+    #[tokio::test]
+    async fn scenario_runs_can_be_updated() {
+        let scheduler = test_scheduler().await;
+        let created = scheduler
+            .add_workspace_run(
+                "ws-1".to_string(),
+                "/tmp/ws-1".to_string(),
+                "release_readiness".to_string(),
+                "0 0 9 * * * *".to_string(),
+                "balanced".to_string(),
+                vec!["repo_guardian".to_string()],
+            )
+            .await
+            .expect("create scenario run");
+
+        let updated = scheduler
+            .update_workspace_run(
+                &created.id,
+                WorkspaceScheduledRunUpdate {
+                    title: None,
+                    prompt_text: None,
+                    scenario_id: Some("codebase_audit".to_string()),
+                    schedule: "0 15 8 * * 1-5 *".to_string(),
+                    trust_preset: Some("elevated".to_string()),
+                    enabled_pack_ids: Some(vec![
+                        "repo_guardian".to_string(),
+                        "knowledge_weaver".to_string(),
+                    ]),
+                },
+            )
+            .await
+            .expect("update scenario run");
+
+        assert_eq!(updated.scenario_id, "codebase_audit");
+        assert_eq!(updated.title, "Codebase Audit");
+        assert_eq!(updated.schedule, "0 15 8 * * 1-5 *");
+        assert_eq!(updated.trust_preset, "elevated");
+        assert_eq!(updated.enabled_pack_ids.len(), 2);
     }
 }

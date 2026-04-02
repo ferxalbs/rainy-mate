@@ -88,6 +88,7 @@ impl SpecialistAgent {
                 "git_branch_list",
                 "list_recurring_tasks",
                 "schedule_recurring_task",
+                "update_recurring_task",
                 "delete_recurring_task",
                 "execute_command",
             ],

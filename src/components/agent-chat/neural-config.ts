@@ -94,6 +94,7 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   excel_read: "observing",
   docx_read: "observing",
   schedule_recurring_task: "creating",
+  update_recurring_task: "creating",
   list_recurring_tasks: "observing",
   delete_recurring_task: "pruning",
 };
@@ -141,6 +142,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   docx_read: "Reading Word Document",
   archive_create: "Bundling Archive",
   schedule_recurring_task: "Scheduling Recurring Task",
+  update_recurring_task: "Updating Recurring Task",
   list_recurring_tasks: "Listing Recurring Tasks",
   delete_recurring_task: "Deleting Recurring Task",
 };

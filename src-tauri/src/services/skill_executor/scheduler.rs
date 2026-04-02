@@ -1,4 +1,7 @@
-use super::args::{DeleteRecurringTaskArgs, ListRecurringTasksArgs, ScheduleRecurringTaskArgs};
+use super::args::{
+    DeleteRecurringTaskArgs, ListRecurringTasksArgs, ScheduleRecurringTaskArgs,
+    UpdateRecurringTaskArgs,
+};
 use super::SkillExecutor;
 use crate::models::neural::CommandResult;
 use chrono::Utc;
@@ -162,6 +165,18 @@ impl SkillExecutor {
                 self.handle_delete_recurring_task(&workspace_ref, args)
                     .await
             }
+            "update_recurring_task" => {
+                let params = match params {
+                    Some(value) => value.clone(),
+                    None => return self.error("Missing parameters"),
+                };
+                let args: UpdateRecurringTaskArgs = match serde_json::from_value(params) {
+                    Ok(value) => value,
+                    Err(error) => return self.error(&format!("Invalid parameters: {}", error)),
+                };
+                self.handle_update_recurring_task(&workspace_ref, args)
+                    .await
+            }
             _ => self.error(&format!("Unknown workspace method: {}", method)),
         }
     }
@@ -253,7 +268,7 @@ impl SkillExecutor {
 
                 let response = ScheduledTaskToolResponse {
                     message: format!(
-                        "Scheduled recurring task '{}' for workspace '{}' at {}",
+                        "Scheduled native recurring task '{}' for workspace '{}' at {}. This task is now stored inside MaTE's workspace scheduler. Do not tell the user to create OS cron, edit crontab, chmod a script, or run shell setup unless they explicitly asked for system-level cron. If they want verification, use list_recurring_tasks as a tool call, not as a terminal command. Describe list_recurring_tasks as view-only. Describe update_recurring_task as the tool for changing an existing recurring task. Describe delete_recurring_task as removal only.",
                         scheduled_run.title,
                         workspace.name,
                         Utc::now().to_rfc3339(),
@@ -349,6 +364,102 @@ impl SkillExecutor {
                         "Deleted recurring task '{}' from workspace '{}'",
                         scheduled_run_id, workspace.name
                     )),
+                    error: None,
+                    exit_code: Some(0),
+                }
+            }
+            Err(error) => self.error(&error),
+        }
+    }
+
+    async fn handle_update_recurring_task(
+        &self,
+        workspace_ref: &str,
+        args: UpdateRecurringTaskArgs,
+    ) -> CommandResult {
+        let scheduler = {
+            let lock = self.scheduler.read().await;
+            match lock.as_ref() {
+                Some(value) => value.clone(),
+                None => return self.error("Persistent scheduler not initialized"),
+            }
+        };
+
+        let resolved = match resolve_workspace_target(&self.workspace_manager, workspace_ref) {
+            Ok(value) => value,
+            Err(error) => return self.error(&error),
+        };
+        let workspace = resolved.workspace;
+        let workspace_path = resolved.workspace_path;
+
+        let scheduled_run_id = args.scheduled_run_id.trim().to_string();
+        if scheduled_run_id.is_empty() {
+            return self.error("update_recurring_task requires a non-empty scheduled_run_id");
+        }
+
+        let existing_runs = match scheduler.list_workspace_runs(&workspace.id).await {
+            Ok(runs) => runs,
+            Err(error) => return self.error(&error),
+        };
+        let existing = match existing_runs
+            .into_iter()
+            .find(|run| run.id == scheduled_run_id)
+        {
+            Some(run) => run,
+            None => return self.error("Scheduled run not found in the current workspace"),
+        };
+
+        let schedule = match build_schedule_expression(&ScheduleRecurringTaskArgs {
+            title: args.title.clone(),
+            task_prompt: args.task_prompt.clone(),
+            scenario_id: args.scenario_id.clone(),
+            schedule_kind: args.schedule_kind.clone(),
+            hour: args.hour,
+            minute: args.minute,
+            day_of_week: args.day_of_week,
+            day_of_month: args.day_of_month,
+            cron_expression: args.cron_expression.clone(),
+        }) {
+            Ok(value) => value,
+            Err(error) => return self.error(&error),
+        };
+
+        let updated = scheduler
+            .update_workspace_run(
+                &scheduled_run_id,
+                crate::services::persistent_scheduler::WorkspaceScheduledRunUpdate {
+                    title: args.title,
+                    prompt_text: args.task_prompt,
+                    scenario_id: args.scenario_id,
+                    schedule,
+                    trust_preset: (existing.job_kind == "scenario")
+                        .then_some(workspace.launchpad.trust_preset.clone()),
+                    enabled_pack_ids: (existing.job_kind == "scenario")
+                        .then_some(workspace.launchpad.enabled_pack_ids.clone()),
+                },
+            )
+            .await;
+
+        match updated {
+            Ok(scheduled_run) => {
+                scheduler
+                    .emit_workspace_runs_updated(
+                        &workspace_path,
+                        &workspace.id,
+                        Some(scheduled_run.id.as_str()),
+                    )
+                    .await;
+
+                let response = ScheduledTaskToolResponse {
+                    message: format!(
+                        "Updated native recurring task '{}' for workspace '{}'. Use list_recurring_tasks to inspect the latest stored schedule.",
+                        scheduled_run.title, workspace.name,
+                    ),
+                    scheduled_run,
+                };
+                CommandResult {
+                    success: true,
+                    output: Some(serde_json::to_string(&response).unwrap_or_default()),
                     error: None,
                     exit_code: Some(0),
                 }

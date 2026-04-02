@@ -218,6 +218,11 @@ pub fn registered_tool_definitions() -> Vec<Tool> {
             "Delete a recurring task from the current workspace by scheduled run id.",
             schema_for!(DeleteRecurringTaskArgs),
         ),
+        tool(
+            "update_recurring_task",
+            "Update an existing recurring task in the current workspace. Use this to change the schedule, prompt, or playbook scenario without switching to OS cron.",
+            schema_for!(UpdateRecurringTaskArgs),
+        ),
     ]
 }
 

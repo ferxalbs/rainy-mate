@@ -27,6 +27,7 @@ pub mod image;
 pub mod keychain_access;
 pub mod llm_client;
 pub mod local_agent_security;
+pub mod macos_auto_launch;
 pub mod macos_native_notifications;
 pub mod macos_quick_delegate;
 pub mod managed_research; // Phase 3 AI Research
@@ -84,6 +85,7 @@ pub use skill_executor::SkillExecutor;
 
 pub use llm_client::LLMClient;
 pub use local_agent_security::{EffectiveLocalAgentPolicy, LocalAgentSecurityService};
+pub use macos_auto_launch::MacOSAutoLaunchBridge;
 pub use macos_native_notifications::MacOSNativeNotificationBridge;
 pub use macos_quick_delegate::MacOSQuickDelegateBridge;
 pub use mate_launchpad::{

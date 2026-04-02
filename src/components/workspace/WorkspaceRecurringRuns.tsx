@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Clock3, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
+import { Clock3, Pencil, RefreshCw, ShieldAlert, Trash2, X } from "lucide-react";
 
 import * as tauri from "../../services/tauri";
 import { ScheduleBuilder } from "../scheduling/ScheduleBuilder";
@@ -41,6 +41,14 @@ export function WorkspaceRecurringRuns({
   const [scenarios, setScenarios] = useState<tauri.FirstRunScenarioDefinition[]>([]);
   const [scenarioId, setScenarioId] = useState("release_readiness");
   const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft>(
+    DEFAULT_SCHEDULE_DRAFT,
+  );
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [editingMode, setEditingMode] = useState<"playbook" | "prompt">("playbook");
+  const [editingScenarioId, setEditingScenarioId] = useState("release_readiness");
+  const [editingTitle, setEditingTitle] = useState("");
+  const [editingPrompt, setEditingPrompt] = useState("");
+  const [editingScheduleDraft, setEditingScheduleDraft] = useState<ScheduleDraft>(
     DEFAULT_SCHEDULE_DRAFT,
   );
   const [isLoading, setIsLoading] = useState(true);
@@ -152,6 +160,67 @@ export function WorkspaceRecurringRuns({
     [refresh, workspacePath],
   );
 
+  const handleStartEdit = useCallback((job: tauri.WorkspaceScheduledRun) => {
+    setEditingJobId(job.id);
+    setEditingMode(job.jobKind === "prompt" ? "prompt" : "playbook");
+    setEditingScenarioId(job.scenarioId || "release_readiness");
+    setEditingTitle(job.title);
+    setEditingPrompt(job.promptText ?? "");
+    setEditingScheduleDraft(inferScheduleDraft(job.schedule));
+    setError(null);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingJobId(null);
+    setEditingMode("playbook");
+    setEditingScenarioId("release_readiness");
+    setEditingTitle("");
+    setEditingPrompt("");
+    setEditingScheduleDraft(DEFAULT_SCHEDULE_DRAFT);
+    setError(null);
+  }, []);
+
+  const handleUpdate = useCallback(async () => {
+    if (!editingJobId) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      await tauri.updateWorkspaceScheduledRun(
+        workspacePath,
+        editingJobId,
+        normalizeScheduleDraft(editingScheduleDraft).cronExpression,
+        editingMode === "prompt"
+          ? {
+              title: editingTitle.trim(),
+              prompt: editingPrompt.trim(),
+            }
+          : {
+              scenarioId: editingScenarioId,
+            },
+      );
+      handleCancelEdit();
+      await refresh();
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Failed to update recurring run",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    editingJobId,
+    editingMode,
+    editingPrompt,
+    editingScenarioId,
+    editingScheduleDraft,
+    editingTitle,
+    handleCancelEdit,
+    refresh,
+    workspacePath,
+  ]);
+
   return (
     <div className="flex h-full w-full flex-col overflow-y-auto p-6">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -220,6 +289,101 @@ export function WorkspaceRecurringRuns({
             </button>
           </div>
         </div>
+
+        {editingJobId ? (
+          <div className="grid gap-5 rounded-3xl border border-primary/20 bg-primary/5 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Edit Recurring Run
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Update the stored schedule and task payload for this workspace run.
+                </p>
+              </div>
+              <button
+                className="rounded-full p-2 text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {editingMode === "playbook" ? (
+              <label className="flex flex-col gap-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Scenario
+                </span>
+                <select
+                  className="h-11 rounded-2xl border border-border/60 bg-background px-3 text-sm text-foreground outline-none"
+                  value={editingScenarioId}
+                  onChange={(event) => setEditingScenarioId(event.target.value)}
+                  disabled={isSaving || isLoading}
+                >
+                  {scenarios.map((scenario) => (
+                    <option key={scenario.id} value={scenario.id}>
+                      {scenario.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <div className="grid gap-4">
+                <label className="flex flex-col gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Task title
+                  </span>
+                  <input
+                    className="h-11 rounded-2xl border border-border/60 bg-background px-3 text-sm text-foreground outline-none"
+                    value={editingTitle}
+                    onChange={(event) => setEditingTitle(event.target.value)}
+                    disabled={isSaving}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Prompt
+                  </span>
+                  <textarea
+                    className="min-h-[120px] rounded-2xl border border-border/60 bg-background px-3 py-3 text-sm text-foreground outline-none"
+                    value={editingPrompt}
+                    onChange={(event) => setEditingPrompt(event.target.value)}
+                    disabled={isSaving}
+                  />
+                </label>
+              </div>
+            )}
+
+            <ScheduleBuilder
+              value={editingScheduleDraft}
+              onChange={setEditingScheduleDraft}
+              disabled={isSaving || isLoading}
+            />
+
+            <div className="flex items-end justify-end gap-3">
+              <button
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+              >
+                Cancel
+              </button>
+              <button
+                className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void handleUpdate()}
+                disabled={
+                  isSaving ||
+                  (editingMode === "prompt" &&
+                    (!editingTitle.trim() || !editingPrompt.trim()))
+                }
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="rounded-3xl border border-white/10 bg-background/35">
           <div className="border-b border-white/10 px-5 py-4">
@@ -315,14 +479,24 @@ export function WorkspaceRecurringRuns({
                     </div>
 
                     <div className="flex items-start justify-end">
-                      <button
-                        className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-500 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={() => void handleDelete(job.id)}
-                        disabled={isSaving}
-                      >
-                        <Trash2 className="size-4" />
-                        Delete
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => handleStartEdit(job)}
+                          disabled={isSaving}
+                        >
+                          <Pencil className="size-4" />
+                          Edit
+                        </button>
+                        <button
+                          className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-500 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => void handleDelete(job.id)}
+                          disabled={isSaving}
+                        >
+                          <Trash2 className="size-4" />
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

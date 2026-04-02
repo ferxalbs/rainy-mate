@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { Bell, ShieldCheck, Zap } from "lucide-react";
+import { Bell, Power, ShieldCheck, Zap } from "lucide-react";
 import { Button, Switch } from "@heroui/react";
 import {
+  getLaunchAtLoginStatus,
   getNotificationStatus,
+  openLaunchAtLoginSettings,
   requestNotificationPermission,
   sendTestNotification,
+  setLaunchAtLoginEnabled,
   setNotifications,
 } from "../../../services/tauri";
 import { toast } from "sonner";
@@ -13,6 +16,10 @@ type PermissionState = "unknown" | "granted" | "denied" | "unsupported";
 
 export function PermissionsTab() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [launchAtLoginEnabled, setLaunchAtLoginState] = useState(false);
+  const [launchAtLoginSupported, setLaunchAtLoginSupported] = useState(false);
+  const [launchAtLoginRequiresApproval, setLaunchAtLoginRequiresApproval] =
+    useState(false);
   const [notificationPermission, setNotificationPermission] =
     useState<PermissionState>("unknown");
   const [isBusy, setIsBusy] = useState(false);
@@ -33,6 +40,12 @@ export function PermissionsTab() {
             ? status.permission
             : "unknown",
         );
+
+        const launchStatus = await getLaunchAtLoginStatus();
+        if (cancelled) return;
+        setLaunchAtLoginState(launchStatus.enabled);
+        setLaunchAtLoginSupported(launchStatus.supported);
+        setLaunchAtLoginRequiresApproval(launchStatus.requiresApproval);
       } catch (error) {
         if (cancelled) return;
         console.error("Failed to load notification status:", error);
@@ -59,6 +72,37 @@ export function PermissionsTab() {
     } catch (error) {
       console.error("Failed to update notifications:", error);
       toast.error("Failed to update notifications");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleLaunchAtLoginToggle = async (enabled: boolean) => {
+    setIsBusy(true);
+    try {
+      const status = await setLaunchAtLoginEnabled(enabled);
+      setLaunchAtLoginState(status.enabled);
+      setLaunchAtLoginSupported(status.supported);
+      setLaunchAtLoginRequiresApproval(status.requiresApproval);
+
+      if (status.requiresApproval) {
+        toast.warning("macOS requires approval in Login Items settings");
+      }
+    } catch (error) {
+      console.error("Failed to update launch at login:", error);
+      toast.error("Failed to update launch at login");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleOpenLaunchSettings = async () => {
+    setIsBusy(true);
+    try {
+      await openLaunchAtLoginSettings();
+    } catch (error) {
+      console.error("Failed to open Login Items settings:", error);
+      toast.error("Failed to open Login Items settings");
     } finally {
       setIsBusy(false);
     }
@@ -118,6 +162,47 @@ export function PermissionsTab() {
               <Switch.Thumb />
             </Switch.Control>
           </Switch>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-bold flex items-center gap-2 tracking-tight uppercase opacity-80">
+              <Power className="size-4 text-primary" />
+              Launch At Login
+            </span>
+            <span className="text-xs text-muted-foreground max-w-sm">
+              Keeps recurring workspace runs reliable after macOS restart by reopening Rainy MaTE automatically.
+            </span>
+            <span className="text-[11px] text-muted-foreground/80">
+              {launchAtLoginSupported
+                ? launchAtLoginRequiresApproval
+                  ? "Needs approval in Login Items"
+                  : launchAtLoginEnabled
+                    ? "Enabled"
+                    : "Disabled"
+                : "Unavailable in raw debug launch"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {launchAtLoginRequiresApproval ? (
+              <Button
+                isDisabled={isBusy}
+                onPress={handleOpenLaunchSettings}
+                variant="outline"
+              >
+                Open Settings
+              </Button>
+            ) : null}
+            <Switch
+              isDisabled={isBusy || !launchAtLoginSupported}
+              isSelected={launchAtLoginEnabled}
+              onChange={handleLaunchAtLoginToggle}
+            >
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch>
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">

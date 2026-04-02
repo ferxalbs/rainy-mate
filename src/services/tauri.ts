@@ -438,6 +438,7 @@ export interface UserSettings {
   selectedModel: string;
   theme: string;
   notificationsEnabled: boolean;
+  launchAtLoginEnabled: boolean;
   autoReconnectCloud: boolean;
   profile: UserProfile;
   embedderProvider: string;
@@ -458,6 +459,13 @@ export interface NotificationStatus {
   permission: "granted" | "denied" | "unknown" | string;
 }
 
+export interface LaunchAtLoginStatus {
+  enabled: boolean;
+  supported: boolean;
+  requiresApproval: boolean;
+  status: "enabled" | "disabled" | "requiresApproval" | "unsupported" | "error" | string;
+}
+
 export interface ReadinessCredential {
   provider: string;
   configured: boolean;
@@ -468,6 +476,9 @@ export interface SystemReadiness {
   notificationsEnabled: boolean;
   nativeNotificationRuntimeSupported: boolean;
   notificationPermission: "granted" | "denied" | "unsupported" | "unknown" | string;
+  launchAtLoginEnabled: boolean;
+  nativeLaunchAtLoginSupported: boolean;
+  launchAtLoginStatus: string;
   workspaceCount: number;
   hasWorkspace: boolean;
   pendingAirlockApprovals: number;
@@ -495,6 +506,20 @@ export async function setTheme(theme: string): Promise<void> {
 
 export async function setNotifications(enabled: boolean): Promise<void> {
   return invoke<void>("set_notifications", { enabled });
+}
+
+export async function getLaunchAtLoginStatus(): Promise<LaunchAtLoginStatus> {
+  return invoke<LaunchAtLoginStatus>("get_launch_at_login_status");
+}
+
+export async function setLaunchAtLoginEnabled(
+  enabled: boolean,
+): Promise<LaunchAtLoginStatus> {
+  return invoke<LaunchAtLoginStatus>("set_launch_at_login_enabled", { enabled });
+}
+
+export async function openLaunchAtLoginSettings(): Promise<void> {
+  return invoke<void>("open_launch_at_login_settings");
 }
 
 export async function getNotificationStatus(): Promise<NotificationStatus> {
@@ -990,6 +1015,26 @@ export async function createWorkspacePromptScheduledRun(
     workspacePath,
     title,
     prompt,
+    schedule,
+  });
+}
+
+export async function updateWorkspaceScheduledRun(
+  workspacePath: string,
+  scheduledRunId: string,
+  schedule: string,
+  options?: {
+    title?: string;
+    prompt?: string;
+    scenarioId?: string;
+  },
+): Promise<WorkspaceScheduledRun> {
+  return invoke<WorkspaceScheduledRun>("update_workspace_scheduled_run", {
+    workspacePath,
+    scheduledRunId,
+    title: options?.title ?? null,
+    prompt: options?.prompt ?? null,
+    scenarioId: options?.scenarioId ?? null,
     schedule,
   });
 }

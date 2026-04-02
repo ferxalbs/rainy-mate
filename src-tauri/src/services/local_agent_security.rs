@@ -47,6 +47,7 @@ const WRITE_TOOLS: &[&str] = &[
     "archive_create",
     "save_memory",
     "schedule_recurring_task",
+    "update_recurring_task",
     "delete_recurring_task",
 ];
 

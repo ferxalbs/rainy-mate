@@ -85,8 +85,11 @@ stage_bridge() {
   cp "$source_path" "$output_path"
 }
 
-rm -f "$STAGE_DIR/libRainyNativeNotifications.dylib" "$STAGE_DIR/libRainyQuickDelegate.dylib"
+rm -f "$STAGE_DIR/libRainyAutoLaunch.dylib" \
+  "$STAGE_DIR/libRainyNativeNotifications.dylib" \
+  "$STAGE_DIR/libRainyQuickDelegate.dylib"
 
+stage_bridge "libRainyAutoLaunch.dylib"
 stage_bridge "libRainyNativeNotifications.dylib"
 stage_bridge "libRainyQuickDelegate.dylib"
 

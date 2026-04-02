@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AgentChat can now create native recurring tasks through real runtime tools instead of falling back to manual UI-only scheduling** — recurring scheduling is now available as a first-party tool capability inside the agent loop:
   - `src-tauri/src/services/skill_executor/args.rs`, `src-tauri/src/services/skill_executor/registry.rs`, `src-tauri/src/services/skill_executor/scheduler.rs`, `src-tauri/src/services/tool_policy.rs`, `src-tauri/src/services/skill_executor.rs` — added `schedule_recurring_task`, `list_recurring_tasks`, and `delete_recurring_task` with explicit policy entries and scheduler injection into the executor
 
+- **Recurring runs can now be edited natively instead of forcing delete-and-recreate** — existing playbooks and prompt-based scheduled tasks can now be updated through the desktop runtime, the workspace surface, and the agent tool contract:
+  - `src-tauri/src/services/persistent_scheduler.rs`, `src-tauri/src/commands/workspace.rs`, `src-tauri/src/lib.rs` — added canonical scheduled-run update plumbing, next-run recalculation on edit, and invoke-surface wiring
+  - `src-tauri/src/services/skill_executor/args.rs`, `src-tauri/src/services/skill_executor/registry.rs`, `src-tauri/src/services/skill_executor/scheduler.rs`, `src-tauri/src/services/tool_policy.rs`, `src-tauri/src/services/local_agent_security.rs`, `src-tauri/src/ai/agent/specialist.rs`, `src/components/agent-chat/neural-config.ts` — added `update_recurring_task` with explicit policy coverage and agent/runtime visibility
+  - `src/components/workspace/WorkspaceRecurringRuns.tsx`, `src/services/tauri.ts` — added native recurring-run edit controls for both playbook and prompt tasks from the workspace UI
+
 ### Changed
 
 - **Workspace Launchpad now reads like a proof surface instead of a configuration panel** — operators can see the current launch story in one glance through explicit cards for control, continuity, and outputs, while recent runs now summarize approved tools, actual tools, touched paths, and artifact counts as evidence:
@@ -41,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/lib/schedule-builder.ts`, `src/components/scheduling/ScheduleBuilder.tsx`, `src/components/scheduling/ScheduleTaskDialog.tsx`, `src/components/workspace/WorkspaceRecurringRuns.tsx` — added daily/weekdays/weekly/monthly/custom schedule building, human-readable schedule inference, and prompt/playbook scheduling flows
   - `src/components/agent-chat/ChatTopbar.tsx`, `src/components/agent-chat/AgentChatPanel.tsx`, `src/components/layout/AppSidebar.tsx`, `src/App.tsx`, `src/components/workspace/index.ts` — added recurring-run entry points in chat/workspace navigation and seeded scheduling from the active conversation
 
+- **Native recurring scheduling is now robust across the default-agent, Launchpad-policy, and macOS-runtime layers** — scheduling now behaves like a first-class governed workspace primitive instead of a partially wired feature:
+  - `src-tauri/src/services/default_agent_spec.rs`, `src-tauri/src/ai/agent/manager.rs`, `src-tauri/src/commands/agent.rs` — built-in default-agent specs now refresh instead of fossilizing older tool visibility/instruction state
+  - `src-tauri/src/services/mate_launchpad.rs` — Launchpad allowlists now preserve recurring-task control tools so pack-constrained workspaces do not accidentally hide scheduler capabilities
+  - `src-tauri/src/services/persistent_scheduler.rs`, `src-tauri/macos/RainyAutoLaunch.swift`, `src-tauri/src/services/macos_auto_launch.rs`, `src-tauri/build.rs`, `scripts/build-macos-bridges.sh`, `src-tauri/tauri.conf.json`, `src-tauri/src/services/settings.rs`, `src-tauri/src/commands/settings.rs`, `src/components/settings/tabs/PermissionsTab.tsx`, `src/services/tauri.ts`, `src-tauri/src/services/mod.rs`, `src-tauri/src/lib.rs` — added launch-at-login control, immediate scheduler startup polling, and native scheduled-run notifications on macOS
+
 ### Fixed
 
 - **Recurring playbook creation no longer fails at runtime with a malformed SQL insert path** — scenario-backed scheduled runs now persist correctly instead of compiling cleanly and failing only when the user attempts to create one:
@@ -48,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Recurring-task tools are no longer silently blocked by local policy and specialist allowlists during AgentChat execution** — the agent can now schedule recurring work through the parallel supervisor path without tripping its own workspace/spec policy layers:
   - `src-tauri/src/services/local_agent_security.rs`, `src-tauri/src/ai/agent/specialist.rs`, `src-tauri/src/commands/agent.rs` — admitted recurring-task tools into workspace-derived permission groups, added them to executor/verifier specialist allowlists, and biased the default runtime instructions toward native scheduling tools instead of shell/cron fallbacks
+
+- **Default-agent recurring-task responses no longer regress into fake shell follow-up after native scheduling succeeds** — once the workspace scheduler has accepted a task, the assistant now describes the real stored state instead of inventing `chmod`, `crontab`, or invalid tool-as-shell guidance:
+  - `src-tauri/src/services/skill_executor/scheduler.rs`, `src-tauri/src/commands/agent.rs` — tightened post-scheduling tool guidance so successful native scheduling stays in the native mental model and uses `list_recurring_tasks` / `update_recurring_task` correctly
 
 ### Validation
 
@@ -63,6 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cd src-tauri && cargo check -q` → pass
 - `pnpm exec tsc --noEmit` → pass
 - `cargo fmt` → pass
+- `cd src-tauri && cargo test mate_launchpad -- --nocapture` → pass
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
 
 ## [Unreleased] - 2026-04-01 - MATE REBORN PHASE 3: LAUNCHPAD HANDOFF SANITY + DOCUMENT OUTPUT HARDENING
 

@@ -379,6 +379,54 @@ pub async fn create_workspace_prompt_scheduled_run(
 }
 
 #[tauri::command]
+pub async fn update_workspace_scheduled_run(
+    workspace_path: String,
+    scheduled_run_id: String,
+    title: Option<String>,
+    prompt: Option<String>,
+    scenario_id: Option<String>,
+    schedule: String,
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    scheduler: State<'_, Arc<crate::services::persistent_scheduler::PersistentScheduler>>,
+    app_handle: AppHandle,
+) -> Result<crate::services::persistent_scheduler::WorkspaceScheduledRun, String> {
+    let workspace = workspace_manager
+        .ensure_workspace_for_path(&workspace_path)
+        .map_err(|e| e.to_string())?;
+    let existing = scheduler
+        .list_workspace_runs(&workspace.id)
+        .await?
+        .into_iter()
+        .find(|run| run.id == scheduled_run_id)
+        .ok_or_else(|| format!("Scheduled run '{}' was not found", scheduled_run_id))?;
+
+    let updated = scheduler
+        .update_workspace_run(
+            &scheduled_run_id,
+            crate::services::persistent_scheduler::WorkspaceScheduledRunUpdate {
+                title,
+                prompt_text: prompt,
+                scenario_id,
+                schedule,
+                trust_preset: (existing.job_kind == "scenario")
+                    .then_some(workspace.launchpad.trust_preset.clone()),
+                enabled_pack_ids: (existing.job_kind == "scenario")
+                    .then_some(workspace.launchpad.enabled_pack_ids.clone()),
+            },
+        )
+        .await?;
+    let _ = app_handle.emit(
+        "workspace://scheduled-runs-updated",
+        serde_json::json!({
+            "workspacePath": workspace_path,
+            "workspaceId": workspace.id,
+            "jobId": updated.id,
+        }),
+    );
+    Ok(updated)
+}
+
+#[tauri::command]
 pub async fn list_workspace_scheduled_runs(
     workspace_path: String,
     workspace_manager: State<'_, Arc<WorkspaceManager>>,

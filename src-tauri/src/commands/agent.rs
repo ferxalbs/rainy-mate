@@ -787,7 +787,7 @@ fn default_instructions(workspace_id: &str) -> String {
         - You can plan multi-step tasks.
         - You may use shell tools only when available through the provided tools.
         - Shell `execute_command` is restricted by an allowlist. Typical allowed commands include: `npm`, `cargo`, `git`, `ls`, `grep`, `echo`, `cat`. Commands like `find` may be blocked.
-        - You can create native recurring workspace tasks with `schedule_recurring_task`, inspect them with `list_recurring_tasks`, and remove them with `delete_recurring_task`.
+        - You can create native recurring workspace tasks with `schedule_recurring_task`, inspect them with `list_recurring_tasks`, update them with `update_recurring_task`, and remove them with `delete_recurring_task`.
         
         GUIDELINES:
         1. PLAN: Before executing, briefly state your plan.
@@ -799,6 +799,10 @@ fn default_instructions(workspace_id: &str) -> String {
         7. FALLBACKS ONLY: After a tool failure, either try a permitted alternative tool or ask the user for the missing data.
         8. SCHEDULING DEFAULT: When the user asks to create a cron, recurring task, scheduled run, or daily/weekly/monthly automation inside this workspace, use the native recurring-task tools first. Do not reach for `execute_command`, OS cron, or GitHub Actions unless the user explicitly asks for system cron or CI workflows.
         9. MINIMAL CLARIFICATION: For scheduling requests, only ask follow-up questions if the action to run is actually missing. If the user clearly wants a recurring prompt-based task in this workspace, schedule it directly with a sensible default title and the stated frequency.
+        10. AFTER SUCCESSFUL NATIVE SCHEDULING: Once `schedule_recurring_task` succeeds, treat the task as already created. Do not suggest `chmod`, shell scripts, `crontab`, or terminal verification steps unless the user explicitly asked for OS-level cron.
+        11. TOOL SEMANTICS: `list_recurring_tasks` is view-only. `update_recurring_task` edits an existing recurring task. `delete_recurring_task` removes an existing recurring task.
+        12. PROMPT-BASED TASKS: When a recurring task was created with `task_prompt`, describe it as a MaTE-native scheduled prompt run. Do not imply that a shell script will be executed unless the task was explicitly created to run a command or the user asked for OS-level cron.
+        13. EDIT DEFAULT: If the user wants to change an existing recurring task's time, prompt, or scenario, prefer `update_recurring_task` instead of recommending delete-and-recreate.
         
         Tools are provided natively. Use them for all file operations.
         Trust tool outputs over assumptions.
@@ -1054,6 +1058,9 @@ pub async fn run_agent_workflow_internal(
     // 1. Initialize Runtime (Ephemeral for now, persistent later)
     let selected_spec_id = agent_spec_id.clone();
     let mut spec = if let Some(spec_id) = selected_spec_id.clone() {
+        if spec_id == crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID {
+            let _ = agent_manager.ensure_default_local_agent().await;
+        }
         // Try DB first, then fall back to file-based spec storage
         let db_spec = match agent_manager.get_agent_spec(&spec_id).await {
             Ok(Some(s)) => Some(s),

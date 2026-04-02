@@ -4,7 +4,9 @@
 use crate::ai::provider::AIProviderManager;
 use crate::commands::airlock::AirlockServiceState;
 use crate::services::settings::{ModelOption, SettingsManager, UserProfile, UserSettings};
-use crate::services::{KeychainAccessService, MacOSNativeNotificationBridge, WorkspaceManager};
+use crate::services::{
+    KeychainAccessService, MacOSAutoLaunchBridge, MacOSNativeNotificationBridge, WorkspaceManager,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -33,11 +35,23 @@ pub struct SystemReadiness {
     pub notifications_enabled: bool,
     pub native_notification_runtime_supported: bool,
     pub notification_permission: String,
+    pub launch_at_login_enabled: bool,
+    pub native_launch_at_login_supported: bool,
+    pub launch_at_login_status: String,
     pub workspace_count: usize,
     pub has_workspace: bool,
     pub pending_airlock_approvals: usize,
     pub pending_airlock_messages: u64,
     pub credentials: Vec<ReadinessCredential>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchAtLoginStatus {
+    pub enabled: bool,
+    pub supported: bool,
+    pub requires_approval: bool,
+    pub status: String,
 }
 
 #[cfg_attr(target_os = "macos", allow(dead_code))]
@@ -101,6 +115,40 @@ pub async fn set_notifications(
 ) -> Result<(), String> {
     let mut settings = settings.lock().await;
     settings.set_notifications(enabled)
+}
+
+#[tauri::command]
+pub async fn get_launch_at_login_status() -> Result<LaunchAtLoginStatus, String> {
+    let status = MacOSAutoLaunchBridge::status();
+    Ok(LaunchAtLoginStatus {
+        enabled: status.enabled,
+        supported: status.supported,
+        requires_approval: status.requires_approval,
+        status: status.status,
+    })
+}
+
+#[tauri::command]
+pub async fn set_launch_at_login_enabled(
+    enabled: bool,
+    settings: State<'_, Arc<Mutex<SettingsManager>>>,
+) -> Result<LaunchAtLoginStatus, String> {
+    let status = MacOSAutoLaunchBridge::set_enabled(enabled)?;
+    {
+        let mut settings = settings.lock().await;
+        settings.set_launch_at_login(enabled)?;
+    }
+    Ok(LaunchAtLoginStatus {
+        enabled: status.enabled,
+        supported: status.supported,
+        requires_approval: status.requires_approval,
+        status: status.status,
+    })
+}
+
+#[tauri::command]
+pub async fn open_launch_at_login_settings() -> Result<(), String> {
+    MacOSAutoLaunchBridge::open_system_settings()
 }
 
 #[tauri::command]
@@ -228,6 +276,7 @@ pub async fn get_system_readiness(
         .list_workspaces()
         .map(|items| items.len())
         .unwrap_or(0);
+    let launch_at_login = MacOSAutoLaunchBridge::status();
 
     let providers = [
         "rainy_api",
@@ -270,6 +319,10 @@ pub async fn get_system_readiness(
         native_notification_runtime_supported: cfg!(target_os = "macos")
             && MacOSNativeNotificationBridge::is_runtime_supported(),
         notification_permission,
+        launch_at_login_enabled: launch_at_login.enabled,
+        native_launch_at_login_supported: cfg!(target_os = "macos")
+            && MacOSAutoLaunchBridge::is_runtime_supported(),
+        launch_at_login_status: launch_at_login.status,
         workspace_count,
         has_workspace: workspace_count > 0,
         pending_airlock_approvals,

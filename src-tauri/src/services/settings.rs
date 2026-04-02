@@ -32,6 +32,8 @@ pub struct UserSettings {
     pub selected_model: String,
     pub theme: String,
     pub notifications_enabled: bool,
+    #[serde(default)]
+    pub launch_at_login_enabled: bool,
     pub profile: UserProfile,
     pub auto_reconnect_cloud: bool,
     pub tool_policy_version_floor: HashMap<String, u64>,
@@ -70,6 +72,7 @@ impl Default for UserSettings {
             selected_model: "gemini-3-flash-preview".to_string(),
             theme: "system".to_string(),
             notifications_enabled: true,
+            launch_at_login_enabled: false,
             profile: UserProfile::default(),
             auto_reconnect_cloud: true,
             tool_policy_version_floor: HashMap::new(),
@@ -188,6 +191,12 @@ impl SettingsManager {
     /// Set notifications and persist
     pub fn set_notifications(&mut self, enabled: bool) -> Result<(), String> {
         self.settings.notifications_enabled = enabled;
+        self.save_to_disk()
+    }
+
+    /// Set launch-at-login and persist
+    pub fn set_launch_at_login(&mut self, enabled: bool) -> Result<(), String> {
+        self.settings.launch_at_login_enabled = enabled;
         self.save_to_disk()
     }
 
