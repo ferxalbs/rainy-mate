@@ -157,6 +157,8 @@ pub struct WorkspaceLaunchRunRecord {
     pub actual_tool_ids: Vec<String>,
     pub actual_touched_paths: Vec<String>,
     pub produced_artifact_paths: Vec<String>,
+    pub out_of_contract_tool_ids: Vec<String>,
+    pub out_of_contract_paths: Vec<String>,
     pub expected_outputs: Vec<String>,
     pub effective_tool_policy_mode: String,
     pub highest_airlock_level: u8,
@@ -183,6 +185,8 @@ impl Default for WorkspaceLaunchRunRecord {
             actual_tool_ids: Vec::new(),
             actual_touched_paths: Vec::new(),
             produced_artifact_paths: Vec::new(),
+            out_of_contract_tool_ids: Vec::new(),
+            out_of_contract_paths: Vec::new(),
             expected_outputs: Vec::new(),
             effective_tool_policy_mode: String::new(),
             highest_airlock_level: 0,
@@ -466,6 +470,8 @@ impl MateLaunchpadService {
                 actual_tool_ids: Vec::new(),
                 actual_touched_paths: Vec::new(),
                 produced_artifact_paths: Vec::new(),
+                out_of_contract_tool_ids: Vec::new(),
+                out_of_contract_paths: Vec::new(),
                 expected_outputs: preflight.expected_outputs.clone(),
                 effective_tool_policy_mode: preflight.effective_tool_policy_mode.clone(),
                 highest_airlock_level: preflight.highest_airlock_level,
@@ -523,6 +529,10 @@ impl MateLaunchpadService {
             .iter_mut()
             .find(|record| record.request_id == request_id)
         {
+            let out_of_contract_tool_ids =
+                out_of_contract_tool_ids(&run.approved_tool_ids, actual_tool_ids);
+            let out_of_contract_paths =
+                out_of_contract_paths(&run.touched_paths, actual_touched_paths);
             run.status = if success {
                 "completed".to_string()
             } else {
@@ -534,6 +544,8 @@ impl MateLaunchpadService {
             run.actual_tool_ids = actual_tool_ids.to_vec();
             run.actual_touched_paths = actual_touched_paths.to_vec();
             run.produced_artifact_paths = produced_artifact_paths.to_vec();
+            run.out_of_contract_tool_ids = out_of_contract_tool_ids;
+            run.out_of_contract_paths = out_of_contract_paths;
         }
 
         workspace_manager
@@ -871,6 +883,41 @@ fn trim_recent_runs(recent_runs: &mut Vec<WorkspaceLaunchRunRecord>) {
     recent_runs.truncate(MAX_RECENT_RUNS);
 }
 
+fn out_of_contract_tool_ids(
+    approved_tool_ids: &[String],
+    actual_tool_ids: &[String],
+) -> Vec<String> {
+    let approved = approved_tool_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<String>>();
+    actual_tool_ids
+        .iter()
+        .filter(|tool_id| !approved.contains(*tool_id))
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn out_of_contract_paths(touched_paths: &[String], actual_touched_paths: &[String]) -> Vec<String> {
+    actual_touched_paths
+        .iter()
+        .filter(|path| !path_is_within_contract(path, touched_paths))
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn path_is_within_contract(path: &str, touched_paths: &[String]) -> bool {
+    let candidate = std::path::Path::new(path);
+    touched_paths
+        .iter()
+        .map(std::path::Path::new)
+        .any(|allowed| candidate.starts_with(allowed))
+}
+
 fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCapabilitySummary {
     let enabled_pack_ids = sanitize_pack_ids(&workspace.launchpad.enabled_pack_ids);
     let active_tool_ids = effective_launch_tool_ids(workspace, &enabled_pack_ids, trust_preset);
@@ -931,7 +978,10 @@ fn capability_summary(workspace: &Workspace, trust_preset: &str) -> WorkspaceCap
 
 #[cfg(test)]
 mod tests {
-    use super::{scenario_intent_summary, summarize_planned_actions};
+    use super::{
+        out_of_contract_paths, out_of_contract_tool_ids, scenario_intent_summary,
+        summarize_planned_actions, trim_recent_runs, WorkspaceLaunchRunRecord,
+    };
 
     #[test]
     fn release_readiness_has_explicit_launch_intent() {
@@ -955,5 +1005,46 @@ mod tests {
             vec!["execute_command".to_string()]
         );
         assert_eq!(summary.memory_actions, vec!["save_memory".to_string()]);
+    }
+
+    #[test]
+    fn computes_contract_drift_for_tools_and_paths() {
+        let approved_tool_ids = vec!["read_file".to_string(), "write_file".to_string()];
+        let actual_tool_ids = vec![
+            "read_file".to_string(),
+            "execute_command".to_string(),
+            "execute_command".to_string(),
+        ];
+        let touched_paths = vec!["/tmp/repo".to_string()];
+        let actual_touched_paths = vec![
+            "/tmp/repo/src/main.rs".to_string(),
+            "/tmp/outside/secrets.txt".to_string(),
+            "/tmp/outside/secrets.txt".to_string(),
+        ];
+
+        assert_eq!(
+            out_of_contract_tool_ids(&approved_tool_ids, &actual_tool_ids),
+            vec!["execute_command".to_string()]
+        );
+        assert_eq!(
+            out_of_contract_paths(&touched_paths, &actual_touched_paths),
+            vec!["/tmp/outside/secrets.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn trim_recent_runs_keeps_the_latest_eight_records() {
+        let mut recent_runs = (0..12)
+            .map(|index| WorkspaceLaunchRunRecord {
+                request_id: format!("run-{}", index),
+                ..WorkspaceLaunchRunRecord::default()
+            })
+            .collect::<Vec<_>>();
+
+        trim_recent_runs(&mut recent_runs);
+
+        assert_eq!(recent_runs.len(), 8);
+        assert_eq!(recent_runs[0].request_id, "run-0");
+        assert_eq!(recent_runs[7].request_id, "run-7");
     }
 }

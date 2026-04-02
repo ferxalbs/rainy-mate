@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Workspace Launchpad now reads like a proof surface instead of a configuration panel** — operators can see the current launch story in one glance through explicit cards for control, continuity, and outputs, while recent runs now summarize approved tools, actual tools, touched paths, and artifact counts as evidence:
   - `src/components/workspace/WorkspaceLaunchpad.tsx` — added launch-proof cards, output status summarization, run-evidence pills, and visible contract-drift warnings when actual tool usage falls outside the approved contract
 
+- **Launchpad run evidence now computes contract drift canonically and the contract block reflects the latest run instead of broader workspace state** — guided runs now persist out-of-contract tools/paths in the Rust ledger, and the UI no longer mixes workspace-level packs/outputs/tools into the latest run contract view:
+  - `src-tauri/src/services/mate_launchpad.rs` — `WorkspaceLaunchRunRecord` now stores `out_of_contract_tool_ids` and `out_of_contract_paths`, computed when launch results are recorded, with focused regression tests covering drift calculation and recent-run trimming
+  - `src/components/workspace/WorkspaceLaunchpad.tsx`, `src/services/tauri.ts`, `src/types/workspace.ts` — execution-contract cards now read from the latest run record, recent-run pills expose `In contract` vs `Contract drift`, and typed frontend contracts include the new evidence fields
+
 - **Roadmap truth is now aligned to the shipped product instead of the obsolete pre-Launchpad era** — the roadmap no longer advertises `v0.3.0` document/image plans that understate the current product:
   - `ROADMAP.md` — replaced the stale roadmap with a `0.6.5` developer-cockpit roadmap focused on governed execution, workspace-safe autonomy, native deliverables, and near-term hardening
 
@@ -36,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cd src-tauri && cargo test workspace_memory_files -- --nocapture` → pass
 - `cd src-tauri && cargo test airlock -- --nocapture` → pass
 - `cd src-tauri && cargo test local_agent_security -- --nocapture` → pass
+- `cargo fmt` → pass
 
 ## [Unreleased] - 2026-04-01 - MATE REBORN PHASE 3: LAUNCHPAD HANDOFF SANITY + DOCUMENT OUTPUT HARDENING
 

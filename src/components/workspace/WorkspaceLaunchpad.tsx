@@ -69,10 +69,6 @@ export function WorkspaceLaunchpad({
     () => new Set(launchpad?.enabledPackIds ?? []),
     [launchpad?.enabledPackIds],
   );
-  const toolPreview = useMemo(
-    () => (launchpad?.capabilitySummary.activeToolIds ?? []).slice(0, 8),
-    [launchpad?.capabilitySummary.activeToolIds],
-  );
   const latestContractRun = useMemo(
     () => launchpad?.recentRuns[0] ?? null,
     [launchpad?.recentRuns],
@@ -81,11 +77,9 @@ export function WorkspaceLaunchpad({
     () => launchpad?.recentRuns.find((run) => run.success) ?? null,
     [launchpad?.recentRuns],
   );
-  const latestRunOutOfContractTools = useMemo(() => {
-    if (!latestContractRun) return [];
-    const approved = new Set(latestContractRun.approvedToolIds);
-    return latestContractRun.actualToolIds.filter((toolId) => !approved.has(toolId));
-  }, [latestContractRun]);
+  const latestRunDriftCount =
+    (latestContractRun?.outOfContractToolIds.length ?? 0) +
+    (latestContractRun?.outOfContractPaths.length ?? 0);
   const latestRunProducedOutputs = latestContractRun?.producedArtifactPaths.length ?? 0;
   const latestRunOutputStatus = useMemo(() => {
     if (!latestContractRun) {
@@ -102,8 +96,11 @@ export function WorkspaceLaunchpad({
     }
     if (latestContractRun.status === "completed") {
       return {
-        label: "Run completed without generated artifacts",
-        tone: "text-foreground/80",
+        label:
+          latestContractRun.expectedOutputs.length > 0
+            ? "Run completed without artifact proof"
+            : "Run completed without generated artifacts",
+        tone: latestContractRun.expectedOutputs.length > 0 ? "text-yellow-500" : "text-foreground/80",
       };
     }
     return {
@@ -111,6 +108,38 @@ export function WorkspaceLaunchpad({
       tone: "text-muted-foreground",
     };
   }, [latestContractRun, latestRunProducedOutputs]);
+  const latestRunContractStatus = useMemo(() => {
+    if (!latestContractRun) {
+      return {
+        label: "Awaiting first governed run",
+        detail: "Prepared launches will start building the evidence ledger here.",
+        tone: "slate" as const,
+      };
+    }
+    if (latestRunDriftCount > 0) {
+      return {
+        label: `${latestRunDriftCount} drift signal${latestRunDriftCount === 1 ? "" : "s"} detected`,
+        detail: "Actual tool or path usage exceeded the prepared contract and needs review.",
+        tone: "amber" as const,
+      };
+    }
+    if (latestContractRun.status === "completed") {
+      return {
+        label: "Run stayed inside contract",
+        detail: "Actual tools and touched paths matched the prepared execution scope.",
+        tone: "emerald" as const,
+      };
+    }
+    return {
+      label: "Contract under execution",
+      detail: "Drift can only be assessed after the run records its actual evidence.",
+      tone: "slate" as const,
+    };
+  }, [latestContractRun, latestRunDriftCount]);
+  const latestContractToolPreview = useMemo(
+    () => (latestContractRun?.approvedToolIds ?? []).slice(0, 8),
+    [latestContractRun],
+  );
 
   const handlePresetChange = useCallback(
     async (trustPreset: "conservative" | "balanced" | "elevated") => {
@@ -424,14 +453,12 @@ export function WorkspaceLaunchpad({
                     }
                   />
                   <ProofCard
-                    title="Continuity"
-                    value={latestSuccessfulRun ? "Ledger active" : "No completed run yet"}
+                    title="Contract"
+                    value={latestRunContractStatus.label}
                     detail={
-                      latestSuccessfulRun?.completedAt
-                        ? `Last successful run: ${new Date(latestSuccessfulRun.completedAt).toLocaleString()}`
-                        : "Prepared launches will accumulate evidence here."
+                      latestRunContractStatus.detail
                     }
-                    tone={latestSuccessfulRun ? "emerald" : "slate"}
+                    tone={latestRunContractStatus.tone}
                   />
                   <ProofCard
                     title="Outputs"
@@ -443,18 +470,38 @@ export function WorkspaceLaunchpad({
                     }
                     tone={latestRunProducedOutputs > 0 ? "emerald" : "slate"}
                   />
+                  <ProofCard
+                    title="Continuity"
+                    value={latestSuccessfulRun ? "Ledger active" : "No completed run yet"}
+                    detail={
+                      latestSuccessfulRun?.completedAt
+                        ? `Last successful run: ${new Date(latestSuccessfulRun.completedAt).toLocaleString()}`
+                        : "Prepared launches will accumulate evidence here."
+                    }
+                    tone={latestSuccessfulRun ? "emerald" : "slate"}
+                  />
                 </div>
-                {latestRunOutOfContractTools.length > 0 && (
+                {latestContractRun && latestRunDriftCount > 0 && (
                   <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3">
                     <p className="text-[10px] font-semibold tracking-widest text-red-500/80 uppercase mb-1.5">
                       Contract Drift
                     </p>
-                    <p className="text-[12.5px] leading-relaxed text-foreground/90">
-                      The latest run recorded tool activity outside the approved preflight set:{" "}
-                      <span className="font-medium text-red-500">
-                        {latestRunOutOfContractTools.join(", ")}
-                      </span>
-                    </p>
+                    {latestContractRun.outOfContractToolIds.length > 0 && (
+                      <p className="text-[12.5px] leading-relaxed text-foreground/90">
+                        Tool drift:{" "}
+                        <span className="font-medium text-red-500">
+                          {latestContractRun.outOfContractToolIds.join(", ")}
+                        </span>
+                      </p>
+                    )}
+                    {latestContractRun.outOfContractPaths.length > 0 && (
+                      <p className="mt-1 text-[12.5px] leading-relaxed text-foreground/90 break-all">
+                        Path drift:{" "}
+                        <span className="font-medium text-red-500">
+                          {latestContractRun.outOfContractPaths.join(" · ")}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -465,28 +512,28 @@ export function WorkspaceLaunchpad({
                   <div className="rounded-xl border border-white/5 bg-background/30 p-3">
                     <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-2">Enforced Packs</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {launchpad.capabilitySummary.enforcedPackIds.length ? (
-                        launchpad.capabilitySummary.enforcedPackIds.map((packId) => (
+                      {latestContractRun?.enabledPackIds.length ? (
+                        latestContractRun.enabledPackIds.map((packId) => (
                           <div key={packId} className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
                             {packId}
                           </div>
                         ))
                       ) : (
-                        <div className="text-[12px] text-muted-foreground">No pack allowlist active.</div>
+                        <div className="text-[12px] text-muted-foreground">No run contract recorded yet.</div>
                       )}
                     </div>
                   </div>
                   <div className="rounded-xl border border-white/5 bg-background/30 p-3">
                     <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-2">Expected Outputs</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {launchpad.capabilitySummary.suggestedOutputs.length ? (
-                        launchpad.capabilitySummary.suggestedOutputs.map((output) => (
+                      {latestContractRun?.expectedOutputs.length ? (
+                        latestContractRun.expectedOutputs.map((output) => (
                           <div key={output} className="rounded-lg bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                             {output}
                           </div>
                         ))
                       ) : (
-                        <div className="text-[12px] text-muted-foreground">No output contract yet.</div>
+                        <div className="text-[12px] text-muted-foreground">No run contract recorded yet.</div>
                       )}
                     </div>
                   </div>
@@ -499,21 +546,38 @@ export function WorkspaceLaunchpad({
                   </p>
                 </div>
                 <div className="rounded-xl border border-white/5 bg-background/30 p-3">
+                  <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase mb-2">Approved Paths</p>
+                  {latestContractRun?.touchedPaths.length ? (
+                    <p className="text-[12.5px] leading-relaxed text-foreground/85 break-all">
+                      {latestContractRun.touchedPaths.join(" · ")}
+                    </p>
+                  ) : (
+                    <p className="text-[12px] leading-relaxed text-muted-foreground">
+                      Guided runs will record the prepared workspace path scope here.
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-white/5 bg-background/30 p-3">
                   <div className="flex items-center justify-between gap-4 mb-2">
                     <p className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Approved Tools</p>
                     <p className="text-[11px] text-muted-foreground">
-                      {launchpad.capabilitySummary.activeToolIds.length} tools in scope
+                      {latestContractRun?.approvedToolIds.length ?? 0} tools in contract
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {toolPreview.map((toolId) => (
+                    {latestContractToolPreview.map((toolId) => (
                       <div key={toolId} className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
                         {toolId}
                       </div>
                     ))}
-                    {launchpad.capabilitySummary.activeToolIds.length > toolPreview.length && (
+                    {(latestContractRun?.approvedToolIds.length ?? 0) > latestContractToolPreview.length && (
                       <div className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        +{launchpad.capabilitySummary.activeToolIds.length - toolPreview.length} more
+                        +{(latestContractRun?.approvedToolIds.length ?? 0) - latestContractToolPreview.length} more
+                      </div>
+                    )}
+                    {!latestContractRun?.approvedToolIds.length && (
+                      <div className="text-[12px] text-muted-foreground">
+                        No run contract recorded yet.
                       </div>
                     )}
                   </div>
@@ -599,12 +663,32 @@ export function WorkspaceLaunchpad({
                             tone="slate"
                           />
                           <RunEvidencePill
+                            label={`${run.touchedPaths.length} approved paths`}
+                            tone="slate"
+                          />
+                          <RunEvidencePill
                             label={`${run.actualTouchedPaths.length} paths`}
                             tone="slate"
                           />
                           <RunEvidencePill
                             label={`${run.producedArtifactPaths.length} artifacts`}
                             tone={run.producedArtifactPaths.length > 0 ? "emerald" : "slate"}
+                          />
+                          <RunEvidencePill
+                            label={
+                              run.outOfContractToolIds.length || run.outOfContractPaths.length
+                                ? "Contract drift"
+                                : "In contract"
+                            }
+                            tone={
+                              run.outOfContractToolIds.length || run.outOfContractPaths.length
+                                ? "amber"
+                                : "emerald"
+                            }
+                          />
+                          <RunEvidencePill
+                            label={run.requiresExplicitApproval ? "Approval path" : "No approval"}
+                            tone={run.requiresExplicitApproval ? "amber" : "slate"}
                           />
                           {run.success === false && (
                             <RunEvidencePill label="Review required" tone="amber" />
@@ -637,6 +721,26 @@ export function WorkspaceLaunchpad({
                             <p className="text-[12px] leading-relaxed text-foreground/80 break-all">
                               {run.actualTouchedPaths.slice(0, 3).join(" · ")}
                               {run.actualTouchedPaths.length > 3 ? " · ..." : ""}
+                            </p>
+                          </div>
+                        )}
+                        {run.outOfContractToolIds.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-[10px] font-semibold tracking-widest text-red-500/80 uppercase mb-1.5">
+                              Drifted Tools
+                            </p>
+                            <p className="text-[12px] leading-relaxed text-red-500">
+                              {run.outOfContractToolIds.join(" · ")}
+                            </p>
+                          </div>
+                        )}
+                        {run.outOfContractPaths.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-[10px] font-semibold tracking-widest text-red-500/80 uppercase mb-1.5">
+                              Drifted Paths
+                            </p>
+                            <p className="text-[12px] leading-relaxed text-red-500 break-all">
+                              {run.outOfContractPaths.join(" · ")}
                             </p>
                           </div>
                         )}
