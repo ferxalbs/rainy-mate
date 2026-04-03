@@ -51,6 +51,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          shared-key: 'v1-sqlite-fix'
 
       - name: Build Rust
         run: cd src-tauri && cargo build --lib
@@ -134,15 +135,17 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          shared-key: 'v1-sqlite-fix'
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Prepare CI config
-        run: echo '{"bundle":{"createUpdaterArtifacts":false}}' > ci-config.json
+        shell: bash
+        run: echo '{"bundle":{"createUpdaterArtifacts":false}}' > src-tauri/ci-config.json
 
       - name: Tauri Build
-        run: pnpm exec tauri build ${{ matrix.args }} --config ci-config.json
+        run: pnpm exec tauri build ${{ matrix.args }} --config src-tauri/ci-config.json
 
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'
