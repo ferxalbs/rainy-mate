@@ -363,7 +363,7 @@ impl WorkflowStep for ThinkStep {
 
             // Emit a single status so the UI shows active planning.
             event_fn(AgentEvent::Status(
-                "Analizando y planificando herramientas...".to_string(),
+                "Analyzing and planning tools...".to_string(),
             ));
 
             let mut blocking_request = request.clone();
