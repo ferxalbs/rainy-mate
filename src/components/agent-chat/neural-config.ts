@@ -97,6 +97,16 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   update_recurring_task: "creating",
   list_recurring_tasks: "observing",
   delete_recurring_task: "pruning",
+
+  // Beam RPC + Secure Local Signing Bridge
+  beam_rpc_connect: "creating",
+  beam_create_wallet: "creating",
+  beam_import_wallet: "creating",
+  beam_get_wallet: "observing",
+  beam_list_wallets: "observing",
+  beam_estimate_gas: "communicating",
+  beam_sign_transaction: "executing",
+  beam_send_transaction: "communicating",
 };
 
 /** Human-readable display names for raw tool function names */
@@ -145,6 +155,15 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   update_recurring_task: "Updating Recurring Task",
   list_recurring_tasks: "Listing Recurring Tasks",
   delete_recurring_task: "Deleting Recurring Task",
+  // Beam RPC + Secure Local Signing Bridge
+  beam_rpc_connect: "Connecting to Beam Network",
+  beam_create_wallet: "Creating Local Wallet",
+  beam_import_wallet: "Importing Wallet",
+  beam_get_wallet: "Reading Wallet Info",
+  beam_list_wallets: "Listing Wallets",
+  beam_estimate_gas: "Estimating Gas",
+  beam_sign_transaction: "Signing Transaction",
+  beam_send_transaction: "Broadcasting Transaction",
 };
 
 /** Resolves a function name to a human-readable display name */

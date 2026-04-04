@@ -3096,3 +3096,120 @@ export async function openQuickDelegateModal(): Promise<void> {
 export async function getQuickDelegateStatus(): Promise<QuickDelegateStatus> {
   return invoke<QuickDelegateStatus>("get_quick_delegate_status");
 }
+
+// ── Beam RPC + Secure Local Signing Bridge ────────────────────────────────────
+
+import type {
+  AllBeamChainConfigs,
+  BeamChainConfig,
+  BeamWorkspaceConfig,
+  GasEstimate,
+  SignedTransaction,
+  TransactionReceipt,
+  WalletInfo,
+} from "../types/beam";
+
+export type { AllBeamChainConfigs, BeamChainConfig, BeamWorkspaceConfig, GasEstimate, SignedTransaction, TransactionReceipt, WalletInfo };
+
+export async function getBeamChainConfigs(): Promise<AllBeamChainConfigs> {
+  return invoke<AllBeamChainConfigs>("get_beam_chain_configs");
+}
+
+export async function getBeamChainConfig(network: "mainnet" | "testnet"): Promise<BeamChainConfig> {
+  return invoke<BeamChainConfig>("get_beam_chain_config", { network });
+}
+
+export async function connectBeamWorkspace(
+  workspacePath: string,
+  network: "mainnet" | "testnet",
+): Promise<BeamWorkspaceConfig> {
+  return invoke<BeamWorkspaceConfig>("connect_beam_workspace", { workspacePath, network });
+}
+
+export async function getBeamWorkspaceConfig(
+  workspacePath: string,
+): Promise<BeamWorkspaceConfig> {
+  return invoke<BeamWorkspaceConfig>("get_beam_workspace_config", { workspacePath });
+}
+
+export async function createBeamWallet(label?: string): Promise<WalletInfo> {
+  return invoke<WalletInfo>("create_beam_wallet", { label: label ?? null });
+}
+
+export async function importBeamWallet(
+  privateKeyHex: string,
+  label?: string,
+): Promise<WalletInfo> {
+  return invoke<WalletInfo>("import_beam_wallet", {
+    privateKeyHex,
+    label: label ?? null,
+  });
+}
+
+export async function getBeamWallet(address: string): Promise<WalletInfo> {
+  return invoke<WalletInfo>("get_beam_wallet", { address });
+}
+
+export async function listBeamWallets(): Promise<WalletInfo[]> {
+  return invoke<WalletInfo[]>("list_beam_wallets");
+}
+
+export async function estimateBeamGas(params: {
+  workspacePath: string;
+  from: string;
+  to: string;
+  value?: string;
+  data?: string;
+}): Promise<GasEstimate> {
+  return invoke<GasEstimate>("estimate_beam_gas", {
+    workspacePath: params.workspacePath,
+    from: params.from,
+    to: params.to,
+    value: params.value ?? null,
+    data: params.data ?? null,
+  });
+}
+
+export async function signBeamTransaction(params: {
+  workspacePath: string;
+  from: string;
+  to: string;
+  value?: string;
+  data?: string;
+  gasLimit?: number;
+  gasPrice?: number;
+  nonce?: number;
+}): Promise<SignedTransaction> {
+  return invoke<SignedTransaction>("sign_beam_transaction", {
+    workspacePath: params.workspacePath,
+    from: params.from,
+    to: params.to,
+    value: params.value ?? null,
+    data: params.data ?? null,
+    gasLimit: params.gasLimit ?? null,
+    gasPrice: params.gasPrice ?? null,
+    nonce: params.nonce ?? null,
+  });
+}
+
+export async function sendBeamTransaction(params: {
+  workspacePath: string;
+  from: string;
+  to: string;
+  value?: string;
+  data?: string;
+  gasLimit?: number;
+  gasPrice?: number;
+  nonce?: number;
+}): Promise<TransactionReceipt> {
+  return invoke<TransactionReceipt>("send_beam_transaction", {
+    workspacePath: params.workspacePath,
+    from: params.from,
+    to: params.to,
+    value: params.value ?? null,
+    data: params.data ?? null,
+    gasLimit: params.gasLimit ?? null,
+    gasPrice: params.gasPrice ?? null,
+    nonce: params.nonce ?? null,
+  });
+}

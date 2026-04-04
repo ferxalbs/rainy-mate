@@ -5,6 +5,25 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Beam RPC + Secure Local Signing Bridge** — MaTE agents can now connect to the Beam Mainnet (Chain ID 4337) and Testnet (Chain ID 13337) directly through the local runtime, sign EVM transactions with AES-256-GCM encrypted local wallets, and broadcast them on-chain without ever exposing private keys outside the device:
+  - `src-tauri/src/services/beam_rpc.rs` — `BeamRpcService` with pre-configured Beam Mainnet/Testnet chain configs, workspace-scoped `.rainy-mate/beam/config.json` persistence, AES-256-GCM wallet encryption (device-bound master key at `{app_data_dir}/beam_wallets/.master`), EIP-155 transaction signing via k256/secp256k1, minimal hand-rolled RLP encoder, JSON-RPC helpers (`eth_estimateGas`, `eth_gasPrice`, `eth_getTransactionCount`, `eth_sendRawTransaction`), and 16 unit tests
+  - `src-tauri/src/services/skill_executor/args.rs`, `src-tauri/src/services/skill_executor/registry.rs`, `src-tauri/src/services/skill_executor/evm.rs`, `src-tauri/src/services/skill_executor.rs` — added 8 agent tools (`beam_rpc_connect`, `beam_create_wallet`, `beam_import_wallet`, `beam_get_wallet`, `beam_list_wallets`, `beam_estimate_gas`, `beam_sign_transaction`, `beam_send_transaction`) with late injection of `BeamRpcService` into the executor via `Arc<RwLock<Option<...>>>` interior mutability
+  - `src-tauri/src/services/tool_policy.rs` — added `ToolSkill::Evm` variant and explicit Airlock policies: L0 for read-only ops, L1 for `beam_rpc_connect`, L2 (always explicit approval) for wallet creation, import, signing, and broadcast
+  - `src-tauri/src/commands/beam.rs`, `src-tauri/src/lib.rs` — 10 Tauri commands (`connect_beam_workspace`, `get_beam_workspace_config`, `get_beam_chain_configs`, `create_beam_wallet`, `import_beam_wallet`, `get_beam_wallet`, `list_beam_wallets`, `estimate_beam_gas`, `sign_beam_transaction`, `send_beam_transaction`) registered in the invoke handler
+  - `src/types/beam.ts`, `src/services/tauri.ts` — TypeScript types and 8 `invoke()` wrappers for all Beam commands
+  - `src/components/workspace/BeamChainCard.tsx`, `src/components/workspace/WorkspaceLaunchpad.tsx` — Blockchain section in the Launchpad with a network selector (Mainnet / Testnet), connection status, Secure Local Signing Bridge panel, wallet list, and create-wallet button
+  - `src/components/agent-chat/neural-config.ts` — neural state mappings and display names for all 8 Beam tools
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `cd src-tauri && cargo test beam_rpc -- --nocapture` → 16/16 pass
+- `pnpm exec tsc --noEmit` → pass
+
 ## [0.6.5] - 2026-04-01 - MATE REBORN: DEFINITIVE DEVELOPER COCKPIT
 
 ### Added

@@ -223,6 +223,58 @@ pub fn registered_tool_definitions() -> Vec<Tool> {
             "Update an existing recurring task in the current workspace. Use this to change the schedule, prompt, or playbook scenario without switching to OS cron.",
             schema_for!(UpdateRecurringTaskArgs),
         ),
+        // ── Beam RPC + Secure Local Signing Bridge ────────────────────────
+        tool(
+            "beam_rpc_connect",
+            "Connect the current workspace to Beam Network (Mainnet Chain ID 4337 or Testnet 13337). \
+             Writes .rainy-mate/beam/config.json with the official build.onbeam.com RPC endpoints. \
+             Use network='mainnet' or network='testnet'.",
+            schema_for!(BeamRpcConnectArgs),
+        ),
+        tool(
+            "beam_create_wallet",
+            "Create a new local EVM wallet secured by AES-256-GCM encryption. \
+             The private key is generated on-device and never exposed. Returns wallet address and label.",
+            schema_for!(BeamCreateWalletArgs),
+        ),
+        tool(
+            "beam_import_wallet",
+            "Import an existing EVM wallet by its 32-byte private key. \
+             The key is encrypted with AES-256-GCM and stored locally. Never logged or transmitted. \
+             Returns wallet address.",
+            schema_for!(BeamImportWalletArgs),
+        ),
+        tool(
+            "beam_get_wallet",
+            "Get public info (address, label) for a locally stored wallet. \
+             Never returns the private key.",
+            schema_for!(BeamGetWalletArgs),
+        ),
+        tool(
+            "beam_list_wallets",
+            "List all locally encrypted wallet addresses and labels. Private keys are never returned.",
+            serde_json::json!({ "type": "object", "properties": {} }),
+        ),
+        tool(
+            "beam_estimate_gas",
+            "Estimate gas for an EVM transaction on the workspace-connected Beam network. \
+             Safe read-only JSON-RPC call. Returns gas limit, gas price, and fee in BEAM.",
+            schema_for!(BeamEstimateGasArgs),
+        ),
+        tool(
+            "beam_sign_transaction",
+            "Sign an EVM transaction with a local wallet using EIP-155 (secp256k1 / keccak256). \
+             The private key never leaves the device. Requires Airlock L2 explicit approval. \
+             Gas and nonce are auto-estimated if not provided. Returns signed raw transaction hex.",
+            schema_for!(BeamSignTransactionArgs),
+        ),
+        tool(
+            "beam_send_transaction",
+            "Sign and broadcast an EVM transaction to the workspace-connected Beam network. \
+             Requires Airlock L2 double confirmation. \
+             Gas and nonce are auto-estimated if not provided. Returns transaction hash and explorer URL.",
+            schema_for!(BeamSendTransactionArgs),
+        ),
     ]
 }
 

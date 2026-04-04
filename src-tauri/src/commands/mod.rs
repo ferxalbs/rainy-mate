@@ -3,6 +3,7 @@
 
 pub mod agent;
 pub mod agent_builder;
+pub mod beam;
 pub(crate) mod agent_frontend_events;
 pub mod ai;
 pub mod ai_providers;
@@ -31,6 +32,7 @@ pub mod workflow_factory;
 pub mod workspace;
 
 pub use agent_builder::*;
+pub use beam::*;
 pub use ai::*;
 pub use ai_providers::*;
 pub use airlock::*;

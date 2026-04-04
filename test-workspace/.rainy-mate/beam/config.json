@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "connected_at": "2026-04-03T00:00:00Z",
+  "network": "testnet",
+  "chain": {
+    "network": "Beam Testnet",
+    "chain_id": 13337,
+    "chain_id_hex": "0x3419",
+    "rpc_url": "https://build.onbeam.com/rpc/testnet",
+    "ws_url": "wss://build.onbeam.com/ws/testnet",
+    "explorer_url": "https://subnets-test.avax.network/beam",
+    "currency_symbol": "BEAM",
+    "currency_decimals": 18
+  }
+}

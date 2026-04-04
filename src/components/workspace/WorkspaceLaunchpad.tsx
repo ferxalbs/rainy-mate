@@ -3,6 +3,7 @@ import { BrainCircuit, CheckCircle2, FolderKanban, Shield, Sparkles } from "luci
 import { Button } from "@heroui/react";
 
 import * as tauri from "../../services/tauri";
+import { BeamChainCard } from "./BeamChainCard";
 
 interface WorkspaceLaunchpadProps {
   workspacePath: string;
@@ -785,6 +786,18 @@ export function WorkspaceLaunchpad({
           </div>
         </div>
       </div>
+
+        {/* Beam Chain Config */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 px-1">
+            <svg className="size-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Blockchain</h2>
+          </div>
+          <BeamChainCard workspacePath={workspacePath} />
+        </div>
+
     </div>
   );
 }

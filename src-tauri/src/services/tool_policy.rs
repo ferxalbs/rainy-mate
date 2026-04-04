@@ -11,6 +11,8 @@ pub enum ToolSkill {
     /// IRONMILL — document generation and reading (KINGFALL Phase 1)
     Documents,
     Workspace,
+    /// Beam RPC + Secure Local Signing Bridge
+    Evm,
 }
 
 impl ToolSkill {
@@ -24,6 +26,7 @@ impl ToolSkill {
             Self::RemoteSession => "remote_session",
             Self::Documents => "documents",
             Self::Workspace => "workspace",
+            Self::Evm => "evm",
         }
     }
 }
@@ -141,6 +144,26 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
                 airlock_level: AirlockLevel::Sensitive,
             }
         }
+
+        // ── Beam RPC + Secure Local Signing Bridge ──────────────────────
+        // L0: read-only — chain configs, wallet info, gas estimation
+        "beam_get_wallet" | "beam_list_wallets" | "beam_estimate_gas" => ToolPolicy {
+            skill: ToolSkill::Evm,
+            airlock_level: AirlockLevel::Safe,
+        },
+        // L1: writes config file to workspace
+        "beam_rpc_connect" => ToolPolicy {
+            skill: ToolSkill::Evm,
+            airlock_level: AirlockLevel::Sensitive,
+        },
+        // L2: wallet creation/import (touches encrypted key store) and all signing/send
+        "beam_create_wallet"
+        | "beam_import_wallet"
+        | "beam_sign_transaction"
+        | "beam_send_transaction" => ToolPolicy {
+            skill: ToolSkill::Evm,
+            airlock_level: AirlockLevel::Dangerous,
+        },
 
         _ => return None,
     };

@@ -1,6 +1,7 @@
 mod args;
 mod browser;
 mod documents;
+mod evm;
 mod filesystem;
 mod registry;
 mod scheduler;
@@ -8,6 +9,7 @@ mod shell;
 mod web;
 
 use crate::models::neural::{CommandResult, QueuedCommand, ToolAccessPolicy};
+use crate::services::beam_rpc::BeamRpcService;
 use crate::services::browser_controller::BrowserController;
 use crate::services::settings::SettingsManager;
 use crate::services::third_party_skill_registry::{
@@ -51,6 +53,8 @@ pub struct SkillExecutor {
     third_party_registry: Arc<ThirdPartySkillRegistry>,
     wasm_sandbox: Arc<WasmSandboxService>,
     mcp_service: Arc<crate::services::mcp_service::McpService>,
+    /// Beam RPC + Secure Local Signing Bridge — injected during setup
+    beam_rpc: Arc<RwLock<Option<Arc<BeamRpcService>>>>,
 }
 
 impl SkillExecutor {
@@ -119,7 +123,13 @@ impl SkillExecutor {
             third_party_registry,
             wasm_sandbox: Arc::new(WasmSandboxService::new()),
             mcp_service,
+            beam_rpc: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub async fn set_beam_rpc(&self, svc: Arc<BeamRpcService>) {
+        let mut lock = self.beam_rpc.write().await;
+        *lock = Some(svc);
     }
 
     pub async fn set_memory_manager(&self, mm: Arc<MemoryManager>) {
@@ -157,6 +167,7 @@ impl SkillExecutor {
             ),
             wasm_sandbox: Arc::new(WasmSandboxService::new()),
             mcp_service: Arc::new(crate::services::mcp_service::McpService::new()),
+            beam_rpc: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -329,6 +340,9 @@ impl SkillExecutor {
             "workspace" => {
                 self.execute_workspace_tools(workspace_id, method, &payload.params)
                     .await
+            }
+            "evm" => {
+                self.execute_evm(workspace_id, method, &payload.params).await
             }
             _ => self
                 .execute_third_party_skill(

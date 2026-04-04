@@ -425,6 +425,82 @@ pub struct DeleteRecurringTaskArgs {
     pub scheduled_run_id: String,
 }
 
+// ── Beam RPC + Secure Local Signing Bridge ───────────────────────────────────
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BeamRpcConnectArgs {
+    /// Network to connect to: "mainnet" or "testnet"
+    pub network: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BeamCreateWalletArgs {
+    /// Optional human-readable label for this wallet
+    pub label: Option<String>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BeamImportWalletArgs {
+    /// 32-byte private key in hex (with or without 0x prefix). Stored encrypted; never logged.
+    pub private_key_hex: String,
+    /// Optional human-readable label for this wallet
+    pub label: Option<String>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BeamGetWalletArgs {
+    /// EIP-55 checksummed wallet address (0x-prefixed)
+    pub address: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BeamEstimateGasArgs {
+    /// Sender address (0x-prefixed)
+    pub from: String,
+    /// Recipient address (0x-prefixed)
+    pub to: String,
+    /// Value in wei as 0x-prefixed hex (default "0x0")
+    pub value: Option<String>,
+    /// Transaction data as 0x-prefixed hex (default "0x")
+    pub data: Option<String>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BeamSignTransactionArgs {
+    /// Sender wallet address — must exist in local encrypted vault
+    pub from: String,
+    /// Recipient address (0x-prefixed)
+    pub to: String,
+    /// Value in wei as 0x-prefixed hex (default "0x0")
+    pub value: Option<String>,
+    /// Transaction data as 0x-prefixed hex (default "0x")
+    pub data: Option<String>,
+    /// Gas limit override. If omitted, estimated automatically with +20% buffer.
+    pub gas_limit: Option<u64>,
+    /// Gas price in wei. If omitted, fetched from RPC.
+    pub gas_price: Option<u64>,
+    /// Nonce override. If omitted, fetched from RPC (pending).
+    pub nonce: Option<u64>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BeamSendTransactionArgs {
+    /// Sender wallet address — must exist in local encrypted vault
+    pub from: String,
+    /// Recipient address (0x-prefixed)
+    pub to: String,
+    /// Value in wei as 0x-prefixed hex (default "0x0")
+    pub value: Option<String>,
+    /// Transaction data as 0x-prefixed hex (default "0x")
+    pub data: Option<String>,
+    /// Gas limit override. If omitted, estimated automatically with +20% buffer.
+    pub gas_limit: Option<u64>,
+    /// Gas price in wei. If omitted, fetched from RPC.
+    pub gas_price: Option<u64>,
+    /// Nonce override. If omitted, fetched from RPC (pending).
+    pub nonce: Option<u64>,
+}
+
 #[derive(JsonSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRecurringTaskArgs {

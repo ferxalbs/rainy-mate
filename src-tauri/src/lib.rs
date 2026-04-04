@@ -14,8 +14,8 @@ use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::db::Database;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
-    ATMClient, AgentLibraryService, AgentRunControl, BrowserController, CommandPoller,
-    DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService,
+    ATMClient, AgentLibraryService, AgentRunControl, BeamRpcService, BrowserController,
+    CommandPoller, DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService,
     KeychainAccessService, LLMClient, MacOSAutoLaunchBridge, ManagedResearchService, MemoryManager,
     NeuralService, NodeAuthenticator, QuickDelegateModalService, SettingsManager, SkillExecutor,
     SocketClient, WorkflowRecorderService, WorkspaceManager,
@@ -364,6 +364,18 @@ pub fn run() {
                 let mm = memory_manager.clone();
                 tauri::async_runtime::block_on(async move {
                     se.set_memory_manager(mm).await;
+                });
+            }
+
+            // Initialize Beam RPC + Secure Local Signing Bridge
+            let beam_rpc = Arc::new(BeamRpcService::new(app_data_dir.clone()));
+            app.manage(beam_rpc.clone());
+            // Inject into SkillExecutor so the "evm" agent skill can use it
+            {
+                let se = app.state::<Arc<SkillExecutor>>();
+                let br = beam_rpc.clone();
+                tauri::async_runtime::block_on(async move {
+                    se.set_beam_rpc(br).await;
                 });
             }
 
@@ -857,6 +869,18 @@ pub fn run() {
             crate::services::persistent_scheduler::add_scheduled_job,
             crate::services::persistent_scheduler::list_scheduled_jobs,
             crate::services::persistent_scheduler::remove_scheduled_job,
+            // Beam RPC + Secure Local Signing Bridge
+            commands::get_beam_chain_configs,
+            commands::get_beam_chain_config,
+            commands::connect_beam_workspace,
+            commands::get_beam_workspace_config,
+            commands::create_beam_wallet,
+            commands::import_beam_wallet,
+            commands::get_beam_wallet,
+            commands::list_beam_wallets,
+            commands::estimate_beam_gas,
+            commands::sign_beam_transaction,
+            commands::send_beam_transaction,
         ])
         .build(tauri::generate_context!());
 
