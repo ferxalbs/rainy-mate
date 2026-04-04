@@ -569,7 +569,6 @@ export function AgentChatPanel({
         onAddFolder={onAddWorkspace}
         onNewChat={handleNewChat}
         onRefreshChat={handleRefreshChat}
-        onOpenSchedule={() => setScheduleDialogOpen(true)}
         onOpenSettings={onOpenSettings}
       />
 
