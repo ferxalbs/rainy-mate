@@ -1032,15 +1032,15 @@ pub async fn run_agent_workflow_internal(
 
     match invocation_source {
         WorkflowInvocationSource::Local => {
+            let _ = agent_manager
+                .ensure_chat_session_with_workspace(&chat_id, "Rainy Agent", &workspace_path)
+                .await
+                .map_err(|e| format!("Failed to initialize chat session: {}", e))?;
             session_coordinator.register_local(
                 chat_id.clone(),
                 run_id.clone(),
                 workspace_path.clone(),
             );
-            let _ = agent_manager
-                .ensure_chat_session_with_workspace(&chat_id, "Rainy Agent", &workspace_path)
-                .await
-                .map_err(|e| format!("Failed to initialize chat session: {}", e))?;
         }
         WorkflowInvocationSource::NativeModal => {
             let _ = session_coordinator
@@ -1594,7 +1594,7 @@ pub async fn run_agent_workflow_internal(
         Ok(response) => response,
         Err(error) => {
             match invocation_source {
-                WorkflowInvocationSource::Local => session_coordinator.unregister(&chat_id),
+                WorkflowInvocationSource::Local => session_coordinator.abort_local_session(&chat_id),
                 WorkflowInvocationSource::NativeModal => {
                     session_coordinator.abort_session(&chat_id)
                 }
@@ -1612,7 +1612,7 @@ pub async fn run_agent_workflow_internal(
 
     match invocation_source {
         WorkflowInvocationSource::Local => {
-            session_coordinator.unregister(&chat_id);
+            session_coordinator.finish_local_session(&chat_id);
             let artifacts = collected_artifacts
                 .lock()
                 .expect("artifact collector poisoned")

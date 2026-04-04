@@ -2813,6 +2813,12 @@ export interface RemoteSessionBinding {
   connectorId?: string | null;
   sessionPeer?: string | null;
   autoImportWorkspace?: boolean;
+  elapsedSecs?: number;
+}
+
+export interface ActiveChatRunBinding extends RemoteSessionBinding {
+  chatId: string;
+  runId: string;
 }
 
 export interface RemoteSessionStartedEvent extends RemoteSessionBinding {
@@ -3068,8 +3074,10 @@ export async function clearWorkspaceVault(
 export interface ActiveSessionInfo {
   chatId: string;
   runId: string;
+  workspaceId: string;
   source: "local" | "remote" | "native_modal";
   connectorId: string | null;
+  elapsedSecs: number;
 }
 
 export async function listActiveSessions(): Promise<ActiveSessionInfo[]> {

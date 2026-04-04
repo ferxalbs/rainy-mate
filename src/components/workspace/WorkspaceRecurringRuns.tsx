@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Clock3, Pencil, RefreshCw, ShieldAlert, Trash2, X } from "lucide-react";
+import { Clock3, Pencil, RefreshCw, ShieldAlert, Trash2, X, Settings2, CalendarDays } from "lucide-react";
+import { Button, Select, ListBox } from "@heroui/react";
 
 import * as tauri from "../../services/tauri";
 import { ScheduleBuilder } from "../scheduling/ScheduleBuilder";
@@ -16,6 +17,15 @@ interface WorkspaceRecurringRunsProps {
   workspacePath: string;
 }
 
+const selectionToValue = (selection: unknown): string | null => {
+  if (typeof selection === "string") return selection;
+  if (selection instanceof Set) {
+    const first = selection.values().next().value;
+    return typeof first === "string" ? first : null;
+  }
+  return null;
+};
+
 function formatTimestamp(value?: number | null): string {
   if (!value) return "Not yet";
   return new Date(value * 1000).toLocaleString();
@@ -24,13 +34,13 @@ function formatTimestamp(value?: number | null): string {
 function statusTone(status?: string | null): string {
   switch (status) {
     case "completed":
-      return "text-green-500";
+      return "text-green-500 bg-green-500/10";
     case "running":
-      return "text-blue-500";
+      return "text-blue-500 bg-blue-500/10";
     case "failed":
-      return "text-red-500";
+      return "text-red-500 bg-red-500/10";
     default:
-      return "text-muted-foreground";
+      return "text-muted-foreground bg-white/5";
   }
 }
 
@@ -221,283 +231,335 @@ export function WorkspaceRecurringRuns({
     workspacePath,
   ]);
 
+  if (isLoading && jobs.length === 0) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="animate-pulse text-sm font-medium text-muted-foreground tracking-wide">
+          Loading recurring runs...
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto p-6">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div className="relative h-full w-full overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8">
+      <div className="flex flex-col gap-6 max-w-6xl mx-auto pb-12">
+        {/* Header Section */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-2">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <Clock3 className="size-5 text-primary" />
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">
                 Recurring Runs
               </h1>
             </div>
-            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Schedule first-party MaTE playbooks against this workspace without
-              turning the runtime into an unbounded daemon. Each run re-enters
-              the normal governed contract flow.
+            <p className="max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
+              Schedule first-party MaTE playbooks against this workspace.
             </p>
           </div>
-          <button
-            className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/10 bg-background px-4 text-sm font-medium text-foreground transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => void refresh()}
-            disabled={isLoading || isSaving}
+          <Button
+            variant="secondary"
+            className="font-medium shrink-0 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-foreground border border-white/5"
+            onPress={() => void refresh()}
+            isDisabled={isLoading || isSaving}
           >
-            <RefreshCw className="size-4" />
+            <RefreshCw className="size-4 mr-2" />
             Refresh
-          </button>
+          </Button>
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-500">
-            {error}
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
+            <p className="text-sm font-medium text-red-500">{error}</p>
           </div>
         )}
 
-        <div className="grid gap-5 rounded-3xl border border-white/10 bg-background/40 p-5">
-          <label className="flex flex-col gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Scenario
-            </span>
-            <select
-              className="h-11 rounded-2xl border border-border/60 bg-background px-3 text-sm text-foreground outline-none"
-              value={scenarioId}
-              onChange={(event) => setScenarioId(event.target.value)}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 px-1">
+            <Settings2 className="size-4 text-primary" />
+            <h2 className="text-[14px] font-semibold tracking-tight text-foreground">New Run Configuration</h2>
+          </div>
+          
+          <div className="rounded-2xl border border-white/5 bg-white/5 p-4 flex flex-col gap-4">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">
+                Scenario
+              </span>
+              <Select
+                className="w-full"
+                selectedKey={scenarioId}
+                isDisabled={isSaving || isLoading}
+                onSelectionChange={(selection) => {
+                  const value = selectionToValue(selection);
+                  if (value) setScenarioId(value);
+                }}
+              >
+                <Select.Trigger className="h-9 rounded-xl border border-white/10 bg-white/5 px-2.5 text-[12px] text-foreground shadow-sm">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover className="bg-background/95 dark:bg-background/35 border border-default-200/70 dark:border-white/15 backdrop-blur-xl max-h-[300px] overflow-y-auto">
+                  <ListBox className="bg-transparent">
+                    {scenarios.map((scenario) => (
+                      <ListBox.Item key={scenario.id} id={scenario.id} textValue={scenario.title}>
+                        {scenario.title}
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </label>
+
+            <ScheduleBuilder
+              value={scheduleDraft}
+              onChange={setScheduleDraft}
               disabled={isSaving || isLoading}
-            >
-              {scenarios.map((scenario) => (
-                <option key={scenario.id} value={scenario.id}>
-                  {scenario.title}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
 
-          <ScheduleBuilder
-            value={scheduleDraft}
-            onChange={setScheduleDraft}
-            disabled={isSaving || isLoading}
-          />
-
-          <div className="flex items-end justify-end">
-            <button
-              className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => void handleCreate()}
-              disabled={isSaving}
-            >
-              {isSaving ? "Saving..." : "Create Run"}
-            </button>
+            <div className="flex items-end justify-end mt-2">
+              <Button
+                variant="primary"
+                className="h-10 px-6 rounded-xl font-medium text-[13px]"
+                onPress={() => void handleCreate()}
+                isDisabled={isSaving}
+              >
+                {isSaving ? "Saving..." : "Create Run"}
+              </Button>
+            </div>
           </div>
         </div>
 
         {editingJobId ? (
-          <div className="grid gap-5 rounded-3xl border border-primary/20 bg-primary/5 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Edit Recurring Run
-                </p>
-                <p className="text-sm text-muted-foreground">
+            <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 px-1">
+              <Pencil className="size-4 text-primary" />
+              <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Edit Configuration</h2>
+            </div>
+          
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <p className="text-[12px] text-primary/80">
                   Update the stored schedule and task payload for this workspace run.
                 </p>
-              </div>
-              <button
-                className="rounded-full p-2 text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
-                onClick={handleCancelEdit}
-                disabled={isSaving}
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-
-            {editingMode === "playbook" ? (
-              <label className="flex flex-col gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Scenario
-                </span>
-                <select
-                  className="h-11 rounded-2xl border border-border/60 bg-background px-3 text-sm text-foreground outline-none"
-                  value={editingScenarioId}
-                  onChange={(event) => setEditingScenarioId(event.target.value)}
-                  disabled={isSaving || isLoading}
+                <Button
+                  isIconOnly
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground border-none h-8 w-8 min-w-8"
+                  onPress={handleCancelEdit}
+                  isDisabled={isSaving}
                 >
-                  {scenarios.map((scenario) => (
-                    <option key={scenario.id} value={scenario.id}>
-                      {scenario.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <div className="grid gap-4">
-                <label className="flex flex-col gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Task title
-                  </span>
-                  <input
-                    className="h-11 rounded-2xl border border-border/60 bg-background px-3 text-sm text-foreground outline-none"
-                    value={editingTitle}
-                    onChange={(event) => setEditingTitle(event.target.value)}
-                    disabled={isSaving}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Prompt
-                  </span>
-                  <textarea
-                    className="min-h-[120px] rounded-2xl border border-border/60 bg-background px-3 py-3 text-sm text-foreground outline-none"
-                    value={editingPrompt}
-                    onChange={(event) => setEditingPrompt(event.target.value)}
-                    disabled={isSaving}
-                  />
-                </label>
+                  <X className="size-3.5" />
+                </Button>
               </div>
-            )}
 
-            <ScheduleBuilder
-              value={editingScheduleDraft}
-              onChange={setEditingScheduleDraft}
-              disabled={isSaving || isLoading}
-            />
+              {editingMode === "playbook" ? (
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">
+                    Scenario
+                  </span>
+                  <Select
+                    className="w-full"
+                    selectedKey={editingScenarioId}
+                    isDisabled={isSaving || isLoading}
+                    onSelectionChange={(selection) => {
+                      const value = selectionToValue(selection);
+                      if (value) setEditingScenarioId(value);
+                    }}
+                  >
+                    <Select.Trigger className="h-9 rounded-xl border border-white/10 bg-white/5 px-2.5 text-[12px] text-foreground shadow-sm">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover className="bg-background/95 dark:bg-background/35 border border-default-200/70 dark:border-white/15 backdrop-blur-xl max-h-[300px] overflow-y-auto">
+                      <ListBox className="bg-transparent">
+                        {scenarios.map((scenario) => (
+                          <ListBox.Item key={scenario.id} id={scenario.id} textValue={scenario.title}>
+                            {scenario.title}
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </label>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="flex flex-col gap-1.5 md:col-span-2">
+                    <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">
+                      Task Title
+                    </span>
+                    <input
+                      className="h-9 rounded-xl border border-white/10 bg-white/5 px-2.5 text-[12px] text-foreground outline-none focus:border-primary/50 transition-colors"
+                      value={editingTitle}
+                      onChange={(event) => setEditingTitle(event.target.value)}
+                      disabled={isSaving}
+                    />
+                  </label>
 
-            <div className="flex items-end justify-end gap-3">
-              <button
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleCancelEdit}
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
-                className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => void handleUpdate()}
-                disabled={
-                  isSaving ||
-                  (editingMode === "prompt" &&
-                    (!editingTitle.trim() || !editingPrompt.trim()))
-                }
-              >
-                {isSaving ? "Saving..." : "Save Changes"}
-              </button>
+                  <label className="flex flex-col gap-1.5 md:col-span-2">
+                    <span className="text-[10px] font-semibold tracking-widest text-muted-foreground/50 uppercase">
+                      Prompt
+                    </span>
+                    <textarea
+                      className="min-h-[80px] rounded-xl border border-white/10 bg-white/5 px-2.5 py-2 text-[12px] text-foreground outline-none focus:border-primary/50 transition-colors resize-y"
+                      value={editingPrompt}
+                      onChange={(event) => setEditingPrompt(event.target.value)}
+                      disabled={isSaving}
+                    />
+                  </label>
+                </div>
+              )}
+
+              <ScheduleBuilder
+                value={editingScheduleDraft}
+                onChange={setEditingScheduleDraft}
+                disabled={isSaving || isLoading}
+              />
+
+              <div className="flex items-end justify-end gap-2.5 mt-1">
+                <Button
+                  variant="outline"
+                  className="h-9 px-4 rounded-xl border-white/10 text-[12px] font-medium"
+                  onPress={handleCancelEdit}
+                  isDisabled={isSaving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  className="h-9 px-4 rounded-xl text-[12px] font-medium"
+                  onPress={() => void handleUpdate()}
+                  isDisabled={
+                    isSaving ||
+                    (editingMode === "prompt" &&
+                      (!editingTitle.trim() || !editingPrompt.trim()))
+                  }
+                >
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
             </div>
           </div>
         ) : null}
 
-        <div className="rounded-3xl border border-white/10 bg-background/35">
-          <div className="border-b border-white/10 px-5 py-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Scheduled Playbooks
-            </h2>
+        <div className="flex flex-col gap-4 pt-2">
+          <div className="flex items-center gap-2 px-1">
+            <CalendarDays className="size-4 text-primary" />
+            <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Scheduled Playbooks</h2>
           </div>
 
-          {isLoading ? (
-            <div className="px-5 py-8 text-sm text-muted-foreground">
-              Loading recurring runs...
-            </div>
-          ) : jobs.length === 0 ? (
-            <div className="px-5 py-8 text-sm text-muted-foreground">
-              No recurring playbooks configured for this workspace yet.
+          {jobs.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-transparent p-5 text-center">
+              <p className="text-[12px] text-muted-foreground">No recurring playbooks configured for this workspace yet.</p>
             </div>
           ) : (
-            <div className="divide-y divide-white/10">
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {jobs.map((job) => {
                 const scenario = scenarioMap.get(job.scenarioId);
                 return (
                   <div
                     key={job.id}
-                    className="grid gap-4 px-5 py-5 md:grid-cols-[1.3fr_1fr_1fr_auto]"
+                    className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-white/5 p-4"
                   >
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <p className="text-base font-semibold text-foreground">
+                      <div className="flex items-center flex-wrap gap-2">
+                        <p className="text-[15px] font-semibold text-foreground tracking-tight">
                           {job.title || scenario?.title || job.scenarioId}
                         </p>
-                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        <span className="rounded-lg bg-white/5 border border-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
                           {job.jobKind === "prompt" ? "Prompt" : "Playbook"}
                         </span>
                         <span
-                          className={`text-xs font-medium uppercase tracking-[0.16em] ${statusTone(job.lastStatus)}`}
+                          className={`rounded-lg px-2 py-0.5 text-[10px] uppercase tracking-wider font-medium ${statusTone(job.lastStatus)}`}
                         >
                           {job.lastStatus ?? "scheduled"}
                         </span>
                       </div>
-                      <p className="text-sm text-muted-foreground">
+                      
+                      <p className="text-[12px] leading-relaxed text-muted-foreground line-clamp-2">
                         {job.jobKind === "prompt"
                           ? job.promptText || "Recurring chat task"
                           : scenario?.summary ?? "First-party recurring playbook"}
                       </p>
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <span className="rounded-full border border-white/10 px-2.5 py-1">
+                      
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <div className="rounded-lg border border-white/5 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-foreground/80">
                           {describeSchedule(inferScheduleDraft(job.schedule))}
-                        </span>
-                        <span className="rounded-full border border-white/10 px-2.5 py-1 font-mono">
-                          {job.schedule}
-                        </span>
-                        <span className="rounded-full border border-white/10 px-2.5 py-1">
-                          {job.enabledPackIds.length} packs
-                        </span>
-                        <span className="rounded-full border border-white/10 px-2.5 py-1">
-                          {job.lastArtifactCount} artifacts
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-sm">
-                      <p className="font-medium text-foreground">Next Run</p>
-                      <p className="text-muted-foreground">
-                        {formatTimestamp(job.nextRunAt)}
-                      </p>
-                      <p className="font-medium text-foreground">Last Run</p>
-                      <p className="text-muted-foreground">
-                        {formatTimestamp(job.lastRunAt)}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1 text-sm">
-                      <p className="font-medium text-foreground">Approval Posture</p>
-                      <p className="text-muted-foreground">
-                        {job.lastRequiresExplicitApproval
-                          ? "Explicit approval required"
-                          : "No explicit approval needed"}
-                      </p>
-                      {job.lastBlockedByApproval ? (
-                        <div className="flex items-center gap-2 text-amber-500">
-                          <ShieldAlert className="size-4" />
-                          <span>Blocked by Airlock</span>
                         </div>
-                      ) : null}
-                      {job.lastError ? (
-                        <p className="text-red-500">{job.lastError}</p>
-                      ) : null}
-                      {job.lastChatId ? (
-                        <p className="text-muted-foreground">
-                          Last chat: {job.lastChatId}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="flex items-start justify-end">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => handleStartEdit(job)}
-                          disabled={isSaving}
-                        >
-                          <Pencil className="size-4" />
-                          Edit
-                        </button>
-                        <button
-                          className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-500 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => void handleDelete(job.id)}
-                          disabled={isSaving}
-                        >
-                          <Trash2 className="size-4" />
-                          Delete
-                        </button>
+                        <div className="rounded-lg border border-white/5 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
+                          {job.schedule}
+                        </div>
+                        <div className="rounded-lg bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          {job.enabledPackIds.length} packs
+                        </div>
+                        <div className="rounded-lg border border-white/5 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-foreground/80">
+                          {job.lastArtifactCount || 0} artifacts
+                        </div>
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4 mt-1 border-t border-white/5 pt-3">
+                      <div className="space-y-1">
+                        <p className="text-[9px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Timing</p>
+                        <div className="text-[11px]">
+                          <span className="text-muted-foreground">Next:</span> <span className="text-foreground/90 font-medium ml-1">{formatTimestamp(job.nextRunAt)}</span>
+                        </div>
+                        <div className="text-[11px]">
+                          <span className="text-muted-foreground">Last:</span> <span className="text-foreground/90 font-medium ml-1">{formatTimestamp(job.lastRunAt)}</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <p className="text-[9px] font-semibold tracking-widest text-muted-foreground/50 uppercase">Posture</p>
+                        <p className="text-[11px] text-foreground/90 font-medium line-clamp-1">
+                          {job.lastRequiresExplicitApproval
+                            ? "Explicit approval required"
+                            : "No explicit approval needed"}
+                        </p>
+                        
+                        {job.lastBlockedByApproval ? (
+                          <div className="flex items-center gap-1.5 text-amber-500 mt-0.5">
+                            <ShieldAlert className="size-3" />
+                            <span className="text-[11px]">Blocked by Airlock</span>
+                          </div>
+                        ) : null}
+                        
+                        {job.lastError ? (
+                          <p className="text-[11px] text-red-500 line-clamp-1 mt-0.5" title={job.lastError}>
+                            {job.lastError}
+                          </p>
+                        ) : null}
+                        
+                        {job.lastChatId ? (
+                          <p className="text-[10px] text-muted-foreground truncate max-w-full mt-0.5">
+                            Chat ID: {job.lastChatId}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 mt-auto">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 rounded-xl bg-white/5 hover:bg-white/10 text-foreground font-medium"
+                          onPress={() => handleStartEdit(job)}
+                          isDisabled={isSaving}
+                        >
+                          <Pencil className="size-3.5 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          className="h-8 rounded-xl font-medium"
+                          onPress={() => void handleDelete(job.id)}
+                          isDisabled={isSaving}
+                        >
+                          <Trash2 className="size-3.5 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
                   </div>
                 );
               })}
@@ -508,3 +570,4 @@ export function WorkspaceRecurringRuns({
     </div>
   );
 }
+

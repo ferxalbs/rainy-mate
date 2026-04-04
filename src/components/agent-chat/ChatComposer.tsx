@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowUp, Check, ChevronDown, FileText, Image, Mic, Plus, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, FileText, Image, Mic, Plus, Square, X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import type { ChatAttachment } from "../../types/agent";
@@ -16,7 +16,12 @@ interface ChatComposerProps {
   onInputChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: () => void;
-  disabled: boolean;
+  inputDisabled: boolean;
+  submitDisabled: boolean;
+  stopDisabled?: boolean;
+  showStopButton?: boolean;
+  onStop?: () => void;
+  submitLabel?: string;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   currentModelId: string;
   onSelectModel: (modelId: string) => void;
@@ -42,7 +47,12 @@ export function ChatComposer({
   onInputChange,
   onKeyDown,
   onSubmit,
-  disabled,
+  inputDisabled,
+  submitDisabled,
+  stopDisabled = false,
+  showStopButton = false,
+  onStop,
+  submitLabel,
   textareaRef,
   currentModelId,
   onSelectModel,
@@ -58,7 +68,8 @@ export function ChatComposer({
   onAddAttachments,
   onRemoveAttachment,
 }: ChatComposerProps) {
-  const canSubmit = (input.trim().length > 0 || attachments.length > 0) && !disabled;
+  const canSubmit = (input.trim().length > 0 || attachments.length > 0) && !submitDisabled;
+  const actionLabel = submitLabel || (showStopButton ? "Stop run" : "Send");
   return (
     <div
       className={cn(
@@ -78,7 +89,7 @@ export function ChatComposer({
               "w-full resize-none border-none bg-transparent px-3 py-3 text-sm text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground/50 focus-visible:border-none focus-visible:ring-0",
               centered ? "min-h-[100px]" : "min-h-[68px]",
             )}
-            disabled={disabled}
+            disabled={inputDisabled}
           />
 
           {/* Attachment preview strip */}
@@ -195,14 +206,17 @@ export function ChatComposer({
               </Button>
               <Button
                 size="icon"
-                onClick={onSubmit}
-                disabled={!canSubmit}
+                onClick={showStopButton ? onStop : onSubmit}
+                disabled={showStopButton ? stopDisabled : !canSubmit}
+                aria-label={actionLabel}
+                title={actionLabel}
                 className={cn(
                   "size-8 rounded-full bg-white/90 text-black shadow-sm transition-all hover:bg-white dark:bg-white/90 dark:text-black",
-                  !canSubmit && "scale-95 opacity-50",
+                  showStopButton && "bg-red-500 text-white hover:bg-red-500/90 dark:bg-red-500 dark:text-white",
+                  (showStopButton ? stopDisabled : !canSubmit) && "scale-95 opacity-50",
                 )}
               >
-                <ArrowUp className="size-4" />
+                {showStopButton ? <Square className="size-4 fill-current" /> : <ArrowUp className="size-4" />}
               </Button>
             </div>
           </div>

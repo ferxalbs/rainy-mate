@@ -20,7 +20,7 @@ import {
   appendUniqueArtifact,
   artifactFromToolResult,
 } from "../lib/chat-artifacts";
-import type { RemoteSessionBinding } from "../services/tauri";
+import type { ActiveChatRunBinding } from "../services/tauri";
 
 type RuntimeAgentEventData = {
   [key: string]: unknown;
@@ -95,6 +95,17 @@ type RuntimeToolCallIndex = Map<
   { name: string; arguments?: string }
 >;
 
+type ActiveChatSessionBinding = {
+  workspaceId: string;
+  workspacePath?: string;
+  workspaceName?: string;
+  chatId: string;
+  runId: string;
+  source: "local" | "remote" | "native_modal" | string;
+  connectorId?: string | null;
+  elapsedSecs?: number;
+};
+
 function mergeDefinedFields<T>(current: T, next: Partial<T>): T {
   const merged = { ...(current as Record<string, unknown>) };
   for (const [key, value] of Object.entries(next as Record<string, unknown>)) {
@@ -127,10 +138,17 @@ function upsertSpecialistState(
   return current;
 }
 
+function isCancellationError(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+  const normalized = message.toLowerCase();
+  return normalized.includes("execution cancelled");
+}
+
 export function useAgentChat(
   initialChatScopeId?: string | null,
   onSessionChanged?: () => void | Promise<void>,
-  remoteSessionBinding?: RemoteSessionBinding | null,
+  activeRunBinding?: ActiveChatRunBinding | null,
 ) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isPlanning, setIsPlanning] = useState(false);
@@ -146,13 +164,15 @@ export function useAgentChat(
   );
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isHydratingHistory, setIsHydratingHistory] = useState(false);
+  const [activeSessionBinding, setActiveSessionBinding] =
+    useState<ActiveChatSessionBinding | null>(null);
   const forgeRecordingIdRef = useRef<string | null>(null);
   const isHydratingRef = useRef(false);
   const hasHydratedRef = useRef(false);
   const messagesRef = useRef(messages);
-  const remoteRunMessageIdRef = useRef<string | null>(null);
-  const remoteRunIdRef = useRef<string | null>(null);
-  const remoteToolCallIndexRef = useRef<RuntimeToolCallIndex>(new Map());
+  const sessionRunMessageIdRef = useRef<string | null>(null);
+  const sessionRunIdRef = useRef<string | null>(null);
+  const sessionToolCallIndexRef = useRef<RuntimeToolCallIndex>(new Map());
   messagesRef.current = messages;
 
   const { streamWithRouting } = useStreaming();
@@ -598,6 +618,7 @@ export function useAgentChat(
             statusLower.includes("failed") ||
             statusLower.includes("exception");
           const isCancelled =
+            statusLower.includes("execution cancelled") ||
             statusLower.includes("terminated by fleet kill switch") ||
             statusLower.includes("terminated by user") ||
             statusLower.includes("cancelled by user");
@@ -677,6 +698,108 @@ export function useAgentChat(
     isHydratingRef.current = false;
   }, [chatScopeId, initialChatScopeId]);
 
+  useEffect(() => {
+    const scopedRemoteBinding =
+      activeRunBinding?.chatId && activeRunBinding.chatId === chatScopeId
+        ? {
+            workspaceId:
+              activeRunBinding.workspacePath ||
+              activeRunBinding.workspaceId,
+            workspacePath:
+              activeRunBinding.workspacePath ||
+              activeRunBinding.workspaceId,
+            workspaceName: activeRunBinding.workspaceName,
+            chatId: activeRunBinding.chatId,
+            runId: activeRunBinding.runId || "",
+            source: activeRunBinding.source || "remote",
+            connectorId: activeRunBinding.connectorId,
+            elapsedSecs: activeRunBinding.elapsedSecs,
+          }
+        : null;
+
+    if (scopedRemoteBinding?.runId) {
+      setActiveSessionBinding(scopedRemoteBinding);
+      return;
+    }
+
+    if (!chatScopeId) {
+      setActiveSessionBinding(null);
+      return;
+    }
+
+    let cancelled = false;
+    void tauri
+      .listActiveSessions()
+      .then((sessions) => {
+        if (cancelled) return;
+        const current = sessions.find((session) => session.chatId === chatScopeId);
+        setActiveSessionBinding(
+          current
+            ? {
+                workspaceId: current.workspaceId,
+                workspacePath: current.workspaceId,
+                chatId: current.chatId,
+                runId: current.runId,
+                source: current.source,
+                connectorId: current.connectorId,
+                elapsedSecs: current.elapsedSecs,
+              }
+            : null,
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to load active sessions for chat scope:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunBinding, chatScopeId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
+
+    void listen<tauri.RemoteSessionStartedEvent>("session://started", (event) => {
+      if (cancelled) return;
+      const payload = event.payload;
+      if (!chatScopeId || payload.chatId !== chatScopeId) return;
+      setActiveSessionBinding({
+        workspaceId: payload.workspacePath || payload.workspaceId,
+        workspacePath: payload.workspacePath || payload.workspaceId,
+        workspaceName: payload.workspaceName,
+        chatId: payload.chatId,
+        runId: payload.runId,
+        source: payload.source || "remote",
+        connectorId: payload.connectorId,
+      });
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlisteners.push(fn);
+    });
+
+    void listen<tauri.RemoteSessionFinishedEvent>("session://finished", (event) => {
+      if (cancelled) return;
+      const payload = event.payload;
+      if (!chatScopeId || payload.chatId !== chatScopeId) return;
+      setActiveSessionBinding((current) => {
+        if (!current) return null;
+        if (payload.runId && current.runId && payload.runId !== current.runId) {
+          return current;
+        }
+        return null;
+      });
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlisteners.push(fn);
+    });
+
+    return () => {
+      cancelled = true;
+      unlisteners.forEach((fn) => fn());
+    };
+  }, [chatScopeId]);
+
   const refreshChatSession = useCallback(
     async (scopeOverride?: string) => {
       try {
@@ -695,18 +818,18 @@ export function useAgentChat(
   );
 
   useEffect(() => {
-    const runId = remoteSessionBinding?.runId ?? null;
-    const previousRunId = remoteRunIdRef.current;
-    remoteRunIdRef.current = runId;
+    const runId = activeSessionBinding?.runId ?? null;
+    const previousRunId = sessionRunIdRef.current;
+    sessionRunIdRef.current = runId;
 
     if (previousRunId !== runId) {
-      remoteRunMessageIdRef.current = null;
-      remoteToolCallIndexRef.current.clear();
+      sessionRunMessageIdRef.current = null;
+      sessionToolCallIndexRef.current.clear();
     }
 
     if (!runId) {
-      remoteRunMessageIdRef.current = null;
-      remoteToolCallIndexRef.current.clear();
+      sessionRunMessageIdRef.current = null;
+      sessionToolCallIndexRef.current.clear();
       return;
     }
 
@@ -718,16 +841,16 @@ export function useAgentChat(
       (message) => message.requestContext?.runId === runId,
     );
     if (existing) {
-      remoteRunMessageIdRef.current = existing.id;
+      sessionRunMessageIdRef.current = existing.id;
       return;
     }
 
-    if (!remoteRunMessageIdRef.current) {
-      remoteRunMessageIdRef.current = crypto.randomUUID();
+    if (!sessionRunMessageIdRef.current) {
+      sessionRunMessageIdRef.current = crypto.randomUUID();
     }
 
-    const placeholderId = remoteRunMessageIdRef.current;
-    remoteToolCallIndexRef.current = new Map();
+    const placeholderId = sessionRunMessageIdRef.current;
+    sessionToolCallIndexRef.current = new Map();
     setMessages((prev) => {
       if (
         prev.some(
@@ -739,13 +862,18 @@ export function useAgentChat(
         return prev;
       }
 
+      const sessionLabel =
+        activeSessionBinding?.source === "native_modal"
+          ? "Quick Delegate"
+          : activeSessionBinding?.source === "remote"
+            ? "Remote session"
+            : "Background run";
       const placeholder: AgentMessage = {
         id: placeholderId,
         type: "agent",
-        content:
-          remoteSessionBinding?.workspaceName?.trim().length
-            ? `Remote session running in ${remoteSessionBinding.workspaceName}.`
-            : "Remote session running.",
+        content: activeSessionBinding?.workspaceName?.trim().length
+          ? `${sessionLabel} running in ${activeSessionBinding.workspaceName}.`
+          : `${sessionLabel} running.`,
         isLoading: true,
         timestamp: new Date(),
         neuralState: "thinking",
@@ -753,14 +881,14 @@ export function useAgentChat(
         requestContext: {
           runId,
           workspaceId:
-            remoteSessionBinding?.workspacePath || remoteSessionBinding?.workspaceId,
-          chatScopeId: remoteSessionBinding?.chatId || chatScopeId || undefined,
+            activeSessionBinding?.workspacePath || activeSessionBinding?.workspaceId,
+          chatScopeId: activeSessionBinding?.chatId || chatScopeId || undefined,
           startedAtMs: Date.now(),
         },
         trace: [
           createTraceEntry(
             "think",
-            "Remote session bound. Streaming live updates.",
+            `${sessionLabel} bound. Streaming live updates.`,
           ),
         ],
       };
@@ -770,14 +898,11 @@ export function useAgentChat(
 
     void onSessionChanged?.();
   }, [
+    activeSessionBinding,
     chatScopeId,
     createTraceEntry,
     isHydratingHistory,
     onSessionChanged,
-    remoteSessionBinding?.chatId,
-    remoteSessionBinding?.runId,
-    remoteSessionBinding?.workspaceId,
-    remoteSessionBinding?.workspaceName,
   ]);
 
   const clearMessagesAndContext = useCallback(async (chatId: string) => {
@@ -792,14 +917,14 @@ export function useAgentChat(
   }, [chatScopeId, refreshChatSession]);
 
   useEffect(() => {
-    const runId = remoteSessionBinding?.runId ?? null;
+    const runId = activeSessionBinding?.runId ?? null;
     if (!runId) {
-      remoteRunMessageIdRef.current = null;
-      remoteToolCallIndexRef.current.clear();
+      sessionRunMessageIdRef.current = null;
+      sessionToolCallIndexRef.current.clear();
       return;
     }
 
-    remoteToolCallIndexRef.current = new Map();
+    sessionToolCallIndexRef.current = new Map();
 
     let cancelled = false;
     let unlisten: (() => void) | null = null;
@@ -808,17 +933,17 @@ export function useAgentChat(
 
     const flushRuntimeEvents = () => {
       runtimeEventFrame = null;
-      if (!remoteRunMessageIdRef.current || !queuedRuntimeEvents.length) return;
+      if (!sessionRunMessageIdRef.current || !queuedRuntimeEvents.length) return;
       const batch = queuedRuntimeEvents;
       queuedRuntimeEvents = [];
       setMessages((prev) =>
-        updateMessageById(prev, remoteRunMessageIdRef.current as string, (message) =>
+        updateMessageById(prev, sessionRunMessageIdRef.current as string, (message) =>
           batch.reduce(
             (current, payload) =>
               applyRuntimeEventToMessage(
                 current,
                 payload,
-                remoteToolCallIndexRef.current,
+                sessionToolCallIndexRef.current,
               ),
             message,
           ),
@@ -835,7 +960,7 @@ export function useAgentChat(
     void listen<RuntimeAgentEvent>("agent://event", (event) => {
       if (cancelled) return;
       if (event.payload?.runId && event.payload.runId !== runId) return;
-      if (!remoteRunMessageIdRef.current) return;
+      if (!sessionRunMessageIdRef.current) return;
       scheduleRuntimeEvent(event.payload);
     }).then((fn) => {
       if (cancelled) {
@@ -852,10 +977,10 @@ export function useAgentChat(
         window.cancelAnimationFrame(runtimeEventFrame);
       }
     };
-  }, [applyRuntimeEventToMessage, remoteSessionBinding?.runId]);
+  }, [activeSessionBinding?.runId, applyRuntimeEventToMessage]);
 
   useEffect(() => {
-    const runId = remoteSessionBinding?.runId ?? null;
+    const runId = activeSessionBinding?.runId ?? null;
     if (!runId) return;
 
     let cancelled = false;
@@ -870,14 +995,13 @@ export function useAgentChat(
     }>("session://finished", (event) => {
       if (cancelled) return;
       const payload = event.payload;
-      if (payload.source && payload.source !== "remote") return;
 
       const matchesRun = payload.runId ? payload.runId === runId : false;
       const matchesChat =
-        remoteSessionBinding?.chatId && payload.chatId === remoteSessionBinding.chatId;
+        activeSessionBinding?.chatId && payload.chatId === activeSessionBinding.chatId;
       if (!matchesRun && !matchesChat) return;
 
-      const messageId = remoteRunMessageIdRef.current;
+      const messageId = sessionRunMessageIdRef.current;
       if (!messageId) return;
 
       setMessages((prev) =>
@@ -889,7 +1013,7 @@ export function useAgentChat(
           activeToolName: undefined,
           trace: [
             ...(message.trace || []),
-            createTraceEntry("done", "Remote session finished."),
+            createTraceEntry("done", "Background session finished."),
           ],
         })),
       );
@@ -905,7 +1029,7 @@ export function useAgentChat(
       cancelled = true;
       unlisten?.();
     };
-  }, [createTraceEntry, remoteSessionBinding?.chatId, remoteSessionBinding?.runId]);
+  }, [activeSessionBinding?.chatId, activeSessionBinding?.runId, createTraceEntry]);
 
   const hydrateLongChatHistory = useCallback(async () => {
     if (isHydratingRef.current || hasHydratedRef.current) return;
@@ -1947,6 +2071,7 @@ export function useAgentChat(
                 statusLower.includes("failed") ||
                 statusLower.includes("exception");
               const isCancelled =
+                statusLower.includes("execution cancelled") ||
                 statusLower.includes("terminated by fleet kill switch") ||
                 statusLower.includes("terminated by user") ||
                 statusLower.includes("cancelled by user");
@@ -2081,12 +2206,15 @@ export function useAgentChat(
         };
       } catch (err: any) {
         console.error("Native agent error:", err);
+        const cancelled = isCancellationError(err);
         setMessages((prev) =>
           updateMessageById(prev, agentMsgId, (message) => ({
             ...message,
-            content: `❌ Agent Runtime Error: ${err.message || err}`,
+            content: cancelled
+              ? "Execution cancelled."
+              : `❌ Agent Runtime Error: ${err.message || err}`,
             isLoading: false,
-            runState: "failed",
+            runState: cancelled ? "cancelled" : "failed",
             requestContext: {
               ...message.requestContext,
               completedAtMs: Date.now(),
@@ -2094,9 +2222,11 @@ export function useAgentChat(
             trace: [
               ...(message.trace || []),
               createTraceEntry(
-                "error",
-                "Agent runtime failed.",
-                { preview: String(err?.message || err) },
+                cancelled ? "cancelled" : "error",
+                cancelled ? "Execution cancelled." : "Agent runtime failed.",
+                {
+                  preview: cancelled ? undefined : String(err?.message || err),
+                },
               ),
             ],
             neuralState: undefined,
@@ -2108,7 +2238,7 @@ export function useAgentChat(
         return {
           ok: false,
           chatScopeId: resolvedChatScopeId,
-          error: String(err?.message || err),
+          error: cancelled ? "Execution cancelled." : String(err?.message || err),
           actualToolIds: [],
           actualTouchedPaths: [],
           producedArtifactPaths: [],
@@ -2169,6 +2299,41 @@ export function useAgentChat(
     }
   }, [createTraceEntry]);
 
+  const stopAgentRunByRunId = useCallback(async (runId: string) => {
+    if (!runId) return;
+
+    const target = messagesRef.current.find((message) => (
+      message.type === "agent" && message.requestContext?.runId === runId
+    ));
+
+    try {
+      const res = await tauri.cancelAgentRun(runId);
+      if (!target?.id) {
+        return;
+      }
+
+      setMessages((prev) =>
+        updateMessageById(prev, target.id, (message) => ({
+          ...message,
+          isLoading: res.status === "cancelled" ? false : message.isLoading,
+          neuralState: res.status === "cancelled" ? undefined : message.neuralState,
+          runState: res.status === "cancelled" ? "cancelled" : message.runState,
+          trace: [
+            ...(message.trace || []),
+            createTraceEntry(
+              res.status === "cancelled" ? "cancelled" : "error",
+              res.status === "cancelled"
+                ? "Cancellation requested by user."
+                : "Run already finished.",
+            ),
+          ],
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to cancel run", error);
+    }
+  }, [createTraceEntry]);
+
   const retryAgentRun = useCallback(async (messageId: string) => {
     const target = messagesRef.current.find((m) => m.id === messageId);
     if (!target?.requestContext?.prompt) return;
@@ -2187,6 +2352,7 @@ export function useAgentChat(
     chatScopeId,
     chatSession,
     chatTitleStatus,
+    activeSessionBinding,
     isPlanning,
     isExecuting,
     currentPlan,
@@ -2201,6 +2367,7 @@ export function useAgentChat(
     refreshActiveChat,
     runNativeAgent,
     stopAgentRun,
+    stopAgentRunByRunId,
     retryAgentRun,
     refreshChatSession,
     hydrateLongChatHistory,

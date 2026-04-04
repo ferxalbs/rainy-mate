@@ -71,6 +71,7 @@ function App() {
     sessionsByWorkspace,
     activeChatId,
     activeRunChatIds,
+    activeSessionsByChatId,
     createNewChat,
     switchToChat,
     deleteChat,
@@ -202,6 +203,46 @@ function App() {
   const settingsTab = isSettingsSection
     ? activeSection.replace("settings-", "")
     : "models";
+
+  const activeSessionBinding = useMemo(() => {
+    if (!activeChatId) {
+      return null;
+    }
+
+    const activeSession = activeSessionsByChatId[activeChatId];
+    if (!activeSession) {
+      return null;
+    }
+
+    const remoteDetailsMatch = remoteSessionBinding &&
+      remoteSessionBinding.chatId === activeSession.chatId &&
+      remoteSessionBinding.runId === activeSession.runId;
+
+    return {
+      workspaceId: remoteDetailsMatch
+        ? remoteSessionBinding.workspaceId
+        : activeSession.workspaceId,
+      workspacePath: remoteDetailsMatch
+        ? remoteSessionBinding.workspacePath
+        : activeSession.workspaceId,
+      workspaceName: remoteDetailsMatch
+        ? remoteSessionBinding.workspaceName
+        : undefined,
+      chatId: activeSession.chatId,
+      runId: activeSession.runId,
+      source: activeSession.source,
+      connectorId: remoteDetailsMatch
+        ? remoteSessionBinding.connectorId
+        : activeSession.connectorId,
+      sessionPeer: remoteDetailsMatch
+        ? remoteSessionBinding.sessionPeer
+        : undefined,
+      autoImportWorkspace: remoteDetailsMatch
+        ? remoteSessionBinding.autoImportWorkspace
+        : undefined,
+      elapsedSecs: activeSession.elapsedSecs,
+    } satisfies tauri.ActiveChatRunBinding;
+  }, [activeChatId, activeSessionsByChatId, remoteSessionBinding]);
 
   useEffect(() => {
     let cancelled = false;
@@ -469,7 +510,7 @@ function App() {
                   onAddWorkspace={addFolder}
                   onOpenSettings={handleSettingsClick}
                   chatScopeId={activeChatId}
-                  remoteSessionBinding={remoteSessionBinding}
+                  activeSessionBinding={activeSessionBinding}
                   pendingLaunch={pendingWorkspaceLaunch}
                   onPendingLaunchConsumed={(requestId) => {
                     if (consumedLaunchRequestIdsRef.current.has(requestId)) {

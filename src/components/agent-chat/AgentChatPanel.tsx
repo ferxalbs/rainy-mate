@@ -3,9 +3,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Eraser, FileText, Gamepad2, Sparkles } from "lucide-react";
 
 import * as tauri from "../../services/tauri";
-import type { RemoteSessionBinding } from "../../services/tauri";
 import { cn } from "../../lib/utils";
 import { useAgentChat } from "../../hooks/useAgentChat";
+import { useActiveChatRunState } from "../../hooks/agent-chat/useActiveChatRunState";
 import type { Folder } from "../../types";
 import type { ChatAttachment } from "../../types/agent";
 import type { AgentSpec } from "../../types/agent-spec";
@@ -30,7 +30,7 @@ interface AgentChatPanelProps {
 
   // Multi-chat props
   chatScopeId?: string | null;
-  remoteSessionBinding?: RemoteSessionBinding | null;
+  activeSessionBinding?: tauri.ActiveChatRunBinding | null;
   pendingLaunch?: {
     requestId: string;
     prompt: string;
@@ -204,7 +204,7 @@ export function AgentChatPanel({
   onOpenSettings,
   className,
   chatScopeId: externalChatScopeId,
-  remoteSessionBinding,
+  activeSessionBinding: propActiveSessionBinding,
   pendingLaunch,
   onPendingLaunchConsumed,
   onPendingLaunchCompleted,
@@ -227,13 +227,13 @@ export function AgentChatPanel({
     messages,
     chatSession,
     chatTitleStatus,
-    isPlanning,
-    isExecuting,
+    activeSessionBinding,
     currentPlan,
     executePlan,
     executeToolCalls,
     runNativeAgent,
     stopAgentRun,
+    stopAgentRunByRunId,
     retryAgentRun,
     clearMessagesAndContext,
     refreshActiveChat,
@@ -242,9 +242,37 @@ export function AgentChatPanel({
     isHydratingHistory,
     // @RESERVED — will be used for in-panel chat tab switching
     switchChat: _switchChat,
-  } = useAgentChat(externalChatScopeId, _onRefreshSessions, remoteSessionBinding);
+  } = useAgentChat(
+    externalChatScopeId,
+    _onRefreshSessions,
+    propActiveSessionBinding,
+  );
 
-  const isProcessing = isPlanning || isExecuting;
+  const { activeChatRun } = useActiveChatRunState(externalChatScopeId);
+  const resolvedActiveChatRun = activeSessionBinding ?? activeChatRun;
+  const activeRunningMessage = useMemo(
+    () =>
+      [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.type === "agent" &&
+            message.runState === "running" &&
+            (!resolvedActiveChatRun?.runId ||
+              message.requestContext?.runId === resolvedActiveChatRun.runId),
+        ) ??
+      [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.type === "agent" && message.runState === "running",
+        ) ??
+      null,
+    [messages, resolvedActiveChatRun?.runId],
+  );
+  const hasCurrentThreadRun = Boolean(resolvedActiveChatRun || activeRunningMessage);
+  const inputDisabled = isHydratingHistory;
+  const submitDisabled = hasCurrentThreadRun || isHydratingHistory;
   const reasoningOptions = useMemo(() => getReasoningOptions(selectedModel), [selectedModel]);
   const stableReasoningOptions = reasoningOptions.length > 0 ? reasoningOptions : EMPTY_REASONING;
 
@@ -390,7 +418,7 @@ export function AgentChatPanel({
 
   const handleSubmit = useCallback(async () => {
     const instruction = input.trim();
-    if ((!instruction && pendingAttachments.length === 0) || isProcessing) return;
+    if ((!instruction && pendingAttachments.length === 0) || submitDisabled) return;
 
     const activeModelId = await resolveActiveModelId();
     if (!activeModelId) {
@@ -409,7 +437,7 @@ export function AgentChatPanel({
       stableReasoningOptions.length ? reasoningEffort : undefined,
       attachmentsToSend.length ? attachmentsToSend : undefined,
     );
-  }, [input, isProcessing, pendingAttachments, reasoningEffort, resolveActiveModelId, runNativeAgent, selectedAgentId, stableReasoningOptions, workspacePath]);
+  }, [input, pendingAttachments, reasoningEffort, resolveActiveModelId, runNativeAgent, selectedAgentId, stableReasoningOptions, submitDisabled, workspacePath]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -433,6 +461,16 @@ export function AgentChatPanel({
   const handleComposerSubmit = useCallback(() => {
     void handleSubmit();
   }, [handleSubmit]);
+
+  const handleStopActiveRun = useCallback(() => {
+    if (resolvedActiveChatRun?.runId) {
+      void stopAgentRunByRunId(resolvedActiveChatRun.runId);
+      return;
+    }
+    if (activeRunningMessage) {
+      void stopAgentRun(activeRunningMessage.id);
+    }
+  }, [activeRunningMessage, resolvedActiveChatRun?.runId, stopAgentRun, stopAgentRunByRunId]);
 
   useEffect(() => {
     if (!pendingLaunch) return;
@@ -541,7 +579,6 @@ export function AgentChatPanel({
         defaultPrompt={schedulePromptSeed}
         onClose={() => setScheduleDialogOpen(false)}
       />
-
       {!hasMessages ? (
         <div className="absolute inset-0 z-10 h-full w-full overflow-y-auto">
           <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-4 pb-12 pt-16 md:px-6">
@@ -578,7 +615,12 @@ export function AgentChatPanel({
                 onInputChange={setInput}
                 onKeyDown={handleKeyDown}
                 onSubmit={handleComposerSubmit}
-                disabled={isProcessing}
+                inputDisabled={inputDisabled}
+                submitDisabled={submitDisabled}
+                stopDisabled={!hasCurrentThreadRun}
+                showStopButton={hasCurrentThreadRun}
+                onStop={handleStopActiveRun}
+                submitLabel={hasCurrentThreadRun ? "Stop active run" : "Send message"}
                 textareaRef={textareaRef}
                 currentModelId={currentModelId}
                 onSelectModel={handleModelSelect}
@@ -609,7 +651,7 @@ export function AgentChatPanel({
             <MemoizedMessageBubble
               message={message}
               currentPlan={currentPlan}
-              isExecuting={isExecuting}
+              isExecuting={hasCurrentThreadRun}
               onExecute={executePlan}
               onExecuteToolCalls={executeToolCalls}
               onStopRun={stopAgentRun}
@@ -628,7 +670,12 @@ export function AgentChatPanel({
               onInputChange={setInput}
               onKeyDown={handleKeyDown}
               onSubmit={handleComposerSubmit}
-              disabled={isProcessing}
+              inputDisabled={inputDisabled}
+              submitDisabled={submitDisabled}
+              stopDisabled={!hasCurrentThreadRun}
+              showStopButton={hasCurrentThreadRun}
+              onStop={handleStopActiveRun}
+              submitLabel={hasCurrentThreadRun ? "Stop active run" : "Send message"}
               textareaRef={textareaRef}
               currentModelId={currentModelId}
               onSelectModel={handleModelSelect}

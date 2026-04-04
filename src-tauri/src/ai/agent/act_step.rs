@@ -4,6 +4,7 @@ use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::runtime::{AgentContent, AgentMessage};
 use crate::ai::agent::workflow::{
     is_tool_allowed_by_spec, truncate_to_max_bytes, AgentState, StepResult, WorkflowStep,
+    CANCELLED_RUN_MESSAGE,
 };
 use crate::ai::specs::manifest::AgentSpec;
 use crate::models::neural::{
@@ -93,10 +94,8 @@ impl WorkflowStep for ActStep {
                 .as_ref()
                 .is_some_and(|switch| switch.is_triggered())
             {
-                on_event(AgentEvent::Status(
-                    "Execution terminated by fleet kill switch".to_string(),
-                ));
-                break;
+                on_event(AgentEvent::Status(CANCELLED_RUN_MESSAGE.to_string()));
+                return Err(CANCELLED_RUN_MESSAGE.to_string());
             }
 
             let function_name = call.function.name.clone();
@@ -278,6 +277,15 @@ impl WorkflowStep for ActStep {
             let mut final_output = String::new();
 
             while attempts <= effective_max_retries {
+                if state
+                    .kill_switch
+                    .as_ref()
+                    .is_some_and(|switch| switch.is_triggered())
+                {
+                    on_event(AgentEvent::Status(CANCELLED_RUN_MESSAGE.to_string()));
+                    return Err(CANCELLED_RUN_MESSAGE.to_string());
+                }
+
                 let result = skills.execute(&command).await;
 
                 if result.success {

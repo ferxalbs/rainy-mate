@@ -16,6 +16,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 const MAX_MODEL_MESSAGE_BYTES: usize = 95 * 1024;
+pub const CANCELLED_RUN_MESSAGE: &str = "Execution cancelled.";
 pub const FILESYSTEM_TOOL_NAMES: &[&str] = &[
     "read_file",
     "read_many_files",
@@ -166,18 +167,8 @@ impl Workflow {
                 .as_ref()
                 .is_some_and(|switch| switch.is_triggered())
             {
-                on_event(AgentEvent::Status(
-                    "Execution terminated by fleet kill switch".to_string(),
-                ));
-                state.messages.push(AgentMessage {
-                    role: "assistant".to_string(),
-                    content: AgentContent::text(
-                        "Execution was terminated by Fleet Kill Switch. Partial progress has been preserved.",
-                    ),
-                    tool_calls: None,
-                    tool_call_id: None,
-                });
-                return Ok(state);
+                on_event(AgentEvent::Status(CANCELLED_RUN_MESSAGE.to_string()));
+                return Err(CANCELLED_RUN_MESSAGE.to_string());
             }
 
             if steps_count >= max_steps {

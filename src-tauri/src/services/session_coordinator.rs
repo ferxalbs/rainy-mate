@@ -58,6 +58,52 @@ impl SessionCoordinator {
         }
     }
 
+    fn emit_session_started(
+        &self,
+        chat_id: &str,
+        run_id: &str,
+        workspace_id: &str,
+        source: &str,
+        connector_id: Option<&str>,
+        session_peer: Option<&str>,
+        auto_import_workspace: bool,
+    ) {
+        let _ = self.app_handle.emit(
+            "session://started",
+            serde_json::json!({
+                "chatId": chat_id,
+                "runId": run_id,
+                "workspaceId": workspace_id,
+                "workspacePath": workspace_id,
+                "source": source,
+                "connectorId": connector_id,
+                "sessionPeer": session_peer,
+                "autoImportWorkspace": auto_import_workspace,
+            }),
+        );
+    }
+
+    fn emit_session_finished(
+        &self,
+        chat_id: &str,
+        run_id: &str,
+        workspace_id: &str,
+        source: &str,
+        connector_id: Option<&str>,
+    ) {
+        let _ = self.app_handle.emit(
+            "session://finished",
+            serde_json::json!({
+                "chatId": chat_id,
+                "runId": run_id,
+                "workspaceId": workspace_id,
+                "workspacePath": workspace_id,
+                "source": source,
+                "connectorId": connector_id,
+            }),
+        );
+    }
+
     /// Create/reuse chat session, save user message, emit `session://started`.
     /// Returns `(chat_id, run_id)`.
     pub async fn start_remote_session(
@@ -112,18 +158,14 @@ impl SessionCoordinator {
             );
         }
 
-        let _ = self.app_handle.emit(
-            "session://started",
-            serde_json::json!({
-                "chatId": chat_id,
-                "runId": run_id,
-                "workspaceId": workspace_id,
-                "workspacePath": workspace_id,
-                "source": "remote",
-                "connectorId": connector_id,
-                "sessionPeer": session_peer,
-                "autoImportWorkspace": true,
-            }),
+        self.emit_session_started(
+            &chat_id,
+            &run_id,
+            workspace_id,
+            "remote",
+            Some(connector_id),
+            Some(session_peer),
+            true,
         );
 
         Ok((chat_id, run_id))
@@ -168,18 +210,14 @@ impl SessionCoordinator {
             );
         }
 
-        let _ = self.app_handle.emit(
-            "session://started",
-            serde_json::json!({
-                "chatId": chat_id,
-                "runId": run_id,
-                "workspaceId": workspace_id,
-                "workspacePath": workspace_id,
-                "source": "native_modal",
-                "connectorId": serde_json::Value::Null,
-                "sessionPeer": serde_json::Value::Null,
-                "autoImportWorkspace": false,
-            }),
+        self.emit_session_started(
+            &chat_id,
+            &run_id,
+            workspace_id,
+            "native_modal",
+            None,
+            None,
+            false,
         );
 
         Ok((chat_id, run_id))
@@ -225,21 +263,24 @@ impl SessionCoordinator {
             }
         }
 
-        let (run_id, workspace_id) = self
+        let (run_id, workspace_id, connector_id) = self
             .active_sessions
             .remove(chat_id)
-            .map(|(_, s)| (s.run_id, s.workspace_id))
+            .map(|(_, s)| {
+                let connector_id = match s.source {
+                    SessionSource::Remote { connector_id, .. } => Some(connector_id),
+                    _ => None,
+                };
+                (s.run_id, s.workspace_id, connector_id)
+            })
             .unwrap_or_default();
 
-        let _ = self.app_handle.emit(
-            "session://finished",
-            serde_json::json!({
-                "chatId": chat_id,
-                "runId": run_id,
-                "workspaceId": workspace_id,
-                "workspacePath": workspace_id,
-                "source": "remote",
-            }),
+        self.emit_session_finished(
+            chat_id,
+            &run_id,
+            &workspace_id,
+            "remote",
+            connector_id.as_deref(),
         );
 
         Ok(())
@@ -259,34 +300,61 @@ impl SessionCoordinator {
     /// Register a local session so it appears in `list_active_sessions`.
     pub fn register_local(&self, chat_id: String, run_id: String, workspace_id: String) {
         self.active_sessions.insert(
-            chat_id,
+            chat_id.clone(),
             ActiveSession {
                 source: SessionSource::Local,
                 started_at: Instant::now(),
-                run_id,
-                workspace_id,
+                run_id: run_id.clone(),
+                workspace_id: workspace_id.clone(),
             },
         );
+        self.emit_session_started(
+            &chat_id,
+            &run_id,
+            &workspace_id,
+            "local",
+            None,
+            None,
+            false,
+        );
+    }
+
+    /// Finish a local session and emit `session://finished`.
+    pub fn finish_local_session(&self, chat_id: &str) {
+        let (run_id, workspace_id) = self
+            .active_sessions
+            .remove(chat_id)
+            .map(|(_, s)| (s.run_id, s.workspace_id))
+            .unwrap_or_default();
+        self.emit_session_finished(chat_id, &run_id, &workspace_id, "local", None);
+    }
+
+    /// Abort a local session and emit `session://finished`.
+    pub fn abort_local_session(&self, chat_id: &str) {
+        self.finish_local_session(chat_id);
     }
 
     /// Unregister a session (local or remote) and emit `session://finished` so the
     /// frontend clears its active-run indicator. Use this on error paths where
     /// `finish_remote_session` is not called.
     pub fn abort_session(&self, chat_id: &str) {
-        let (run_id, workspace_id) = self
+        let (run_id, workspace_id, connector_id) = self
             .active_sessions
             .remove(chat_id)
-            .map(|(_, s)| (s.run_id, s.workspace_id))
+            .map(|(_, s)| {
+                let connector_id = match s.source {
+                    SessionSource::Remote { connector_id, .. } => Some(connector_id),
+                    _ => None,
+                };
+                (s.run_id, s.workspace_id, connector_id)
+            })
             .unwrap_or_default();
-        let _ = self.app_handle.emit(
-            "session://finished",
-            serde_json::json!({
-                "chatId": chat_id,
-                "runId": run_id,
-                "workspaceId": workspace_id,
-                "workspacePath": workspace_id,
-                "source": "remote",
-            }),
+        self.emit_session_finished(
+            chat_id,
+            &run_id,
+            &workspace_id,
+            "remote",
+            connector_id.as_deref(),
         );
     }
 
