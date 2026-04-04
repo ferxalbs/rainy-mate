@@ -17,11 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/types/beam.ts`, `src/services/tauri.ts` — TypeScript types and 8 `invoke()` wrappers for all Beam commands
   - `src/components/workspace/BeamChainCard.tsx`, `src/components/workspace/WorkspaceLaunchpad.tsx` — Blockchain section in the Launchpad with a network selector (Mainnet / Testnet), connection status, Secure Local Signing Bridge panel, wallet list, and create-wallet button
   - `src/components/agent-chat/neural-config.ts` — neural state mappings and display names for all 8 Beam tools
+- **Beam Templates Library + Intelligent One-Click Deploy Engine** — MaTE Launchpad can now scaffold Beam-ready Solidity templates, preserve Beam-specific workspace memory overlay context, compile locally without Forge, estimate contract-creation gas against Beam RPC, and route deployment broadcasts through a two-step confirmation flow (Launchpad review + L2 Airlock approval):
+  - `src-tauri/src/services/beam_templates.rs` — new `BeamTemplateService` for template discovery, manifest loading, workspace scaffolding, Beam-specific `MEMORY.md` / `GUARDRAILS.md` seeding, local `solcjs` compilation, deployment-plan construction, and guarded broadcast orchestration
+  - `src-tauri/src/services/beam_rpc.rs` — extended transaction model to support contract-creation transactions (`to = null`), contract-deploy gas estimation, and post-broadcast receipt polling with contract address / gas-used capture
+  - `src-tauri/src/commands/beam.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/services/mod.rs` — added Beam template commands (`list_beam_templates`, `get_beam_template`, `scaffold_beam_template`, `prepare_beam_template_deployment`, `deploy_beam_template`) and registered `BeamTemplateService` in the desktop runtime
+  - `src-tauri/src/services/mate_launchpad.rs` — added the `beam_deployer` Launchpad pack and `beam_deploy` governed scenario so Beam deployments inherit the existing execution-contract, approval, and evidence-ledger model
+  - `src/components/workspace/BeamDeployCard.tsx`, `src/components/workspace/WorkspaceLaunchpad.tsx` — added the Launchpad Beam deploy surface with template selection, Solidity preview, local wallet selection, compile-and-estimate preflight, transaction review modal, and one-click handoff into Airlock approval
+  - `src/services/tauri.ts`, `src/types/beam.ts` — added typed desktop bindings and frontend data models for Beam templates, deployment plans, compilation artifacts, and deployment receipts
+  - `templates/beam/` — added five ready-made Beam templates (`simple-erc20`, `nft-collection`, `basic-game`, `ai-oracle`, `mini-indexer`), each with `Main.sol`, Beam-specific `MEMORY.md`, and Beam-specific `GUARDRAILS.md`
 
 ### Validation
 
 - `cd src-tauri && cargo check -q` → pass
 - `cd src-tauri && cargo test beam_rpc -- --nocapture` → 16/16 pass
+- `pnpm exec tsc --noEmit` → pass
+- `cd src-tauri && cargo fmt` → pass
+- `cd src-tauri && cargo check -q` → pass
 - `pnpm exec tsc --noEmit` → pass
 
 ## [0.6.5] - 2026-04-01 - MATE REBORN: DEFINITIVE DEVELOPER COCKPIT

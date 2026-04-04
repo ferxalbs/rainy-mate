@@ -1,10 +1,10 @@
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+
 #[cfg(target_os = "macos")]
 fn compile_swift_bridge(module_name: &str, swift_file: &str, extra_frameworks: &[&str]) {
-    use std::env;
-    use std::fs;
-    use std::path::PathBuf;
-    use std::process::Command;
-
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR missing"));
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir missing"));
     let swift_src = manifest_dir.join("macos").join(swift_file);
@@ -94,7 +94,145 @@ fn compile_swift_bridge(module_name: &str, swift_file: &str, extra_frameworks: &
         .expect("failed to copy whale icon to Frameworks dir");
 }
 
+#[derive(Clone, Copy)]
+struct BeamTemplateBuildSpec {
+    id: &'static str,
+    contract_name: &'static str,
+    source_rel_path: &'static str,
+}
+
+const BEAM_TEMPLATE_SPECS: &[BeamTemplateBuildSpec] = &[
+    BeamTemplateBuildSpec {
+        id: "simple-erc20",
+        contract_name: "BeamArcToken",
+        source_rel_path: "../templates/beam/simple-erc20/Main.sol",
+    },
+    BeamTemplateBuildSpec {
+        id: "nft-collection",
+        contract_name: "BeamCollection",
+        source_rel_path: "../templates/beam/nft-collection/Main.sol",
+    },
+    BeamTemplateBuildSpec {
+        id: "basic-game",
+        contract_name: "BeamArcadeArena",
+        source_rel_path: "../templates/beam/basic-game/Main.sol",
+    },
+    BeamTemplateBuildSpec {
+        id: "ai-oracle",
+        contract_name: "BeamAiOracle",
+        source_rel_path: "../templates/beam/ai-oracle/Main.sol",
+    },
+    BeamTemplateBuildSpec {
+        id: "mini-indexer",
+        contract_name: "BeamMiniIndexer",
+        source_rel_path: "../templates/beam/mini-indexer/Main.sol",
+    },
+];
+
+fn compile_beam_templates() {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir missing"));
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR missing"));
+    let repo_root = manifest_dir
+        .parent()
+        .expect("failed to resolve repo root")
+        .to_path_buf();
+    let solc_entry = repo_root
+        .join("node_modules")
+        .join(".pnpm")
+        .join("solc@0.8.34")
+        .join("node_modules")
+        .join("solc")
+        .join("solc.js");
+
+    println!("cargo:rerun-if-changed={}", solc_entry.display());
+    for spec in BEAM_TEMPLATE_SPECS {
+        let source_path = manifest_dir.join(spec.source_rel_path);
+        println!("cargo:rerun-if-changed={}", source_path.display());
+    }
+
+    if !solc_entry.is_file() {
+        panic!(
+            "Beam template build requires solc-js at {}. Run `pnpm install` before Cargo build.",
+            solc_entry.display()
+        );
+    }
+
+    let build_dir = out_dir.join("beam-template-artifacts");
+    fs::create_dir_all(&build_dir).expect("failed to create beam artifact dir");
+
+    let mut generated = String::from(
+        "pub struct PrecompiledBeamTemplateArtifact {\n    pub id: &'static str,\n    pub contract_name: &'static str,\n    pub abi_json: &'static str,\n    pub bytecode: &'static str,\n    pub compiler_version: &'static str,\n}\n\npub const PRECOMPILED_BEAM_TEMPLATE_ARTIFACTS: &[PrecompiledBeamTemplateArtifact] = &[\n",
+    );
+
+    for spec in BEAM_TEMPLATE_SPECS {
+        let source_path = manifest_dir.join(spec.source_rel_path);
+        let template_out = build_dir.join(spec.id);
+        fs::create_dir_all(&template_out).expect("failed to create template build dir");
+
+        let status = Command::new("node")
+            .arg(&solc_entry)
+            .args([
+                "--abi",
+                "--bin",
+                "--optimize",
+                "--optimize-runs",
+                "200",
+                "-o",
+            ])
+            .arg(&template_out)
+            .arg(&source_path)
+            .status()
+            .expect("failed to execute solcjs during build");
+
+        if !status.success() {
+            panic!("solcjs failed while compiling {}", spec.id);
+        }
+
+        let abi_path = find_solc_output(&template_out, spec.contract_name, "abi");
+        let bin_path = find_solc_output(&template_out, spec.contract_name, "bin");
+        let abi_json = fs::read_to_string(&abi_path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {}", abi_path.display(), e));
+        let bytecode = fs::read_to_string(&bin_path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {}", bin_path.display(), e));
+
+        generated.push_str("    PrecompiledBeamTemplateArtifact {\n");
+        generated.push_str(&format!("        id: {:?},\n", spec.id));
+        generated.push_str(&format!("        contract_name: {:?},\n", spec.contract_name));
+        generated.push_str(&format!("        abi_json: {:?},\n", abi_json.trim()));
+        generated.push_str(&format!("        bytecode: {:?},\n", bytecode.trim()));
+        generated.push_str("        compiler_version: \"solcjs 0.8.34\",\n");
+        generated.push_str("    },\n");
+    }
+
+    generated.push_str("];\n");
+    fs::write(out_dir.join("beam_template_artifacts.rs"), generated)
+        .expect("failed to write beam_template_artifacts.rs");
+}
+
+fn find_solc_output(dir: &PathBuf, contract_name: &str, extension: &str) -> PathBuf {
+    let suffix = format!("_{}.{}", contract_name, extension);
+    let entries = fs::read_dir(dir).unwrap_or_else(|e| {
+        panic!("failed to read solc output dir {}: {}", dir.display(), e);
+    });
+    for entry in entries {
+        let path = entry
+            .unwrap_or_else(|e| panic!("failed to inspect solc output entry: {}", e))
+            .path();
+        let file_name = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
+        if file_name.ends_with(&suffix) {
+            return path;
+        }
+    }
+    panic!(
+        "failed to find solc output matching *{} in {}",
+        suffix,
+        dir.display()
+    );
+}
+
 fn main() {
+    compile_beam_templates();
+
     #[cfg(target_os = "macos")]
     {
         compile_swift_bridge(

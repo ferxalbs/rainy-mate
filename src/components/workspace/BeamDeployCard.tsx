@@ -59,7 +59,7 @@ export function BeamDeployCard({
         setNetwork("testnet");
       }
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Failed to load Beam deploy card");
+      setError(readErrorMessage(nextError, "Failed to load Beam deploy card"));
     } finally {
       setIsLoading(false);
     }
@@ -84,7 +84,7 @@ export function BeamDeployCard({
       })
       .catch((nextError) => {
         if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : "Failed to load template");
+          setError(readErrorMessage(nextError, "Failed to load template"));
         }
       });
     return () => {
@@ -105,7 +105,7 @@ export function BeamDeployCard({
       await tauri.scaffoldBeamTemplate(workspacePath, selectedTemplateId);
       await refresh();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Failed to scaffold template");
+      setError(readErrorMessage(nextError, "Failed to scaffold template"));
     } finally {
       setIsScaffolding(false);
     }
@@ -131,7 +131,7 @@ export function BeamDeployCard({
       setReviewOpen(true);
       await onDeploymentRecorded?.();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Failed to prepare deployment");
+      setError(readErrorMessage(nextError, "Failed to prepare deployment"));
     } finally {
       setIsPreparing(false);
     }
@@ -159,7 +159,7 @@ export function BeamDeployCard({
       setReviewOpen(false);
       await onDeploymentRecorded?.();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Beam deployment failed");
+      setError(readErrorMessage(nextError, "Beam deployment failed"));
     } finally {
       setIsDeploying(false);
     }
@@ -402,6 +402,24 @@ export function BeamDeployCard({
       </Modal>
     </>
   );
+}
+
+function readErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  try {
+    const serialized = JSON.stringify(error);
+    if (serialized && serialized !== "{}") {
+      return serialized;
+    }
+  } catch {
+    // ignore serialization failure
+  }
+  return fallback;
 }
 
 function InfoBlock({
