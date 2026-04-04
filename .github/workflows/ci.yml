@@ -50,7 +50,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "v3"
+          shared-key: "v4"
           workspaces: './src-tauri -> target'
 
       - name: Build Rust
@@ -132,7 +132,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "v3"
+          shared-key: "v4"
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
