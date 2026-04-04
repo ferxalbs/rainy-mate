@@ -207,19 +207,19 @@ export function WorkspaceLaunchpad({
   }
 
   return (
-    <div className="relative h-full w-full overflow-y-auto overflow-x-hidden">
-      <div className="flex flex-col gap-8">
+    <div className="relative h-full w-full overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8">
+      <div className="flex flex-col gap-6 max-w-6xl mx-auto pb-12">
         
         {/* Header Section */}
-        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-3">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <BrainCircuit className="size-6 text-primary" />
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              <BrainCircuit className="size-5 text-primary" />
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">
                 Workspace Launchpad
               </h1>
             </div>
-            <p className="max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
+            <p className="max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
               Turn the current workspace into a production-ready MaTE operating surface with trust
               presets, first-party packs, and a guided first run.
             </p>
@@ -251,7 +251,7 @@ export function WorkspaceLaunchpad({
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2 px-1">
             <Shield className="size-4 text-primary" />
-            <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Trust Preset</h2>
+            <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Trust Preset</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {TRUST_PRESETS.map((preset) => {
@@ -262,7 +262,7 @@ export function WorkspaceLaunchpad({
                   type="button"
                   onClick={() => void handlePresetChange(preset.id)}
                   disabled={isSaving}
-                  className={`group relative overflow-hidden rounded-2xl border p-5 text-left transition-all duration-200 outline-none ${
+                  className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 outline-none ${
                     active
                       ? "border-primary/50 bg-primary/5"
                       : "border-white/5 bg-white/5 hover:border-white/10 hover:bg-white/10"
@@ -291,7 +291,7 @@ export function WorkspaceLaunchpad({
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2 px-1">
             <FolderKanban className="size-4 text-primary" />
-            <h2 className="text-[15px] font-semibold tracking-tight text-foreground">MaTE Packs</h2>
+            <h2 className="text-[14px] font-semibold tracking-tight text-foreground">MaTE Packs</h2>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             {packs.map((pack) => {
@@ -299,7 +299,7 @@ export function WorkspaceLaunchpad({
               return (
                 <div
                   key={pack.id}
-                  className={`flex flex-col gap-4 rounded-2xl border p-5 transition-colors ${
+                  className={`flex flex-col gap-4 rounded-2xl border p-4 transition-colors ${
                     enabled ? "border-primary/20 bg-primary/5" : "border-white/5 bg-white/5"
                   }`}
                 >
@@ -357,11 +357,11 @@ export function WorkspaceLaunchpad({
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2 px-1">
               <Sparkles className="size-4 text-primary" />
-              <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Guided First Run</h2>
+              <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Guided First Run</h2>
             </div>
             <div className="flex flex-col gap-4">
               {scenarios.map((scenario) => (
-                <div key={scenario.id} className="rounded-2xl border border-white/5 bg-white/5 p-5 flex flex-col gap-4">
+                <div key={scenario.id} className="rounded-2xl border border-white/5 bg-white/5 p-4 flex flex-col gap-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -416,9 +416,9 @@ export function WorkspaceLaunchpad({
           <div className="flex flex-col gap-4 h-full">
             <div className="flex items-center gap-2 px-1">
               <Shield className="size-4 text-primary" />
-              <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Capability Summary</h2>
+              <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Capability Summary</h2>
             </div>
-            <div className="rounded-2xl border border-white/5 bg-white/5 p-5 flex flex-col gap-5 h-full">
+            <div className="rounded-2xl border border-white/5 bg-white/5 p-4 flex flex-col gap-4 h-full">
               
               <div className="flex flex-wrap gap-2">
                 <div className="rounded-lg bg-primary/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
