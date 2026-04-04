@@ -1,0 +1,11 @@
+{
+  "id": "nft-collection",
+  "title": "NFT Collection",
+  "summary": "Sequential ERC721-style collection with owner minting and compact metadata hooks.",
+  "description": "A self-contained collection contract for Beam drops, game assets, and community badges.",
+  "contract_name": "BeamCollection",
+  "contract_file": "Main.sol",
+  "category": "nft",
+  "recommended_network": "testnet",
+  "tags": ["erc721", "nft", "collection", "gaming"]
+}

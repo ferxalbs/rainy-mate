@@ -41,6 +41,7 @@
     "shadcn": "^4.1.2",
     "shiki": "4.0.2",
     "sileo": "^0.1.5",
+    "solc": "^0.8.34",
     "sonner": "2.0.7",
     "tailwind-merge": "3.5.0",
     "tailwind-variants": "3.2.2",

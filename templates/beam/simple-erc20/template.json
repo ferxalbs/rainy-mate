@@ -1,0 +1,11 @@
+{
+  "id": "simple-erc20",
+  "title": "Simple ERC20",
+  "summary": "Low-friction Beam token with owner minting, bounded supply controls, and custom errors.",
+  "description": "A compact ERC20 optimized for Beam-compatible EVM deployment without external imports.",
+  "contract_name": "BeamArcToken",
+  "contract_file": "Main.sol",
+  "category": "fungible-token",
+  "recommended_network": "testnet",
+  "tags": ["erc20", "token", "mintable", "low-gas"]
+}

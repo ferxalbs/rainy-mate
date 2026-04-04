@@ -1,0 +1,11 @@
+{
+  "id": "basic-game",
+  "title": "Basic Game Contract",
+  "summary": "Arcade-friendly session score registry with rewards, compact events, and leaderboard queries.",
+  "description": "A Beam gaming starter contract for match reporting, reward pools, and replay-friendly indexed events.",
+  "contract_name": "BeamArcadeArena",
+  "contract_file": "Main.sol",
+  "category": "gaming",
+  "recommended_network": "testnet",
+  "tags": ["gaming", "leaderboard", "sessions", "beam"]
+}

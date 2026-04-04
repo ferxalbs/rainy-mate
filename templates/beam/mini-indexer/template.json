@@ -1,0 +1,11 @@
+{
+  "id": "mini-indexer",
+  "title": "Mini Indexer",
+  "summary": "Canonical event feed for offchain Beam indexers, sync checkpoints, and collection snapshots.",
+  "description": "A compact helper contract that emits normalized records and stores per-stream checkpoints for lightweight indexers.",
+  "contract_name": "BeamMiniIndexer",
+  "contract_file": "Main.sol",
+  "category": "indexing",
+  "recommended_network": "testnet",
+  "tags": ["indexer", "events", "analytics", "beam"]
+}

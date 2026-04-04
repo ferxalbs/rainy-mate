@@ -1594,7 +1594,9 @@ pub async fn run_agent_workflow_internal(
         Ok(response) => response,
         Err(error) => {
             match invocation_source {
-                WorkflowInvocationSource::Local => session_coordinator.abort_local_session(&chat_id),
+                WorkflowInvocationSource::Local => {
+                    session_coordinator.abort_local_session(&chat_id)
+                }
                 WorkflowInvocationSource::NativeModal => {
                     session_coordinator.abort_session(&chat_id)
                 }

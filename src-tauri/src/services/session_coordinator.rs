@@ -308,15 +308,7 @@ impl SessionCoordinator {
                 workspace_id: workspace_id.clone(),
             },
         );
-        self.emit_session_started(
-            &chat_id,
-            &run_id,
-            &workspace_id,
-            "local",
-            None,
-            None,
-            false,
-        );
+        self.emit_session_started(&chat_id, &run_id, &workspace_id, "local", None, None, false);
     }
 
     /// Finish a local session and emit `session://finished`.

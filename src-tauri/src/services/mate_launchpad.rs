@@ -85,6 +85,16 @@ const KNOWLEDGE_WEAVER_TOOLS: &[&str] = &[
     "excel_write",
 ];
 
+const BEAM_DEPLOYER_TOOLS: &[&str] = &[
+    "beam_rpc_connect",
+    "beam_get_wallet",
+    "beam_list_wallets",
+    "beam_estimate_gas",
+    "beam_send_transaction",
+    "write_file",
+    "append_file",
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatePackDefinition {
@@ -350,11 +360,38 @@ impl MateLaunchpadService {
                 default_trust_preset: "conservative".to_string(),
                 tool_ids: KNOWLEDGE_WEAVER_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
             },
+            MatePackDefinition {
+                id: "beam_deployer".to_string(),
+                title: "Beam Deployer".to_string(),
+                summary: "Compiles Beam-ready Solidity templates, seeds workspace guardrails, estimates gas, and deploys governed contracts through the local signing bridge.".to_string(),
+                recommended_for: "Beam smart contract launches and game-adjacent EVM workspaces".to_string(),
+                expected_outputs: vec![
+                    "Compiled ABI".to_string(),
+                    "Deployment bytecode".to_string(),
+                    "Governed transaction receipt".to_string(),
+                ],
+                default_trust_preset: "balanced".to_string(),
+                tool_ids: BEAM_DEPLOYER_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
+            },
         ]
     }
 
     pub fn first_run_scenarios() -> Vec<FirstRunScenarioDefinition> {
         vec![
+            FirstRunScenarioDefinition {
+                id: "beam_deploy".to_string(),
+                title: "Beam Deploy".to_string(),
+                summary: "Prepare a governed Beam template deployment with execution-contract evidence, transaction preview, and workspace memory updates before broadcast.".to_string(),
+                recommended_pack_ids: vec![
+                    "beam_deployer".to_string(),
+                    "knowledge_weaver".to_string(),
+                ],
+                suggested_outputs: vec![
+                    "Transaction preview".to_string(),
+                    "Compiled ABI".to_string(),
+                    "Deployment receipt".to_string(),
+                ],
+            },
             FirstRunScenarioDefinition {
                 id: "release_readiness".to_string(),
                 title: "Release Readiness".to_string(),
@@ -696,7 +733,11 @@ fn sanitize_pack_ids(ids: &[String]) -> Vec<String> {
         .filter(|value| {
             matches!(
                 value.as_str(),
-                "repo_guardian" | "workspace_forger" | "incident_scribe" | "knowledge_weaver"
+                "repo_guardian"
+                    | "workspace_forger"
+                    | "incident_scribe"
+                    | "knowledge_weaver"
+                    | "beam_deployer"
             )
         })
         .cloned()
@@ -875,6 +916,7 @@ fn build_first_run_prompt(
         "incident_brief" => "Inspect this workspace as an incident lead preparing a current production brief. Read logs, reports, changelog truth, and workspace memory. Produce: 1) the current incident narrative, 2) the strongest evidence and anomalies, 3) the most likely next checks or fixes, and 4) a compact incident brief suitable for handoff. Generate a native document artifact if the evidence supports it, and update WORKSTATE with the current status.",
         "docs_builder" => "Read the current workspace, changelog context, and any durable memory files. Produce a polished project brief suitable for a technical founder or investor. Generate a native document artifact if the workspace contents support it, and update workspace memory with the decisive summary.",
         "docs_to_artifacts" => "Read the current workspace, changelog context, and durable memory files, then turn the strongest truths into polished native deliverables. Produce: 1) a concise written brief, 2) at least one native artifact when supported by the workspace contents, and 3) an updated WORKSTATE entry describing what was generated and why it matters.",
+        "beam_deploy" => "Prepare a governed Beam template deployment. Treat the Launchpad execution contract, Beam template source, transaction preview, and workspace memory overlay as canonical. Produce a concise deployment summary, keep all artifacts inside the active workspace overlay, and only proceed to broadcast after the explicit confirmation flow is complete.",
         _ => return Err(format!("Unknown first-run scenario '{}'", scenario_id)),
     };
 
@@ -930,6 +972,10 @@ fn scenario_intent_summary(scenario_id: &str) -> String {
         }
         "docs_to_artifacts" => {
             "Convert current workspace truth into polished native deliverables inside the governed run."
+                .to_string()
+        }
+        "beam_deploy" => {
+            "Prepare and execute a governed Beam contract deployment with explicit transaction preview."
                 .to_string()
         }
         _ => "Run a governed workspace scenario inside the approved tool scope.".to_string(),

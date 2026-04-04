@@ -4,9 +4,14 @@
 //! BeamChainCard, etc.) without going through the agent/ATM pipeline.
 //! They complement the agent-accessible "evm" skill tools.
 
+use crate::commands::airlock::AirlockServiceState;
 use crate::services::beam_rpc::{
-    BeamChainConfig, BeamNetwork, BeamRpcService, BeamWorkspaceConfig, GasEstimate, SignedTransaction,
-    TransactionReceipt, TransactionRequest, WalletInfo,
+    BeamChainConfig, BeamNetwork, BeamRpcService, BeamWorkspaceConfig, GasEstimate,
+    SignedTransaction, TransactionReceipt, TransactionRequest, WalletInfo,
+};
+use crate::services::beam_templates::{
+    BeamDeploymentPlan, BeamDeploymentResult, BeamTemplateDetail, BeamTemplateScaffoldResult,
+    BeamTemplateService, BeamTemplateSummary,
 };
 use std::sync::Arc;
 use tauri::State;
@@ -96,13 +101,19 @@ pub async fn list_beam_wallets(
 pub async fn estimate_beam_gas(
     workspace_path: String,
     from: String,
-    to: String,
+    to: Option<String>,
     value: Option<String>,
     data: Option<String>,
     beam_rpc: State<'_, Arc<BeamRpcService>>,
 ) -> Result<GasEstimate, String> {
     beam_rpc
-        .estimate_gas(&workspace_path, &from, &to, value.as_deref(), data.as_deref())
+        .estimate_gas(
+            &workspace_path,
+            &from,
+            to.as_deref(),
+            value.as_deref(),
+            data.as_deref(),
+        )
         .await
 }
 
@@ -114,7 +125,7 @@ pub async fn estimate_beam_gas(
 pub async fn sign_beam_transaction(
     workspace_path: String,
     from: String,
-    to: String,
+    to: Option<String>,
     value: Option<String>,
     data: Option<String>,
     gas_limit: Option<u64>,
@@ -139,7 +150,7 @@ pub async fn sign_beam_transaction(
 pub async fn send_beam_transaction(
     workspace_path: String,
     from: String,
-    to: String,
+    to: Option<String>,
     value: Option<String>,
     data: Option<String>,
     gas_limit: Option<u64>,
@@ -157,4 +168,79 @@ pub async fn send_beam_transaction(
         nonce,
     };
     beam_rpc.send_transaction(&workspace_path, &tx).await
+}
+
+#[tauri::command]
+pub async fn list_beam_templates(
+    beam_templates: State<'_, Arc<BeamTemplateService>>,
+) -> Result<Vec<BeamTemplateSummary>, String> {
+    beam_templates.list_templates()
+}
+
+#[tauri::command]
+pub async fn get_beam_template(
+    template_id: String,
+    beam_templates: State<'_, Arc<BeamTemplateService>>,
+) -> Result<BeamTemplateDetail, String> {
+    beam_templates.get_template(&template_id)
+}
+
+#[tauri::command]
+pub async fn scaffold_beam_template(
+    workspace_path: String,
+    template_id: String,
+    beam_templates: State<'_, Arc<BeamTemplateService>>,
+) -> Result<BeamTemplateScaffoldResult, String> {
+    beam_templates
+        .scaffold_template(&workspace_path, &template_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn prepare_beam_template_deployment(
+    workspace_path: String,
+    template_id: String,
+    network: String,
+    wallet_address: String,
+    request_id: Option<String>,
+    beam_templates: State<'_, Arc<BeamTemplateService>>,
+) -> Result<BeamDeploymentPlan, String> {
+    let network = BeamNetwork::from_str(&network)
+        .ok_or_else(|| format!("Unknown network '{}'. Use 'mainnet' or 'testnet'.", network))?;
+    beam_templates
+        .prepare_deployment(
+            &workspace_path,
+            &template_id,
+            network,
+            &wallet_address,
+            request_id,
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn deploy_beam_template(
+    workspace_path: String,
+    template_id: String,
+    network: String,
+    wallet_address: String,
+    request_id: Option<String>,
+    beam_templates: State<'_, Arc<BeamTemplateService>>,
+    workspace_manager: State<'_, Arc<crate::services::WorkspaceManager>>,
+    airlock_state: State<'_, AirlockServiceState>,
+) -> Result<BeamDeploymentResult, String> {
+    let network = BeamNetwork::from_str(&network)
+        .ok_or_else(|| format!("Unknown network '{}'. Use 'mainnet' or 'testnet'.", network))?;
+    let airlock_guard = airlock_state.0.lock().await;
+    beam_templates
+        .deploy_template(
+            workspace_manager.inner(),
+            airlock_guard.as_ref(),
+            &workspace_path,
+            &template_id,
+            network,
+            &wallet_address,
+            request_id,
+        )
+        .await
 }

@@ -4,6 +4,7 @@ import { Button } from "@heroui/react";
 
 import * as tauri from "../../services/tauri";
 import { BeamChainCard } from "./BeamChainCard";
+import { BeamDeployCard } from "./BeamDeployCard";
 
 interface WorkspaceLaunchpadProps {
   workspacePath: string;
@@ -795,7 +796,10 @@ export function WorkspaceLaunchpad({
             </svg>
             <h2 className="text-[14px] font-semibold tracking-tight text-foreground">Blockchain</h2>
           </div>
-          <BeamChainCard workspacePath={workspacePath} />
+          <div className="grid gap-4 xl:grid-cols-[0.9fr,1.1fr]">
+            <BeamChainCard workspacePath={workspacePath} />
+            <BeamDeployCard workspacePath={workspacePath} onDeploymentRecorded={refresh} />
+          </div>
         </div>
 
     </div>

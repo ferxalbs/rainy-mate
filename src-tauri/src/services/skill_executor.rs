@@ -342,7 +342,8 @@ impl SkillExecutor {
                     .await
             }
             "evm" => {
-                self.execute_evm(workspace_id, method, &payload.params).await
+                self.execute_evm(workspace_id, method, &payload.params)
+                    .await
             }
             _ => self
                 .execute_third_party_skill(

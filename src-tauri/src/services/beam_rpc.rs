@@ -15,7 +15,7 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use k256::ecdsa::SigningKey;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use sha3::Keccak256;
 use std::path::{Path, PathBuf};
 
@@ -129,7 +129,7 @@ struct EncryptedWalletRecord {
 #[serde(rename_all = "camelCase")]
 pub struct TransactionRequest {
     pub from: String,
-    pub to: String,
+    pub to: Option<String>,
     /// Value in wei as 0x-prefixed hex (default "0x0")
     pub value: Option<String>,
     /// Transaction data as 0x-prefixed hex
@@ -167,7 +167,7 @@ pub struct SignedTransaction {
     pub tx_hash: String,
     /// Transaction details for display
     pub from: String,
-    pub to: String,
+    pub to: Option<String>,
     pub value_hex: String,
     pub gas_limit: u64,
     pub gas_price: u64,
@@ -182,6 +182,10 @@ pub struct TransactionReceipt {
     pub tx_hash: String,
     pub network: String,
     pub explorer_url: String,
+    pub status: Option<String>,
+    pub block_number: Option<u64>,
+    pub gas_used: Option<u64>,
+    pub contract_address: Option<String>,
 }
 
 // ── JSON-RPC helpers ─────────────────────────────────────────────────────────
@@ -290,7 +294,11 @@ fn keccak256(data: &[u8]) -> [u8; 32] {
 /// Derive checksummed EIP-55 address from secp256k1 public key bytes.
 /// `pubkey_uncompressed` must be the 65-byte uncompressed point (0x04 prefix).
 fn pubkey_to_address(pubkey_uncompressed: &[u8]) -> String {
-    assert_eq!(pubkey_uncompressed.len(), 65, "expected 65-byte uncompressed pubkey");
+    assert_eq!(
+        pubkey_uncompressed.len(),
+        65,
+        "expected 65-byte uncompressed pubkey"
+    );
     // Drop the 0x04 prefix; take last 32 bytes (y and x are each 32 bytes)
     let hash = keccak256(&pubkey_uncompressed[1..]);
     let addr_bytes = &hash[12..]; // last 20 bytes
@@ -322,7 +330,10 @@ fn eip55_checksum(addr_bytes: &[u8]) -> String {
 
 /// Sign a keccak256 pre-hash with a secp256k1 signing key.
 /// Returns (r_bytes, s_bytes, recovery_id).
-fn secp256k1_sign_prehash(signing_key: &SigningKey, hash: &[u8; 32]) -> Result<([u8; 32], [u8; 32], u8), String> {
+fn secp256k1_sign_prehash(
+    signing_key: &SigningKey,
+    hash: &[u8; 32],
+) -> Result<([u8; 32], [u8; 32], u8), String> {
     let (sig, recovery_id) = signing_key
         .sign_prehash_recoverable(hash)
         .map_err(|e| format!("Signing failed: {}", e))?;
@@ -344,7 +355,11 @@ fn derive_wallet_key(master_key: &[u8], address: &str) -> [u8; 32] {
     hasher.finalize().into()
 }
 
-fn encrypt_private_key(master_key: &[u8], address: &str, private_key_bytes: &[u8]) -> Result<(Vec<u8>, [u8; 12]), String> {
+fn encrypt_private_key(
+    master_key: &[u8],
+    address: &str,
+    private_key_bytes: &[u8],
+) -> Result<(Vec<u8>, [u8; 12]), String> {
     let key_material = derive_wallet_key(master_key, address);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_material));
     let mut nonce = [0u8; 12];
@@ -355,7 +370,12 @@ fn encrypt_private_key(master_key: &[u8], address: &str, private_key_bytes: &[u8
     Ok((ciphertext, nonce))
 }
 
-fn decrypt_private_key(master_key: &[u8], address: &str, ciphertext: &[u8], nonce: &[u8]) -> Result<Vec<u8>, String> {
+fn decrypt_private_key(
+    master_key: &[u8],
+    address: &str,
+    ciphertext: &[u8],
+    nonce: &[u8],
+) -> Result<Vec<u8>, String> {
     let key_material = derive_wallet_key(master_key, address);
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_material));
     cipher
@@ -432,13 +452,9 @@ impl BeamRpcService {
         let json = serde_json::to_string_pretty(&config)
             .map_err(|e| format!("Serialization failed: {}", e))?;
         let config_path = config_dir.join("config.json");
-        std::fs::write(&config_path, json)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+        std::fs::write(&config_path, json).map_err(|e| format!("Failed to write config: {}", e))?;
 
-        tracing::info!(
-            "BeamRpcService: wrote workspace config → {:?}",
-            config_path
-        );
+        tracing::info!("BeamRpcService: wrote workspace config → {:?}", config_path);
         Ok(config)
     }
 
@@ -486,7 +502,10 @@ impl BeamRpcService {
                 std::fs::Permissions::from_mode(0o600),
             );
         }
-        tracing::info!("BeamRpcService: generated new master key at {:?}", self.master_key_path);
+        tracing::info!(
+            "BeamRpcService: generated new master key at {:?}",
+            self.master_key_path
+        );
         Ok(key.to_vec())
     }
 
@@ -508,9 +527,15 @@ impl BeamRpcService {
     }
 
     /// Import a wallet from a 32-byte hex private key.
-    pub fn import_wallet(&self, private_key_hex: &str, label: Option<String>) -> Result<WalletInfo, String> {
+    pub fn import_wallet(
+        &self,
+        private_key_hex: &str,
+        label: Option<String>,
+    ) -> Result<WalletInfo, String> {
         let master_key = self.load_or_create_master_key()?;
-        let hex = private_key_hex.strip_prefix("0x").unwrap_or(private_key_hex);
+        let hex = private_key_hex
+            .strip_prefix("0x")
+            .unwrap_or(private_key_hex);
         let raw = hex::decode(hex).map_err(|e| format!("Invalid private key hex: {}", e))?;
         if raw.len() != 32 {
             return Err("Private key must be exactly 32 bytes".to_string());
@@ -544,16 +569,24 @@ impl BeamRpcService {
 
         let json = serde_json::to_string(&record)
             .map_err(|e| format!("Failed to serialize wallet: {}", e))?;
-        let wallet_path = self.wallet_dir.join(format!("{}.enc", address.to_lowercase()));
+        let wallet_path = self
+            .wallet_dir
+            .join(format!("{}.enc", address.to_lowercase()));
         std::fs::write(&wallet_path, json.as_bytes())
             .map_err(|e| format!("Failed to write wallet file: {}", e))?;
 
         tracing::info!("BeamRpcService: stored wallet {}", address);
-        Ok(WalletInfo { address: address.to_string(), label, created_at })
+        Ok(WalletInfo {
+            address: address.to_string(),
+            label,
+            created_at,
+        })
     }
 
     fn load_wallet_record(&self, address: &str) -> Result<EncryptedWalletRecord, String> {
-        let path = self.wallet_dir.join(format!("{}.enc", address.to_lowercase()));
+        let path = self
+            .wallet_dir
+            .join(format!("{}.enc", address.to_lowercase()));
         let json = std::fs::read_to_string(&path)
             .map_err(|_| format!("Wallet '{}' not found", address))?;
         serde_json::from_str(&json).map_err(|e| format!("Corrupt wallet file: {}", e))
@@ -562,8 +595,7 @@ impl BeamRpcService {
     fn load_signing_key(&self, address: &str) -> Result<SigningKey, String> {
         let master_key = self.load_or_create_master_key()?;
         let record = self.load_wallet_record(address)?;
-        let nonce = hex::decode(&record.nonce_hex)
-            .map_err(|e| format!("Bad nonce hex: {}", e))?;
+        let nonce = hex::decode(&record.nonce_hex).map_err(|e| format!("Bad nonce hex: {}", e))?;
         let ciphertext = hex::decode(&record.ciphertext_hex)
             .map_err(|e| format!("Bad ciphertext hex: {}", e))?;
         let private_key_bytes = decrypt_private_key(&master_key, address, &ciphertext, &nonce)?;
@@ -635,21 +667,27 @@ impl BeamRpcService {
         if let Some(err) = rpc_resp.error {
             return Err(format!("RPC error: {}", err));
         }
-        rpc_resp.result.ok_or_else(|| "RPC returned no result".to_string())
+        rpc_resp
+            .result
+            .ok_or_else(|| "RPC returned no result".to_string())
     }
 
     async fn get_nonce(&self, rpc_url: &str, address: &str) -> Result<u64, String> {
-        let result = self.rpc_call(
-            rpc_url,
-            "eth_getTransactionCount",
-            serde_json::json!([address, "latest"]),
-        ).await?;
+        let result = self
+            .rpc_call(
+                rpc_url,
+                "eth_getTransactionCount",
+                serde_json::json!([address, "latest"]),
+            )
+            .await?;
         let hex = result.as_str().ok_or("nonce not a string")?;
         decode_hex_u64(hex)
     }
 
     async fn get_gas_price(&self, rpc_url: &str) -> Result<u64, String> {
-        let result = self.rpc_call(rpc_url, "eth_gasPrice", serde_json::json!([])).await?;
+        let result = self
+            .rpc_call(rpc_url, "eth_gasPrice", serde_json::json!([]))
+            .await?;
         let hex = result.as_str().ok_or("gasPrice not a string")?;
         decode_hex_u64(hex)
     }
@@ -658,19 +696,68 @@ impl BeamRpcService {
         &self,
         rpc_url: &str,
         from: &str,
-        to: &str,
+        to: Option<&str>,
         value: &str,
         data: &str,
     ) -> Result<u64, String> {
-        let params = serde_json::json!([{
-            "from": from,
-            "to": to,
-            "value": value,
-            "data": data,
-        }]);
+        let mut request = serde_json::Map::new();
+        request.insert(
+            "from".to_string(),
+            serde_json::Value::String(from.to_string()),
+        );
+        if let Some(to) = to {
+            request.insert("to".to_string(), serde_json::Value::String(to.to_string()));
+        }
+        request.insert(
+            "value".to_string(),
+            serde_json::Value::String(value.to_string()),
+        );
+        request.insert(
+            "data".to_string(),
+            serde_json::Value::String(data.to_string()),
+        );
+        let params = serde_json::json!([request]);
         let result = self.rpc_call(rpc_url, "eth_estimateGas", params).await?;
         let hex = result.as_str().ok_or("estimatedGas not a string")?;
         decode_hex_u64(hex)
+    }
+
+    async fn get_transaction_receipt(
+        &self,
+        rpc_url: &str,
+        tx_hash: &str,
+    ) -> Result<Option<(Option<String>, Option<u64>, Option<u64>, Option<String>)>, String> {
+        let result = self
+            .rpc_call(
+                rpc_url,
+                "eth_getTransactionReceipt",
+                serde_json::json!([tx_hash]),
+            )
+            .await?;
+        if result.is_null() {
+            return Ok(None);
+        }
+
+        let status = result
+            .get("status")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string());
+        let block_number = result
+            .get("blockNumber")
+            .and_then(|value| value.as_str())
+            .map(decode_hex_u64)
+            .transpose()?;
+        let gas_used = result
+            .get("gasUsed")
+            .and_then(|value| value.as_str())
+            .map(decode_hex_u64)
+            .transpose()?;
+        let contract_address = result
+            .get("contractAddress")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string());
+
+        Ok(Some((status, block_number, gas_used, contract_address)))
     }
 
     // ── Gas estimation ───────────────────────────────────────────────────
@@ -679,7 +766,7 @@ impl BeamRpcService {
         &self,
         workspace_path: &str,
         from: &str,
-        to: &str,
+        to: Option<&str>,
         value: Option<&str>,
         data: Option<&str>,
     ) -> Result<GasEstimate, String> {
@@ -744,15 +831,20 @@ impl BeamRpcService {
         let gas_limit = match tx.gas_limit {
             Some(gl) => gl,
             None => {
-                let estimated = self.estimate_gas_rpc(rpc_url, &tx.from, &tx.to, value_str, data_str).await?;
+                let estimated = self
+                    .estimate_gas_rpc(rpc_url, &tx.from, tx.to.as_deref(), value_str, data_str)
+                    .await?;
                 (estimated as f64 * 1.2) as u64
             }
         };
 
         // Decode to address bytes
-        let to_bytes = {
-            let addr = tx.to.strip_prefix("0x").unwrap_or(&tx.to);
-            hex::decode(addr).map_err(|e| format!("Invalid 'to' address: {}", e))?
+        let to_bytes = match tx.to.as_deref() {
+            Some(to) => {
+                let addr = to.strip_prefix("0x").unwrap_or(to);
+                hex::decode(addr).map_err(|e| format!("Invalid 'to' address: {}", e))?
+            }
+            None => Vec::new(),
         };
 
         // EIP-155: signing hash = keccak256(RLP([nonce, gasPrice, gasLimit, to, value, data, chainId, 0, 0]))
@@ -798,7 +890,9 @@ impl BeamRpcService {
             tx_hash,
             cfg.network,
             tx.from,
-            tx.to,
+            tx.to
+                .clone()
+                .unwrap_or_else(|| "<contract-creation>".to_string()),
             nonce
         );
 
@@ -824,14 +918,52 @@ impl BeamRpcService {
     ) -> Result<TransactionReceipt, String> {
         let cfg = self.read_workspace_config(workspace_path)?;
         let result = self
-            .rpc_call(&cfg.chain.rpc_url, "eth_sendRawTransaction", serde_json::json!([raw_tx]))
+            .rpc_call(
+                &cfg.chain.rpc_url,
+                "eth_sendRawTransaction",
+                serde_json::json!([raw_tx]),
+            )
             .await?;
-        let tx_hash = result.as_str()
+        let tx_hash = result
+            .as_str()
             .ok_or("sendRawTransaction returned non-string result")?
             .to_string();
-        let explorer_url = format!("{}/tx/{}", cfg.chain.explorer_url.trim_end_matches('/'), tx_hash);
-        tracing::info!("BeamRpcService: broadcast tx {} on {}", tx_hash, cfg.network);
-        Ok(TransactionReceipt { tx_hash, network: cfg.network, explorer_url })
+        let explorer_url = format!(
+            "{}/tx/{}",
+            cfg.chain.explorer_url.trim_end_matches('/'),
+            tx_hash
+        );
+        tracing::info!(
+            "BeamRpcService: broadcast tx {} on {}",
+            tx_hash,
+            cfg.network
+        );
+        let mut status = None;
+        let mut block_number = None;
+        let mut gas_used = None;
+        let mut contract_address = None;
+        for _ in 0..15 {
+            if let Some((next_status, next_block_number, next_gas_used, next_contract_address)) =
+                self.get_transaction_receipt(&cfg.chain.rpc_url, &tx_hash)
+                    .await?
+            {
+                status = next_status;
+                block_number = next_block_number;
+                gas_used = next_gas_used;
+                contract_address = next_contract_address;
+                break;
+            }
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        }
+        Ok(TransactionReceipt {
+            tx_hash,
+            network: cfg.network,
+            explorer_url,
+            status,
+            block_number,
+            gas_used,
+            contract_address,
+        })
     }
 
     /// Sign and immediately broadcast a transaction.
@@ -841,7 +973,8 @@ impl BeamRpcService {
         tx: &TransactionRequest,
     ) -> Result<TransactionReceipt, String> {
         let signed = self.sign_transaction(workspace_path, tx).await?;
-        self.send_raw_transaction(workspace_path, &signed.raw_tx).await
+        self.send_raw_transaction(workspace_path, &signed.raw_tx)
+            .await
     }
 }
 
@@ -871,14 +1004,26 @@ mod tests {
 
     #[test]
     fn chain_configs_have_correct_rpc_urls() {
-        assert_eq!(BeamChainConfig::mainnet().rpc_url, "https://build.onbeam.com/rpc");
-        assert_eq!(BeamChainConfig::testnet().rpc_url, "https://build.onbeam.com/rpc/testnet");
+        assert_eq!(
+            BeamChainConfig::mainnet().rpc_url,
+            "https://build.onbeam.com/rpc"
+        );
+        assert_eq!(
+            BeamChainConfig::testnet().rpc_url,
+            "https://build.onbeam.com/rpc/testnet"
+        );
     }
 
     #[test]
     fn chain_configs_have_correct_ws_urls() {
-        assert_eq!(BeamChainConfig::mainnet().ws_url, "wss://build.onbeam.com/ws");
-        assert_eq!(BeamChainConfig::testnet().ws_url, "wss://build.onbeam.com/ws/testnet");
+        assert_eq!(
+            BeamChainConfig::mainnet().ws_url,
+            "wss://build.onbeam.com/ws"
+        );
+        assert_eq!(
+            BeamChainConfig::testnet().ws_url,
+            "wss://build.onbeam.com/ws/testnet"
+        );
     }
 
     #[test]
@@ -950,7 +1095,10 @@ mod tests {
         // Second instance reuses the master key → decryption succeeds
         let svc2 = BeamRpcService::new(tmp.path().to_path_buf());
         let signing_key = svc2.load_signing_key(&wallet.address);
-        assert!(signing_key.is_ok(), "should decrypt across service instances");
+        assert!(
+            signing_key.is_ok(),
+            "should decrypt across service instances"
+        );
     }
 
     #[test]
@@ -968,8 +1116,8 @@ mod tests {
     #[test]
     fn eip55_checksum_known_vector() {
         // https://eips.ethereum.org/EIPS/eip-55
-        let addr_bytes = hex::decode("5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".to_lowercase())
-            .unwrap();
+        let addr_bytes =
+            hex::decode("5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".to_lowercase()).unwrap();
         // Just verify the function produces a 0x-prefixed 42-char string
         let result = eip55_checksum(&addr_bytes[..20]);
         assert!(result.starts_with("0x"));

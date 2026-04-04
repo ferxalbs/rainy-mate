@@ -3102,14 +3102,32 @@ export async function getQuickDelegateStatus(): Promise<QuickDelegateStatus> {
 import type {
   AllBeamChainConfigs,
   BeamChainConfig,
+  BeamDeploymentPlan,
+  BeamDeploymentResult,
   BeamWorkspaceConfig,
+  BeamTemplateDetail,
+  BeamTemplateScaffoldResult,
+  BeamTemplateSummary,
   GasEstimate,
   SignedTransaction,
   TransactionReceipt,
   WalletInfo,
 } from "../types/beam";
 
-export type { AllBeamChainConfigs, BeamChainConfig, BeamWorkspaceConfig, GasEstimate, SignedTransaction, TransactionReceipt, WalletInfo };
+export type {
+  AllBeamChainConfigs,
+  BeamChainConfig,
+  BeamDeploymentPlan,
+  BeamDeploymentResult,
+  BeamWorkspaceConfig,
+  BeamTemplateDetail,
+  BeamTemplateScaffoldResult,
+  BeamTemplateSummary,
+  GasEstimate,
+  SignedTransaction,
+  TransactionReceipt,
+  WalletInfo,
+};
 
 export async function getBeamChainConfigs(): Promise<AllBeamChainConfigs> {
   return invoke<AllBeamChainConfigs>("get_beam_chain_configs");
@@ -3157,7 +3175,7 @@ export async function listBeamWallets(): Promise<WalletInfo[]> {
 export async function estimateBeamGas(params: {
   workspacePath: string;
   from: string;
-  to: string;
+  to?: string | null;
   value?: string;
   data?: string;
 }): Promise<GasEstimate> {
@@ -3173,7 +3191,7 @@ export async function estimateBeamGas(params: {
 export async function signBeamTransaction(params: {
   workspacePath: string;
   from: string;
-  to: string;
+  to?: string | null;
   value?: string;
   data?: string;
   gasLimit?: number;
@@ -3195,7 +3213,7 @@ export async function signBeamTransaction(params: {
 export async function sendBeamTransaction(params: {
   workspacePath: string;
   from: string;
-  to: string;
+  to?: string | null;
   value?: string;
   data?: string;
   gasLimit?: number;
@@ -3211,5 +3229,55 @@ export async function sendBeamTransaction(params: {
     gasLimit: params.gasLimit ?? null,
     gasPrice: params.gasPrice ?? null,
     nonce: params.nonce ?? null,
+  });
+}
+
+export async function listBeamTemplates(): Promise<BeamTemplateSummary[]> {
+  return invoke<BeamTemplateSummary[]>("list_beam_templates");
+}
+
+export async function getBeamTemplate(templateId: string): Promise<BeamTemplateDetail> {
+  return invoke<BeamTemplateDetail>("get_beam_template", { templateId });
+}
+
+export async function scaffoldBeamTemplate(
+  workspacePath: string,
+  templateId: string,
+): Promise<BeamTemplateScaffoldResult> {
+  return invoke<BeamTemplateScaffoldResult>("scaffold_beam_template", {
+    workspacePath,
+    templateId,
+  });
+}
+
+export async function prepareBeamTemplateDeployment(params: {
+  workspacePath: string;
+  templateId: string;
+  network: "mainnet" | "testnet";
+  walletAddress: string;
+  requestId?: string | null;
+}): Promise<BeamDeploymentPlan> {
+  return invoke<BeamDeploymentPlan>("prepare_beam_template_deployment", {
+    workspacePath: params.workspacePath,
+    templateId: params.templateId,
+    network: params.network,
+    walletAddress: params.walletAddress,
+    requestId: params.requestId ?? null,
+  });
+}
+
+export async function deployBeamTemplate(params: {
+  workspacePath: string;
+  templateId: string;
+  network: "mainnet" | "testnet";
+  walletAddress: string;
+  requestId?: string | null;
+}): Promise<BeamDeploymentResult> {
+  return invoke<BeamDeploymentResult>("deploy_beam_template", {
+    workspacePath: params.workspacePath,
+    templateId: params.templateId,
+    network: params.network,
+    walletAddress: params.walletAddress,
+    requestId: params.requestId ?? null,
   });
 }

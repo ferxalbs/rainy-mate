@@ -1,0 +1,11 @@
+{
+  "id": "ai-oracle",
+  "title": "AI Oracle",
+  "summary": "Authorized response oracle for model outputs, scored responses, and auditable request lifecycles.",
+  "description": "A Beam-friendly AI oracle shell that lets approved reporters fulfill structured responses onchain.",
+  "contract_name": "BeamAiOracle",
+  "contract_file": "Main.sol",
+  "category": "oracle",
+  "recommended_network": "testnet",
+  "tags": ["ai", "oracle", "reporting", "agentic"]
+}

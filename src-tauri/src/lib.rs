@@ -370,6 +370,9 @@ pub fn run() {
             // Initialize Beam RPC + Secure Local Signing Bridge
             let beam_rpc = Arc::new(BeamRpcService::new(app_data_dir.clone()));
             app.manage(beam_rpc.clone());
+            let beam_templates =
+                Arc::new(crate::services::BeamTemplateService::new(beam_rpc.clone()));
+            app.manage(beam_templates);
             // Inject into SkillExecutor so the "evm" agent skill can use it
             {
                 let se = app.state::<Arc<SkillExecutor>>();
@@ -881,6 +884,11 @@ pub fn run() {
             commands::estimate_beam_gas,
             commands::sign_beam_transaction,
             commands::send_beam_transaction,
+            commands::list_beam_templates,
+            commands::get_beam_template,
+            commands::scaffold_beam_template,
+            commands::prepare_beam_template_deployment,
+            commands::deploy_beam_template,
         ])
         .build(tauri::generate_context!());
 

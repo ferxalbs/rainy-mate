@@ -1,7 +1,6 @@
 // Rainy MaTE - Services Module
 // Business logic layer
 
-pub mod beam_rpc;
 pub mod agent_kill_switch;
 pub mod agent_library;
 pub mod agent_run_control;
@@ -12,6 +11,8 @@ pub mod atm_auth;
 pub mod atm_client;
 pub mod attachment;
 pub mod audit_emitter;
+pub mod beam_rpc;
+pub mod beam_templates;
 pub mod browser_controller;
 pub mod chat_artifacts;
 pub mod cloud_bridge;
@@ -59,12 +60,13 @@ pub mod workspace_memory_files;
 pub mod workflow_recorder;
 pub mod workspace;
 
-pub use beam_rpc::BeamRpcService;
 pub use agent_library::AgentLibraryService;
 pub use agent_run_control::AgentRunControl;
 pub use airlock::AirlockService;
 pub use airlock_messages::{AirlockMessage, AirlockMessageStore};
 pub use atm_client::ATMClient;
+pub use beam_rpc::BeamRpcService;
+pub use beam_templates::BeamTemplateService;
 pub use browser_controller::BrowserController;
 pub use command_poller::CommandPoller;
 pub use document::DocumentService;

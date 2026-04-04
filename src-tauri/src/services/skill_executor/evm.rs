@@ -28,10 +28,7 @@ impl SkillExecutor {
         let workspace_path = match self.workspace_manager.load_workspace(&workspace_id) {
             Ok(ws) => {
                 // Use the first allowed path as the workspace root
-                ws.allowed_paths
-                    .into_iter()
-                    .next()
-                    .unwrap_or_default()
+                ws.allowed_paths.into_iter().next().unwrap_or_default()
             }
             Err(_) => String::new(),
         };
@@ -53,9 +50,12 @@ impl SkillExecutor {
                 }
                 let network = match BeamNetwork::from_str(&args.network) {
                     Some(n) => n,
-                    None => return self.error(&format!(
-                        "Unknown network '{}'. Use 'mainnet' or 'testnet'", args.network
-                    )),
+                    None => {
+                        return self.error(&format!(
+                            "Unknown network '{}'. Use 'mainnet' or 'testnet'",
+                            args.network
+                        ))
+                    }
                 };
                 match beam.write_workspace_config(&workspace_path, network) {
                     Ok(cfg) => CommandResult {
@@ -120,17 +120,15 @@ impl SkillExecutor {
             }
 
             // ── beam_list_wallets ────────────────────────────────────────
-            "beam_list_wallets" => {
-                match beam.list_wallets() {
-                    Ok(wallets) => CommandResult {
-                        success: true,
-                        output: Some(serde_json::to_string(&wallets).unwrap_or_default()),
-                        error: None,
-                        exit_code: Some(0),
-                    },
-                    Err(e) => self.error(&e),
-                }
-            }
+            "beam_list_wallets" => match beam.list_wallets() {
+                Ok(wallets) => CommandResult {
+                    success: true,
+                    output: Some(serde_json::to_string(&wallets).unwrap_or_default()),
+                    error: None,
+                    exit_code: Some(0),
+                },
+                Err(e) => self.error(&e),
+            },
 
             // ── beam_estimate_gas ────────────────────────────────────────
             "beam_estimate_gas" => {
@@ -145,7 +143,7 @@ impl SkillExecutor {
                     .estimate_gas(
                         &workspace_path,
                         &args.from,
-                        &args.to,
+                        Some(&args.to),
                         args.value.as_deref(),
                         args.data.as_deref(),
                     )
@@ -173,7 +171,7 @@ impl SkillExecutor {
                 }
                 let tx = TransactionRequest {
                     from: args.from,
-                    to: args.to,
+                    to: Some(args.to),
                     value: args.value,
                     data: args.data,
                     gas_limit: args.gas_limit,
@@ -203,7 +201,7 @@ impl SkillExecutor {
                 }
                 let tx = TransactionRequest {
                     from: args.from,
-                    to: args.to,
+                    to: Some(args.to),
                     value: args.value,
                     data: args.data,
                     gas_limit: args.gas_limit,
