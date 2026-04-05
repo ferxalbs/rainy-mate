@@ -64,7 +64,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          shared-key: "v2-libsqlite3"
+          shared-key: "v3-sqlite-fix"
 
       - name: Build Rust
         run: cd src-tauri && cargo build --lib
@@ -162,7 +162,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          shared-key: "v2-libsqlite3"
+          shared-key: "v3-sqlite-fix"
 
       - name: Create Tauri override config
         shell: bash
