@@ -32,7 +32,10 @@ const methodColors: Record<string, string> = {
   default: "text-gray-400 bg-gray-400/10 border-gray-400/20",
 };
 
-export function PlanConfirmationCard({
+// ⚡ Bolt: Wrapped in React.memo to prevent unnecessary re-renders during message streaming.
+// Ensures that as the agent streams new tokens (updating the parent MessageBubble),
+// this static prompt for execution doesn't needlessly tear down and rebuild its DOM.
+export const PlanConfirmationCard = React.memo(function PlanConfirmationCard({
   toolCalls,
   onExecute,
   isExecuting,
@@ -88,4 +91,4 @@ export function PlanConfirmationCard({
       </div>
     </Card>
   );
-}
+});

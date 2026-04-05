@@ -69,11 +69,13 @@ function MessageBubbleComponent({
   const isUser = message.type === "user";
   const isSystem = message.type === "system";
 
-  const handleExecuteToolCalls = () => {
+  // ⚡ Bolt: Memoize the callback to ensure PlanConfirmationCard's React.memo is effective
+  // during parent streaming renders where this would otherwise be recreated on every token.
+  const handleExecuteToolCalls = React.useCallback(() => {
     if (message.toolCalls && onExecuteToolCalls && workspaceId) {
       onExecuteToolCalls(message.id, message.toolCalls, workspaceId);
     }
-  };
+  }, [message.id, message.toolCalls, onExecuteToolCalls, workspaceId]);
 
   const handleCopy = async () => {
     if (!message.content) return;
@@ -221,6 +223,8 @@ function MessageBubbleComponent({
 
         {/* Thought/Reasoning Display (Only for Agent with thinking) */}
         {!isUser && message.artifacts && message.artifacts.length > 0 && (
+          // ⚡ Bolt: message.artifacts array is managed immutably by the backend reducer,
+          // providing stable references that make ArtifactBadgeRow's React.memo effective.
           <ArtifactBadgeRow artifacts={message.artifacts} />
         )}
 

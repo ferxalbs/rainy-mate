@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { FileImage, FileSpreadsheet, FileText, Eye, ExternalLink } from "lucide-react";
 
@@ -27,7 +27,10 @@ interface ArtifactBadgeRowProps {
   artifacts: ChatArtifact[];
 }
 
-export function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
+// ⚡ Bolt: Wrapped in React.memo to prevent unnecessary re-renders during message streaming.
+// The artifacts array is stable from the backend or memoized in the parent, avoiding constant tearing down
+// of these relatively heavy sub-components on every single token update.
+export const ArtifactBadgeRow = React.memo(function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
   const [openingPath, setOpeningPath] = useState<string | null>(null);
   const [errorByPath, setErrorByPath] = useState<Record<string, string>>({});
 
@@ -128,4 +131,4 @@ export function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
       })}
     </div>
   );
-}
+});
