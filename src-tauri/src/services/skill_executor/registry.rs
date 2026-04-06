@@ -275,6 +275,31 @@ pub fn registered_tool_definitions() -> Vec<Tool> {
              Gas and nonce are auto-estimated if not provided. Returns transaction hash and explorer URL.",
             schema_for!(BeamSendTransactionArgs),
         ),
+        tool(
+            "spawn_external_agent_session",
+            "Create a governed external coding worker session for Codex or Claude, bound to the current workspace. This only prepares the audited session; use send_external_agent_message to start the one-shot run.",
+            schema_for!(SpawnExternalAgentSessionArgs),
+        ),
+        tool(
+            "send_external_agent_message",
+            "Start a pending external coding worker session with an operator message. The worker runs one-shot in the bound workspace and streams stdout/stderr back into the audited session record.",
+            schema_for!(SendExternalAgentMessageArgs),
+        ),
+        tool(
+            "wait_external_agent_session",
+            "Wait for an external worker session to reach a terminal state and return the latest captured stdout/stderr summary.",
+            schema_for!(WaitExternalAgentSessionArgs),
+        ),
+        tool(
+            "list_external_agent_sessions",
+            "List external coding worker sessions currently known to the desktop runtime, optionally filtered to the active workspace.",
+            schema_for!(ListExternalAgentSessionsArgs),
+        ),
+        tool(
+            "cancel_external_agent_session",
+            "Cancel a running external coding worker session or mark a pending session as cancelled before execution begins.",
+            schema_for!(CancelExternalAgentSessionArgs),
+        ),
     ]
 }
 

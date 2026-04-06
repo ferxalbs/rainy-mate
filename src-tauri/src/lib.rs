@@ -14,11 +14,12 @@ use crate::ai::agent::runtime_registry::RuntimeRegistry;
 use crate::db::Database;
 use ai::{AIProviderManager, IntelligentRouter, ProviderRegistry};
 use services::{
-    ATMClient, AgentLibraryService, AgentRunControl, BeamRpcService, BrowserController,
-    CommandPoller, DocumentService, FileManager, FileOperationEngine, FolderManager, ImageService,
-    KeychainAccessService, LLMClient, MacOSAutoLaunchBridge, ManagedResearchService, MemoryManager,
-    NeuralService, NodeAuthenticator, QuickDelegateModalService, SettingsManager, SkillExecutor,
-    SocketClient, WorkflowRecorderService, WorkspaceManager,
+    ATMClient, AgentLibraryService, AgentRunControl, AuditEmitter, BeamRpcService,
+    BrowserController, CommandPoller, DocumentService, ExternalAgentRuntime, FileManager,
+    FileOperationEngine, FolderManager, ImageService, KeychainAccessService, LLMClient,
+    MacOSAutoLaunchBridge, ManagedResearchService, MemoryManager, NeuralService,
+    NodeAuthenticator, QuickDelegateModalService, SettingsManager, SkillExecutor, SocketClient,
+    WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tauri::Manager;
@@ -130,6 +131,8 @@ pub fn run() {
     // API Key will be loaded/set via commands later
     let llm_client = Arc::new(Mutex::new(LLMClient::new("".to_string())));
     let workflow_recorder = Arc::new(WorkflowRecorderService::new());
+    let audit_emitter = Arc::new(AuditEmitter::new());
+    let external_agent_runtime = Arc::new(ExternalAgentRuntime::new());
     let remote_workspace_grants = Arc::new(services::RemoteWorkspaceGrantStore::new());
     let agent_library = match AgentLibraryService::new_default() {
         Ok(service) => Arc::new(service),
@@ -178,6 +181,8 @@ pub fn run() {
         .manage(socket_client) // SocketClient
         .manage(llm_client) // Arc<Mutex<LLMClient>>
         .manage(workflow_recorder) // Arc<WorkflowRecorderService>
+        .manage(audit_emitter.clone()) // Arc<AuditEmitter>
+        .manage(external_agent_runtime.clone()) // Arc<ExternalAgentRuntime>
         .manage(remote_workspace_grants.clone()) // Arc<RemoteWorkspaceGrantStore>
         .manage(agent_library) // Arc<AgentLibraryService>
         .manage(commands::airlock::AirlockServiceState(Arc::new(
@@ -379,6 +384,20 @@ pub fn run() {
                 let br = beam_rpc.clone();
                 tauri::async_runtime::block_on(async move {
                     se.set_beam_rpc(br).await;
+                });
+            }
+            {
+                let se = app.state::<Arc<SkillExecutor>>();
+                let runtime = external_agent_runtime.clone();
+                tauri::async_runtime::block_on(async move {
+                    se.set_external_agent_runtime(runtime).await;
+                });
+            }
+            {
+                let runtime = external_agent_runtime.clone();
+                let audit = audit_emitter.clone();
+                tauri::async_runtime::block_on(async move {
+                    runtime.set_audit_emitter(audit).await;
                 });
             }
 
@@ -796,6 +815,13 @@ pub fn run() {
             commands::ack_airlock_message,
             commands::send_airlock_message,
             commands::set_headless_mode,
+            commands::create_external_agent_session,
+            commands::send_external_agent_input,
+            commands::get_external_agent_session,
+            commands::list_external_agent_sessions,
+            commands::wait_external_agent_session,
+            commands::cancel_external_agent_session,
+            commands::get_external_agent_runtime_availability,
             // Skill Commands (Direct Local Execution)
             commands::execute_skill,
             commands::parse_tool_calls,

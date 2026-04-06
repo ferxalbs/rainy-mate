@@ -2,7 +2,17 @@
 // Typed wrappers for Tauri command invocation
 
 import { invoke, Channel } from "@tauri-apps/api/core";
-import type { ChatArtifact } from "../types/agent";
+import type {
+  ChatArtifact,
+  ExternalAgentSession,
+  ExternalRuntimeAvailability,
+  ExternalRuntimeKind,
+} from "../types/agent";
+export type {
+  ExternalAgentSession,
+  ExternalRuntimeAvailability,
+  ExternalRuntimeKind,
+} from "../types/agent";
 
 // ============ Types ============
 
@@ -3279,5 +3289,67 @@ export async function deployBeamTemplate(params: {
     network: params.network,
     walletAddress: params.walletAddress,
     requestId: params.requestId ?? null,
+  });
+}
+
+export async function getExternalAgentRuntimeAvailability(): Promise<
+  ExternalRuntimeAvailability[]
+> {
+  return invoke<ExternalRuntimeAvailability[]>(
+    "get_external_agent_runtime_availability",
+  );
+}
+
+export async function createExternalAgentSession(params: {
+  runtimeKind: ExternalRuntimeKind;
+  workspacePath: string;
+  taskSummary: string;
+}): Promise<ExternalAgentSession> {
+  return invoke<ExternalAgentSession>("create_external_agent_session", {
+    runtimeKind: params.runtimeKind,
+    workspacePath: params.workspacePath,
+    taskSummary: params.taskSummary,
+  });
+}
+
+export async function sendExternalAgentInput(params: {
+  sessionId: string;
+  message: string;
+}): Promise<ExternalAgentSession> {
+  return invoke<ExternalAgentSession>("send_external_agent_input", {
+    sessionId: params.sessionId,
+    message: params.message,
+  });
+}
+
+export async function getExternalAgentSession(
+  sessionId: string,
+): Promise<ExternalAgentSession> {
+  return invoke<ExternalAgentSession>("get_external_agent_session", { sessionId });
+}
+
+export async function listExternalAgentSessions(
+  workspacePath?: string | null,
+): Promise<ExternalAgentSession[]> {
+  return invoke<ExternalAgentSession[]>("list_external_agent_sessions", {
+    workspacePath: workspacePath ?? null,
+  });
+}
+
+export async function waitExternalAgentSession(params: {
+  sessionId: string;
+  timeoutMs?: number | null;
+}): Promise<ExternalAgentSession> {
+  return invoke<ExternalAgentSession>("wait_external_agent_session", {
+    sessionId: params.sessionId,
+    timeoutMs: params.timeoutMs ?? null,
+  });
+}
+
+export async function cancelExternalAgentSession(
+  sessionId: string,
+): Promise<ExternalAgentSession> {
+  return invoke<ExternalAgentSession>("cancel_external_agent_session", {
+    sessionId,
   });
 }

@@ -2,6 +2,7 @@ mod args;
 mod browser;
 mod documents;
 mod evm;
+mod external_agents;
 mod filesystem;
 mod registry;
 mod scheduler;
@@ -11,6 +12,7 @@ mod web;
 use crate::models::neural::{CommandResult, QueuedCommand, ToolAccessPolicy};
 use crate::services::beam_rpc::BeamRpcService;
 use crate::services::browser_controller::BrowserController;
+use crate::services::external_agent_runtime::ExternalAgentRuntime;
 use crate::services::settings::SettingsManager;
 use crate::services::third_party_skill_registry::{
     InstalledThirdPartySkill, ThirdPartySkillRegistry,
@@ -55,6 +57,7 @@ pub struct SkillExecutor {
     mcp_service: Arc<crate::services::mcp_service::McpService>,
     /// Beam RPC + Secure Local Signing Bridge — injected during setup
     beam_rpc: Arc<RwLock<Option<Arc<BeamRpcService>>>>,
+    external_agent_runtime: Arc<RwLock<Option<Arc<ExternalAgentRuntime>>>>,
 }
 
 impl SkillExecutor {
@@ -124,6 +127,7 @@ impl SkillExecutor {
             wasm_sandbox: Arc::new(WasmSandboxService::new()),
             mcp_service,
             beam_rpc: Arc::new(RwLock::new(None)),
+            external_agent_runtime: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -135,6 +139,11 @@ impl SkillExecutor {
     pub async fn set_memory_manager(&self, mm: Arc<MemoryManager>) {
         let mut lock = self.memory_manager.write().await;
         *lock = Some(mm);
+    }
+
+    pub async fn set_external_agent_runtime(&self, runtime: Arc<ExternalAgentRuntime>) {
+        let mut lock = self.external_agent_runtime.write().await;
+        *lock = Some(runtime);
     }
 
     pub async fn set_scheduler(
@@ -168,6 +177,7 @@ impl SkillExecutor {
             wasm_sandbox: Arc::new(WasmSandboxService::new()),
             mcp_service: Arc::new(crate::services::mcp_service::McpService::new()),
             beam_rpc: Arc::new(RwLock::new(None)),
+            external_agent_runtime: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -344,6 +354,16 @@ impl SkillExecutor {
             "evm" => {
                 self.execute_evm(workspace_id, method, &payload.params)
                     .await
+            }
+            "external_agent" => {
+                self.execute_external_agents(
+                    workspace_id,
+                    method,
+                    &payload.params,
+                    allowed_paths,
+                    blocked_paths,
+                )
+                .await
             }
             _ => self
                 .execute_third_party_skill(

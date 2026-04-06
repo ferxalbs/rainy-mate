@@ -6,6 +6,7 @@ import type {
   AgentTraceEntry,
   AgentMessage,
   ChatAttachment,
+  ExternalAgentSession,
   SpecialistRunState,
   TaskPlan,
 } from "../types/agent";
@@ -18,7 +19,7 @@ import {
 import { updateMessageById } from "./agent-chat/messageState";
 import {
   appendUniqueArtifact,
-  artifactFromToolResult,
+  artifactsFromToolResult,
 } from "../lib/chat-artifacts";
 import type { ActiveChatRunBinding } from "../services/tauri";
 
@@ -106,6 +107,8 @@ type ActiveChatSessionBinding = {
   elapsedSecs?: number;
 };
 
+const EXTERNAL_SESSION_POLL_INTERVAL_MS = 2000;
+
 function mergeDefinedFields<T>(current: T, next: Partial<T>): T {
   const merged = { ...(current as Record<string, unknown>) };
   for (const [key, value] of Object.entries(next as Record<string, unknown>)) {
@@ -143,6 +146,100 @@ function isCancellationError(error: unknown): boolean {
     error instanceof Error ? error.message : String(error ?? "");
   const normalized = message.toLowerCase();
   return normalized.includes("execution cancelled");
+}
+
+function summarizeExternalSessionResult(raw: string): string | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      runtimeKind?: string;
+      status?: string;
+      touchedPaths?: string[];
+      artifacts?: Array<{ path?: string }>;
+      error?: string | null;
+    };
+    if (
+      parsed.runtimeKind !== "codex" &&
+      parsed.runtimeKind !== "claude"
+    ) {
+      return null;
+    }
+    const runtimeLabel = parsed.runtimeKind === "codex" ? "Codex" : "Claude Code";
+    const touchedCount = Array.isArray(parsed.touchedPaths)
+      ? parsed.touchedPaths.length
+      : 0;
+    const artifactCount = Array.isArray(parsed.artifacts) ? parsed.artifacts.length : 0;
+    const statusLabel = parsed.status || "pending";
+    if (parsed.error) {
+      return `${runtimeLabel} session ${statusLabel}: ${parsed.error}`;
+    }
+    return `${runtimeLabel} session ${statusLabel} · ${touchedCount} path${
+      touchedCount === 1 ? "" : "s"
+    } · ${artifactCount} artifact${artifactCount === 1 ? "" : "s"}`;
+  } catch {
+    return null;
+  }
+}
+
+function extractExternalSessions(raw: string): ExternalAgentSession[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const values = Array.isArray(parsed) ? parsed : [parsed];
+    return values.filter((value): value is ExternalAgentSession => {
+      if (!value || typeof value !== "object") return false;
+      const candidate = value as Record<string, unknown>;
+      return (
+        typeof candidate.sessionId === "string" &&
+        (candidate.runtimeKind === "codex" || candidate.runtimeKind === "claude")
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+function mergeExternalSessions(
+  current: ExternalAgentSession[] | undefined,
+  next: ExternalAgentSession[],
+): ExternalAgentSession[] | undefined {
+  if (!next.length) return current;
+  const map = new Map((current ?? []).map((session) => [session.sessionId, session]));
+  for (const session of next) {
+    map.set(session.sessionId, session);
+  }
+  return [...map.values()].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function isExternalSessionActive(session: ExternalAgentSession): boolean {
+  return session.status === "pending" || session.status === "running";
+}
+
+function mergeExternalSessionArtifacts(
+  current: AgentMessage["artifacts"],
+  sessions: ExternalAgentSession[],
+): AgentMessage["artifacts"] {
+  let nextArtifacts = current;
+  for (const session of sessions) {
+    for (const artifact of session.artifacts ?? []) {
+      nextArtifacts = appendUniqueArtifact(nextArtifacts, artifact);
+    }
+  }
+  return nextArtifacts;
+}
+
+function applyExternalSessionUpdates(
+  message: AgentMessage,
+  sessions: ExternalAgentSession[],
+): AgentMessage {
+  const mergedSessions = mergeExternalSessions(message.externalSessions, sessions);
+  if (!mergedSessions) {
+    return message;
+  }
+
+  return {
+    ...message,
+    externalSessions: mergedSessions,
+    artifacts: mergeExternalSessionArtifacts(message.artifacts, sessions),
+  };
 }
 
 export function useAgentChat(
@@ -430,13 +527,27 @@ export function useAgentChat(
           const toolCall = payload.data?.id
             ? toolCallIndex.get(payload.data.id)
             : undefined;
-          const artifact =
+          const artifacts =
             toolCall && typeof payload.data?.result === "string"
-              ? artifactFromToolResult(
+              ? artifactsFromToolResult(
                   toolCall.name,
                   toolCall.arguments,
                   payload.data.result,
                 )
+              : [];
+          const externalSessions =
+            toolCall && typeof payload.data?.result === "string"
+              ? extractExternalSessions(payload.data.result)
+              : [];
+          const externalSessionSummary =
+            toolCall &&
+            typeof payload.data?.result === "string" &&
+            (toolCall.name === "spawn_external_agent_session" ||
+              toolCall.name === "send_external_agent_message" ||
+              toolCall.name === "wait_external_agent_session" ||
+              toolCall.name === "cancel_external_agent_session" ||
+              toolCall.name === "list_external_agent_sessions")
+              ? summarizeExternalSessionResult(payload.data.result)
               : null;
           void captureForgeStep(
             "tool_result",
@@ -447,19 +558,26 @@ export function useAgentChat(
             },
           );
           return {
-            ...message,
-            artifacts: artifact
-              ? appendUniqueArtifact(message.artifacts, artifact)
-              : message.artifacts,
+            ...applyExternalSessionUpdates(message, externalSessions),
+            artifacts: artifacts.length
+              ? artifacts.reduce(
+                  (current, nextArtifact) =>
+                    appendUniqueArtifact(current, nextArtifact),
+                  mergeExternalSessionArtifacts(message.artifacts, externalSessions),
+                )
+              : mergeExternalSessionArtifacts(message.artifacts, externalSessions),
             neuralState: "thinking",
             trace: [
               ...(message.trace || []),
               createTraceEntry(
                 "tool",
-                `Tool result: ${payload.data?.id || "completed"}`,
+                externalSessionSummary
+                  ? externalSessionSummary
+                  : `Tool result: ${payload.data?.id || "completed"}`,
                 {
-                  preview:
-                    typeof payload.data?.result === "string"
+                  preview: externalSessionSummary
+                    ? externalSessionSummary
+                    : typeof payload.data?.result === "string"
                       ? payload.data.result.slice(0, 180)
                       : undefined,
                 },
@@ -1030,6 +1148,99 @@ export function useAgentChat(
       unlisten?.();
     };
   }, [activeSessionBinding?.chatId, activeSessionBinding?.runId, createTraceEntry]);
+
+  useEffect(() => {
+    const activeSessions = messages.filter((message) =>
+      (message.externalSessions ?? []).some(isExternalSessionActive),
+    );
+    if (!activeSessions.length) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let inFlight = false;
+
+    const scheduleNextPoll = () => {
+      if (cancelled) return;
+      timeoutId = window.setTimeout(pollExternalSessions, EXTERNAL_SESSION_POLL_INTERVAL_MS);
+    };
+
+    const pollExternalSessions = async () => {
+      if (cancelled || inFlight) {
+        return;
+      }
+
+      const pendingLookups = messagesRef.current.flatMap((message) =>
+        (message.externalSessions ?? [])
+          .filter(isExternalSessionActive)
+          .map((session) => ({
+            messageId: message.id,
+            sessionId: session.sessionId,
+          })),
+      );
+
+      if (!pendingLookups.length) {
+        return;
+      }
+
+      inFlight = true;
+      try {
+        const results = await Promise.all(
+          pendingLookups.map(async ({ messageId, sessionId }) => {
+            try {
+              const session = await tauri.getExternalAgentSession(sessionId);
+              return { messageId, session };
+            } catch (error) {
+              console.error(`Failed to refresh external session ${sessionId}:`, error);
+              return null;
+            }
+          }),
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const updatesByMessage = new Map<string, ExternalAgentSession[]>();
+        for (const result of results) {
+          if (!result) continue;
+          const existing = updatesByMessage.get(result.messageId) ?? [];
+          existing.push(result.session);
+          updatesByMessage.set(result.messageId, existing);
+        }
+
+        if (updatesByMessage.size > 0) {
+          setMessages((prev) =>
+            prev.map((message) => {
+              const nextSessions = updatesByMessage.get(message.id);
+              if (!nextSessions?.length) {
+                return message;
+              }
+              return applyExternalSessionUpdates(message, nextSessions);
+            }),
+          );
+        }
+      } finally {
+        inFlight = false;
+        const shouldContinue = messagesRef.current.some((message) =>
+          (message.externalSessions ?? []).some(isExternalSessionActive),
+        );
+        if (shouldContinue) {
+          scheduleNextPoll();
+        }
+      }
+    };
+
+    void pollExternalSessions();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [messages]);
 
   const hydrateLongChatHistory = useCallback(async () => {
     if (isHydratingRef.current || hasHydratedRef.current) return;
@@ -1887,13 +2098,27 @@ export function useAgentChat(
               const toolCall = payload.data?.id
                 ? toolCallIndex.get(payload.data.id)
                 : undefined;
-              const artifact =
+              const artifacts =
                 toolCall && typeof payload.data?.result === "string"
-                  ? artifactFromToolResult(
+                  ? artifactsFromToolResult(
                       toolCall.name,
                       toolCall.arguments,
                       payload.data.result,
                     )
+                  : [];
+              const externalSessions =
+                toolCall && typeof payload.data?.result === "string"
+                  ? extractExternalSessions(payload.data.result)
+                  : [];
+              const externalSessionSummary =
+                toolCall &&
+                typeof payload.data?.result === "string" &&
+                (toolCall.name === "spawn_external_agent_session" ||
+                  toolCall.name === "send_external_agent_message" ||
+                  toolCall.name === "wait_external_agent_session" ||
+                  toolCall.name === "cancel_external_agent_session" ||
+                  toolCall.name === "list_external_agent_sessions")
+                  ? summarizeExternalSessionResult(payload.data.result)
                   : null;
               void captureForgeStep(
                 "tool_result",
@@ -1904,19 +2129,26 @@ export function useAgentChat(
                 },
               );
               return {
-                ...message,
-                artifacts: artifact
-                  ? appendUniqueArtifact(message.artifacts, artifact)
-                  : message.artifacts,
+                ...applyExternalSessionUpdates(message, externalSessions),
+                artifacts: artifacts.length
+                  ? artifacts.reduce(
+                      (current, nextArtifact) =>
+                        appendUniqueArtifact(current, nextArtifact),
+                      mergeExternalSessionArtifacts(message.artifacts, externalSessions),
+                    )
+                  : mergeExternalSessionArtifacts(message.artifacts, externalSessions),
                 neuralState: "thinking",
                 trace: [
                   ...(message.trace || []),
                   createTraceEntry(
                     "tool",
-                    `Tool result: ${payload.data?.id || "completed"}`,
+                    externalSessionSummary
+                      ? externalSessionSummary
+                      : `Tool result: ${payload.data?.id || "completed"}`,
                     {
-                      preview:
-                        typeof payload.data?.result === "string"
+                      preview: externalSessionSummary
+                        ? externalSessionSummary
+                        : typeof payload.data?.result === "string"
                           ? payload.data.result.slice(0, 180)
                           : undefined,
                     },

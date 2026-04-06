@@ -152,6 +152,59 @@ export interface ChatArtifact {
   originTool: string;
 }
 
+export type ExternalRuntimeKind = "codex" | "claude";
+export type ExternalAgentSessionStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+export type ExternalAgentAuditEventType =
+  | "session_created"
+  | "session_started"
+  | "stdout_chunk"
+  | "stderr_chunk"
+  | "file_touched"
+  | "artifact_emitted"
+  | "session_completed"
+  | "session_failed"
+  | "session_cancelled";
+
+export interface ExternalAgentAuditEvent {
+  eventType: ExternalAgentAuditEventType;
+  message: string;
+  timestamp: number;
+}
+
+export interface ExternalAgentSession {
+  sessionId: string;
+  runtimeKind: ExternalRuntimeKind;
+  workspacePath: string;
+  taskSummary: string;
+  launchCommandPreview?: string | null;
+  status: ExternalAgentSessionStatus;
+  createdAt: number;
+  startedAt?: number | null;
+  finishedAt?: number | null;
+  lastMessage?: string | null;
+  stdout: string;
+  stderr: string;
+  exitCode?: number | null;
+  error?: string | null;
+  touchedPaths: string[];
+  artifacts: ChatArtifact[];
+  auditEvents: ExternalAgentAuditEvent[];
+}
+
+export interface ExternalRuntimeAvailability {
+  runtimeKind: ExternalRuntimeKind;
+  installed: boolean;
+  binaryName: string;
+  binaryPath?: string | null;
+  installHint: string;
+  statusMessage: string;
+}
+
 export interface AgentMessage {
   id: string;
   type: "user" | "agent" | "system";
@@ -195,6 +248,7 @@ export interface AgentMessage {
     finalResponseLanguageMode?: string;
   };
   specialists?: SpecialistRunState[];
+  externalSessions?: ExternalAgentSession[];
   ragTelemetry?: {
     historySource?: string;
     retrievalMode?: string;

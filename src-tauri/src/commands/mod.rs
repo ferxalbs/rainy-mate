@@ -13,6 +13,7 @@ pub mod chat_artifacts;
 pub mod deployment;
 
 pub mod document;
+pub mod external_agents;
 pub mod file;
 pub mod file_ops;
 pub mod folder;
@@ -40,6 +41,7 @@ pub use beam::*;
 pub use deployment::*;
 
 pub use document::*;
+pub use external_agents::*;
 pub use file::*;
 pub use file_ops::*;
 pub use folder::*;

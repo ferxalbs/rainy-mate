@@ -77,12 +77,26 @@ function makeArtifact(
   };
 }
 
-function extractPathFromResult(result: string): string | null {
+function extractArtifactPathsFromResult(result: string): string[] {
   try {
-    const parsed = JSON.parse(result) as { path?: unknown };
-    return typeof parsed.path === "string" ? parsed.path : null;
+    const parsed = JSON.parse(result) as {
+      path?: unknown;
+      artifacts?: Array<{ path?: unknown }>;
+    };
+    const paths = new Set<string>();
+    if (typeof parsed.path === "string") {
+      paths.add(parsed.path);
+    }
+    if (Array.isArray(parsed.artifacts)) {
+      for (const artifact of parsed.artifacts) {
+        if (typeof artifact?.path === "string") {
+          paths.add(artifact.path);
+        }
+      }
+    }
+    return [...paths];
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -91,9 +105,19 @@ export function artifactFromToolResult(
   _args: string | undefined,
   result: string,
 ): ChatArtifact | null {
-  const path = extractPathFromResult(result);
-  if (!path) return null;
-  return artifactFromPath(path, toolName);
+  const [firstPath] = extractArtifactPathsFromResult(result);
+  if (!firstPath) return null;
+  return artifactFromPath(firstPath, toolName);
+}
+
+export function artifactsFromToolResult(
+  toolName: string,
+  _args: string | undefined,
+  result: string,
+): ChatArtifact[] {
+  return extractArtifactPathsFromResult(result)
+    .map((path) => artifactFromPath(path, toolName))
+    .filter((artifact): artifact is ChatArtifact => artifact !== null);
 }
 
 export function appendUniqueArtifact(

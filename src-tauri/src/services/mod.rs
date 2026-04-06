@@ -21,6 +21,7 @@ pub mod command_poller_agent;
 pub mod default_agent_spec;
 pub mod document;
 pub mod embedder;
+pub mod external_agent_runtime;
 pub mod file_manager;
 pub mod file_operations;
 pub mod fleet_control;
@@ -65,11 +66,16 @@ pub use agent_run_control::AgentRunControl;
 pub use airlock::AirlockService;
 pub use airlock_messages::{AirlockMessage, AirlockMessageStore};
 pub use atm_client::ATMClient;
+pub use audit_emitter::AuditEmitter;
 pub use beam_rpc::BeamRpcService;
 pub use beam_templates::BeamTemplateService;
 pub use browser_controller::BrowserController;
 pub use command_poller::CommandPoller;
 pub use document::DocumentService;
+pub use external_agent_runtime::{
+    ExternalAgentRuntime, ExternalAgentSession, ExternalRuntimeAvailability, ExternalRuntimeKind,
+    NewExternalAgentSession,
+};
 pub use file_manager::FileManager;
 pub use file_operations::FileOperationEngine;
 pub use folder_manager::FolderManager;

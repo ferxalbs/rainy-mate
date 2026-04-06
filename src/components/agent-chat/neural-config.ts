@@ -107,6 +107,11 @@ export const TOOL_STATE_MAP: Record<string, NeuralState> = {
   beam_estimate_gas: "communicating",
   beam_sign_transaction: "executing",
   beam_send_transaction: "communicating",
+  spawn_external_agent_session: "executing",
+  send_external_agent_message: "executing",
+  wait_external_agent_session: "observing",
+  list_external_agent_sessions: "observing",
+  cancel_external_agent_session: "executing",
 };
 
 /** Human-readable display names for raw tool function names */
@@ -164,6 +169,11 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   beam_estimate_gas: "Estimating Gas",
   beam_sign_transaction: "Signing Transaction",
   beam_send_transaction: "Broadcasting Transaction",
+  spawn_external_agent_session: "Starting External Worker",
+  send_external_agent_message: "Directing External Worker",
+  wait_external_agent_session: "Awaiting External Worker",
+  list_external_agent_sessions: "Listing External Workers",
+  cancel_external_agent_session: "Stopping External Worker",
 };
 
 /** Resolves a function name to a human-readable display name */

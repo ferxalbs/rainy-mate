@@ -525,3 +525,43 @@ pub struct UpdateRecurringTaskArgs {
     /// Seven-field cron expression. Required when schedule_kind is custom.
     pub cron_expression: Option<String>,
 }
+
+// ── External Agent CLI Runtime ───────────────────────────────────────────────
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct SpawnExternalAgentSessionArgs {
+    /// External runtime identifier: "codex" or "claude"
+    pub runtime: String,
+    /// High-level task summary MaTE will bind to the worker session
+    pub task_summary: String,
+    /// Optional workspace path override. Must resolve inside the current workspace scope.
+    pub workspace_path: Option<String>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct SendExternalAgentMessageArgs {
+    /// External session id returned by spawn_external_agent_session
+    pub session_id: String,
+    /// Operator message that starts the one-shot external worker run
+    pub message: String,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct WaitExternalAgentSessionArgs {
+    /// External session id to await
+    pub session_id: String,
+    /// Optional timeout in milliseconds
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize, Default)]
+pub struct ListExternalAgentSessionsArgs {
+    /// Optional workspace path filter. Must resolve inside the active workspace scope.
+    pub workspace_path: Option<String>,
+}
+
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct CancelExternalAgentSessionArgs {
+    /// External session id to stop
+    pub session_id: String,
+}

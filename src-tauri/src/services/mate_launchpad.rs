@@ -17,6 +17,11 @@ const EXECUTE_RISK_TOOLS: &[&str] = &[
     "go_back",
     "submit_form",
     "http_post_json",
+    "spawn_external_agent_session",
+    "send_external_agent_message",
+    "wait_external_agent_session",
+    "list_external_agent_sessions",
+    "cancel_external_agent_session",
 ];
 
 const DELETE_RISK_TOOLS: &[&str] = &["delete_file", "move_file"];
@@ -93,6 +98,14 @@ const BEAM_DEPLOYER_TOOLS: &[&str] = &[
     "beam_send_transaction",
     "write_file",
     "append_file",
+];
+
+const PARALLEL_CODERS_TOOLS: &[&str] = &[
+    "spawn_external_agent_session",
+    "send_external_agent_message",
+    "wait_external_agent_session",
+    "list_external_agent_sessions",
+    "cancel_external_agent_session",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -361,6 +374,19 @@ impl MateLaunchpadService {
                 tool_ids: KNOWLEDGE_WEAVER_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
             },
             MatePackDefinition {
+                id: "parallel_coders".to_string(),
+                title: "Parallel Coders".to_string(),
+                summary: "Delegates bounded engineering subtasks to audited Codex or Claude worker sessions while MaTE remains the governed control plane.".to_string(),
+                recommended_for: "Codebase copilot workflows and bounded parallel engineering work".to_string(),
+                expected_outputs: vec![
+                    "Parallel worker transcript".to_string(),
+                    "Touched path evidence".to_string(),
+                    "Worker-produced artifact".to_string(),
+                ],
+                default_trust_preset: "elevated".to_string(),
+                tool_ids: PARALLEL_CODERS_TOOLS.iter().map(|tool| (*tool).to_string()).collect(),
+            },
+            MatePackDefinition {
                 id: "beam_deployer".to_string(),
                 title: "Beam Deployer".to_string(),
                 summary: "Compiles Beam-ready Solidity templates, seeds workspace guardrails, estimates gas, and deploys governed contracts through the local signing bridge.".to_string(),
@@ -427,11 +453,13 @@ impl MateLaunchpadService {
                 recommended_pack_ids: vec![
                     "repo_guardian".to_string(),
                     "knowledge_weaver".to_string(),
+                    "parallel_coders".to_string(),
                 ],
                 suggested_outputs: vec![
                     "Engineering brief".to_string(),
                     "Risk map".to_string(),
                     "Updated workspace memory".to_string(),
+                    "Parallel worker evidence".to_string(),
                 ],
             },
             FirstRunScenarioDefinition {
@@ -738,6 +766,7 @@ fn sanitize_pack_ids(ids: &[String]) -> Vec<String> {
                     | "incident_scribe"
                     | "knowledge_weaver"
                     | "beam_deployer"
+                    | "parallel_coders"
             )
         })
         .cloned()
@@ -994,7 +1023,10 @@ fn summarize_planned_actions(tool_ids: &[String]) -> WorkspacePlannedActionSumma
             | "docx_create" | "archive_create" => create_or_update.push(tool.clone()),
             "move_file" | "delete_file" => move_or_delete.push(tool.clone()),
             "execute_command" | "browse_url" | "open_new_tab" | "click_element" | "type_text"
-            | "go_back" | "submit_form" | "http_post_json" => external_actions.push(tool.clone()),
+            | "go_back" | "submit_form" | "http_post_json"
+            | "spawn_external_agent_session" | "send_external_agent_message"
+            | "wait_external_agent_session" | "list_external_agent_sessions"
+            | "cancel_external_agent_session" => external_actions.push(tool.clone()),
             "save_memory" | "recall_memory" | "ingest_document" => {
                 memory_actions.push(tool.clone())
             }
@@ -1184,6 +1216,22 @@ mod tests {
         assert!(scenario_ids.contains(&"codebase_audit"));
         assert!(scenario_ids.contains(&"incident_brief"));
         assert!(scenario_ids.contains(&"docs_to_artifacts"));
+    }
+
+    #[test]
+    fn codebase_copilot_can_recommend_parallel_coders_pack() {
+        let scenarios = MateLaunchpadService::first_run_scenarios();
+        let copilot = scenarios
+            .into_iter()
+            .find(|scenario| scenario.id == "codebase_copilot")
+            .expect("copilot scenario");
+
+        assert!(
+            copilot
+                .recommended_pack_ids
+                .iter()
+                .any(|pack_id| pack_id == "parallel_coders")
+        );
     }
 
     #[test]

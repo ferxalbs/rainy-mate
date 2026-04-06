@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BrainCircuit, CheckCircle2, FolderKanban, Shield, Sparkles } from "lucide-react";
+import {
+  BrainCircuit,
+  CheckCircle2,
+  FolderKanban,
+  Shield,
+  Sparkles,
+  TerminalSquare,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@heroui/react";
 
 import * as tauri from "../../services/tauri";
@@ -42,20 +50,26 @@ export function WorkspaceLaunchpad({
   const [launchpad, setLaunchpad] = useState<tauri.WorkspaceLaunchpadSummary | null>(null);
   const [packs, setPacks] = useState<tauri.MatePackDefinition[]>([]);
   const [scenarios, setScenarios] = useState<tauri.FirstRunScenarioDefinition[]>([]);
+  const [externalRuntimes, setExternalRuntimes] = useState<
+    tauri.ExternalRuntimeAvailability[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [nextLaunchpad, nextPacks, nextScenarios] = await Promise.all([
+      const [nextLaunchpad, nextPacks, nextScenarios, nextExternalRuntimes] =
+        await Promise.all([
         tauri.getWorkspaceLaunchpad(workspacePath),
         tauri.listMatePackDefinitions(),
         tauri.listFirstRunScenarios(),
-      ]);
+        tauri.getExternalAgentRuntimeAvailability(),
+        ]);
       setLaunchpad(nextLaunchpad);
       setPacks(nextPacks);
       setScenarios(nextScenarios);
+      setExternalRuntimes(nextExternalRuntimes);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to load launchpad");
     } finally {
@@ -141,6 +155,10 @@ export function WorkspaceLaunchpad({
   const latestContractToolPreview = useMemo(
     () => (latestContractRun?.approvedToolIds ?? []).slice(0, 8),
     [latestContractRun],
+  );
+  const missingExternalRuntimeCount = useMemo(
+    () => externalRuntimes.filter((runtime) => !runtime.installed).length,
+    [externalRuntimes],
   );
 
   const handlePresetChange = useCallback(
@@ -351,6 +369,82 @@ export function WorkspaceLaunchpad({
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 px-1">
+            <TerminalSquare className="size-4 text-primary" />
+            <h2 className="text-[14px] font-semibold tracking-tight text-foreground">
+              External Workers
+            </h2>
+          </div>
+          <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${
+                  missingExternalRuntimeCount === 0
+                    ? "bg-green-500/10 text-green-500"
+                    : "bg-yellow-500/10 text-yellow-500"
+                }`}
+              >
+                {missingExternalRuntimeCount === 0
+                  ? "All runtimes ready"
+                  : `${missingExternalRuntimeCount} runtime${
+                      missingExternalRuntimeCount === 1 ? "" : "s"
+                    } need installation`}
+              </div>
+              <p className="text-[12px] text-muted-foreground">
+                Parallel worker delegation is only valid when the corresponding CLI is installed on
+                this machine.
+              </p>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {externalRuntimes.map((runtime) => (
+                <div
+                  key={runtime.runtimeKind}
+                  className={`rounded-2xl border p-4 ${
+                    runtime.installed
+                      ? "border-green-500/20 bg-green-500/5"
+                      : "border-yellow-500/20 bg-yellow-500/5"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <h3 className="text-[14px] font-semibold tracking-tight text-foreground">
+                        {runtime.runtimeKind === "codex" ? "Codex CLI" : "Claude Code CLI"}
+                      </h3>
+                      <p className="text-[13px] leading-relaxed text-muted-foreground">
+                        {runtime.statusMessage}
+                      </p>
+                    </div>
+                    <div
+                      className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                        runtime.installed
+                          ? "bg-green-500/10 text-green-500"
+                          : "bg-yellow-500/10 text-yellow-500"
+                      }`}
+                    >
+                      {runtime.installed ? "Installed" : "Missing"}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2 pt-3 border-t border-white/5">
+                    <div className="rounded-lg bg-white/5 border border-white/5 px-2.5 py-2 text-[12px] text-foreground/80 break-all">
+                      <span className="text-muted-foreground mr-1.5">Binary:</span>
+                      <span className="font-medium">
+                        {runtime.binaryPath || runtime.binaryName}
+                      </span>
+                    </div>
+                    {!runtime.installed && (
+                      <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-2.5 py-2 text-[12px] text-foreground/90 flex gap-2">
+                        <AlertTriangle className="size-4 shrink-0 text-yellow-500 mt-0.5" />
+                        <span>{runtime.installHint}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

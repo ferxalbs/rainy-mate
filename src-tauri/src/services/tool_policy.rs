@@ -13,6 +13,7 @@ pub enum ToolSkill {
     Workspace,
     /// Beam RPC + Secure Local Signing Bridge
     Evm,
+    ExternalAgent,
 }
 
 impl ToolSkill {
@@ -27,6 +28,7 @@ impl ToolSkill {
             Self::Documents => "documents",
             Self::Workspace => "workspace",
             Self::Evm => "evm",
+            Self::ExternalAgent => "external_agent",
         }
     }
 }
@@ -162,6 +164,18 @@ pub fn get_tool_policy(function_name: &str) -> Option<ToolPolicy> {
         | "beam_sign_transaction"
         | "beam_send_transaction" => ToolPolicy {
             skill: ToolSkill::Evm,
+            airlock_level: AirlockLevel::Dangerous,
+        },
+        "list_external_agent_sessions" | "wait_external_agent_session" => ToolPolicy {
+            skill: ToolSkill::ExternalAgent,
+            airlock_level: AirlockLevel::Safe,
+        },
+        "send_external_agent_message" | "cancel_external_agent_session" => ToolPolicy {
+            skill: ToolSkill::ExternalAgent,
+            airlock_level: AirlockLevel::Sensitive,
+        },
+        "spawn_external_agent_session" => ToolPolicy {
+            skill: ToolSkill::ExternalAgent,
             airlock_level: AirlockLevel::Dangerous,
         },
 

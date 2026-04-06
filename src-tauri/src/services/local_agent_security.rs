@@ -62,6 +62,11 @@ const EXECUTE_TOOLS: &[&str] = &[
     "go_back",
     "submit_form",
     "http_post_json",
+    "spawn_external_agent_session",
+    "send_external_agent_message",
+    "wait_external_agent_session",
+    "list_external_agent_sessions",
+    "cancel_external_agent_session",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

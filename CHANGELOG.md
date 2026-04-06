@@ -35,6 +35,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cd src-tauri && cargo check -q` → pass
 - `pnpm exec tsc --noEmit` → pass
 
+## [0.6.6] - 2026-04-05 - GOVERNED EXTERNAL WORKERS
+
+### Added
+
+- **Governed external worker runtime for Codex CLI and Claude Code is now first-class in the desktop engine** — MaTE can create audited external sessions, execute one-shot delegated runs inside the current workspace, wait for completion, list active/history sessions, cancel work, and surface touched paths, artifacts, and audit evidence through the same governed runtime model:
+  - `src-tauri/src/services/external_agent_runtime/mod.rs`, `src-tauri/src/services/external_agent_runtime/models.rs`, `src-tauri/src/services/mod.rs`, `src-tauri/src/lib.rs` — added the external runtime service, session/audit models, runtime registration, CLI availability checks, audit-emitter wiring, command previews, cancellation/timeout handling, and dev-only real-CLI smoke coverage
+  - `src-tauri/src/commands/external_agents.rs`, `src-tauri/src/commands/mod.rs` — added the Tauri command surface for create/get/list/wait/cancel operations and runtime availability inspection
+  - `src-tauri/src/services/skill_executor/external_agents.rs`, `src-tauri/src/services/skill_executor/args.rs`, `src-tauri/src/services/skill_executor/registry.rs`, `src-tauri/src/services/skill_executor.rs`, `src-tauri/src/services/tool_policy.rs`, `src-tauri/src/services/local_agent_security.rs` — added the agent tool contract for governed external workers with explicit L2/L1 policy coverage and workspace security admission
+  - `src-tauri/src/services/mate_launchpad.rs` — added the `parallel_coders` pack and Launchpad contract coverage for external coding workers
+
+### Changed
+
+- **Launchpad and Agent Chat now present external workers as auditable product surface instead of opaque tool output** — operators can see if the required CLI is installed before delegation, and finished/running sessions now render compact runtime, status, artifact, path, and command evidence in chat without introducing a second UI paradigm:
+  - `src/components/workspace/WorkspaceLaunchpad.tsx`, `src/services/tauri.ts`, `src/types/agent.ts` — added runtime availability bindings and an `External Workers` block that explicitly tells the user when `codex` or `claude` is missing and must be installed
+  - `src/hooks/useAgentChat.ts`, `src/components/agent-chat/MessageBubble.tsx`, `src/lib/chat-artifacts.ts`, `src/components/agent-chat/neural-config.ts` — added external session parsing, controlled polling for active sessions, artifact/session merging, and a compact `External Sessions` rail with audited command preview and runtime evidence
+
+- **Claude Code compatibility is now aligned to the real CLI contract observed in dev** — the runtime no longer assumes prompt-argument behavior that fails under the installed `claude` build:
+  - `src-tauri/src/services/external_agent_runtime/mod.rs` — Claude sessions now run with `--verbose`, `stream-json`, and prompt delivery over `stdin`, matching the real CLI behavior validated on the local machine
+
+### Fixed
+
+- **External worker sessions now preserve canonical evidence under cancellation and path normalization edge cases** — pending-session cancellation records its terminal audit event before snapshot return, command previews use canonical workspace paths, and touched-path/artifact extraction stays aligned with macOS `/var` vs `/private/var` resolution:
+  - `src-tauri/src/services/external_agent_runtime/mod.rs` — fixed cancellation snapshot ordering, canonical preview assertions, and path/artifact evidence handling under real workspace normalization
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+- `cd src-tauri && cargo test external_agent_runtime -- --nocapture` → pass
+- `cd src-tauri && RUN_REAL_EXTERNAL_AGENT_SMOKE=1 cargo test real_codex_cli_smoke -- --ignored --nocapture` → pass
+- `cd src-tauri && RUN_REAL_EXTERNAL_AGENT_SMOKE=1 cargo test real_claude_cli_smoke -- --ignored --nocapture` → pass
+
 ## [0.6.5] - 2026-04-01 - MATE REBORN: DEFINITIVE DEVELOPER COCKPIT
 
 ### Added
