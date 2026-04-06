@@ -64,7 +64,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          shared-key: "sqlite-bust-v1"
+          shared-key: "sqlite-bust-v2"
 
       - name: Build Rust
         run: cd src-tauri && cargo build --lib
@@ -128,7 +128,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsqlite3-dev
+          sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsqlite3-dev pkg-config
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -167,8 +167,12 @@ jobs:
           echo "VCPKG_ROOT=C:/vcpkg" >> $GITHUB_ENV
           echo "C:/vcpkg/installed/x64-windows/bin" >> $GITHUB_PATH
 
+      - name: Create Tauri CI Config
+        shell: bash
+        run: echo '{"bundle":{"createUpdaterArtifacts":false}}' > src-tauri/ci-config.json
+
       - name: Tauri Build
-        run: pnpm run tauri build ${{ matrix.args }}
+        run: pnpm run tauri build ${{ matrix.args }} --config src-tauri/ci-config.json
 
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'
