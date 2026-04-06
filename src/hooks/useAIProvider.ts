@@ -132,9 +132,6 @@ export function useAIProvider(): UseAIProviderResult {
       const geminiProvider = currentProviders.find((p) => p.id === GEMINI_PROVIDER_ID);
 
       if (!rainyProvider) {
-        console.log(
-          "[useAIProvider] Registering default rainy_api provider...",
-        );
         try {
           // Check for API key
           const apiKey = await tauri.getApiKey(RAINY_PROVIDER_ID);
@@ -153,11 +150,6 @@ export function useAIProvider(): UseAIProviderResult {
           // Add to router if enabled
           if (enabled) {
             await tauri.addProviderToRouter(RAINY_PROVIDER_ID);
-            console.log("[useAIProvider] Added rainy_api to router");
-          } else {
-            console.log(
-              "[useAIProvider] rainy_api registered but disabled (no API key)",
-            );
           }
         } catch (err) {
           console.warn("[useAIProvider] Failed to init rainy_api:", err);
@@ -168,7 +160,6 @@ export function useAIProvider(): UseAIProviderResult {
           const routerProviders = await tauri.getRouterProviders();
           if (!routerProviders.includes(RAINY_PROVIDER_ID)) {
             await tauri.addProviderToRouter(RAINY_PROVIDER_ID);
-            console.log("[useAIProvider] Added existing rainy_api to router");
           }
         } catch (e) {
           console.warn("[useAIProvider] Failed to add rainy_api to router:", e);
@@ -192,7 +183,6 @@ export function useAIProvider(): UseAIProviderResult {
 
           if (enabled) {
             await tauri.addProviderToRouter(GEMINI_PROVIDER_ID);
-            console.log("[useAIProvider] Added gemini_byok to router");
           }
         } catch (err) {
           console.warn("[useAIProvider] Failed to init gemini_byok:", err);
@@ -202,7 +192,6 @@ export function useAIProvider(): UseAIProviderResult {
           const routerProviders = await tauri.getRouterProviders();
           if (!routerProviders.includes(GEMINI_PROVIDER_ID)) {
             await tauri.addProviderToRouter(GEMINI_PROVIDER_ID);
-            console.log("[useAIProvider] Added existing gemini_byok to router");
           }
         } catch (e) {
           console.warn("[useAIProvider] Failed to add gemini_byok to router:", e);
