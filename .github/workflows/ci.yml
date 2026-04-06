@@ -42,6 +42,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -51,6 +64,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          shared-key: "sqlite-bust-v1"
 
       - name: Build Rust
         run: cd src-tauri && cargo build --lib
@@ -71,6 +85,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
@@ -101,7 +128,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsqlite3-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -122,9 +149,23 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          shared-key: "sqlite-bust-v1"
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Set LIBSQLITE3_SYS_USE_PKG_CONFIG (Ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: echo "LIBSQLITE3_SYS_USE_PKG_CONFIG=1" >> $GITHUB_ENV
+
+      - name: Setup SQLite (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          vcpkg install sqlite3:x64-windows
+          echo "VCPKGRS_DYNAMIC=1" >> $GITHUB_ENV
+          echo "VCPKG_ROOT=C:/vcpkg" >> $GITHUB_ENV
+          echo "C:/vcpkg/installed/x64-windows/bin" >> $GITHUB_PATH
 
       - name: Tauri Build
         run: pnpm run tauri build ${{ matrix.args }}
