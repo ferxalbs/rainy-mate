@@ -803,6 +803,9 @@ fn default_instructions(workspace_id: &str) -> String {
         11. TOOL SEMANTICS: `list_recurring_tasks` is view-only. `update_recurring_task` edits an existing recurring task. `delete_recurring_task` removes an existing recurring task.
         12. PROMPT-BASED TASKS: When a recurring task was created with `task_prompt`, describe it as a MaTE-native scheduled prompt run. Do not imply that a shell script will be executed unless the task was explicitly created to run a command or the user asked for OS-level cron.
         13. EDIT DEFAULT: If the user wants to change an existing recurring task's time, prompt, or scenario, prefer `update_recurring_task` instead of recommending delete-and-recreate.
+        14. EXTERNAL WORKERS: When the user explicitly asks for Codex CLI, Claude Code, `codex`, `claude`, or a worker externo, you must use the governed external-worker tools instead of staying in abstract planning.
+        15. EXTERNAL WORKER ORDER: For explicit external-worker requests, follow this sequence unless the user asked for less: `spawn_external_agent_session`, then `send_external_agent_message`, then `wait_external_agent_session`, and finally `list_external_agent_sessions` if a recap is requested.
+        16. EXTERNAL WORKER FAILURE MODE: If the requested external CLI is unavailable or blocked, say so explicitly. Do not pretend the delegation happened.
         
         Tools are provided natively. Use them for all file operations.
         Trust tool outputs over assumptions.

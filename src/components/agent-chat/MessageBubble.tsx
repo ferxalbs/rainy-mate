@@ -496,6 +496,26 @@ function ExternalSessionRail({
     cancelled: "text-amber-500",
   };
 
+  const formatTimestamp = (value?: number | null) => {
+    if (!value) return null;
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(value));
+  };
+
+  const formatElapsed = (session: ExternalAgentSession) => {
+    if (!session.startedAt || !session.finishedAt) return null;
+    const elapsedMs = Math.max(session.finishedAt - session.startedAt, 0);
+    const totalSeconds = Math.round(elapsedMs / 1000);
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+  };
+
   return (
     <div className="w-full rounded-2xl border border-border/30 bg-background/45 p-4 backdrop-blur-md">
       <div className="mb-3 flex items-center gap-2">
@@ -506,75 +526,101 @@ function ExternalSessionRail({
       </div>
 
       <div className="grid gap-2 xl:grid-cols-2">
-        {sessions.map((session) => (
-          <div
-            key={session.sessionId}
-            className="min-w-0 rounded-xl border border-border/30 bg-background/70 p-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Bot className="size-3.5 text-primary/80" />
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {session.runtimeKind === "codex" ? "Codex" : "Claude Code"}
-                  </span>
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                  {session.taskSummary}
-                </p>
-              </div>
-              <span
-                className={`shrink-0 text-[11px] font-medium uppercase tracking-wide ${statusTone[session.status]}`}
-              >
-                {session.status}
-              </span>
-            </div>
+        {sessions.map((session) => {
+          const artifactPaths = new Set(session.artifacts.map((artifact) => artifact.path));
+          const inspectionPaths = session.touchedPaths.filter((path) => !artifactPaths.has(path));
+          const startedLabel = formatTimestamp(session.startedAt ?? session.createdAt);
+          const finishedLabel = formatTimestamp(session.finishedAt);
+          const elapsedLabel = formatElapsed(session);
 
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
-                {session.touchedPaths.length} path{session.touchedPaths.length === 1 ? "" : "s"}
-              </span>
-              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
-                {session.auditEvents.length} event{session.auditEvents.length === 1 ? "" : "s"}
-              </span>
-              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
-                {session.artifacts.length} artifact{session.artifacts.length === 1 ? "" : "s"}
-              </span>
-              {typeof session.exitCode === "number" && (
-                <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
-                  exit {session.exitCode}
+          return (
+            <div
+              key={session.sessionId}
+              className="min-w-0 rounded-xl border border-border/30 bg-background/70 p-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Bot className="size-3.5 text-primary/80" />
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {session.runtimeKind === "codex" ? "Codex" : "Claude Code"}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {session.taskSummary}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 text-[11px] font-medium uppercase tracking-wide ${statusTone[session.status]}`}
+                >
+                  {session.status}
                 </span>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                  {session.artifacts.length} deliverable{session.artifacts.length === 1 ? "" : "s"}
+                </span>
+                <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                  {inspectionPaths.length} inspected path{inspectionPaths.length === 1 ? "" : "s"}
+                </span>
+                <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                  {session.auditEvents.length} event{session.auditEvents.length === 1 ? "" : "s"}
+                </span>
+                {typeof session.exitCode === "number" && (
+                  <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                    exit {session.exitCode}
+                  </span>
+                )}
+              </div>
+
+              {(startedLabel || finishedLabel || elapsedLabel) && (
+                <div className="mt-3 rounded-lg border border-border/30 bg-background/55 px-2.5 py-2 text-[11px] text-muted-foreground">
+                  {startedLabel && <p>Started: {startedLabel}</p>}
+                  {finishedLabel && <p>Finished: {finishedLabel}</p>}
+                  {elapsedLabel && <p>Duration: {elapsedLabel}</p>}
+                </div>
+              )}
+
+              {session.error && (
+                <p className="mt-3 text-xs leading-relaxed text-red-500">{session.error}</p>
+              )}
+
+              {session.launchCommandPreview && (
+                <p className="mt-3 truncate rounded-lg border border-border/30 bg-background/60 px-2.5 py-2 font-mono text-[11px] text-muted-foreground">
+                  {session.launchCommandPreview}
+                </p>
+              )}
+
+              {session.artifacts.length > 0 && (
+                <div className="mt-3">
+                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-primary/75">
+                    Deliverables
+                  </p>
+                  <div className="flex items-center gap-2 text-[11px] text-primary/85">
+                    <FileOutput className="size-3.5" />
+                    <span className="truncate">
+                      {session.artifacts.slice(0, 2).map((artifact) => artifact.filename).join(" · ")}
+                      {session.artifacts.length > 2 ? " · ..." : ""}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {inspectionPaths.length > 0 && (
+                <div className="mt-3">
+                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">
+                    Inspected Paths
+                  </p>
+                  <p className="break-all text-[11px] leading-relaxed text-muted-foreground">
+                    {inspectionPaths.slice(0, 2).join(" · ")}
+                    {inspectionPaths.length > 2 ? " · ..." : ""}
+                  </p>
+                </div>
               )}
             </div>
-
-            {session.error && (
-              <p className="mt-3 text-xs leading-relaxed text-red-500">{session.error}</p>
-            )}
-
-            {session.launchCommandPreview && (
-              <p className="mt-3 truncate rounded-lg border border-border/30 bg-background/60 px-2.5 py-2 font-mono text-[11px] text-muted-foreground">
-                {session.launchCommandPreview}
-              </p>
-            )}
-
-            {session.touchedPaths.length > 0 && (
-              <p className="mt-3 break-all text-[11px] leading-relaxed text-muted-foreground">
-                {session.touchedPaths.slice(0, 2).join(" · ")}
-                {session.touchedPaths.length > 2 ? " · ..." : ""}
-              </p>
-            )}
-
-            {session.artifacts.length > 0 && (
-              <div className="mt-3 flex items-center gap-2 text-[11px] text-primary/85">
-                <FileOutput className="size-3.5" />
-                <span className="truncate">
-                  {session.artifacts.slice(0, 2).map((artifact) => artifact.filename).join(" · ")}
-                  {session.artifacts.length > 2 ? " · ..." : ""}
-                </span>
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

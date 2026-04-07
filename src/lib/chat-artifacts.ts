@@ -52,6 +52,16 @@ function artifactFromPath(path: string, originTool: string): ChatArtifact | null
         "system_default",
         originTool,
       );
+    case "md":
+    case "markdown":
+      return makeArtifact(
+        path,
+        filename,
+        "markdown",
+        "text/markdown",
+        "system_default",
+        originTool,
+      );
     default:
       return null;
   }

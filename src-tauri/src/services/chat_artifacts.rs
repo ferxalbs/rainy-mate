@@ -8,6 +8,7 @@ pub enum ChatArtifactKind {
     Pdf,
     Docx,
     Xlsx,
+    Markdown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -91,6 +92,11 @@ pub fn artifact_from_path(path: &str, origin_tool: &str) -> Option<ChatArtifact>
         "xlsx" => (
             ChatArtifactKind::Xlsx,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ChatArtifactOpenMode::SystemDefault,
+        ),
+        "md" | "markdown" => (
+            ChatArtifactKind::Markdown,
+            "text/markdown",
             ChatArtifactOpenMode::SystemDefault,
         ),
         _ => return None,
@@ -207,5 +213,18 @@ mod tests {
 
         assert_eq!(artifact.kind, ChatArtifactKind::Pdf);
         assert_eq!(artifact.filename, "brief.pdf");
+    }
+
+    #[test]
+    fn validates_existing_markdown_artifact_paths() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let path = tempdir.path().join("brief.md");
+        std::fs::write(&path, b"# hello").expect("write");
+
+        let artifact =
+            ensure_openable_artifact_path(path.to_string_lossy().as_ref()).expect("artifact");
+
+        assert_eq!(artifact.kind, ChatArtifactKind::Markdown);
+        assert_eq!(artifact.filename, "brief.md");
     }
 }

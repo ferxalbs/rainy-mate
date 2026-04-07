@@ -170,8 +170,12 @@ impl ExternalAgentRuntime {
             launch_command_preview: None,
             status: ExternalAgentSessionStatus::Pending,
             created_at: chrono::Utc::now().timestamp_millis(),
+            created_at_iso: None,
             started_at: None,
+            started_at_iso: None,
             finished_at: None,
+            finished_at_iso: None,
+            duration_ms: None,
             last_message: None,
             stdout: String::new(),
             stderr: String::new(),
@@ -181,6 +185,8 @@ impl ExternalAgentRuntime {
             artifacts: Vec::new(),
             audit_events: Vec::new(),
         };
+        let mut session = session;
+        Self::refresh_session_timestamps(&mut session);
 
         let handle = Arc::new(ExternalAgentSessionHandle::new(session.clone()));
         self.sessions
@@ -301,6 +307,7 @@ impl ExternalAgentRuntime {
                 session.runtime_kind,
                 Path::new(&session.workspace_path),
             ));
+            Self::refresh_session_timestamps(&mut session);
             Self::build_prompt(&session.task_summary, &normalized_message)
         };
         self.record_event(
@@ -376,6 +383,7 @@ impl ExternalAgentRuntime {
                 session.status = ExternalAgentSessionStatus::Cancelled;
                 session.finished_at = Some(chrono::Utc::now().timestamp_millis());
                 session.error = Some("Cancelled before execution".to_string());
+                Self::refresh_session_timestamps(&mut session);
                 drop(session);
                 self.record_event(
                     session_id,
@@ -481,12 +489,14 @@ impl ExternalAgentRuntime {
                                 status.code()
                             ));
                         }
+                        Self::refresh_session_timestamps(&mut session);
                     }
                     Err(error) => {
                         let mut session = handle.session.write().await;
                         session.finished_at = Some(chrono::Utc::now().timestamp_millis());
                         session.status = ExternalAgentSessionStatus::Failed;
                         session.error = Some(format!("Failed to await child process: {}", error));
+                        Self::refresh_session_timestamps(&mut session);
                     }
                 }
                 let snapshot = handle.snapshot().await;
@@ -514,6 +524,7 @@ impl ExternalAgentRuntime {
                 session.status = ExternalAgentSessionStatus::Cancelled;
                 session.error = Some("Cancelled by MaTE operator".to_string());
                 session.exit_code = None;
+                Self::refresh_session_timestamps(&mut session);
                 drop(session);
                 self.record_event(
                     &session_id,
@@ -540,6 +551,7 @@ impl ExternalAgentRuntime {
             let mut session = handle.session.write().await;
             if session.finished_at.is_none() {
                 session.finished_at = Some(chrono::Utc::now().timestamp_millis());
+                Self::refresh_session_timestamps(&mut session);
             }
         }
         handle.completion.notify_waiters();
@@ -690,6 +702,16 @@ impl ExternalAgentRuntime {
         Ok(input
             .canonicalize()
             .map_err(|e| format!("Cannot canonicalize workspace path '{}': {}", path, e))?)
+    }
+
+    fn refresh_session_timestamps(session: &mut ExternalAgentSession) {
+        session.created_at_iso = Some(timestamp_to_iso(session.created_at));
+        session.started_at_iso = session.started_at.map(timestamp_to_iso);
+        session.finished_at_iso = session.finished_at.map(timestamp_to_iso);
+        session.duration_ms = match (session.started_at, session.finished_at) {
+            (Some(started_at), Some(finished_at)) => Some((finished_at - started_at).max(0)),
+            _ => None,
+        };
     }
 
     fn is_terminal_status(status: ExternalAgentSessionStatus) -> bool {
@@ -855,6 +877,12 @@ fn display_runtime_label(runtime_kind: ExternalRuntimeKind) -> &'static str {
         ExternalRuntimeKind::Codex => "Codex",
         ExternalRuntimeKind::Claude => "Claude Code",
     }
+}
+
+fn timestamp_to_iso(timestamp_ms: i64) -> String {
+    chrono::DateTime::<chrono::Utc>::from_timestamp_millis(timestamp_ms)
+        .map(|value| value.to_rfc3339())
+        .unwrap_or_else(|| timestamp_ms.to_string())
 }
 
 fn shell_escape_preview(value: &str) -> String {

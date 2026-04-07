@@ -469,8 +469,23 @@ fn now_ms() -> i64 {
         .as_millis() as i64
 }
 
+const ALWAYS_AVAILABLE_AGENT_CONTROL_TOOLS: &[&str] = &[
+    "spawn_external_agent_session",
+    "send_external_agent_message",
+    "wait_external_agent_session",
+    "list_external_agent_sessions",
+    "cancel_external_agent_session",
+];
+
 fn build_generated_spec(recording: &RecordedWorkflow, agent_name: String) -> AgentSpec {
-    let allowed_tools = derive_allowed_tools(recording);
+    let mut allowed_tools = derive_allowed_tools(recording);
+    for tool in ALWAYS_AVAILABLE_AGENT_CONTROL_TOOLS {
+        if !allowed_tools.iter().any(|existing| existing == tool) {
+            allowed_tools.push((*tool).to_string());
+        }
+    }
+    allowed_tools.sort();
+    allowed_tools.dedup();
     let summary = build_summary(recording);
     let structured = build_structured_playbook(recording);
 
@@ -598,7 +613,12 @@ mod tests {
         }]);
         let spec = build_generated_spec(&recording, "Forge Agent".to_string());
         assert_eq!(spec.airlock.tool_policy.mode, "allowlist");
-        assert!(spec.airlock.tool_policy.allow.is_empty());
+        assert!(spec
+            .airlock
+            .tool_policy
+            .allow
+            .iter()
+            .any(|tool| tool == "spawn_external_agent_session"));
     }
 
     #[test]

@@ -53,6 +53,14 @@ const WRITE_TOOLS: &[&str] = &[
 
 const DELETE_TOOLS: &[&str] = &["delete_file", "move_file"];
 
+const CREATE_AGENT_TOOLS: &[&str] = &[
+    "spawn_external_agent_session",
+    "send_external_agent_message",
+    "wait_external_agent_session",
+    "list_external_agent_sessions",
+    "cancel_external_agent_session",
+];
+
 const EXECUTE_TOOLS: &[&str] = &[
     "execute_command",
     "browse_url",
@@ -62,11 +70,6 @@ const EXECUTE_TOOLS: &[&str] = &[
     "go_back",
     "submit_form",
     "http_post_json",
-    "spawn_external_agent_session",
-    "send_external_agent_message",
-    "wait_external_agent_session",
-    "list_external_agent_sessions",
-    "cancel_external_agent_session",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +178,9 @@ impl LocalAgentSecurityService {
         }
         if !permissions.can_execute {
             deny.extend(EXECUTE_TOOLS.iter().map(|tool| (*tool).to_string()));
+        }
+        if !permissions.can_create_agents {
+            deny.extend(CREATE_AGENT_TOOLS.iter().map(|tool| (*tool).to_string()));
         }
 
         ToolAccessPolicy {
@@ -337,7 +343,35 @@ mod tests {
         assert!(policy.deny.iter().any(|item| item == "write_file"));
         assert!(policy.deny.iter().any(|item| item == "execute_command"));
         assert!(policy.deny.iter().any(|item| item == "delete_file"));
+        assert!(!policy.deny.iter().any(|item| item == "spawn_external_agent_session"));
         assert!(!policy.deny.iter().any(|item| item == "read_file"));
+    }
+
+    #[test]
+    fn create_agent_tools_follow_can_create_agents_not_can_execute() {
+        let blocked = LocalAgentSecurityService::tool_policy_from_permissions(&WorkspacePermissions {
+            can_read: true,
+            can_write: true,
+            can_execute: false,
+            can_delete: false,
+            can_create_agents: false,
+        });
+        assert!(blocked
+            .deny
+            .iter()
+            .any(|item| item == "spawn_external_agent_session"));
+
+        let allowed = LocalAgentSecurityService::tool_policy_from_permissions(&WorkspacePermissions {
+            can_read: true,
+            can_write: true,
+            can_execute: false,
+            can_delete: false,
+            can_create_agents: true,
+        });
+        assert!(!allowed
+            .deny
+            .iter()
+            .any(|item| item == "spawn_external_agent_session"));
     }
 
     #[test]

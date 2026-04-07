@@ -137,7 +137,7 @@ export interface ChatAttachment {
   thumbnailDataUri?: string;
 }
 
-export type ChatArtifactKind = "image" | "pdf" | "docx" | "xlsx";
+export type ChatArtifactKind = "image" | "pdf" | "docx" | "xlsx" | "markdown";
 export type ChatArtifactOpenMode = "inline" | "preview" | "system_default";
 export type ChatArtifactAction = "open";
 
@@ -184,8 +184,12 @@ export interface ExternalAgentSession {
   launchCommandPreview?: string | null;
   status: ExternalAgentSessionStatus;
   createdAt: number;
+  createdAtIso?: string | null;
   startedAt?: number | null;
+  startedAtIso?: string | null;
   finishedAt?: number | null;
+  finishedAtIso?: string | null;
+  durationMs?: number | null;
   lastMessage?: string | null;
   stdout: string;
   stderr: string;

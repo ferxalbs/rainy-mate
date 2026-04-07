@@ -29,6 +29,11 @@ const ALWAYS_AVAILABLE_WORKSPACE_CONTROL_TOOLS: &[&str] = &[
     "list_recurring_tasks",
     "schedule_recurring_task",
     "delete_recurring_task",
+    "spawn_external_agent_session",
+    "send_external_agent_message",
+    "wait_external_agent_session",
+    "list_external_agent_sessions",
+    "cancel_external_agent_session",
 ];
 
 const REPO_GUARDIAN_TOOLS: &[&str] = &[
@@ -829,10 +834,18 @@ fn active_tool_ids(enabled_pack_ids: &[String], trust_preset: &str) -> Vec<Strin
         .into_iter()
         .filter(|tool| match trust_preset {
             "conservative" => {
-                !EXECUTE_RISK_TOOLS.iter().any(|value| value == tool)
+                (!EXECUTE_RISK_TOOLS.iter().any(|value| value == tool)
+                    || ALWAYS_AVAILABLE_WORKSPACE_CONTROL_TOOLS
+                        .iter()
+                        .any(|value| value == tool))
                     && !DELETE_RISK_TOOLS.iter().any(|value| value == tool)
             }
-            "balanced" => !EXECUTE_RISK_TOOLS.iter().any(|value| value == tool),
+            "balanced" => {
+                !EXECUTE_RISK_TOOLS.iter().any(|value| value == tool)
+                    || ALWAYS_AVAILABLE_WORKSPACE_CONTROL_TOOLS
+                        .iter()
+                        .any(|value| value == tool)
+            }
             _ => true,
         })
         .collect()
@@ -1275,6 +1288,20 @@ mod tests {
         assert!(active.iter().any(|tool| tool == "schedule_recurring_task"));
         assert!(active.iter().any(|tool| tool == "list_recurring_tasks"));
         assert!(active.iter().any(|tool| tool == "delete_recurring_task"));
+    }
+
+    #[test]
+    fn launchpad_active_tools_keep_external_workers_available_for_agent_creation() {
+        let workspace = test_workspace(vec!["repo_guardian"]);
+        let active = effective_launch_tool_ids(
+            &workspace,
+            &workspace.launchpad.enabled_pack_ids,
+            &workspace.launchpad.trust_preset,
+        );
+
+        assert!(active.iter().any(|tool| tool == "spawn_external_agent_session"));
+        assert!(active.iter().any(|tool| tool == "send_external_agent_message"));
+        assert!(active.iter().any(|tool| tool == "wait_external_agent_session"));
     }
 
     #[test]
