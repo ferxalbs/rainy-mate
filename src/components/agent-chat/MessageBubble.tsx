@@ -223,7 +223,7 @@ function MessageBubbleComponent({
         </div>
 
         {/* Thought/Reasoning Display (Only for Agent with thinking) */}
-        {!isUser && message.artifacts && message.artifacts.length > 0 && (
+        {!isUser && !message.isLoading && message.artifacts && message.artifacts.length > 0 && (
           <ArtifactBadgeRow artifacts={message.artifacts} />
         )}
 
@@ -281,7 +281,7 @@ function MessageBubbleComponent({
           />
         ) : null}
 
-        {!isUser && message.externalSessions && message.externalSessions.length > 0 && (
+        {!isUser && !message.isLoading && message.externalSessions && message.externalSessions.length > 0 && (
           <ExternalSessionRail sessions={message.externalSessions} />
         )}
 
