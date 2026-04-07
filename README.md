@@ -9,10 +9,11 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.6.5-0f766e" />
+  <img alt="Version" src="https://img.shields.io/badge/version-0.6.6-0f766e" />
   <img alt="Status" src="https://img.shields.io/badge/status-beta-f59e0b" />
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-tauri_2-2563eb" />
   <img alt="Engine" src="https://img.shields.io/badge/engine-rust-111827" />
+  <a href="https://deepwiki.com/ferxalbs/rainy-mate"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 > [!WARNING]
