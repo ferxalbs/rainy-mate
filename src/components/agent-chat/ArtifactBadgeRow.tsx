@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { FileImage, FileSpreadsheet, FileText, Eye, ExternalLink } from "lucide-react";
 
@@ -28,7 +28,7 @@ interface ArtifactBadgeRowProps {
 }
 
 // ⚡ Bolt: Wrapped in React.memo to prevent unnecessary re-renders during message streaming token updates
-export const ArtifactBadgeRow = React.memo(function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
+export const ArtifactBadgeRow = memo(function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
   const [openingPath, setOpeningPath] = useState<string | null>(null);
   const [errorByPath, setErrorByPath] = useState<Record<string, string>>({});
 

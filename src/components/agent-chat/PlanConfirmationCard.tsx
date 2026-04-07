@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -33,7 +33,7 @@ const methodColors: Record<string, string> = {
 };
 
 // ⚡ Bolt: Wrapped in React.memo to prevent unnecessary re-renders during message streaming token updates
-export const PlanConfirmationCard = React.memo(function PlanConfirmationCard({
+export const PlanConfirmationCard = memo(function PlanConfirmationCard({
   toolCalls,
   onExecute,
   isExecuting,

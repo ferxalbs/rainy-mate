@@ -939,6 +939,6 @@ mod tests {
         assert!(refreshed
             .spec_json
             .as_deref()
-            .is_some_and(|json| json.contains("parallel_supervisor")));
+            .is_some_and(|json| json.contains("ParallelSupervisor")));
     }
 }

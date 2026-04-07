@@ -35,6 +35,330 @@ import type { SpecialistRunState } from "../../types/agent";
 // Inline fallback arrays (like prop || []) create referential inequality on every render.
 const EMPTY_ARRAY: never[] = [];
 
+// ⚡ Bolt: Define child components above usage to prevent no-use-before-define linting errors
+// while ensuring React.memo correctly prevents unnecessary AST teardowns during rapid token updates.
+
+function SupervisorRailComponent({
+  summary,
+  steps,
+  specialists,
+}: {
+  summary?: string;
+  steps: string[];
+  specialists: SpecialistRunState[];
+}) {
+  const roleLabel: Record<SpecialistRunState["role"], string> = {
+    research: "Research",
+    executor: "Executor",
+    verifier: "Verifier",
+    memory_scribe: "Memory Scribe",
+  };
+
+  const statusTone: Record<
+    SpecialistRunState["status"],
+    string
+  > = {
+    pending: "text-muted-foreground",
+    planning: "text-amber-400",
+    running: "text-cyan-500",
+    waiting_on_airlock: "text-orange-500",
+    verifying: "text-emerald-500",
+    completed: "text-green-500",
+    failed: "text-red-500",
+    cancelled: "text-muted-foreground",
+  };
+
+  const formatDuration = (specialist: SpecialistRunState) => {
+    if (!specialist.startedAtMs) return null;
+    // Use finishedAtMs when available; for running specialists show nothing
+    // to avoid impure Date.now() calls during render
+    if (!specialist.finishedAtMs) return null;
+    const elapsedMs = Math.max(0, specialist.finishedAtMs - specialist.startedAtMs);
+    if (elapsedMs < 1000) return `${elapsedMs}ms`;
+    return `${(elapsedMs / 1000).toFixed(1)}s`;
+  };
+
+  return (
+    <div className="w-full rounded-2xl border border-primary/15 bg-background/50 p-4 backdrop-blur-md">
+      {summary && (
+        <div className="mb-3">
+          <p className="text-xs uppercase tracking-[0.18em] text-primary/70">
+            Supervisor
+          </p>
+          <p className="mt-1 text-sm text-foreground">{summary}</p>
+        </div>
+      )}
+
+      {steps.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {steps.map((step) => (
+            <span
+              key={step}
+              className="rounded-full border border-border/40 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground"
+            >
+              {step}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {specialists.length > 0 && (
+        <div className="grid gap-2 xl:grid-cols-3">
+          {specialists.map((specialist) => (
+            <div
+              key={specialist.agentId}
+              className="min-w-0 rounded-xl border border-border/30 bg-background/70 p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">
+                  {roleLabel[specialist.role]}
+                </span>
+                <span
+                  className={`text-[11px] font-medium uppercase tracking-wide ${statusTone[specialist.status]}`}
+                >
+                  {specialist.status.replace(/_/g, " ")}
+                </span>
+              </div>
+
+              {specialist.detail && (
+                <p className="mt-2 break-words text-xs text-muted-foreground">
+                  {specialist.detail}
+                </p>
+              )}
+              {specialist.dependsOn && specialist.dependsOn.length > 0 && (
+                <p className="mt-2 break-words text-[11px] text-muted-foreground">
+                  Depends on: {specialist.dependsOn.join(", ")}
+                </p>
+              )}
+              {specialist.activeTool && (
+                <p className="mt-2 text-xs text-primary/80">
+                  Tool: {specialist.activeTool}
+                </p>
+              )}
+              {(specialist.toolCount || formatDuration(specialist) || specialist.writeLikeUsed) && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {specialist.toolCount ? `${specialist.toolCount} tool${specialist.toolCount === 1 ? "" : "s"}` : "No tools yet"}
+                  {formatDuration(specialist) ? ` · ${formatDuration(specialist)}` : ""}
+                  {specialist.writeLikeUsed ? " · write-like actions" : ""}
+                </p>
+              )}
+              {specialist.error && (
+                <p className="mt-2 text-xs text-red-500">{specialist.error}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SupervisorRail = React.memo(SupervisorRailComponent);
+
+function ExternalSessionRailComponent({
+  sessions,
+}: {
+  sessions: ExternalAgentSession[];
+}) {
+  const statusTone: Record<ExternalAgentSession["status"], string> = {
+    pending: "text-muted-foreground",
+    running: "text-cyan-500",
+    completed: "text-emerald-500",
+    failed: "text-red-500",
+    cancelled: "text-amber-500",
+  };
+
+  return (
+    <div className="w-full rounded-2xl border border-border/30 bg-background/45 p-4 backdrop-blur-md">
+      <div className="mb-3 flex items-center gap-2">
+        <TerminalSquare className="size-4 text-primary" />
+        <p className="text-xs uppercase tracking-[0.18em] text-primary/70">
+          External Sessions
+        </p>
+      </div>
+
+      <div className="grid gap-2 xl:grid-cols-2">
+        {sessions.map((session) => (
+          <div
+            key={session.sessionId}
+            className="min-w-0 rounded-xl border border-border/30 bg-background/70 p-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Bot className="size-3.5 text-primary/80" />
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {session.runtimeKind === "codex" ? "Codex" : "Claude Code"}
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {session.taskSummary}
+                </p>
+              </div>
+              <span
+                className={`shrink-0 text-[11px] font-medium uppercase tracking-wide ${statusTone[session.status]}`}
+              >
+                {session.status}
+              </span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                {session.touchedPaths.length} path{session.touchedPaths.length === 1 ? "" : "s"}
+              </span>
+              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                {session.auditEvents.length} event{session.auditEvents.length === 1 ? "" : "s"}
+              </span>
+              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                {session.artifacts.length} artifact{session.artifacts.length === 1 ? "" : "s"}
+              </span>
+              {typeof session.exitCode === "number" && (
+                <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
+                  exit {session.exitCode}
+                </span>
+              )}
+            </div>
+
+            {session.error && (
+              <p className="mt-3 text-xs leading-relaxed text-red-500">{session.error}</p>
+            )}
+
+            {session.launchCommandPreview && (
+              <p className="mt-3 truncate rounded-lg border border-border/30 bg-background/60 px-2.5 py-2 font-mono text-[11px] text-muted-foreground">
+                {session.launchCommandPreview}
+              </p>
+            )}
+
+            {session.touchedPaths.length > 0 && (
+              <p className="mt-3 break-all text-[11px] leading-relaxed text-muted-foreground">
+                {session.touchedPaths.slice(0, 2).join(" · ")}
+                {session.touchedPaths.length > 2 ? " · ..." : ""}
+              </p>
+            )}
+
+            {session.artifacts.length > 0 && (
+              <div className="mt-3 flex items-center gap-2 text-[11px] text-primary/85">
+                <FileOutput className="size-3.5" />
+                <span className="truncate">
+                  {session.artifacts.slice(0, 2).map((artifact) => artifact.filename).join(" · ")}
+                  {session.artifacts.length > 2 ? " · ..." : ""}
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const ExternalSessionRail = React.memo(ExternalSessionRailComponent);
+
+function TraceAccordionComponent({
+  trace,
+  runState,
+  stats,
+}: {
+  trace: NonNullable<AgentMessage["trace"]>;
+  runState?: AgentMessage["runState"];
+  stats: {
+    total: number;
+    toolCalls: number;
+    retries: number;
+    errors: number;
+    approvals: number;
+  };
+}) {
+  const [isOpen, React_useState] = React.useState(false);
+  const [visibleCount, setVisibleCount] = React.useState(40);
+  const stateTone =
+    runState === "failed"
+      ? "text-red-500"
+      : runState === "cancelled"
+        ? "text-amber-500"
+        : runState === "completed"
+          ? "text-emerald-500"
+          : "text-cyan-500";
+
+  const visibleTrace = isOpen ? trace.slice(0, visibleCount) : [];
+  const hasHiddenTrace = visibleCount < trace.length;
+
+  return (
+    <details
+      className="w-full rounded-xl border border-border/30 bg-background/40 px-3 py-2"
+      onToggle={(event) => {
+        const nextOpen = (event.currentTarget as HTMLDetailsElement).open;
+        React_useState(nextOpen);
+        if (!nextOpen) {
+          setVisibleCount(40);
+        }
+      }}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="flex items-center gap-2">
+          <ChevronDown className="size-3.5" />
+          <span className={`font-medium ${stateTone}`}>
+            Runtime Trace {runState ? `(${runState})` : ""}
+          </span>
+          <span>calls {stats.toolCalls}</span>
+          <span>retries {stats.retries}</span>
+          <span>errors {stats.errors}</span>
+          <span>approvals {stats.approvals}</span>
+        </span>
+        <span>{stats.total} events</span>
+      </summary>
+
+      <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-border/20 bg-background/30 p-2 font-mono text-[11px]">
+        {!isOpen ? (
+          <div className="text-muted-foreground">
+            Expand to inspect {trace.length} runtime event{trace.length === 1 ? "" : "s"}.
+          </div>
+        ) : trace.length === 0 ? (
+          <div className="text-muted-foreground">Waiting for runtime events...</div>
+        ) : (
+          <>
+            {visibleTrace.map((item) => (
+              <div
+                key={item.id}
+                className="mb-1.5 rounded-md border border-border/10 bg-background/40 p-2"
+              >
+                <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                  <span className="uppercase tracking-wide">{item.phase}</span>
+                  <span>
+                    {item.timestamp.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <div className="mt-1 text-foreground">{item.label}</div>
+                {item.preview && (
+                  <div className="mt-1 line-clamp-2 text-muted-foreground">{item.preview}</div>
+                )}
+              </div>
+            ))}
+            {hasHiddenTrace && (
+              <div className="mt-2 flex justify-center">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setVisibleCount((count) => Math.min(trace.length, count + 40))}
+                >
+                  Show {Math.min(40, trace.length - visibleCount)} more
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
+const TraceAccordion = React.memo(TraceAccordionComponent);
+
 // Map step types to icons
 const stepIcons: Record<string, React.ElementType> = {
   createFile: FileCode,
@@ -47,6 +371,70 @@ const stepIcons: Record<string, React.ElementType> = {
 
 function TrashIcon(props: any) {
   return <Ban {...props} />;
+}
+
+const PlanCard = React.memo(PlanCardComponent);
+
+function PlanCardComponent({
+  plan,
+  onExecute,
+  isExecuting,
+}: {
+  plan: TaskPlan;
+  onExecute?: (id: string) => void;
+  isExecuting?: boolean;
+}) {
+  return (
+    <Card className="w-full max-w-md md:max-w-lg lg:max-w-xl p-4 space-y-4 border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-900/10">
+      <div className="flex items-center justify-between">
+        <h3 className="font-medium text-sm flex items-center gap-2">
+          <FileCode className="size-4 text-purple-500" />
+          Proposed Plan
+        </h3>
+        <span className="text-xs text-muted-foreground bg-background/50 px-2 py-1 rounded">
+          {plan.steps.length} steps
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {plan.steps.map((step) => {
+          const Icon = stepIcons[step.type] || stepIcons.default;
+          return (
+            <div
+              key={`${step.type}-${step.description}`}
+              className="flex gap-3 items-start text-xs p-2 rounded bg-background/40 hover:bg-background/80 transition-colors border border-transparent hover:border-border/30"
+            >
+              <Icon className="size-3.5 mt-0.5 text-muted-foreground shrink-0" />
+              <span className="text-foreground/80">{step.description}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {plan.warnings.length > 0 && (
+        <div className="bg-orange-500/10 text-orange-600 dark:text-orange-400 p-3 rounded-lg text-xs space-y-1">
+          <p className="font-semibold flex items-center gap-1">⚠️ Warnings</p>
+          <ul className="list-disc list-inside opacity-90">
+            {plan.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-2">
+        <Button
+          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20"
+          size="sm"
+          onClick={() => onExecute?.(plan.id)}
+          disabled={isExecuting}
+        >
+          <Play className="size-3.5" />
+          Execute Plan
+        </Button>
+      </div>
+    </Card>
+  );
 }
 
 interface MessageBubbleProps {
@@ -373,385 +761,6 @@ export const MessageBubble = React.memo(
 
 // Re-export with a name hint for the parent to avoid confusion
 export { MessageBubble as MemoizedMessageBubble };
-
-// ⚡ Bolt: Wrapped child components in React.memo to prevent unnecessary
-// AST and component teardown during rapid token updates in message streaming.
-const SupervisorRail = React.memo(function SupervisorRail({
-  summary,
-  steps,
-  specialists,
-}: {
-  summary?: string;
-  steps: string[];
-  specialists: SpecialistRunState[];
-}) {
-  const roleLabel: Record<SpecialistRunState["role"], string> = {
-    research: "Research",
-    executor: "Executor",
-    verifier: "Verifier",
-    memory_scribe: "Memory Scribe",
-  };
-
-  const statusTone: Record<
-    SpecialistRunState["status"],
-    string
-  > = {
-    pending: "text-muted-foreground",
-    planning: "text-amber-400",
-    running: "text-cyan-500",
-    waiting_on_airlock: "text-orange-500",
-    verifying: "text-emerald-500",
-    completed: "text-green-500",
-    failed: "text-red-500",
-    cancelled: "text-muted-foreground",
-  };
-
-  const formatDuration = (specialist: SpecialistRunState) => {
-    if (!specialist.startedAtMs) return null;
-    // Use finishedAtMs when available; for running specialists show nothing
-    // to avoid impure Date.now() calls during render
-    if (!specialist.finishedAtMs) return null;
-    const elapsedMs = Math.max(0, specialist.finishedAtMs - specialist.startedAtMs);
-    if (elapsedMs < 1000) return `${elapsedMs}ms`;
-    return `${(elapsedMs / 1000).toFixed(1)}s`;
-  };
-
-  return (
-    <div className="w-full rounded-2xl border border-primary/15 bg-background/50 p-4 backdrop-blur-md">
-      {summary && (
-        <div className="mb-3">
-          <p className="text-xs uppercase tracking-[0.18em] text-primary/70">
-            Supervisor
-          </p>
-          <p className="mt-1 text-sm text-foreground">{summary}</p>
-        </div>
-      )}
-
-      {steps.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {steps.map((step) => (
-            <span
-              key={step}
-              className="rounded-full border border-border/40 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground"
-            >
-              {step}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {specialists.length > 0 && (
-        <div className="grid gap-2 xl:grid-cols-3">
-          {specialists.map((specialist) => (
-            <div
-              key={specialist.agentId}
-              className="min-w-0 rounded-xl border border-border/30 bg-background/70 p-3"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">
-                  {roleLabel[specialist.role]}
-                </span>
-                <span
-                  className={`text-[11px] font-medium uppercase tracking-wide ${statusTone[specialist.status]}`}
-                >
-                  {specialist.status.replace(/_/g, " ")}
-                </span>
-              </div>
-
-              {specialist.detail && (
-                <p className="mt-2 break-words text-xs text-muted-foreground">
-                  {specialist.detail}
-                </p>
-              )}
-              {specialist.dependsOn && specialist.dependsOn.length > 0 && (
-                <p className="mt-2 break-words text-[11px] text-muted-foreground">
-                  Depends on: {specialist.dependsOn.join(", ")}
-                </p>
-              )}
-              {specialist.activeTool && (
-                <p className="mt-2 text-xs text-primary/80">
-                  Tool: {specialist.activeTool}
-                </p>
-              )}
-              {(specialist.toolCount || formatDuration(specialist) || specialist.writeLikeUsed) && (
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  {specialist.toolCount ? `${specialist.toolCount} tool${specialist.toolCount === 1 ? "" : "s"}` : "No tools yet"}
-                  {formatDuration(specialist) ? ` · ${formatDuration(specialist)}` : ""}
-                  {specialist.writeLikeUsed ? " · write-like actions" : ""}
-                </p>
-              )}
-              {specialist.error && (
-                <p className="mt-2 text-xs text-red-500">{specialist.error}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-});
-
-const ExternalSessionRail = React.memo(function ExternalSessionRail({
-  sessions,
-}: {
-  sessions: ExternalAgentSession[];
-}) {
-  const statusTone: Record<ExternalAgentSession["status"], string> = {
-    pending: "text-muted-foreground",
-    running: "text-cyan-500",
-    completed: "text-emerald-500",
-    failed: "text-red-500",
-    cancelled: "text-amber-500",
-  };
-
-  return (
-    <div className="w-full rounded-2xl border border-border/30 bg-background/45 p-4 backdrop-blur-md">
-      <div className="mb-3 flex items-center gap-2">
-        <TerminalSquare className="size-4 text-primary" />
-        <p className="text-xs uppercase tracking-[0.18em] text-primary/70">
-          External Sessions
-        </p>
-      </div>
-
-      <div className="grid gap-2 xl:grid-cols-2">
-        {sessions.map((session) => (
-          <div
-            key={session.sessionId}
-            className="min-w-0 rounded-xl border border-border/30 bg-background/70 p-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Bot className="size-3.5 text-primary/80" />
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {session.runtimeKind === "codex" ? "Codex" : "Claude Code"}
-                  </span>
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                  {session.taskSummary}
-                </p>
-              </div>
-              <span
-                className={`shrink-0 text-[11px] font-medium uppercase tracking-wide ${statusTone[session.status]}`}
-              >
-                {session.status}
-              </span>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
-                {session.touchedPaths.length} path{session.touchedPaths.length === 1 ? "" : "s"}
-              </span>
-              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
-                {session.auditEvents.length} event{session.auditEvents.length === 1 ? "" : "s"}
-              </span>
-              <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
-                {session.artifacts.length} artifact{session.artifacts.length === 1 ? "" : "s"}
-              </span>
-              {typeof session.exitCode === "number" && (
-                <span className="rounded-full border border-border/40 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
-                  exit {session.exitCode}
-                </span>
-              )}
-            </div>
-
-            {session.error && (
-              <p className="mt-3 text-xs leading-relaxed text-red-500">{session.error}</p>
-            )}
-
-            {session.launchCommandPreview && (
-              <p className="mt-3 truncate rounded-lg border border-border/30 bg-background/60 px-2.5 py-2 font-mono text-[11px] text-muted-foreground">
-                {session.launchCommandPreview}
-              </p>
-            )}
-
-            {session.touchedPaths.length > 0 && (
-              <p className="mt-3 break-all text-[11px] leading-relaxed text-muted-foreground">
-                {session.touchedPaths.slice(0, 2).join(" · ")}
-                {session.touchedPaths.length > 2 ? " · ..." : ""}
-              </p>
-            )}
-
-            {session.artifacts.length > 0 && (
-              <div className="mt-3 flex items-center gap-2 text-[11px] text-primary/85">
-                <FileOutput className="size-3.5" />
-                <span className="truncate">
-                  {session.artifacts.slice(0, 2).map((artifact) => artifact.filename).join(" · ")}
-                  {session.artifacts.length > 2 ? " · ..." : ""}
-                </span>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-});
-
-const TraceAccordion = React.memo(function TraceAccordion({
-  trace,
-  runState,
-  stats,
-}: {
-  trace: NonNullable<AgentMessage["trace"]>;
-  runState?: AgentMessage["runState"];
-  stats: {
-    total: number;
-    toolCalls: number;
-    retries: number;
-    errors: number;
-    approvals: number;
-  };
-}) {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [visibleCount, setVisibleCount] = React.useState(40);
-  const stateTone =
-    runState === "failed"
-      ? "text-red-500"
-      : runState === "cancelled"
-        ? "text-amber-500"
-        : runState === "completed"
-          ? "text-emerald-500"
-          : "text-cyan-500";
-
-  const visibleTrace = isOpen ? trace.slice(0, visibleCount) : [];
-  const hasHiddenTrace = visibleCount < trace.length;
-
-  return (
-    <details
-      className="w-full rounded-xl border border-border/30 bg-background/40 px-3 py-2"
-      onToggle={(event) => {
-        const nextOpen = (event.currentTarget as HTMLDetailsElement).open;
-        setIsOpen(nextOpen);
-        if (!nextOpen) {
-          setVisibleCount(40);
-        }
-      }}
-    >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-2">
-          <ChevronDown className="size-3.5" />
-          <span className={`font-medium ${stateTone}`}>
-            Runtime Trace {runState ? `(${runState})` : ""}
-          </span>
-          <span>calls {stats.toolCalls}</span>
-          <span>retries {stats.retries}</span>
-          <span>errors {stats.errors}</span>
-          <span>approvals {stats.approvals}</span>
-        </span>
-        <span>{stats.total} events</span>
-      </summary>
-
-      <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-border/20 bg-background/30 p-2 font-mono text-[11px]">
-        {!isOpen ? (
-          <div className="text-muted-foreground">
-            Expand to inspect {trace.length} runtime event{trace.length === 1 ? "" : "s"}.
-          </div>
-        ) : trace.length === 0 ? (
-          <div className="text-muted-foreground">Waiting for runtime events...</div>
-        ) : (
-          <>
-            {visibleTrace.map((item) => (
-              <div
-                key={item.id}
-                className="mb-1.5 rounded-md border border-border/10 bg-background/40 p-2"
-              >
-                <div className="flex items-center justify-between gap-2 text-muted-foreground">
-                  <span className="uppercase tracking-wide">{item.phase}</span>
-                  <span>
-                    {item.timestamp.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      second: "2-digit",
-                    })}
-                  </span>
-                </div>
-                <div className="mt-1 text-foreground">{item.label}</div>
-                {item.preview && (
-                  <div className="mt-1 line-clamp-2 text-muted-foreground">{item.preview}</div>
-                )}
-              </div>
-            ))}
-            {hasHiddenTrace && (
-              <div className="mt-2 flex justify-center">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setVisibleCount((count) => Math.min(trace.length, count + 40))}
-                >
-                  Show {Math.min(40, trace.length - visibleCount)} more
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </details>
-  );
-});
-
-const PlanCard = React.memo(function PlanCard({
-  plan,
-  onExecute,
-  isExecuting,
-}: {
-  plan: TaskPlan;
-  onExecute?: (id: string) => void;
-  isExecuting?: boolean;
-}) {
-  return (
-    <Card className="w-full max-w-md md:max-w-lg lg:max-w-xl p-4 space-y-4 border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-900/10">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium text-sm flex items-center gap-2">
-          <FileCode className="size-4 text-purple-500" />
-          Proposed Plan
-        </h3>
-        <span className="text-xs text-muted-foreground bg-background/50 px-2 py-1 rounded">
-          {plan.steps.length} steps
-        </span>
-      </div>
-
-      <div className="space-y-2">
-        {plan.steps.map((step) => {
-          const Icon = stepIcons[step.type] || stepIcons.default;
-          return (
-            <div
-              key={`${step.type}-${step.description}`}
-              className="flex gap-3 items-start text-xs p-2 rounded bg-background/40 hover:bg-background/80 transition-colors border border-transparent hover:border-border/30"
-            >
-              <Icon className="size-3.5 mt-0.5 text-muted-foreground shrink-0" />
-              <span className="text-foreground/80">{step.description}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {plan.warnings.length > 0 && (
-        <div className="bg-orange-500/10 text-orange-600 dark:text-orange-400 p-3 rounded-lg text-xs space-y-1">
-          <p className="font-semibold flex items-center gap-1">⚠️ Warnings</p>
-          <ul className="list-disc list-inside opacity-90">
-            {plan.warnings.map((w) => (
-              <li key={w}>{w}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="flex gap-2 pt-2">
-        <Button
-          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20"
-          size="sm"
-          onClick={() => onExecute?.(plan.id)}
-          disabled={isExecuting}
-        >
-          <Play className="size-3.5" />
-          Execute Plan
-        </Button>
-      </div>
-    </Card>
-  );
-});
 
 const AIRLOCK_BADGE_CONFIG: Record<number, { label: string; className: string }> = {
   0: { label: "L0 Safe",      className: "border-emerald-500/30 text-emerald-500 bg-emerald-500/10" },

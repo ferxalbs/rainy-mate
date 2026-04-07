@@ -63,12 +63,9 @@ struct BeamTemplateManifest {
     title: String,
     summary: String,
     description: String,
-    #[serde(rename = "contract_name")]
     contract_name: String,
-    #[serde(rename = "contract_file")]
     contract_file: String,
     category: String,
-    #[serde(rename = "recommended_network")]
     recommended_network: String,
     tags: Vec<String>,
 }
@@ -80,12 +77,9 @@ pub struct BeamTemplateSummary {
     pub title: String,
     pub summary: String,
     pub description: String,
-    #[serde(rename = "contract_name")]
     pub contract_name: String,
-    #[serde(rename = "contract_file")]
     pub contract_file: String,
     pub category: String,
-    #[serde(rename = "recommended_network")]
     pub recommended_network: String,
     pub tags: Vec<String>,
 }
