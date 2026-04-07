@@ -541,9 +541,7 @@ function App() {
                   }}
                 />
               ) : (
-                <div className="flex items-center justify-center h-full">
-                  <NoFolderGate onAddFolder={addFolder} />
-                </div>
+                <NoFolderGate onAddFolder={addFolder} />
               )}
             </div>
           )}
@@ -565,7 +563,8 @@ function App() {
  */
 function NoFolderGate({ onAddFolder }: { onAddFolder: () => void }) {
   return (
-    <div className="mx-auto max-w-lg animate-appear rounded-[32px] border border-white/10 bg-background/80 p-12 text-center shadow-[0_24px_90px_rgba(0,0,0,0.14)] backdrop-blur-2xl backdrop-saturate-150 dark:bg-background/20">
+    <div className="flex items-center justify-center h-full w-full flex-1 min-h-[400px]">
+      <div className="mx-auto w-full max-w-lg animate-appear rounded-[32px] border border-white/10 bg-background/80 p-12 text-center shadow-[0_24px_90px_rgba(0,0,0,0.14)] backdrop-blur-2xl backdrop-saturate-150 dark:bg-background/20">
       <div className="space-y-4">
         <div className="size-16 mx-auto bg-primary/10 rounded-2xl flex items-center justify-center">
           <FolderPlus className="size-8 text-primary" />
@@ -588,6 +587,7 @@ function NoFolderGate({ onAddFolder }: { onAddFolder: () => void }) {
           Add Folder
         </Button>
       </div>
+    </div>
     </div>
   );
 }
