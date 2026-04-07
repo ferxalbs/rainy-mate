@@ -39,6 +39,38 @@ const MAX_COMPACTION_SUMMARY_CHARS: usize = 12_000;
 const CHAT_TITLE_MODEL_ID: &str = "openai/gpt-5-nano";
 const MAX_CHAT_TITLE_CHARS: usize = 72;
 
+fn default_agent_unrestricted_tool_policy() -> crate::models::neural::ToolAccessPolicy {
+    crate::models::neural::ToolAccessPolicy {
+        enabled: true,
+        mode: "all".to_string(),
+        allow: Vec::new(),
+        deny: Vec::new(),
+    }
+}
+
+fn is_default_local_agent_run(agent_spec_id: Option<&str>) -> bool {
+    match agent_spec_id {
+        None => true,
+        Some(id) => id == crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID,
+    }
+}
+
+fn apply_default_local_agent_tool_policy_override(
+    agent_spec_id: Option<&str>,
+    spec: &mut AgentSpec,
+    effective_policy: &mut crate::services::EffectiveLocalAgentPolicy,
+) {
+    if !is_default_local_agent_run(agent_spec_id) {
+        return;
+    }
+
+    spec.airlock.tool_policy.mode = "all".to_string();
+    spec.airlock.tool_policy.allow.clear();
+    spec.airlock.tool_policy.deny.clear();
+    effective_policy.tool_access_policy = default_agent_unrestricted_tool_policy();
+    effective_policy.tool_access_policy_source = "default_agent+airlock".to_string();
+}
+
 fn default_runtime_mode_for_chat(agent_spec_id: Option<&str>) -> RuntimeMode {
     if agent_spec_id.is_some() {
         RuntimeMode::Single
@@ -1234,7 +1266,7 @@ pub async fn run_agent_workflow_internal(
     }
 
     let settings_manager = app_handle.state::<Arc<Mutex<crate::services::SettingsManager>>>();
-    let effective_policy = {
+    let mut effective_policy = {
         let settings = settings_manager.lock().await;
         crate::services::LocalAgentSecurityService::resolve(
             &workspace_manager,
@@ -1243,6 +1275,12 @@ pub async fn run_agent_workflow_internal(
             Some(&spec),
         )
     };
+
+    apply_default_local_agent_tool_policy_override(
+        selected_spec_id.as_deref(),
+        &mut spec,
+        &mut effective_policy,
+    );
 
     let processed_attachments =
         attachments.map(|inputs| crate::services::attachment::process_attachments(inputs));
@@ -1935,9 +1973,31 @@ pub async fn prepare_attachment_previews(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_fallback_chat_title, collect_touched_paths, is_placeholder_chat_title,
-        sanitize_chat_title,
+        apply_default_local_agent_tool_policy_override, build_fallback_chat_title,
+        collect_touched_paths, is_placeholder_chat_title, sanitize_chat_title,
     };
+    use crate::ai::specs::manifest::{AgentSpec, AirlockConfig, AirlockToolPolicy};
+    use crate::models::neural::ToolAccessPolicy;
+    use crate::services::EffectiveLocalAgentPolicy;
+
+    fn sample_effective_policy() -> EffectiveLocalAgentPolicy {
+        EffectiveLocalAgentPolicy {
+            workspace_id: "/tmp/ws".to_string(),
+            allowed_paths: vec!["/tmp/ws".to_string()],
+            blocked_paths: Vec::new(),
+            allowed_domains: Vec::new(),
+            blocked_domains: Vec::new(),
+            tool_access_policy: ToolAccessPolicy {
+                enabled: true,
+                mode: "all".to_string(),
+                allow: Vec::new(),
+                deny: vec!["execute_command".to_string(), "git_fetch".to_string()],
+            },
+            tool_access_policy_source: "workspace_permissions+spec".to_string(),
+            notifications_enabled: true,
+            can_create_agents: true,
+        }
+    }
 
     #[test]
     fn placeholder_titles_are_detected() {
@@ -1959,6 +2019,64 @@ mod tests {
     fn sanitized_title_uses_fallback_when_empty() {
         let title = sanitize_chat_title("\"\"", "Create the new sidebar system");
         assert_eq!(title, "Create the new sidebar system");
+    }
+
+    #[test]
+    fn default_local_agent_tool_override_clears_pre_airlock_restrictions() {
+        let mut spec = AgentSpec::default();
+        spec.airlock = AirlockConfig {
+            tool_policy: AirlockToolPolicy {
+                mode: "allowlist".to_string(),
+                allow: vec!["read_file".to_string()],
+                deny: vec!["execute_command".to_string()],
+            },
+            ..AirlockConfig::default()
+        };
+        let mut effective_policy = sample_effective_policy();
+
+        apply_default_local_agent_tool_policy_override(None, &mut spec, &mut effective_policy);
+
+        assert_eq!(spec.airlock.tool_policy.mode, "all");
+        assert!(spec.airlock.tool_policy.allow.is_empty());
+        assert!(spec.airlock.tool_policy.deny.is_empty());
+        assert_eq!(effective_policy.tool_access_policy.mode, "all");
+        assert!(effective_policy.tool_access_policy.allow.is_empty());
+        assert!(effective_policy.tool_access_policy.deny.is_empty());
+        assert_eq!(
+            effective_policy.tool_access_policy_source,
+            "default_agent+airlock"
+        );
+    }
+
+    #[test]
+    fn custom_agent_tool_policy_is_left_untouched() {
+        let mut spec = AgentSpec::default();
+        spec.airlock = AirlockConfig {
+            tool_policy: AirlockToolPolicy {
+                mode: "allowlist".to_string(),
+                allow: vec!["read_file".to_string()],
+                deny: vec!["execute_command".to_string()],
+            },
+            ..AirlockConfig::default()
+        };
+        let original_spec_policy = spec.airlock.tool_policy.clone();
+        let mut effective_policy = sample_effective_policy();
+        let original_effective_policy = effective_policy.tool_access_policy.clone();
+        let original_source = effective_policy.tool_access_policy_source.clone();
+
+        apply_default_local_agent_tool_policy_override(
+            Some("user-custom-agent"),
+            &mut spec,
+            &mut effective_policy,
+        );
+
+        assert_eq!(spec.airlock.tool_policy.mode, original_spec_policy.mode);
+        assert_eq!(spec.airlock.tool_policy.allow, original_spec_policy.allow);
+        assert_eq!(spec.airlock.tool_policy.deny, original_spec_policy.deny);
+        assert_eq!(effective_policy.tool_access_policy.mode, original_effective_policy.mode);
+        assert_eq!(effective_policy.tool_access_policy.allow, original_effective_policy.allow);
+        assert_eq!(effective_policy.tool_access_policy.deny, original_effective_policy.deny);
+        assert_eq!(effective_policy.tool_access_policy_source, original_source);
     }
 
     #[test]

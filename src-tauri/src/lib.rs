@@ -17,9 +17,9 @@ use services::{
     ATMClient, AgentLibraryService, AgentRunControl, AuditEmitter, BeamRpcService,
     BrowserController, CommandPoller, DocumentService, ExternalAgentRuntime, FileManager,
     FileOperationEngine, FolderManager, ImageService, KeychainAccessService, LLMClient,
-    MacOSAutoLaunchBridge, ManagedResearchService, MemoryManager, NeuralService,
-    NodeAuthenticator, QuickDelegateModalService, SettingsManager, SkillExecutor, SocketClient,
-    WorkflowRecorderService, WorkspaceManager,
+    MacOSAutoLaunchBridge, ManagedResearchService, MemoryManager, NativeShellService,
+    NeuralService, NodeAuthenticator, QuickDelegateModalService, SettingsManager,
+    SkillExecutor, SocketClient, WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tauri::Manager;
@@ -213,6 +213,7 @@ pub fn run() {
             app.manage(Arc::new(QuickDelegateModalService::new(
                 app.handle().clone(),
             )));
+            app.manage(Arc::new(NativeShellService::new(app.handle().clone())));
 
             tauri::async_runtime::block_on(async {
                 mcp_service.set_app_handle(app.handle().clone()).await;
@@ -811,6 +812,7 @@ pub fn run() {
             // Airlock Commands (Security)
             commands::respond_to_airlock,
             commands::get_pending_airlock_approvals,
+            commands::get_native_shell_status,
             commands::list_airlock_messages,
             commands::ack_airlock_message,
             commands::send_airlock_message,
@@ -848,6 +850,8 @@ pub fn run() {
             commands::agent::list_active_sessions,
             commands::agent::prepare_attachment_previews,
             commands::chat_artifacts::open_chat_artifact,
+            commands::refresh_native_shell,
+            commands::show_native_shell_palette,
             // Workflow Factory (THE FORGE foundation)
             commands::start_workflow_recording,
             commands::record_workflow_step,
@@ -938,6 +942,11 @@ pub fn run() {
             crate::services::MacOSQuickDelegateBridge::initialize(
                 app_handle.clone(),
                 quick_delegate.inner().clone(),
+            );
+            let native_shell = app_handle.state::<Arc<NativeShellService>>();
+            crate::services::MacOSNativeShellBridge::initialize(
+                app_handle.clone(),
+                native_shell.inner().clone(),
             );
         }
     });

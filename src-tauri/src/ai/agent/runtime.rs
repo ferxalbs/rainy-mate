@@ -707,6 +707,12 @@ Rules:
         let mut state = AgentState::new(
             self.options.workspace_id.clone(),
             self.options.allowed_paths.clone().unwrap_or_default(),
+            crate::models::neural::ToolAccessPolicy {
+                enabled: true,
+                mode: self.spec.airlock.tool_policy.mode.clone(),
+                allow: self.spec.airlock.tool_policy.allow.clone(),
+                deny: self.spec.airlock.tool_policy.deny.clone(),
+            },
             self.memory.clone(),
             Arc::new(self.spec.clone()),
             self.airlock_service.clone(),

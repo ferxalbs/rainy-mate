@@ -34,7 +34,6 @@ private final class RainyQuickDelegateController: NSObject {
             return
         }
 
-        installStatusItemIfNeeded()
         _ = ensurePanel()
         registerHotkeyIfNeeded()
     }

@@ -5,6 +5,7 @@ use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::{AgentContent, AgentMessage, RuntimeOptions};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::AgentSpec;
+use crate::models::neural::ToolAccessPolicy;
 use crate::services::agent_kill_switch::AgentKillSwitch;
 use crate::services::SkillExecutor;
 use chrono::Utc;
@@ -62,6 +63,7 @@ pub struct AgentState {
     pub context: HashMap<String, String>,
     pub workspace_id: String,
     pub allowed_paths: Vec<String>,
+    pub tool_access_policy: ToolAccessPolicy,
     pub memory: Arc<AgentMemory>,
     #[allow(dead_code)] // Used by steps
     pub spec: Arc<AgentSpec>,
@@ -73,6 +75,7 @@ impl AgentState {
     pub fn new(
         workspace_id: String,
         allowed_paths: Vec<String>,
+        tool_access_policy: ToolAccessPolicy,
         memory: Arc<AgentMemory>,
         spec: Arc<AgentSpec>,
         airlock_service: Arc<Option<crate::services::airlock::AirlockService>>,
@@ -83,6 +86,7 @@ impl AgentState {
             context: HashMap::new(),
             workspace_id,
             allowed_paths,
+            tool_access_policy,
             memory,
             spec,
             airlock_service,
@@ -610,6 +614,12 @@ mod tests {
         let state = AgentState::new(
             "test-ws".to_string(),
             Vec::new(),
+            crate::models::neural::ToolAccessPolicy {
+                enabled: true,
+                mode: "all".to_string(),
+                allow: Vec::new(),
+                deny: Vec::new(),
+            },
             memory,
             Arc::new(spec.clone()),
             Arc::new(None),

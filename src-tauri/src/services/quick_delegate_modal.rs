@@ -43,14 +43,18 @@ impl QuickDelegateModalService {
     }
 
     pub fn focus_main_window(&self) -> Result<(), String> {
-        if let Some(window) = self.app_handle.get_webview_window("main") {
-            let _ = window.show();
-            let _ = window.unminimize();
-            let _ = window.set_focus();
-            Ok(())
-        } else {
-            Err("Main window not found".to_string())
-        }
+        focus_main_window(&self.app_handle)
+    }
+
+    pub fn begin_run(&self) -> Result<(), String> {
+        self.busy
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map(|_| ())
+            .map_err(|_| "A quick delegation is already running.".to_string())
+    }
+
+    pub fn finish_run(&self) {
+        self.busy.store(false, Ordering::SeqCst);
     }
 
     pub async fn handle_bridge_action(&self, action: String, payload: Option<String>) {
@@ -74,14 +78,10 @@ impl QuickDelegateModalService {
                     return;
                 }
 
-                if self
-                    .busy
-                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                    .is_err()
-                {
+                if let Err(error) = self.begin_run() {
                     let _ = MacOSQuickDelegateBridge::set_state(
                         "error",
-                        Some("A quick delegation is already running."),
+                        Some(&error),
                     );
                     return;
                 }
@@ -95,7 +95,7 @@ impl QuickDelegateModalService {
                     let _ = MacOSQuickDelegateBridge::hide();
 
                     let result =
-                        execute_native_modal_prompt(app_handle.clone(), prompt.clone()).await;
+                        run_native_delegate_prompt(app_handle.clone(), prompt.clone()).await;
                     if let Err(error) = result {
                         let _ = MacOSQuickDelegateBridge::show(
                             Some("error"),
@@ -104,7 +104,7 @@ impl QuickDelegateModalService {
                     }
 
                     let quick_delegate = app_handle.state::<Arc<QuickDelegateModalService>>();
-                    quick_delegate.busy.store(false, Ordering::SeqCst);
+                    quick_delegate.finish_run();
                 });
             }
             _ => {}
@@ -112,7 +112,18 @@ impl QuickDelegateModalService {
     }
 }
 
-async fn execute_native_modal_prompt(app_handle: AppHandle, prompt: String) -> Result<(), String> {
+pub fn focus_main_window(app_handle: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        Ok(())
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
+
+pub async fn run_native_delegate_prompt(app_handle: AppHandle, prompt: String) -> Result<(), String> {
     let file_manager = app_handle.state::<Arc<FileManager>>();
     let workspace_id = file_manager
         .get_workspace()

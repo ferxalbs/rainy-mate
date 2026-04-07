@@ -130,6 +130,8 @@ private final class RainyNotificationDelegate: NSObject, UNUserNotificationCente
             sendCallback(action: "approve", commandId: commandId)
         case "RAINY_AIRLOCK_REJECT":
             sendCallback(action: "reject", commandId: commandId)
+        case "RAINY_AGENT_OPEN":
+            sendCallback(action: "open", commandId: commandId)
         case UNNotificationDefaultActionIdentifier:
             sendCallback(action: "open", commandId: commandId)
         default:
@@ -173,8 +175,19 @@ private func registerCategories() {
         intentIdentifiers: [],
         options: [.customDismissAction]
     )
+    let openSession = UNNotificationAction(
+        identifier: "RAINY_AGENT_OPEN",
+        title: "Open Session",
+        options: [.foreground]
+    )
+    let agentCategory = UNNotificationCategory(
+        identifier: "RAINY_AGENT_CATEGORY",
+        actions: [openSession],
+        intentIdentifiers: [],
+        options: [.customDismissAction]
+    )
 
-    UNUserNotificationCenter.current().setNotificationCategories([category])
+    UNUserNotificationCenter.current().setNotificationCategories([category, agentCategory])
 }
 
 @_cdecl("rainy_notification_bridge_initialize")

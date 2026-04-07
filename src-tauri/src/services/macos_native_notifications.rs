@@ -312,7 +312,7 @@ impl MacOSNativeNotificationBridge {
             _ => None,
         };
 
-        Self::send(title, body, payload.as_deref(), None)
+        Self::send(title, body, payload.as_deref(), Some("RAINY_AGENT_CATEGORY"))
     }
 
     pub fn activate_app() {

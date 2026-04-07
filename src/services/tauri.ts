@@ -3099,12 +3099,47 @@ export interface QuickDelegateStatus {
   busy: boolean;
 }
 
+export interface NativeShellRecentChat {
+  chatId: string;
+  workspaceId: string;
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+  isActive: boolean;
+}
+
+export interface NativeShellSnapshot {
+  available: boolean;
+  workspaceName?: string | null;
+  workspacePath?: string | null;
+  pendingApprovalCount: number;
+  activeSessionCount: number;
+  quickDelegateBusy: boolean;
+  recentChats: NativeShellRecentChat[];
+}
+
+export interface NativeShellStatus {
+  available: boolean;
+}
+
 export async function openQuickDelegateModal(): Promise<void> {
   return invoke<void>("open_quick_delegate_modal");
 }
 
 export async function getQuickDelegateStatus(): Promise<QuickDelegateStatus> {
   return invoke<QuickDelegateStatus>("get_quick_delegate_status");
+}
+
+export async function getNativeShellStatus(): Promise<NativeShellStatus> {
+  return invoke<NativeShellStatus>("get_native_shell_status");
+}
+
+export async function refreshNativeShell(): Promise<NativeShellSnapshot> {
+  return invoke<NativeShellSnapshot>("refresh_native_shell");
+}
+
+export async function showNativeShellPalette(): Promise<void> {
+  return invoke<void>("show_native_shell_palette");
 }
 
 // ── Beam RPC + Secure Local Signing Bridge ────────────────────────────────────

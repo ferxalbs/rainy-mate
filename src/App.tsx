@@ -19,6 +19,7 @@ import type { Folder } from "./types";
 import type { AgentSpec } from "./types/agent-spec";
 import * as tauri from "./services/tauri";
 import { useCloudEvents } from "./hooks/useCloudEvents";
+import { useNativeShellSync } from "./hooks/useNativeShellSync";
 import { Button } from "./components/ui/button";
 
 function deriveFolderNameFromPath(path: string): string {
@@ -86,6 +87,19 @@ function App() {
   useEffect(() => {
     refreshProviders();
   }, [refreshProviders]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unlistenPromise = listen("native-shell:review_approvals", async () => {
+      if (cancelled) return;
+      setActiveSection("agent-chat");
+    });
+
+    return () => {
+      cancelled = true;
+      void unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, []);
 
   // Handle folder selection
   const handleFolderSelect = useCallback(
@@ -243,6 +257,8 @@ function App() {
       elapsedSecs: activeSession.elapsedSecs,
     } satisfies tauri.ActiveChatRunBinding;
   }, [activeChatId, activeSessionsByChatId, remoteSessionBinding]);
+
+  useNativeShellSync(activeFolder?.path || activeChatId || activeSessionBinding?.runId || null);
 
   useEffect(() => {
     let cancelled = false;

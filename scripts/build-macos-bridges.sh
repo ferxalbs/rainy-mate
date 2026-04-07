@@ -86,10 +86,12 @@ stage_bridge() {
 }
 
 rm -f "$STAGE_DIR/libRainyAutoLaunch.dylib" \
+  "$STAGE_DIR/libRainyNativeShell.dylib" \
   "$STAGE_DIR/libRainyNativeNotifications.dylib" \
   "$STAGE_DIR/libRainyQuickDelegate.dylib"
 
 stage_bridge "libRainyAutoLaunch.dylib"
+stage_bridge "libRainyNativeShell.dylib"
 stage_bridge "libRainyNativeNotifications.dylib"
 stage_bridge "libRainyQuickDelegate.dylib"
 

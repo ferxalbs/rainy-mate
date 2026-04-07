@@ -250,6 +250,11 @@ fn main() {
             "RainyQuickDelegate.swift",
             &["Carbon"],
         );
+        compile_swift_bridge(
+            "RainyNativeShell",
+            "RainyNativeShell.swift",
+            &["Carbon", "AppKit"],
+        );
     }
 
     tauri_build::build()

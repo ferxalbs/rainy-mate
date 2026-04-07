@@ -35,6 +35,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cd src-tauri && cargo check -q` → pass
 - `pnpm exec tsc --noEmit` → pass
 
+### Fixed
+
+- **Default local agent tools now flow through canonical Airlock instead of being pre-blocked by workspace fallback policy** — the default agent no longer loses capabilities such as `execute_command`, `git pull`, or future tools before approval routing happens, while custom agents still preserve their user-authored Airlock policy:
+  - `src-tauri/src/commands/agent.rs` — added a default-agent-only override that resets the runtime tool policy to canonical `all` and leaves custom-agent specs untouched
+  - `src-tauri/src/ai/agent/workflow.rs`, `src-tauri/src/ai/agent/runtime.rs`, `src-tauri/src/ai/agent/act_step.rs` — the local runtime now carries `tool_access_policy` through agent state and injects it into every queued tool command so ActStep hands the real policy to execution instead of `None`
+  - `src-tauri/src/services/skill_executor.rs` — the executor now has an explicit `effective_tool_policy(...)` path with regression coverage proving that an explicit runtime policy wins over workspace fallback policy
+  - `src-tauri/src/commands/agent.rs`, `src-tauri/src/ai/agent/act_step.rs`, `src-tauri/src/services/skill_executor.rs` — added focused regression tests for: default-agent pre-Airlock override, custom-agent policy preservation, queued-command policy propagation, and explicit-policy precedence over fallback
+
+- **macOS menubar no longer shows two competing MaTE status items** — the legacy quick-delegate status item no longer duplicates the new canonical native shell entry:
+  - `src-tauri/macos/RainyQuickDelegate.swift` — removed the legacy status-item install path while preserving the native panel and hotkey behavior
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+
+## [0.6.7] - 2026-04-06 - NATIVE SHELL KICKOFF
+
+### Added
+
+- **Canonical native macOS shell for fast-entry UX without duplicating runtime logic** — MaTE now exposes a Rust-owned native shell surface that summarizes the real workspace/session/approval state and routes quick actions back through the existing desktop runtime instead of introducing parallel Swift business logic:
+  - `src-tauri/src/services/native_shell.rs`, `src-tauri/src/commands/native_shell.rs`, `src-tauri/src/services/quick_delegate_modal.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/services/mod.rs`, `src-tauri/src/commands/mod.rs` — added `NativeShellService`, native shell snapshot/actions commands, shared native-prompt execution helpers, runtime registration, and invoke wiring
+  - `src-tauri/src/services/macos_native_shell.rs`, `src-tauri/macos/RainyNativeShell.swift`, `src-tauri/build.rs`, `scripts/build-macos-bridges.sh`, `src-tauri/tauri.conf.json` — added a new Swift bridge/dylib for a menu bar companion, global hotkey quick palette, recent-chat shortcuts, and bundle staging
+  - `src/services/tauri.ts`, `src/hooks/useNativeShellSync.ts`, `src/App.tsx` — added typed bindings plus frontend-driven shell snapshot refresh so the native shell stays aligned with real workspace selection, active sessions, and Airlock changes
+
+### Changed
+
+- **Agent-completion notifications now expose an explicit native macOS action to reopen the finished session**:
+  - `src-tauri/src/services/macos_native_notifications.rs`, `src-tauri/macos/RainyNativeNotifications.swift` — agent notifications now use a dedicated macOS category with an `Open Session` action that reuses the existing notification focus path
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+
 ## [0.6.6] - 2026-04-05 - GOVERNED EXTERNAL WORKERS
 
 ### Added

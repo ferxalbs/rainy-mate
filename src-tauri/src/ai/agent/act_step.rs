@@ -57,6 +57,45 @@ fn resolve_airlock_level_for_tool(spec: &AgentSpec, tool_name: &str) -> AirlockL
         .unwrap_or(AirlockLevel::Dangerous)
 }
 
+fn build_command_for_tool_call(
+    state: &AgentState,
+    skill: &str,
+    method_str: &str,
+    params: serde_json::Value,
+    airlock_level: AirlockLevel,
+) -> QueuedCommand {
+    QueuedCommand {
+        id: uuid::Uuid::new_v4().to_string(),
+        intent: format!("{}.{}", skill, method_str),
+        payload: RainyPayload {
+            skill: Some(skill.to_string()),
+            method: Some(method_str.to_string()),
+            params: Some(params),
+            content: None,
+            allowed_paths: state.allowed_paths.clone(),
+            blocked_paths: state.spec.airlock.scopes.blocked_paths.clone(),
+            allowed_domains: state.spec.airlock.scopes.allowed_domains.clone(),
+            blocked_domains: state.spec.airlock.scopes.blocked_domains.clone(),
+            tool_access_policy: Some(state.tool_access_policy.clone()),
+            tool_access_policy_version: None,
+            tool_access_policy_hash: None,
+            ..Default::default()
+        },
+        status: CommandStatus::Pending,
+        priority: CommandPriority::Normal,
+        airlock_level,
+        approval_timeout_secs: Some(0),
+        created_at: Some(Utc::now().timestamp()),
+        started_at: None,
+        completed_at: None,
+        result: None,
+        workspace_id: Some(state.workspace_id.clone()),
+        desktop_node_id: None,
+        approved_by: None,
+        schema_version: None,
+    }
+}
+
 #[derive(Debug)]
 pub struct ActStep;
 
@@ -190,36 +229,8 @@ impl WorkflowStep for ActStep {
             call_with_level.airlock_level = Some(airlock_level);
             on_event(AgentEvent::ToolCall(call_with_level));
 
-            let command = QueuedCommand {
-                id: uuid::Uuid::new_v4().to_string(),
-                intent: format!("{}.{}", skill, method_str),
-                payload: RainyPayload {
-                    skill: Some(skill.to_string()),
-                    method: Some(method_str.to_string()),
-                    params: Some(params),
-                    content: None,
-                    allowed_paths: state.allowed_paths.clone(),
-                    blocked_paths: state.spec.airlock.scopes.blocked_paths.clone(),
-                    allowed_domains: state.spec.airlock.scopes.allowed_domains.clone(),
-                    blocked_domains: state.spec.airlock.scopes.blocked_domains.clone(),
-                    tool_access_policy: None,
-                    tool_access_policy_version: None,
-                    tool_access_policy_hash: None,
-                    ..Default::default()
-                },
-                status: CommandStatus::Pending,
-                priority: CommandPriority::Normal,
-                airlock_level,
-                approval_timeout_secs: Some(0),
-                created_at: Some(Utc::now().timestamp()),
-                started_at: None,
-                completed_at: None,
-                result: None,
-                workspace_id: Some(state.workspace_id.clone()),
-                desktop_node_id: None,
-                approved_by: None,
-                schema_version: None,
-            };
+            let command =
+                build_command_for_tool_call(state, &skill, &method_str, params, airlock_level);
 
             // Enforce Airlock for local agent tool execution as well as cloud-dispatched commands.
             if let Some(airlock) = state.airlock_service.as_ref() {
@@ -353,5 +364,86 @@ impl WorkflowStep for ActStep {
             success: true,
             output: Some("Executed tools".to_string()),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_command_for_tool_call;
+    use crate::ai::agent::memory::AgentMemory;
+    use crate::ai::agent::runtime::AgentMessage;
+    use crate::ai::agent::workflow::AgentState;
+    use crate::ai::specs::manifest::AgentSpec;
+    use crate::models::neural::{AirlockLevel, ToolAccessPolicy};
+    use serial_test::serial;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    #[serial]
+    async fn queued_command_carries_agent_tool_access_policy() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let memory_manager = Arc::new(
+            crate::services::MemoryManager::new(temp_dir.path().to_path_buf())
+                .await
+                .expect("memory manager"),
+        );
+        let memory = Arc::new(
+            AgentMemory::new(
+                "test-ws",
+                temp_dir.path().to_path_buf(),
+                memory_manager,
+                None,
+                None,
+            )
+            .await,
+        );
+
+        let policy = ToolAccessPolicy {
+            enabled: true,
+            mode: "all".to_string(),
+            allow: Vec::new(),
+            deny: Vec::new(),
+        };
+
+        let mut state = AgentState::new(
+            "test-ws".to_string(),
+            vec!["/tmp/test-ws".to_string()],
+            policy.clone(),
+            memory,
+            Arc::new(AgentSpec::default()),
+            Arc::new(None),
+            None,
+        );
+        state.messages = vec![AgentMessage {
+            role: "assistant".to_string(),
+            content: crate::ai::agent::runtime::AgentContent::text("call tool".to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+        }];
+        state.context = HashMap::new();
+
+        let command = build_command_for_tool_call(
+            &state,
+            "shell",
+            "execute_command",
+            serde_json::json!({"command":"git pull"}),
+            AirlockLevel::Dangerous,
+        );
+
+        assert_eq!(command.intent, "shell.execute_command");
+        assert_eq!(
+            command.payload.tool_access_policy.as_ref().map(|value| value.mode.as_str()),
+            Some("all")
+        );
+        assert_eq!(
+            command
+                .payload
+                .tool_access_policy
+                .as_ref()
+                .map(|value| value.deny.len()),
+            Some(0)
+        );
+        assert_eq!(command.airlock_level, AirlockLevel::Dangerous);
     }
 }

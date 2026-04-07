@@ -20,6 +20,7 @@ pub mod folder;
 pub mod image;
 pub mod mcp;
 pub mod memory;
+pub mod native_shell;
 pub mod neural;
 pub mod quick_delegate;
 
@@ -48,6 +49,7 @@ pub use folder::*;
 pub use image::*;
 pub use mcp::*;
 pub use memory::*;
+pub use native_shell::*;
 pub use neural::*;
 pub use quick_delegate::*;
 

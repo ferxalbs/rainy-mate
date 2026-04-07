@@ -109,6 +109,13 @@ impl SkillExecutor {
         hex::encode(hasher.finalize())
     }
 
+    fn effective_tool_policy<'a>(
+        explicit: Option<&'a ToolAccessPolicy>,
+        fallback: Option<&'a crate::services::EffectiveLocalAgentPolicy>,
+    ) -> Option<&'a ToolAccessPolicy> {
+        explicit.or(fallback.map(|policy| &policy.tool_access_policy))
+    }
+
     pub fn new(
         workspace_manager: Arc<WorkspaceManager>,
         managed_research: Arc<ManagedResearchService>,
@@ -203,9 +210,10 @@ impl SkillExecutor {
             } else {
                 None
             };
-        let tool_policy = payload.tool_access_policy.as_ref().or(fallback_policy_state
-            .as_ref()
-            .map(|policy| &policy.tool_access_policy));
+        let tool_policy = Self::effective_tool_policy(
+            payload.tool_access_policy.as_ref(),
+            fallback_policy_state.as_ref(),
+        );
 
         let fallback_allowed_paths = fallback_policy_state
             .as_ref()
@@ -702,6 +710,7 @@ impl SkillExecutor {
 mod policy_tests {
     use super::SkillExecutor;
     use crate::models::neural::ToolAccessPolicy;
+    use crate::services::EffectiveLocalAgentPolicy;
 
     #[test]
     fn tool_policy_is_deny_first() {
@@ -751,6 +760,38 @@ mod policy_tests {
             SkillExecutor::hash_tool_policy(&policy_a),
             SkillExecutor::hash_tool_policy(&policy_b),
         );
+    }
+
+    #[test]
+    fn explicit_tool_policy_wins_over_workspace_fallback() {
+        let explicit = ToolAccessPolicy {
+            enabled: true,
+            mode: "all".to_string(),
+            allow: vec![],
+            deny: vec![],
+        };
+        let fallback = EffectiveLocalAgentPolicy {
+            workspace_id: "/tmp/ws".to_string(),
+            allowed_paths: vec!["/tmp/ws".to_string()],
+            blocked_paths: vec![],
+            allowed_domains: vec![],
+            blocked_domains: vec![],
+            tool_access_policy: ToolAccessPolicy {
+                enabled: true,
+                mode: "all".to_string(),
+                allow: vec![],
+                deny: vec!["execute_command".to_string()],
+            },
+            tool_access_policy_source: "workspace_permissions".to_string(),
+            notifications_enabled: true,
+            can_create_agents: true,
+        };
+
+        let chosen =
+            SkillExecutor::effective_tool_policy(Some(&explicit), Some(&fallback)).expect("policy");
+
+        assert!(std::ptr::eq(chosen, &explicit));
+        assert!(SkillExecutor::is_tool_allowed("execute_command", Some(chosen)));
     }
 }
 
