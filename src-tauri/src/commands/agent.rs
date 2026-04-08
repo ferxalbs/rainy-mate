@@ -2023,7 +2023,21 @@ mod tests {
 
     #[test]
     fn default_local_agent_tool_override_clears_pre_airlock_restrictions() {
-        let mut spec = AgentSpec::default();
+        let mut spec = AgentSpec {
+            id: "default".to_string(),
+            version: "3.0.0".to_string(),
+            soul: Default::default(),
+            skills: Default::default(),
+            airlock: Default::default(),
+            memory_config: Default::default(),
+            connectors: Default::default(),
+            runtime: Default::default(),
+            model: None,
+            temperature: None,
+            max_tokens: None,
+            provider: None,
+            signature: None,
+        };
         spec.airlock = AirlockConfig {
             tool_policy: AirlockToolPolicy {
                 mode: "allowlist".to_string(),
@@ -2050,7 +2064,21 @@ mod tests {
 
     #[test]
     fn custom_agent_tool_policy_is_left_untouched() {
-        let mut spec = AgentSpec::default();
+        let mut spec = AgentSpec {
+            id: "default".to_string(),
+            version: "3.0.0".to_string(),
+            soul: Default::default(),
+            skills: Default::default(),
+            airlock: Default::default(),
+            memory_config: Default::default(),
+            connectors: Default::default(),
+            runtime: Default::default(),
+            model: None,
+            temperature: None,
+            max_tokens: None,
+            provider: None,
+            signature: None,
+        };
         spec.airlock = AirlockConfig {
             tool_policy: AirlockToolPolicy {
                 mode: "allowlist".to_string(),

@@ -384,9 +384,7 @@ mod tests {
     async fn queued_command_carries_agent_tool_access_policy() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let memory_manager = Arc::new(
-            crate::services::MemoryManager::new(temp_dir.path().to_path_buf())
-                .await
-                .expect("memory manager"),
+            crate::services::MemoryManager::new(100, temp_dir.path().to_path_buf())
         );
         let memory = Arc::new(
             AgentMemory::new(
@@ -406,12 +404,28 @@ mod tests {
             deny: Vec::new(),
         };
 
+        let empty_spec = AgentSpec {
+            id: "test".to_string(),
+            version: "1.0.0".to_string(),
+            soul: crate::ai::specs::soul::AgentSoul::default(),
+            skills: crate::ai::specs::skills::AgentSkills::default(),
+            airlock: Default::default(),
+            memory_config: Default::default(),
+            connectors: Default::default(),
+            runtime: Default::default(),
+            model: None,
+            temperature: None,
+            max_tokens: None,
+            provider: None,
+            signature: None,
+        };
+
         let mut state = AgentState::new(
             "test-ws".to_string(),
             vec!["/tmp/test-ws".to_string()],
             policy.clone(),
             memory,
-            Arc::new(AgentSpec::default()),
+            Arc::new(empty_spec),
             Arc::new(None),
             None,
         );
