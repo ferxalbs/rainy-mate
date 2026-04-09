@@ -244,6 +244,12 @@ fn reasoning_from_v2(
                 Some("thinking_budget".to_string()),
             );
         }
+        if normalized.starts_with("google/gemma-4") {
+            return (
+                vec!["minimal".to_string(), "high".to_string()],
+                Some("thinking_level".to_string()),
+            );
+        }
         if normalized.starts_with("google/") {
             return (
                 vec![

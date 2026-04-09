@@ -43,11 +43,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/src/services/skill_executor.rs` — the executor now has an explicit `effective_tool_policy(...)` path with regression coverage proving that an explicit runtime policy wins over workspace fallback policy
   - `src-tauri/src/commands/agent.rs`, `src-tauri/src/ai/agent/act_step.rs`, `src-tauri/src/services/skill_executor.rs` — added focused regression tests for: default-agent pre-Airlock override, custom-agent policy preservation, queued-command policy propagation, and explicit-policy precedence over fallback
 
+- **Gemma 4 reasoning controls no longer inherit the generic Google five-level fallback in chat model selection** — Gemma 4 models now expose only the supported `minimal` and `high` thinking levels instead of incorrectly showing `minimal` / `low` / `medium` / `high` / `none` when the live catalog omits explicit reasoning-level arrays:
+  - `src-tauri/src/commands/unified_models.rs` — added a `google/gemma-4*` fallback branch in `reasoning_from_v2(...)` so unified model capabilities map Gemma 4 to `thinking_level` with `minimal` and `high` only
+
 - **macOS menubar no longer shows two competing MaTE status items** — the legacy quick-delegate status item no longer duplicates the new canonical native shell entry:
   - `src-tauri/macos/RainyQuickDelegate.swift` — removed the legacy status-item install path while preserving the native panel and hotkey behavior
 
 ### Validation
 
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
 - `cd src-tauri && cargo check -q` → pass
 - `pnpm exec tsc --noEmit` → pass
 
