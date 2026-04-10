@@ -237,20 +237,24 @@ pub struct MacOSNativeShellBridge;
 
 #[cfg(not(target_os = "macos"))]
 impl MacOSNativeShellBridge {
+    #[allow(dead_code)]
     pub fn is_runtime_supported() -> bool {
         false
     }
 
+    #[allow(dead_code)]
     pub fn initialize(
         _app: tauri::AppHandle,
         _native_shell: std::sync::Arc<crate::services::NativeShellService>,
     ) {
     }
 
+    #[allow(dead_code)]
     pub fn show_palette() -> Result<(), String> {
         Err("Native shell is only available on macOS".to_string())
     }
 
+    #[allow(dead_code)]
     pub fn update_snapshot(
         _snapshot: &crate::services::NativeShellSnapshot,
     ) -> Result<(), String> {

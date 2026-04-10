@@ -375,24 +375,29 @@ pub struct MacOSNativeNotificationBridge;
 
 #[cfg(not(target_os = "macos"))]
 impl MacOSNativeNotificationBridge {
+    #[allow(dead_code)]
     pub fn is_runtime_supported() -> bool {
         false
     }
 
+    #[allow(dead_code)]
     pub fn initialize(
         _app: tauri::AppHandle,
         _airlock_state: crate::commands::airlock::AirlockServiceState,
     ) {
     }
 
+    #[allow(dead_code)]
     pub fn authorization_status() -> i32 {
         1
     }
 
+    #[allow(dead_code)]
     pub fn request_authorization() -> bool {
         true
     }
 
+    #[allow(dead_code)]
     pub fn send_airlock_notification(
         _title: &str,
         _body: &str,
@@ -401,10 +406,12 @@ impl MacOSNativeNotificationBridge {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn send_test_notification(_title: &str, _body: &str) -> Result<(), String> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn send_agent_notification(
         _title: &str,
         _body: &str,
@@ -414,6 +421,7 @@ impl MacOSNativeNotificationBridge {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn activate_app() {}
 }
 

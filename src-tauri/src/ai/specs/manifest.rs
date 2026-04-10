@@ -4,7 +4,7 @@ use super::soul::AgentSoul;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentSpec {
     pub id: String,
     pub version: String, // "3.0.0"
@@ -51,7 +51,7 @@ pub enum RuntimeMode {
     HierarchicalSupervisor,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeConfig {
     #[serde(default)]
@@ -98,7 +98,7 @@ fn default_final_response_language_mode() -> String {
     "user".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegationConfig {
     #[serde(default = "default_delegation_policy")]
@@ -137,7 +137,7 @@ pub enum DelegationPolicy {
     AutoHeuristic,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguagePolicyConfig {
     #[serde(default = "default_internal_coordination_language")]
