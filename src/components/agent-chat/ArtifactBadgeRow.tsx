@@ -27,6 +27,8 @@ interface ArtifactBadgeRowProps {
   artifacts: ChatArtifact[];
 }
 
+// ⚡ Bolt: Wrapped complex artifact badge rendering in React.memo
+// Prevents entire row from re-calculating rendering rules per token chunk during agent streaming
 export const ArtifactBadgeRow = React.memo(function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
   const [openingPath, setOpeningPath] = useState<string | null>(null);
   const [errorByPath, setErrorByPath] = useState<Record<string, string>>({});

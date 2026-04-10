@@ -89,7 +89,6 @@ fn auto_launch_bridge() -> Result<&'static AutoLaunchBridgeSymbols, String> {
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 pub enum AutoLaunchState {
     Enabled,
     Disabled,
@@ -108,7 +107,6 @@ pub struct AutoLaunchStatus {
 }
 
 impl AutoLaunchStatus {
-    #[allow(dead_code)]
     fn from_state(state: AutoLaunchState) -> Self {
         match state {
             AutoLaunchState::Enabled => Self {

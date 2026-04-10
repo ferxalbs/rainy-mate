@@ -45,11 +45,12 @@ function TrashIcon(props: any) {
   return <Ban {...props} />;
 }
 
+// ⚡ Bolt: Define stable empty arrays globally to preserve referential equality.
+// Passing inline arrays (e.g. `trace || []`) invalidates React.memo() on every render.
 const EMPTY_TRACE: NonNullable<AgentMessage["trace"]> = [];
 const EMPTY_STEPS: string[] = [];
 const EMPTY_SPECIALISTS: SpecialistRunState[] = [];
 const EMPTY_SESSIONS: ExternalAgentSession[] = [];
-const EMPTY_ARTIFACTS: NonNullable<AgentMessage["artifacts"]> = [];
 
 interface MessageBubbleProps {
   message: AgentMessage;
@@ -78,20 +79,34 @@ function MessageBubbleComponent({
   const isUser = message.type === "user";
   const isSystem = message.type === "system";
 
+  // ⚡ Bolt: Memoize the callback to maintain stable function references when passing down to PlanConfirmationCard.
   const handleExecuteToolCalls = React.useCallback(() => {
     if (message.toolCalls && onExecuteToolCalls && workspaceId) {
       onExecuteToolCalls(message.id, message.toolCalls, workspaceId);
     }
   }, [message.id, message.toolCalls, onExecuteToolCalls, workspaceId]);
 
-  const handleCopy = async () => {
+  const handleCopy = React.useCallback(async () => {
     if (!message.content) return;
     try {
       await navigator.clipboard.writeText(message.content);
     } catch (error) {
       console.error("Failed to copy message", error);
     }
-  };
+  }, [message.content]);
+
+  const handleRetry = React.useCallback(() => {
+    onRetryRun?.(message.id);
+  }, [message.id, onRetryRun]);
+
+  const handleStop = React.useCallback(() => {
+    onStopRun?.(message.id);
+  }, [message.id, onStopRun]);
+
+  // ⚡ Bolt: Memoize the plan execute callback so `PlanCard` receives a stable function prop
+  const handlePlanExecute = React.useCallback((planId: string) => {
+    onExecute?.(planId);
+  }, [onExecute]);
 
   const traceStats = useMemo(() => {
     const trace = message.trace || EMPTY_TRACE;
@@ -230,7 +245,7 @@ function MessageBubbleComponent({
 
         {/* Thought/Reasoning Display (Only for Agent with thinking) */}
         {!isUser && !message.isLoading && message.artifacts && message.artifacts.length > 0 && (
-          <ArtifactBadgeRow artifacts={message.artifacts || EMPTY_ARTIFACTS} />
+          <ArtifactBadgeRow artifacts={message.artifacts} />
         )}
 
         {!isUser && message.thought && (
@@ -259,7 +274,7 @@ function MessageBubbleComponent({
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => onRetryRun?.(message.id)}
+              onClick={handleRetry}
               disabled={!message.requestContext?.prompt || message.isLoading}
             >
               <RotateCcw className="size-3.5" />
@@ -270,7 +285,7 @@ function MessageBubbleComponent({
                 size="sm"
                 variant="ghost"
                 className="h-7 px-2 text-xs text-red-500 hover:text-red-400"
-                onClick={() => onStopRun?.(message.id)}
+                onClick={handleStop}
               >
                 <Square className="size-3.5" />
                 Stop
@@ -314,7 +329,7 @@ function MessageBubbleComponent({
         {!isUser && message.plan && (
           <PlanCard
             plan={message.plan}
-            onExecute={onExecute}
+            onExecute={handlePlanExecute}
             isExecuting={isExecuting}
           />
         )}
@@ -368,12 +383,18 @@ export const MessageBubble = React.memo(
   (prev, next) =>
     prev.message === next.message &&
     prev.isExecuting === next.isExecuting &&
-    prev.workspaceId === next.workspaceId,
+    prev.workspaceId === next.workspaceId &&
+    prev.onExecute === next.onExecute &&
+    prev.onExecuteToolCalls === next.onExecuteToolCalls &&
+    prev.onStopRun === next.onStopRun &&
+    prev.onRetryRun === next.onRetryRun,
 );
 
 // Re-export with a name hint for the parent to avoid confusion
 export { MessageBubble as MemoizedMessageBubble };
 
+// ⚡ Bolt: Wrapped child rails and cards in React.memo so they only re-render
+// when their explicit slice of state changes, significantly improving streaming performance.
 const SupervisorRail = React.memo(function SupervisorRail({
   summary,
   steps,
@@ -489,6 +510,7 @@ const SupervisorRail = React.memo(function SupervisorRail({
   );
 });
 
+// ⚡ Bolt: Prevent unnecessary re-renders of external sessions list during agent token streaming.
 const ExternalSessionRail = React.memo(function ExternalSessionRail({
   sessions,
 }: {
@@ -632,6 +654,7 @@ const ExternalSessionRail = React.memo(function ExternalSessionRail({
   );
 });
 
+// ⚡ Bolt: Prevent unnecessary re-renders of complex runtime traces during agent token streaming.
 const TraceAccordion = React.memo(function TraceAccordion({
   trace,
   runState,
@@ -735,6 +758,7 @@ const TraceAccordion = React.memo(function TraceAccordion({
   );
 });
 
+// ⚡ Bolt: Prevent unnecessary re-renders of proposed plans during agent token streaming.
 const PlanCard = React.memo(function PlanCard({
   plan,
   onExecute,

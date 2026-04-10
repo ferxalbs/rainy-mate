@@ -32,6 +32,9 @@ const methodColors: Record<string, string> = {
   default: "text-gray-400 bg-gray-400/10 border-gray-400/20",
 };
 
+// ⚡ Bolt: Wrapped the tool call confirmation cards in React.memo
+// This stops expensive re-renders and re-calculation of tool icons and colors
+// while the parent message is streaming.
 export const PlanConfirmationCard = React.memo(function PlanConfirmationCard({
   toolCalls,
   onExecute,

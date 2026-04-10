@@ -19,7 +19,6 @@ pub struct QuickDelegateStatus {
 }
 
 pub struct QuickDelegateModalService {
-    #[allow(dead_code)]
     app_handle: AppHandle,
     busy: AtomicBool,
 }
@@ -43,12 +42,10 @@ impl QuickDelegateModalService {
         MacOSQuickDelegateBridge::show(Some("idle"), None)
     }
 
-    #[allow(dead_code)]
     pub fn focus_main_window(&self) -> Result<(), String> {
         focus_main_window(&self.app_handle)
     }
 
-    #[allow(dead_code)]
     pub fn begin_run(&self) -> Result<(), String> {
         self.busy
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -56,12 +53,10 @@ impl QuickDelegateModalService {
             .map_err(|_| "A quick delegation is already running.".to_string())
     }
 
-    #[allow(dead_code)]
     pub fn finish_run(&self) {
         self.busy.store(false, Ordering::SeqCst);
     }
 
-    #[allow(dead_code)]
     pub async fn handle_bridge_action(&self, action: String, payload: Option<String>) {
         match action.as_str() {
             "hotkey" => {
@@ -117,7 +112,6 @@ impl QuickDelegateModalService {
     }
 }
 
-#[allow(dead_code)]
 pub fn focus_main_window(app_handle: &AppHandle) -> Result<(), String> {
     if let Some(window) = app_handle.get_webview_window("main") {
         let _ = window.show();
@@ -129,7 +123,6 @@ pub fn focus_main_window(app_handle: &AppHandle) -> Result<(), String> {
     }
 }
 
-#[allow(dead_code)]
 pub async fn run_native_delegate_prompt(app_handle: AppHandle, prompt: String) -> Result<(), String> {
     let file_manager = app_handle.state::<Arc<FileManager>>();
     let workspace_id = file_manager
@@ -190,7 +183,6 @@ pub async fn run_native_delegate_prompt(app_handle: AppHandle, prompt: String) -
     }
 }
 
-#[allow(dead_code)]
 fn emit_finish_notification(
     app_handle: &AppHandle,
     title: &str,
@@ -229,7 +221,6 @@ fn emit_finish_notification(
         .map_err(|e| format!("Failed to emit finish notification: {}", e))
 }
 
-#[allow(dead_code)]
 fn truncate_message(value: &str, max_chars: usize) -> String {
     let trimmed = value.trim();
     if trimmed.chars().count() <= max_chars {
@@ -244,7 +235,6 @@ fn truncate_message(value: &str, max_chars: usize) -> String {
     out
 }
 
-#[allow(dead_code)]
 fn build_summary(response: &str) -> String {
     let compact = response.split_whitespace().collect::<Vec<_>>().join(" ");
     truncate_message(&compact, 90)

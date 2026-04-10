@@ -42,19 +42,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -85,19 +72,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
 
@@ -123,6 +97,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -133,29 +113,6 @@ jobs:
         with:
           version: 9
 
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsqlite3-dev pkg-config
-
-      - name: Setup SQLite via vcpkg (Windows only)
-        if: matrix.platform == 'windows-latest'
-        shell: bash
-        run: |
-          vcpkg install sqlite3:x64-windows
-          echo "VCPKGRS_DYNAMIC=1" >> $GITHUB_ENV
-          echo "VCPKG_ROOT=C:/vcpkg" >> $GITHUB_ENV
-          echo "C:/vcpkg/installed/x64-windows/bin" >> $GITHUB_PATH
-
-      - name: Set SQLite Config (Ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        shell: bash
-        run: echo "LIBSQLITE3_SYS_USE_PKG_CONFIG=1" >> $GITHUB_ENV
-
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -165,14 +122,12 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          shared-key: "v1-sqlite-fix"
 
-      - name: Write Tauri Override (CI build)
-        shell: bash
-        run: echo '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"pubkey":"null"}}}' > src-tauri/ci-config.json
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Tauri Build
-        run: pnpm exec tauri build ${{ matrix.args }} --config src-tauri/ci-config.json
+        run: pnpm run tauri build ${{ matrix.args }}
 
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'

@@ -264,29 +264,24 @@ pub struct MacOSQuickDelegateBridge;
 
 #[cfg(not(target_os = "macos"))]
 impl MacOSQuickDelegateBridge {
-    #[allow(dead_code)]
     pub fn is_runtime_supported() -> bool {
         false
     }
 
-    #[allow(dead_code)]
     pub fn initialize(
         _app: tauri::AppHandle,
         _quick_delegate: std::sync::Arc<crate::services::QuickDelegateModalService>,
     ) {
     }
 
-    #[allow(dead_code)]
     pub fn show(_state: Option<&str>, _message: Option<&str>) -> Result<(), String> {
         Err("Quick delegate is only available on macOS".to_string())
     }
 
-    #[allow(dead_code)]
     pub fn hide() -> Result<(), String> {
         Err("Quick delegate is only available on macOS".to_string())
     }
 
-    #[allow(dead_code)]
     pub fn set_state(_state: &str, _message: Option<&str>) -> Result<(), String> {
         Err("Quick delegate is only available on macOS".to_string())
     }
