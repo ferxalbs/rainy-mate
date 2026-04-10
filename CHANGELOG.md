@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/components/agent-chat/timeline/MessagesTimeline.logic.ts` — new logic parser correctly grouping multiple thoughts and tool executions into a single work cluster.
   - `src/components/agent-chat/timeline/entries/WorkEntryRow.tsx` — granular collapsed views for tools and reasoning.
   - `src/components/agent-chat/AgentChatPanel.tsx` — removed monolithic bubble dependency.
+- **Agent Chat visual system was fully reworked into the new `Nightless` conversation shell before public release** — the shipped `0.6.8` UI no longer reflects the first pass of the timeline migration; it now uses a denser, more editorial workspace-chat layout with a lighter topbar, floating composer, simplified message chrome, and a compact empty state designed around direct task entry instead of decorative panels:
+  - `src/lib/themes.ts`, `src/types/theme.ts`, `src/providers/ThemeProvider.tsx`, `src/global.css` — added the new `nightless` theme, made it the default theme, and introduced the softer translucent background treatment used by the redesigned chat shell
+  - `src/components/agent-chat/ChatTopbar.tsx` — rebuilt the topbar as a more compact semitransparent glass layer with reduced vertical footprint and an explicit toggle for optional telemetry chips
+  - `src/components/agent-chat/ChatComposer.tsx` — redesigned the composer into a floating blurred capsule with a cleaner prompt-first layout, compact controls row, and lower-contrast visual weight suitable for production chat use
+  - `src/components/agent-chat/AgentChatPanel.tsx` — restructured the full chat shell layout, introduced the centered English empty state (`What can I do for you?`), moved quick-start actions below the composer, and added persisted visibility control for telemetry chips via `rainy-mate-chat-telemetry-chips`
+  - `src/components/agent-chat/timeline/entries/UserMessageRow.tsx`, `src/components/agent-chat/timeline/entries/AssistantMessageRow.tsx`, `src/components/agent-chat/timeline/entries/WorkEntryRow.tsx` — removed outdated bubble headers like `You`, tightened spacing, simplified assistant status chrome, and made work-log cards visually consistent with the new shell
+  - `src/components/agent-chat/timeline/MessagesTimeline.tsx`, `src/components/agent-chat/timeline/MessagesTimeline.logic.ts` — aligned the row model to the final shell and removed the unstable virtualized rendering path from the chat timeline so expandable work entries no longer cause global layout jitter
+- **Agent Chat telemetry is now operator-controlled instead of always-on visual noise** — the full chip set remains available but is hidden by default until explicitly enabled from the topbar:
+  - `src/lib/appIdentity.ts`, `src/components/agent-chat/AgentChatPanel.tsx`, `src/components/agent-chat/ChatTopbar.tsx` — added persisted chat telemetry visibility state and restored the broader chip set (`run`, `memory`, `history`, `retrieval`, `embedding`, `model`, `tokens`, `compression`) behind a topbar toggle
 
 ### Added
 
@@ -42,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cd src-tauri && cargo fmt` → pass
 - `cd src-tauri && cargo check -q` → pass
 - `pnpm exec tsc --noEmit` → pass
+- `pnpm exec tsc --noEmit` → pass (agent chat shell redesign)
+- `cd src-tauri && cargo check -q` → pass (agent chat shell redesign)
 
 ### Fixed
 

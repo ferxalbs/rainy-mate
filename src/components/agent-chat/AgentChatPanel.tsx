@@ -96,53 +96,128 @@ function resolveTimeGreeting(date: Date): {
   subline: string;
 } {
   const hour = date.getHours();
+  const rotationSeed = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate() + hour;
+
+  const pickVariant = <T,>(variants: T[]): T => {
+    return variants[Math.abs(rotationSeed) % variants.length]!;
+  };
 
   if (hour >= 0 && hour < 2) {
-    return {
-      headline: "Past midnight. What still needs to get done?",
-      subline: "Late-night execution, clean handoffs, and focused work.",
-    };
+    return pickVariant([
+      {
+        headline: "Past midnight. What still needs to get done?",
+        subline: "Late-night execution, clean handoffs, and focused work.",
+      },
+      {
+        headline: "Midnight shift. What matters now?",
+        subline: "Use the quiet hours for decisive work and zero noise.",
+      },
+      {
+        headline: "Still awake?",
+        subline: "Hand me the task and I will keep the thread clean.",
+      },
+    ]);
   }
 
   if (hour >= 2 && hour < 5) {
-    return {
-      headline: "Early morning. What should I take over?",
-      subline: "Quiet hours are good for decisive work and cleanup.",
-    };
+    return pickVariant([
+      {
+        headline: "Early morning. What should I take over?",
+        subline: "Quiet hours are good for decisive work and cleanup.",
+      },
+      {
+        headline: "Before sunrise. What are we solving?",
+        subline: "This is a good window for sharp decisions and focused execution.",
+      },
+      {
+        headline: "Up early?",
+        subline: "Give me the next move.",
+      },
+    ]);
   }
 
   if (hour >= 5 && hour < 7) {
-    return {
-      headline: "At dawn already? What are we starting?",
-      subline: "Use the first block of the day for the highest-leverage task.",
-    };
+    return pickVariant([
+      {
+        headline: "At dawn already? What are we starting?",
+        subline: "Use the first block of the day for the highest-leverage task.",
+      },
+      {
+        headline: "Morning is opening up. What should go first?",
+        subline: "Start with the task that changes the day, not the task that fills it.",
+      },
+      {
+        headline: "Dawn run.",
+        subline: "Point me at the priority.",
+      },
+    ]);
   }
 
   if (hour >= 7 && hour < 12) {
-    return {
-      headline: "Good morning. What can I do for you?",
-      subline: "Assign a task, ask a question, or launch a complete workflow.",
-    };
+    return pickVariant([
+      {
+        headline: "Good morning. What can I do for you?",
+        subline: "Assign a task, ask a question, or launch a complete workflow.",
+      },
+      {
+        headline: "Morning session. What are we building?",
+        subline: "Start clean with a clear prompt and a concrete outcome.",
+      },
+      {
+        headline: "Good morning.",
+        subline: "What is the move?",
+      },
+    ]);
   }
 
   if (hour >= 12 && hour < 18) {
-    return {
-      headline: "Good afternoon. What are we building?",
-      subline: "Keep momentum high with a clear prompt and a concrete outcome.",
-    };
+    return pickVariant([
+      {
+        headline: "Good afternoon. What are we building?",
+        subline: "Keep momentum high with a clear prompt and a concrete outcome.",
+      },
+      {
+        headline: "Afternoon block. What needs shipping?",
+        subline: "This is the right moment for execution, refinement, and follow-through.",
+      },
+      {
+        headline: "Afternoon.",
+        subline: "What needs to move?",
+      },
+    ]);
   }
 
   if (hour >= 18 && hour < 21) {
-    return {
-      headline: "Good evening. What still matters today?",
-      subline: "Finish the important work, not the noisy work.",
-    };
+    return pickVariant([
+      {
+        headline: "Good evening. What still matters today?",
+        subline: "Finish the important work, not the noisy work.",
+      },
+      {
+        headline: "Evening pass. What deserves one more push?",
+        subline: "Close the loop on the work that actually moves the project forward.",
+      },
+      {
+        headline: "Evening.",
+        subline: "What is worth finishing?",
+      },
+    ]);
   }
 
-  return {
-    headline: "Working late? What can I take off your plate?",
-    subline: "Use the remaining hours for decisive execution and review.",
-  };
+  return pickVariant([
+    {
+      headline: "Working late? What can I take off your plate?",
+      subline: "Use the remaining hours for decisive execution and review.",
+    },
+    {
+      headline: "Late session. What is still open?",
+      subline: "Good time for careful edits, final checks, and hard decisions.",
+    },
+    {
+      headline: "Still here?",
+      subline: "Send the task.",
+    },
+  ]);
 }
 
 // ─── Extracted sub-components for proper reconciliation ──────────────
