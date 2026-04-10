@@ -1,5 +1,14 @@
 import React from "react";
-import { ArrowUp, Check, ChevronDown, FileText, Image, Mic, Plus, Square, X } from "lucide-react";
+import {
+  ArrowUp,
+  Check,
+  ChevronDown,
+  FileText,
+  Image,
+  Paperclip,
+  Square,
+  X,
+} from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import type { ChatAttachment } from "../../types/agent";
@@ -70,156 +79,144 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const canSubmit = (input.trim().length > 0 || attachments.length > 0) && !submitDisabled;
   const actionLabel = submitLabel || (showStopButton ? "Stop run" : "Send");
+
   return (
-    <div
-      className={cn(
-        "mx-auto w-full transition-all duration-300",
-        centered ? "max-w-3xl" : "max-w-[58rem]",
-      )}
-    >
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-background/72 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.14)] backdrop-blur-2xl backdrop-saturate-150">
-        <div className="relative z-10 flex flex-col">
+    <div className={cn("mx-auto w-full transition-all duration-300", centered ? "max-w-4xl" : "max-w-[46rem]")}>
+      <div className="overflow-hidden rounded-[24px] border border-primary/55 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_62%,transparent),color-mix(in_srgb,var(--background)_48%,transparent))] shadow-[0_32px_100px_-70px_rgba(0,0,0,0.95)] backdrop-blur-[24px]">
+        <div className="px-4 pb-2.5 pt-3">
+
+          {attachments.length > 0 ? (
+            <div className="mb-2.5 flex flex-wrap gap-2">
+            {attachments.map((att) => (
+              <div
+                key={att.id}
+                className="group flex items-center gap-2 rounded-2xl border border-border/45 bg-background/34 px-2 py-1.5 text-xs text-muted-foreground"
+              >
+                {att.type === "image" && att.thumbnailDataUri ? (
+                  <img
+                    src={att.thumbnailDataUri}
+                    alt={att.filename}
+                    className="size-8 rounded-xl object-cover"
+                  />
+                ) : att.type === "image" ? (
+                  <Image className="size-4 shrink-0" />
+                ) : (
+                  <FileText className="size-4 shrink-0" />
+                )}
+                <span className="max-w-[140px] truncate text-foreground/90">{att.filename}</span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveAttachment(att.id)}
+                  className="rounded-full p-0.5 opacity-55 transition-opacity hover:opacity-100"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+            </div>
+          ) : null}
+
           <Textarea
             ref={textareaRef}
             value={input}
             onChange={(event) => onInputChange(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Ask MaTE anything, @ to add files, / for commands"
+            placeholder="Ask MaTE anything, use @ for files or launch a concrete task."
             className={cn(
-              "w-full resize-none border-none bg-transparent px-3 py-3 text-sm text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground/50 focus-visible:border-none focus-visible:ring-0",
-              centered ? "min-h-[100px]" : "min-h-[68px]",
+              "w-full resize-none border-none bg-transparent px-0 py-0 text-[14px] leading-7 text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground/34 focus-visible:border-none focus-visible:ring-0",
+              centered ? "min-h-[110px]" : "min-h-[58px]",
             )}
             disabled={inputDisabled}
           />
+        </div>
 
-          {/* Attachment preview strip */}
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 px-3 pb-2">
-              {attachments.map((att) => (
-                <div
-                  key={att.id}
-                  className="group relative flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-muted-foreground"
-                >
-                  {att.type === "image" && att.thumbnailDataUri ? (
-                    <img
-                      src={att.thumbnailDataUri}
-                      alt={att.filename}
-                      className="size-7 rounded object-cover"
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-background/14 px-3.5 py-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 rounded-full px-2 text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+              onClick={onAddAttachments}
+            >
+              <Paperclip className="size-4" />
+            </Button>
+
+            <UnifiedModelSelector
+              selectedModelId={currentModelId}
+              onSelect={onSelectModel}
+              onModelResolved={onModelResolved}
+              filter="chat"
+            />
+
+            <div className="hidden h-3.5 w-px bg-border/45 sm:block" />
+
+            {reasoningOptions.length > 0 ? (
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="group flex h-7 items-center gap-1.5 rounded-full px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
                     />
-                  ) : att.type === "image" ? (
-                    <Image className="size-4 shrink-0" />
-                  ) : (
-                    <FileText className="size-4 shrink-0" />
-                  )}
-                  <span className="max-w-[120px] truncate">{att.filename}</span>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveAttachment(att.id)}
-                    className="ml-0.5 rounded-full p-0.5 opacity-50 transition-opacity hover:opacity-100"
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-1 pl-1 pr-1">
-            <div className="flex flex-wrap items-center gap-1">
-              <button
-                type="button"
-                onClick={onAddAttachments}
-                className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-              >
-                <Plus className="size-4" />
-              </button>
-
-              <UnifiedModelSelector
-                selectedModelId={currentModelId}
-                onSelect={onSelectModel}
-                onModelResolved={onModelResolved}
-                filter="chat"
-              />
-
-              <AgentSelector
-                selectedAgentId={selectedAgentId}
-                onSelect={onSelectAgent}
-                agentSpecs={agentSpecs}
-              />
-
-              {reasoningOptions.length > 0 && (
-                <Popover>
-                  <PopoverTrigger
-                    render={
+                  }
+                >
+                  <span>{reasoningEffort ? titleCase(reasoningEffort) : "Reasoning"}</span>
+                  <ChevronDown className="size-3 opacity-60 transition-transform group-data-[state=open]:rotate-180" />
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  sideOffset={12}
+                  className="w-[220px] overflow-hidden rounded-2xl border border-border/70 bg-popover/95 p-1 shadow-2xl backdrop-blur-xl"
+                >
+                  <div className="px-3 pb-1.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                    Reasoning effort
+                  </div>
+                  {reasoningOptions.map((option) => {
+                    const active = reasoningEffort === option;
+                    return (
                       <button
+                        key={option}
                         type="button"
-                        className="group flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                      />
-                    }
-                  >
-                    <span className="truncate">
-                      {reasoningEffort ? titleCase(reasoningEffort) : "Reasoning"}
-                    </span>
-                    <ChevronDown className="size-3 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="start"
-                    sideOffset={12}
-                    className="w-[200px] overflow-hidden rounded-xl border border-white/10 bg-background/20 p-1 shadow-2xl backdrop-blur-md"
-                  >
-                    <div className="flex flex-col">
-                      <div className="px-3 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40">
-                        Reasoning effort
-                      </div>
-                      {reasoningOptions.map((option) => {
-                        const active = reasoningEffort === option;
-                        return (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => onSelectReasoningEffort(option)}
-                            className={cn(
-                              "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-xs transition-colors",
-                              active
-                                ? "bg-white/10 text-foreground"
-                                : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-                            )}
-                          >
-                            <span>{titleCase(option)}</span>
-                            {active && <Check className="size-3.5 shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
-            </div>
+                        onClick={() => onSelectReasoningEffort(option)}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs transition-colors",
+                          active
+                            ? "bg-primary/10 text-foreground"
+                            : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                        )}
+                      >
+                        <span>{titleCase(option)}</span>
+                        {active ? <Check className="size-3.5 shrink-0" /> : null}
+                      </button>
+                    );
+                  })}
+                </PopoverContent>
+              </Popover>
+            ) : null}
 
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 rounded-full text-muted-foreground hover:bg-white/5 hover:text-foreground"
-              >
-                <Mic className="size-4" />
-              </Button>
-              <Button
-                size="icon"
-                onClick={showStopButton ? onStop : onSubmit}
-                disabled={showStopButton ? stopDisabled : !canSubmit}
-                aria-label={actionLabel}
-                title={actionLabel}
-                className={cn(
-                  "size-8 rounded-full bg-white/90 text-black shadow-sm transition-all hover:bg-white dark:bg-white/90 dark:text-black",
-                  showStopButton && "bg-red-500 text-white hover:bg-red-500/90 dark:bg-red-500 dark:text-white",
-                  (showStopButton ? stopDisabled : !canSubmit) && "scale-95 opacity-50",
-                )}
-              >
-                {showStopButton ? <Square className="size-4 fill-current" /> : <ArrowUp className="size-4" />}
-              </Button>
-            </div>
+            <div className="hidden h-3.5 w-px bg-border/45 sm:block" />
+
+            <AgentSelector
+              selectedAgentId={selectedAgentId}
+              onSelect={onSelectAgent}
+              agentSpecs={agentSpecs}
+            />
           </div>
+
+          <Button
+            size="icon"
+            onClick={showStopButton ? onStop : onSubmit}
+            disabled={showStopButton ? stopDisabled : !canSubmit}
+            aria-label={actionLabel}
+            title={actionLabel}
+            className={cn(
+              "size-9 rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:scale-[1.02]",
+              showStopButton && "bg-destructive text-destructive-foreground",
+              (showStopButton ? stopDisabled : !canSubmit) && "scale-95 opacity-55",
+            )}
+          >
+            {showStopButton ? <Square className="size-4 fill-current" /> : <ArrowUp className="size-4" />}
+          </Button>
         </div>
       </div>
     </div>

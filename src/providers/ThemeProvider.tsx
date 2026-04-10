@@ -72,7 +72,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const [theme, setThemeState] = useState<ThemeName>(() => {
     const stored = getStoredValue(THEME_STORAGE_KEY);
-    return (stored as ThemeName) || "rainy-tahoe";
+    return (stored as ThemeName) || "nightless";
   });
 
   const [mode, setModeState] = useState<ThemeMode>(() => {

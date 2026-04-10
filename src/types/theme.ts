@@ -2,6 +2,7 @@
 export type ThemeMode = "light" | "dark";
 
 export type ThemeName =
+  | "nightless"
   | "rainy-tahoe"
   | "cosmic-gold"
   | "cosmic-night"
@@ -56,4 +57,3 @@ export interface ThemeConfig {
   mode: ThemeMode;
   enableAnimations: boolean;
 }
-

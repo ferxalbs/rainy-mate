@@ -6,6 +6,66 @@ import type { Theme } from "../types/theme";
  */
 
 export const themes: Record<string, Theme> = {
+  nightless: {
+    name: "nightless",
+    displayName: "Nightless",
+    description: "T3CODE-inspired neutral workspace theme tuned for dense chat work",
+    icon: "◐",
+    colors: {
+      light: {
+        background: "oklch(1 0 0)",
+        foreground: "oklch(0.28 0.01 255)",
+        card: "color-mix(in srgb, white 96%, oklch(0.95 0.01 250))",
+        cardForeground: "oklch(0.28 0.01 255)",
+        popover: "color-mix(in srgb, white 98%, oklch(0.94 0.01 250))",
+        popoverForeground: "oklch(0.28 0.01 255)",
+        primary: "oklch(0.488 0.217 264)",
+        primaryForeground: "oklch(0.99 0 0)",
+        secondary: "color-mix(in srgb, black 4%, transparent)",
+        secondaryForeground: "oklch(0.28 0.01 255)",
+        muted: "color-mix(in srgb, black 4%, transparent)",
+        mutedForeground: "color-mix(in srgb, oklch(0.56 0.01 255) 90%, black)",
+        accent: "color-mix(in srgb, black 4%, transparent)",
+        accentForeground: "oklch(0.28 0.01 255)",
+        destructive: "oklch(0.63 0.22 26)",
+        destructiveForeground: "oklch(0.98 0 0)",
+        border: "color-mix(in srgb, black 8%, transparent)",
+        input: "color-mix(in srgb, black 10%, transparent)",
+        ring: "oklch(0.488 0.217 264)",
+        sidebar: "color-mix(in srgb, white 96%, oklch(0.95 0.01 250))",
+        sidebarForeground: "oklch(0.28 0.01 255)",
+        sidebarPrimary: "oklch(0.488 0.217 264)",
+        sidebarAccent: "color-mix(in srgb, black 4%, transparent)",
+        sidebarBorder: "color-mix(in srgb, black 8%, transparent)",
+      },
+      dark: {
+        background: "color-mix(in srgb, oklch(0.14 0.01 260) 95%, white)",
+        foreground: "oklch(0.97 0.005 260)",
+        card: "color-mix(in srgb, oklch(0.14 0.01 260) 98%, white)",
+        cardForeground: "oklch(0.97 0.005 260)",
+        popover: "color-mix(in srgb, oklch(0.14 0.01 260) 98%, white)",
+        popoverForeground: "oklch(0.97 0.005 260)",
+        primary: "oklch(0.588 0.217 264)",
+        primaryForeground: "oklch(0.99 0 0)",
+        secondary: "color-mix(in srgb, white 4%, transparent)",
+        secondaryForeground: "oklch(0.97 0.005 260)",
+        muted: "color-mix(in srgb, white 4%, transparent)",
+        mutedForeground: "color-mix(in srgb, oklch(0.61 0.01 260) 90%, white)",
+        accent: "color-mix(in srgb, white 4%, transparent)",
+        accentForeground: "oklch(0.97 0.005 260)",
+        destructive: "color-mix(in srgb, oklch(0.63 0.22 26) 90%, white)",
+        destructiveForeground: "oklch(0.98 0 0)",
+        border: "color-mix(in srgb, white 6%, transparent)",
+        input: "color-mix(in srgb, white 8%, transparent)",
+        ring: "oklch(0.588 0.217 264)",
+        sidebar: "color-mix(in srgb, oklch(0.14 0.01 260) 98%, white)",
+        sidebarForeground: "oklch(0.97 0.005 260)",
+        sidebarPrimary: "oklch(0.588 0.217 264)",
+        sidebarAccent: "color-mix(in srgb, white 4%, transparent)",
+        sidebarBorder: "color-mix(in srgb, white 6%, transparent)",
+      },
+    },
+  },
   "rainy-tahoe": {
     name: "rainy-tahoe",
     displayName: "Rainy Tahoe",
@@ -649,4 +709,4 @@ export const themes: Record<string, Theme> = {
   },
 };
 
-export const defaultTheme: Theme = themes["rainy-tahoe"];
+export const defaultTheme: Theme = themes.nightless;

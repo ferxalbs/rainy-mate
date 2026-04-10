@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Eraser, FileText, Gamepad2, Sparkles } from "lucide-react";
 
@@ -56,21 +56,21 @@ interface AgentChatPanelProps {
 const PROMPTS = [
   {
     icon: Gamepad2,
-    title: "Build a classic Snake game in this repo.",
-    prompt: "Build a classic Snake game in this repo.",
+    title: "Ship a polished Snake game for this repo.",
+    prompt: "Build a polished Snake game in this repo with responsive UI, score persistence, and keyboard controls.",
     accent: "text-sky-500",
   },
   {
     icon: FileText,
-    title: "Create a one-page PDF that summarizes this app.",
-    prompt: "Create a one-page pdf that summarizes this app.",
+    title: "Generate an investor-grade one-page brief.",
+    prompt: "Create a one-page PDF that summarizes this app for technical founders and investors.",
     accent: "text-rose-500",
   },
   {
     icon: Eraser,
-    title: "Use parallel agents to inspect T3Code editor state.",
+    title: "Inspect T3CODE chat patterns and port them here.",
     prompt:
-      "Use parallel agents to inspect how T3Code manages editor state and open tabs. Return 3 concise findings with exact file paths. Answer in English.",
+      "Inspect the local T3CODE repo and return the most important chat UX patterns to replicate here, including streaming behavior and timeline density. Answer in English with exact file paths.",
     accent: "text-amber-500",
   },
 ];
@@ -91,13 +91,13 @@ const EmptyStatePrompts = React.memo(function EmptyStatePrompts({
           key={title}
           type="button"
           onClick={() => onApplyPrompt(prompt)}
-          className="group relative flex-1 overflow-hidden rounded-2xl border border-white/10 bg-background/66 p-4 text-left shadow-sm transition-colors hover:bg-white/5"
+          className="group relative flex-1 overflow-hidden rounded-[26px] border border-border/70 bg-card/72 p-4 text-left shadow-[0_24px_80px_-64px_rgba(0,0,0,0.7)] transition-colors hover:bg-card"
         >
           <div className="relative z-10 flex h-full flex-col gap-4">
             <div className="flex items-center justify-between">
               <div
                 className={cn(
-                  "flex size-8 items-center justify-center rounded-xl bg-white/10",
+                  "flex size-8 items-center justify-center rounded-xl border border-border/60 bg-background/75",
                   accent,
                 )}
               >
@@ -132,62 +132,36 @@ const TelemetryBar = React.memo(function TelemetryBar({
     compressionTriggerTokens?: number;
   } | undefined;
 }) {
+  const items = [
+    `run:${telemetry?.executionMode || "local"}`,
+    `memory:${telemetry?.workspaceMemoryEnabled ? "on" : "off"}`,
+    `history:${telemetry?.historySource || "persisted_long_chat"}`,
+    `retrieval:${telemetry?.retrievalMode || "unavailable"}`,
+  ];
+
+  if (telemetry?.lastModel) {
+    items.push(`model:${telemetry.lastModel}`);
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
-      <Badge
-        variant="outline"
-        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-      >
-        Run Path: {telemetry?.executionMode || "local"}
-      </Badge>
-      <Badge
-        variant="outline"
-        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-      >
-        Memory Files: {telemetry?.workspaceMemoryEnabled ? "active" : "off"}
-      </Badge>
-      {telemetry?.lastModel && (
+      {items.map((item) => (
+        <Badge
+          key={item}
+          variant="outline"
+          className="rounded-full border-border/60 bg-card/82 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground backdrop-blur-xl"
+        >
+          {item}
+        </Badge>
+      ))}
+      {telemetry?.compressionApplied ? (
         <Badge
           variant="outline"
-          className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
+          className="rounded-full border-border/60 bg-card/82 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground backdrop-blur-xl"
         >
-          Model: {telemetry.lastModel}
+          compression@{telemetry.compressionTriggerTokens || 80000}
         </Badge>
-      )}
-      {typeof telemetry?.totalTokens === "number" && telemetry.totalTokens > 0 && (
-        <Badge
-          variant="outline"
-          className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-        >
-          Tokens: {telemetry.totalTokens.toLocaleString()}
-        </Badge>
-      )}
-      <Badge
-        variant="outline"
-        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-      >
-        History: {telemetry?.historySource || "persisted_long_chat"}
-      </Badge>
-      <Badge
-        variant="outline"
-        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-      >
-        Retrieval: {telemetry?.retrievalMode || "unavailable"}
-      </Badge>
-      <Badge
-        variant="outline"
-        className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-      >
-        Embedding: {telemetry?.embeddingProfile || "gemini-embedding-2-preview"}
-      </Badge>
-      {telemetry?.compressionApplied && (
-        <Badge
-          variant="outline"
-          className="rounded-md border-white/10 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-[0.14em] backdrop-blur-sm backdrop-saturate-150 dark:bg-background/10"
-        >
-          Compression @{telemetry.compressionTriggerTokens || 80000}
-        </Badge>
-      )}
+      ) : null}
     </div>
   );
 });
@@ -518,17 +492,31 @@ export function AgentChatPanel({
     workspacePath,
   ]);
 
-  // ─── Render ────────────────────────────────────────────────────────
-  const hasMessages = messages.length > 0;
-  const transcriptHeader = hasMessages ? <div className="absolute top-0 left-0 right-0 z-50 flex justify-center mt-3"><TelemetryBar telemetry={latestTelemetry} /></div> : null;
-  
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // removed measure function
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const distanceFromBottom =
+      container.scrollHeight - container.clientHeight - container.scrollTop;
+    const isNearBottom = distanceFromBottom < 120;
+    if (!isNearBottom && !hasCurrentThreadRun) {
+      return;
+    }
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: messages.length > 4 ? "smooth" : "auto",
+    });
+  }, [messages, hasCurrentThreadRun]);
+
+  // ─── Render ────────────────────────────────────────────────────────
+  const hasMessages = messages.length > 0;
 
   return (
     <div className={cn("relative h-full w-full overflow-hidden bg-transparent text-foreground", className)}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_30%),radial-gradient(circle_at_20%_20%,rgba(255,184,76,0.08),transparent_26%),linear-gradient(180deg,rgba(0,0,0,0.02),transparent_20%,rgba(0,0,0,0.08))] dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_28%),radial-gradient(circle_at_12%_18%,rgba(255,184,76,0.08),transparent_26%),linear-gradient(180deg,rgba(0,0,0,0),transparent_24%,rgba(0,0,0,0.2))]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_30%),linear-gradient(180deg,color-mix(in_srgb,var(--background)_30%,transparent),transparent_26%,color-mix(in_srgb,var(--background)_92%,transparent))]" />
 
       <ChatTopbar
         chatSession={chatSession}
@@ -549,37 +537,87 @@ export function AgentChatPanel({
         defaultPrompt={schedulePromptSeed}
         onClose={() => setScheduleDialogOpen(false)}
       />
-      {!hasMessages ? (
-        <div className="absolute inset-0 z-10 h-full w-full overflow-y-auto">
-          <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-4 pb-12 pt-16 md:px-6">
-            <div className="flex flex-1 flex-col items-center justify-center">
-              <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-black/5 bg-background shadow-sm dark:border-white/10 dark:bg-background/20">
-                <Sparkles className="size-5 text-primary" />
+      <div className="relative z-10 flex h-full flex-col pt-20">
+        {!hasMessages ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-4 pb-12 pt-10 md:px-6">
+              <div className="flex flex-1 flex-col items-center justify-center">
+                <div className="mb-4 flex size-11 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-[0_24px_80px_-64px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+                  <Sparkles className="size-5 text-primary" />
+                </div>
+
+                <div className="mb-7 max-w-2xl text-center">
+                  <div className="mb-3 inline-flex items-center rounded-full border border-border/70 bg-card/75 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur-xl">
+                    Nightless
+                  </div>
+                  <h1 className="text-3xl font-semibold tracking-[-0.04em] text-foreground">
+                    Precision chat for governed workspace execution
+                  </h1>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    Dense timeline, cleaner streaming, tighter control surface. Built to feel deliberate instead of inflated.
+                  </p>
+                </div>
+
+                <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
+                  <Badge variant="outline" className="rounded-full border-border/70 bg-card/72 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-xl">
+                    Stable streaming
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full border-border/70 bg-card/72 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-xl">
+                    Dense work logs
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full border-border/70 bg-card/72 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-xl">
+                    Launchpad-ready
+                  </Badge>
+                </div>
+
+                <EmptyStatePrompts onApplyPrompt={applyPrompt} />
+
+                <ChatComposer
+                  input={input}
+                  onInputChange={setInput}
+                  onKeyDown={handleKeyDown}
+                  onSubmit={handleComposerSubmit}
+                  inputDisabled={inputDisabled}
+                  submitDisabled={submitDisabled}
+                  stopDisabled={!hasCurrentThreadRun}
+                  showStopButton={hasCurrentThreadRun}
+                  onStop={handleStopActiveRun}
+                  submitLabel={hasCurrentThreadRun ? "Stop active run" : "Send message"}
+                  textareaRef={textareaRef}
+                  currentModelId={currentModelId}
+                  onSelectModel={handleModelSelect}
+                  onModelResolved={setSelectedModel}
+                  selectedAgentId={selectedAgentId}
+                  onSelectAgent={setSelectedAgentId}
+                  agentSpecs={agentSpecs}
+                  reasoningOptions={stableReasoningOptions}
+                  reasoningEffort={reasoningEffort}
+                  onSelectReasoningEffort={setReasoningEffortOverride}
+                  centered
+                  attachments={pendingAttachments}
+                  onAddAttachments={handleAddAttachments}
+                  onRemoveAttachment={handleRemoveAttachment}
+                />
               </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex shrink-0 justify-center px-4 pb-3 pt-2 md:px-6">
+              <TelemetryBar telemetry={latestTelemetry} />
+            </div>
+            <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto pb-34">
+              <MessagesTimeline
+                messages={messages}
+                scrollContainer={scrollContainerRef.current}
+              />
+            </div>
+          </>
+        )}
 
-              <div className="mb-6 text-center">
-                <h1 className="text-2xl font-semibold tracking-[-0.03em] text-foreground">
-                  Conversation-first workspace control
-                </h1>
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  The new shell starts here: faster context, cleaner workspace switching, and auto-titled sessions.
-                </p>
-              </div>
-
-              <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
-                <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
-                  Multi-thread workspace
-                </Badge>
-                <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
-                  Auto-titled sessions
-                </Badge>
-                <Badge variant="outline" className="rounded-full border-white/10 bg-background/60 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-md">
-                  80k auto-compaction
-                </Badge>
-              </div>
-
-              <EmptyStatePrompts onApplyPrompt={applyPrompt} />
-
+        {hasMessages ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 px-4 md:px-6">
+            <div className="pointer-events-auto mx-auto w-full max-w-6xl">
               <ChatComposer
                 input={input}
                 onInputChange={setInput}
@@ -601,58 +639,15 @@ export function AgentChatPanel({
                 reasoningOptions={stableReasoningOptions}
                 reasoningEffort={reasoningEffort}
                 onSelectReasoningEffort={setReasoningEffortOverride}
-                centered
+                centered={false}
                 attachments={pendingAttachments}
                 onAddAttachments={handleAddAttachments}
                 onRemoveAttachment={handleRemoveAttachment}
               />
             </div>
           </div>
-        </div>
-      ) : (
-        <div ref={scrollContainerRef} className="absolute inset-0 z-10 w-full h-full overflow-y-auto">
-          {transcriptHeader}
-          <div className="min-h-full flex flex-col justify-end">
-            <MessagesTimeline
-              messages={messages}
-              scrollContainer={scrollContainerRef.current}
-            />
-          </div>
-        </div>
-      )}
-
-      {hasMessages && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 px-4 md:px-6">
-          <div className="pointer-events-auto mx-auto w-full max-w-6xl">
-            <ChatComposer
-              input={input}
-              onInputChange={setInput}
-              onKeyDown={handleKeyDown}
-              onSubmit={handleComposerSubmit}
-              inputDisabled={inputDisabled}
-              submitDisabled={submitDisabled}
-              stopDisabled={!hasCurrentThreadRun}
-              showStopButton={hasCurrentThreadRun}
-              onStop={handleStopActiveRun}
-              submitLabel={hasCurrentThreadRun ? "Stop active run" : "Send message"}
-              textareaRef={textareaRef}
-              currentModelId={currentModelId}
-              onSelectModel={handleModelSelect}
-              onModelResolved={setSelectedModel}
-              selectedAgentId={selectedAgentId}
-              onSelectAgent={setSelectedAgentId}
-              agentSpecs={agentSpecs}
-              reasoningOptions={stableReasoningOptions}
-              reasoningEffort={reasoningEffort}
-              onSelectReasoningEffort={setReasoningEffortOverride}
-              centered={false}
-              attachments={pendingAttachments}
-              onAddAttachments={handleAddAttachments}
-              onRemoveAttachment={handleRemoveAttachment}
-            />
-          </div>
-        </div>
-      )}
+        ) : null}
+      </div>
     </div>
   );
 }

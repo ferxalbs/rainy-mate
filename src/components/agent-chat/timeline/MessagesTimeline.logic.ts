@@ -1,11 +1,11 @@
-import type { AgentMessage } from "../../../types/agent";
+import type { AgentMessage, AgentTraceEntry } from "../../../types/agent";
 
 export type TimelineRowKind = "user-message" | "assistant-message" | "work-group" | "working";
 
 export interface TimelineWorkEntry {
   id: string;
   tone: "thinking" | "tool" | "info" | "error";
-  detail?: string;
+  detail: string;
   command?: string;
   rawCommand?: string;
   status: "running" | "completed" | "failed";
@@ -19,14 +19,92 @@ export interface MessagesTimelineRow {
   message?: AgentMessage;
   groupedEntries?: TimelineWorkEntry[];
   createdAt?: string;
-  durationStart?: string;
-  showCompletionDivider?: boolean;
+}
+
+function buildWorkEntryFromTrace(trace: AgentTraceEntry): TimelineWorkEntry | null {
+  if (trace.phase === "tool") {
+    return {
+      id: `trace-${trace.id}`,
+      tone: "tool",
+      detail: trace.label || trace.toolName || "Tool execution",
+      command: trace.toolName,
+      rawCommand: trace.preview,
+      status: "completed",
+      timestamp: trace.timestamp,
+    };
+  }
+
+  if (trace.phase === "error") {
+    return {
+      id: `trace-${trace.id}`,
+      tone: "error",
+      detail: trace.label || "Runtime error",
+      rawCommand: trace.preview,
+      status: "failed",
+      timestamp: trace.timestamp,
+    };
+  }
+
+  if (trace.phase === "approval" || trace.phase === "retry" || trace.phase === "act") {
+    return {
+      id: `trace-${trace.id}`,
+      tone: "info",
+      detail: trace.label,
+      rawCommand: trace.preview,
+      status: "completed",
+      timestamp: trace.timestamp,
+    };
+  }
+
+  return null;
+}
+
+function deriveWorkEntries(message: AgentMessage): TimelineWorkEntry[] {
+  const entries: TimelineWorkEntry[] = [];
+
+  if (message.thought?.trim()) {
+    entries.push({
+      id: `thought-${message.id}`,
+      tone: "thinking",
+      detail: message.thought.trim(),
+      status: message.runState === "failed" ? "failed" : "completed",
+      timestamp: message.timestamp,
+    });
+  }
+
+  for (const trace of message.trace ?? []) {
+    const entry = buildWorkEntryFromTrace(trace);
+    if (entry) {
+      entries.push(entry);
+    }
+  }
+
+  if (message.runState === "running" && message.activeToolName) {
+    const runningEntryId = `running-${message.id}-${message.activeToolName}`;
+    const alreadyPresent = entries.some((entry) => entry.id === runningEntryId);
+    if (!alreadyPresent) {
+      entries.push({
+        id: runningEntryId,
+        tone: "tool",
+        detail: `Executing ${message.activeToolName}`,
+        command: message.activeToolName,
+        status: "running",
+        timestamp: message.timestamp,
+      });
+    }
+  }
+
+  return entries;
 }
 
 export function deriveMessagesTimelineRows(messages: AgentMessage[]): MessagesTimelineRow[] {
   const rows: MessagesTimelineRow[] = [];
 
   for (const message of messages) {
+    if (message.type === "system") {
+      continue;
+    }
+
     if (message.type === "user") {
       rows.push({
         id: `row-${message.id}`,
@@ -38,90 +116,68 @@ export function deriveMessagesTimelineRows(messages: AgentMessage[]): MessagesTi
       continue;
     }
 
-    if (message.type === "agent") {
-      const workEntries: TimelineWorkEntry[] = [];
+    const workEntries = deriveWorkEntries(message);
+    if (workEntries.length > 0) {
+      rows.push({
+        id: `work-${message.id}`,
+        kind: "work-group",
+        messageId: message.id,
+        message,
+        groupedEntries: workEntries,
+        createdAt: message.timestamp.toISOString(),
+      });
+    }
 
-      if (message.thought) {
-          workEntries.push({
-              id: `thought-${message.id}`,
-              tone: "thinking",
-              detail: message.thought,
-              status: "completed",
-              timestamp: message.timestamp,
-          });
-      }
+    if (message.content || message.artifacts?.length || message.runState === "completed" || message.runState === "failed" || message.runState === "cancelled") {
+      rows.push({
+        id: `response-${message.id}`,
+        kind: "assistant-message",
+        messageId: message.id,
+        message,
+        createdAt: message.timestamp.toISOString(),
+      });
+      continue;
+    }
 
-      if (message.trace && message.trace.length > 0) {
-        for (const trace of message.trace) {
-          if (trace.phase === "tool" || trace.phase === "error") {
-             workEntries.push({
-                id: `trace-${trace.id}`,
-                tone: trace.phase === "error" ? "error" : "tool",
-                detail: trace.label || trace.toolName,
-                command: trace.toolName,
-                rawCommand: trace.preview,
-                status: "completed",
-                timestamp: trace.timestamp,
-             });
-          }
-        }
-      }
-
-      if (workEntries.length > 0) {
-        rows.push({
-          id: `work-${message.id}`,
-          kind: "work-group",
-          messageId: message.id,
-          groupedEntries: workEntries,
-          createdAt: message.timestamp.toISOString(),
-        });
-      }
-
-      // If the agent has output content, or is generating content / thinking and has text
-      if (message.content || message.runState === "completed" || message.runState === "failed") {
-          rows.push({
-             id: `response-${message.id}`,
-             kind: "assistant-message",
-             messageId: message.id,
-             message,
-             createdAt: message.timestamp.toISOString(),
-          });
-      }
-
-      if (message.runState === "running" && !message.content) {
-         rows.push({
-            id: `working-${message.id}`,
-            kind: "working",
-            messageId: message.id,
-            createdAt: message.timestamp.toISOString(),
-         });
-      }
+    if (message.runState === "running") {
+      rows.push({
+        id: `working-${message.id}`,
+        kind: "working",
+        messageId: message.id,
+        message,
+        createdAt: message.timestamp.toISOString(),
+      });
     }
   }
 
   return rows;
 }
 
-export function estimateTimelineRowHeight(row: MessagesTimelineRow, _widthPx: number | null): number {
+function estimateTextHeight(text: string, charsPerLine: number, lineHeight: number, base: number): number {
+  const lines = Math.max(1, Math.ceil(text.length / charsPerLine) + text.split("\n").length - 1);
+  return base + lines * lineHeight;
+}
+
+export function estimateTimelineRowHeight(row: MessagesTimelineRow, widthPx: number | null): number {
+  const narrow = widthPx !== null && widthPx < 720;
+  const charsPerLine = narrow ? 36 : 54;
+
   if (row.kind === "user-message") {
-    // base + text approximation
-    if (row.message?.content) {
-         const lines = row.message.content.split("\n").length;
-         return 60 + (lines * 24);
-    }
-    return 60;
+    const attachmentCount = row.message?.attachments?.length ?? 0;
+    const content = row.message?.content ?? "";
+    return estimateTextHeight(content, charsPerLine, 24, 76 + attachmentCount * 86);
   }
+
   if (row.kind === "work-group") {
-    return 50 + (row.groupedEntries?.length || 0) * 28;
+    const entries = row.groupedEntries ?? [];
+    return 64 + entries.reduce((total, entry) => total + estimateTextHeight(entry.detail, charsPerLine, 18, 22), 0);
   }
+
   if (row.kind === "assistant-message") {
-     if (row.message?.content) {
-         return 40 + Math.ceil(row.message.content.length / 80) * 24;
-     }
-     return 40;
+    const content = row.message?.content ?? "";
+    const artifactCount = row.message?.artifacts?.length ?? 0;
+    return estimateTextHeight(content || "Awaiting response", charsPerLine, 24, 68 + artifactCount * 34);
   }
-  if (row.kind === "working") {
-     return 40;
-  }
-  return 80;
+
+  return 54;
 }
