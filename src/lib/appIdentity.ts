@@ -3,6 +3,7 @@ export const CURRENT_STORAGE_KEYS = {
   mode: "rainy-mate-mode",
   animations: "rainy-mate-animations",
   compact: "rainy-mate-compact",
+  chatTelemetryChips: "rainy-mate-chat-telemetry-chips",
 } as const;
 
 export function getStoredValue(key: string): string | null {

@@ -3,6 +3,7 @@ import {
   Compass,
   FolderPlus,
   RefreshCw,
+  Rows3,
   Settings2,
   SquarePen,
 } from "lucide-react";
@@ -26,6 +27,8 @@ interface ChatTopbarProps {
   onNewChat: () => void;
   onRefreshChat: () => void;
   onOpenSettings?: () => void;
+  showTelemetryChips?: boolean;
+  onToggleTelemetryChips?: () => void;
 }
 
 function getWorkspaceName(path: string): string {
@@ -50,23 +53,25 @@ export function ChatTopbar({
   onNewChat,
   onRefreshChat,
   onOpenSettings,
+  showTelemetryChips = false,
+  onToggleTelemetryChips,
 }: ChatTopbarProps) {
   const workspaceName = getWorkspaceName(workspacePath);
   const title = resolveTitle(chatSession, titleStatus);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 px-4 pt-4 md:px-6">
-      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-20" />
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 px-4 pt-3 md:px-6">
+      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-16" />
 
-      <div className="pointer-events-auto mx-auto flex w-full max-w-6xl items-center justify-between gap-3 rounded-full border border-border/70 bg-card/78 px-3 py-2 shadow-[0_18px_60px_-38px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="pointer-events-auto mx-auto flex w-full max-w-6xl items-center justify-between gap-3 rounded-full border border-white/8 bg-background/22 px-3 py-1.5 shadow-[0_18px_60px_-38px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/70 text-primary">
-            <Compass className="size-4" />
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-background/28 text-primary">
+            <Compass className="size-3.5" />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
               <span className="truncate text-sm font-medium text-foreground">{title}</span>
-              <span className="hidden rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground sm:inline-flex">
+              <span className="hidden rounded-full border border-white/8 bg-background/24 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground sm:inline-flex">
                 {titleStatus === "generating" ? "titling" : "session"}
               </span>
             </div>
@@ -77,7 +82,7 @@ export function ChatTopbar({
               render={
                 <button
                   type="button"
-                  className="ml-2 hidden min-w-0 items-center gap-1 rounded-full border border-transparent bg-transparent px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border/60 hover:bg-background/65 hover:text-foreground md:flex"
+                  className="ml-2 hidden min-w-0 items-center gap-1 rounded-full border border-transparent bg-transparent px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-white/8 hover:bg-background/24 hover:text-foreground md:flex"
                 />
               }
             >
@@ -134,14 +139,31 @@ export function ChatTopbar({
 
         <div className="flex items-center gap-1">
           <AnimatedThemeToggler />
-          <div className="mx-1 hidden h-4 w-px bg-border/70 sm:block" />
+          <div className="mx-1 hidden h-4 w-px bg-white/8 sm:block" />
           <TooltipProvider delay={0}>
             <Tooltip>
               <TooltipTrigger
                 render={
                   <button
                     type="button"
-                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+                    className={cn(
+                      "rounded-full p-2 text-muted-foreground transition-colors hover:bg-background/24 hover:text-foreground",
+                      showTelemetryChips && "bg-background/28 text-foreground",
+                    )}
+                    onClick={onToggleTelemetryChips}
+                  />
+                }
+              >
+                <Rows3 className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{showTelemetryChips ? "Hide telemetry chips" : "Show telemetry chips"}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-background/24 hover:text-foreground"
                     onClick={onRefreshChat}
                   />
                 }
@@ -155,7 +177,7 @@ export function ChatTopbar({
                 render={
                   <button
                     type="button"
-                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-background/24 hover:text-foreground"
                     onClick={onNewChat}
                   />
                 }
@@ -168,7 +190,7 @@ export function ChatTopbar({
           {onOpenSettings ? (
             <button
               type="button"
-              className="ml-1 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+              className="ml-1 rounded-full p-2 text-muted-foreground transition-colors hover:bg-background/24 hover:text-foreground"
               onClick={onOpenSettings}
             >
               <Settings2 className="size-4" />

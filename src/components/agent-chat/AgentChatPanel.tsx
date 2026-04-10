@@ -16,6 +16,7 @@ import { ChatComposer } from "./ChatComposer";
 import { ChatTopbar } from "./ChatTopbar";
 import { MessagesTimeline } from "./timeline/MessagesTimeline";
 import { ScheduleTaskDialog } from "../scheduling/ScheduleTaskDialog";
+import { CURRENT_STORAGE_KEYS, getStoredValue, setStoredValue } from "../../lib/appIdentity";
 
 interface AgentChatPanelProps {
   workspacePath: string;
@@ -137,10 +138,14 @@ const TelemetryBar = React.memo(function TelemetryBar({
     `memory:${telemetry?.workspaceMemoryEnabled ? "on" : "off"}`,
     `history:${telemetry?.historySource || "persisted_long_chat"}`,
     `retrieval:${telemetry?.retrievalMode || "unavailable"}`,
+    `embedding:${telemetry?.embeddingProfile || "gemini-embedding-2-preview"}`,
   ];
 
   if (telemetry?.lastModel) {
     items.push(`model:${telemetry.lastModel}`);
+  }
+  if (typeof telemetry?.totalTokens === "number" && telemetry.totalTokens > 0) {
+    items.push(`tokens:${telemetry.totalTokens.toLocaleString()}`);
   }
 
   return (
@@ -193,6 +198,9 @@ export function AgentChatPanel({
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [showTelemetryChips, setShowTelemetryChips] = useState<boolean>(() => {
+    return getStoredValue(CURRENT_STORAGE_KEYS.chatTelemetryChips) === "true";
+  });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastLaunchRequestIdRef = useRef<string | null>(null);
 
@@ -425,6 +433,14 @@ export function AgentChatPanel({
     void refreshActiveChat();
   }, [refreshActiveChat]);
 
+  const handleToggleTelemetryChips = useCallback(() => {
+    setShowTelemetryChips((current) => {
+      const next = !current;
+      setStoredValue(CURRENT_STORAGE_KEYS.chatTelemetryChips, String(next));
+      return next;
+    });
+  }, []);
+
   const handleComposerSubmit = useCallback(() => {
     void handleSubmit();
   }, [handleSubmit]);
@@ -529,6 +545,8 @@ export function AgentChatPanel({
         onNewChat={handleNewChat}
         onRefreshChat={handleRefreshChat}
         onOpenSettings={onOpenSettings}
+        showTelemetryChips={showTelemetryChips}
+        onToggleTelemetryChips={handleToggleTelemetryChips}
       />
 
       <ScheduleTaskDialog
@@ -537,7 +555,7 @@ export function AgentChatPanel({
         defaultPrompt={schedulePromptSeed}
         onClose={() => setScheduleDialogOpen(false)}
       />
-      <div className="relative z-10 flex h-full flex-col pt-20">
+      <div className="relative z-10 flex h-full flex-col pt-16">
         {!hasMessages ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-4 pb-12 pt-10 md:px-6">
@@ -603,9 +621,11 @@ export function AgentChatPanel({
           </div>
         ) : (
           <>
-            <div className="flex shrink-0 justify-center px-4 pb-3 pt-2 md:px-6">
-              <TelemetryBar telemetry={latestTelemetry} />
-            </div>
+            {showTelemetryChips ? (
+              <div className="flex shrink-0 justify-center px-4 pb-2 pt-1 md:px-6">
+                <TelemetryBar telemetry={latestTelemetry} />
+              </div>
+            ) : null}
             <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto pb-34">
               <MessagesTimeline
                 messages={messages}
