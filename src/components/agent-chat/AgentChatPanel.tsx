@@ -17,6 +17,7 @@ import { ChatTopbar } from "./ChatTopbar";
 import { MessagesTimeline } from "./timeline/MessagesTimeline";
 import { ScheduleTaskDialog } from "../scheduling/ScheduleTaskDialog";
 import { CURRENT_STORAGE_KEYS, getStoredValue, setStoredValue } from "../../lib/appIdentity";
+import { TextAnimate } from "../ui/text-animate";
 
 interface AgentChatPanelProps {
   workspacePath: string;
@@ -89,6 +90,60 @@ const PROMPTS = [
 ];
 
 const EMPTY_REASONING: string[] = [];
+
+function resolveTimeGreeting(date: Date): {
+  headline: string;
+  subline: string;
+} {
+  const hour = date.getHours();
+
+  if (hour >= 0 && hour < 2) {
+    return {
+      headline: "Past midnight. What still needs to get done?",
+      subline: "Late-night execution, clean handoffs, and focused work.",
+    };
+  }
+
+  if (hour >= 2 && hour < 5) {
+    return {
+      headline: "Early morning. What should I take over?",
+      subline: "Quiet hours are good for decisive work and cleanup.",
+    };
+  }
+
+  if (hour >= 5 && hour < 7) {
+    return {
+      headline: "At dawn already? What are we starting?",
+      subline: "Use the first block of the day for the highest-leverage task.",
+    };
+  }
+
+  if (hour >= 7 && hour < 12) {
+    return {
+      headline: "Good morning. What can I do for you?",
+      subline: "Assign a task, ask a question, or launch a complete workflow.",
+    };
+  }
+
+  if (hour >= 12 && hour < 18) {
+    return {
+      headline: "Good afternoon. What are we building?",
+      subline: "Keep momentum high with a clear prompt and a concrete outcome.",
+    };
+  }
+
+  if (hour >= 18 && hour < 21) {
+    return {
+      headline: "Good evening. What still matters today?",
+      subline: "Finish the important work, not the noisy work.",
+    };
+  }
+
+  return {
+    headline: "Working late? What can I take off your plate?",
+    subline: "Use the remaining hours for decisive execution and review.",
+  };
+}
 
 // ─── Extracted sub-components for proper reconciliation ──────────────
 
@@ -204,6 +259,7 @@ export function AgentChatPanel({
   const [showTelemetryChips, setShowTelemetryChips] = useState<boolean>(() => {
     return getStoredValue(CURRENT_STORAGE_KEYS.chatTelemetryChips) === "true";
   });
+  const [timeGreeting, setTimeGreeting] = useState(() => resolveTimeGreeting(new Date()));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastLaunchRequestIdRef = useRef<string | null>(null);
 
@@ -331,6 +387,18 @@ export function AgentChatPanel({
       }
     }).catch((error) => console.error("Failed to load saved agents", error));
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const syncGreeting = () => {
+      setTimeGreeting(resolveTimeGreeting(new Date()));
+    };
+
+    syncGreeting();
+    const intervalId = window.setInterval(syncGreeting, 60_000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   // Derive reasoning effort from options + user override — no effect needed
@@ -564,11 +632,17 @@ export function AgentChatPanel({
             <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-4 pb-12 pt-8 md:px-6">
               <div className="flex flex-1 flex-col items-center justify-center">
                 <div className="mb-5 max-w-2xl text-center">
-                  <h1 className="text-[clamp(2rem,4vw,3rem)] font-semibold tracking-[-0.055em] text-foreground">
-                    What can I do for you?
-                  </h1>
+                  <TextAnimate
+                    as="h1"
+                    by="word"
+                    animation="blurInUp"
+                    duration={0.28}
+                    className="text-[clamp(2rem,4vw,3rem)] font-semibold tracking-[-0.055em] text-foreground"
+                  >
+                    {timeGreeting.headline}
+                  </TextAnimate>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Assign a task, ask a question, or launch a complete workflow.
+                    {timeGreeting.subline}
                   </p>
                 </div>
 
