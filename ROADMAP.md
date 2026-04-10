@@ -1,8 +1,8 @@
 # Rainy MaTE Roadmap
 
-## Current Version: v0.6.5
+## Current Version: v0.6.8
 
-### v0.6.5 - Definitive Developer Cockpit
+### v0.6.8 - Definitive Developer Cockpit
 
 **Current Release Direction**
 
@@ -39,5 +39,9 @@
 - [ ] Stronger cross-device bridge surfaces beyond the current remote session path
 - [ ] Optional integrations that preserve the laptop workspace as the trusted execution environment
 - [ ] Additional release and incident-oriented artifact pipelines for professional developer workflows
+
+###  Dynamic Agent Behavior AND EMOTIONS
+
+- [ ] **Context-Aware Agent Conciseness**: Implementar un sistema de ajuste dinámico de tono y brevedad según el horario del sistema (ej. respuestas ultra-directas y pragmáticas post-medianoche para sesiones de alta concentración).
 
 *Last Updated: 2026-04-01*

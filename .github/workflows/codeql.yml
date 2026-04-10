@@ -1,0 +1,56 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run weekly on Mondays at 08:00 UTC
+    - cron: "0 8 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # CodeQL requires ubuntu or macos for most languages.
+    # Swift requires macos — but we are NOT scanning Swift because these are
+    # standalone .swift files compiled by cargo-tauri, not an Xcode project.
+    # CodeQL's autobuild cannot compile them without an .xcodeproj / Package.swift.
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # JavaScript/TypeScript: build-mode none — no compilation needed.
+          # Covers all frontend code in src/ and rainy-atm/.
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # Exclude generated/vendor paths from analysis
+          config: |
+            paths-ignore:
+              - node_modules
+              - src-tauri/target
+              - dist
+              - .next
+              - rainy-atm/node_modules
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
