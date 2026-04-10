@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/components/agent-chat/timeline/MessagesTimeline.tsx`, `src/components/agent-chat/timeline/MessagesTimeline.logic.ts` — aligned the row model to the final shell and removed the unstable virtualized rendering path from the chat timeline so expandable work entries no longer cause global layout jitter
 - **Agent Chat telemetry is now operator-controlled instead of always-on visual noise** — the full chip set remains available but is hidden by default until explicitly enabled from the topbar:
   - `src/lib/appIdentity.ts`, `src/components/agent-chat/AgentChatPanel.tsx`, `src/components/agent-chat/ChatTopbar.tsx` — added persisted chat telemetry visibility state and restored the broader chip set (`run`, `memory`, `history`, `retrieval`, `embedding`, `model`, `tokens`, `compression`) behind a topbar toggle
+- **Agent Chat empty-state greeting is now time-aware and less static** — the centered launch surface no longer opens with a single repeated headline; it now reacts to the device-local hour, distinguishes late-night and dawn windows more precisely, rotates between shorter and more editorial greeting variants, and uses the production-safe `TextAnimate` entrance instead of a typing effect:
+  - `src/components/agent-chat/AgentChatPanel.tsx`, `src/components/ui/text-animate.tsx` — added deterministic time-banded greeting variants for past midnight, early morning, dawn, morning, afternoon, evening, and late-night sessions, plus animated headline rendering that keeps the empty state premium without becoming noisy
 
 ### Added
 
@@ -53,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pnpm exec tsc --noEmit` → pass
 - `pnpm exec tsc --noEmit` → pass (agent chat shell redesign)
 - `cd src-tauri && cargo check -q` → pass (agent chat shell redesign)
+- `pnpm exec tsc --noEmit` → pass (time-aware empty-state greeting)
 
 ### Fixed
 
