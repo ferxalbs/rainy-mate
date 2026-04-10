@@ -5,7 +5,15 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.8] - 2026-04-09 - AGENT CHAT TIMELINE OVERHAUL
+
+### Changed
+
+- **Agent Chat Interface Redesign** — Migrated the monolithic virtual transcript to a modern timeline architecture using HeroUI v3 and `@tanstack/react-virtual`:
+  - `src/components/agent-chat/timeline/MessagesTimeline.tsx` — new virtualized timeline renderer replacing `VirtualTranscript.tsx`.
+  - `src/components/agent-chat/timeline/MessagesTimeline.logic.ts` — new logic parser correctly grouping multiple thoughts and tool executions into a single work cluster.
+  - `src/components/agent-chat/timeline/entries/WorkEntryRow.tsx` — granular collapsed views for tools and reasoning.
+  - `src/components/agent-chat/AgentChatPanel.tsx` — removed monolithic bubble dependency.
 
 ### Added
 

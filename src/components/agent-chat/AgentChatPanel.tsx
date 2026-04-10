@@ -12,10 +12,9 @@ import type { AgentSpec } from "../../types/agent-spec";
 import type { UnifiedModel } from "../ai/UnifiedModelSelector";
 import { getReasoningOptions } from "../ai/UnifiedModelSelector";
 import { Badge } from "../ui/badge";
-import { MemoizedMessageBubble } from "./MessageBubble";
 import { ChatComposer } from "./ChatComposer";
 import { ChatTopbar } from "./ChatTopbar";
-import { VirtualTranscript } from "./VirtualTranscript";
+import { MessagesTimeline } from "./timeline/MessagesTimeline";
 import { ScheduleTaskDialog } from "../scheduling/ScheduleTaskDialog";
 
 interface AgentChatPanelProps {
@@ -228,17 +227,11 @@ export function AgentChatPanel({
     chatSession,
     chatTitleStatus,
     activeSessionBinding,
-    currentPlan,
-    executePlan,
-    executeToolCalls,
     runNativeAgent,
     stopAgentRun,
     stopAgentRunByRunId,
-    retryAgentRun,
     clearMessagesAndContext,
     refreshActiveChat,
-    loadOlderHistory,
-    hasMoreHistory,
     isHydratingHistory,
     // @RESERVED — will be used for in-panel chat tab switching
     switchChat: _switchChat,
@@ -527,33 +520,11 @@ export function AgentChatPanel({
 
   // ─── Render ────────────────────────────────────────────────────────
   const hasMessages = messages.length > 0;
-  const transcriptHeader = hasMessages ? <TelemetryBar telemetry={latestTelemetry} /> : null;
+  const transcriptHeader = hasMessages ? <div className="absolute top-0 left-0 right-0 z-50 flex justify-center mt-3"><TelemetryBar telemetry={latestTelemetry} /></div> : null;
+  
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const estimateTranscriptMessageSize = useCallback(
-    (message: (typeof messages)[number]) => {
-      const baseHeight = message.type === "user" ? 104 : 180;
-      const contentHeight = Math.min(720, Math.ceil(message.content.length / 44) * 14);
-      const traceHeight = Math.min(320, (message.trace?.length || 0) * 26);
-      const specialistsHeight = message.specialists?.length
-        ? 120 + message.specialists.length * 52
-        : 0;
-      const supervisorHeight = message.supervisorPlan ? 84 : 0;
-      const thoughtHeight = message.thought ? 96 : 0;
-      const artifactsHeight = message.artifacts?.length
-        ? 28 + message.artifacts.length * 98
-        : 0;
-      return (
-        baseHeight +
-        contentHeight +
-        traceHeight +
-        specialistsHeight +
-        supervisorHeight +
-        thoughtHeight +
-        artifactsHeight
-      );
-    },
-    [],
-  );
+  // removed measure function
 
   return (
     <div className={cn("relative h-full w-full overflow-hidden bg-transparent text-foreground", className)}>
@@ -639,26 +610,15 @@ export function AgentChatPanel({
           </div>
         </div>
       ) : (
-        <VirtualTranscript
-          items={messages}
-          header={transcriptHeader}
-          hasMoreHistory={hasMoreHistory}
-          isHydratingHistory={isHydratingHistory}
-          onLoadOlderHistory={loadOlderHistory}
-          estimateSize={estimateTranscriptMessageSize}
-          renderItem={(message) => (
-            <MemoizedMessageBubble
-              message={message}
-              currentPlan={currentPlan}
-              isExecuting={hasCurrentThreadRun}
-              onExecute={executePlan}
-              onExecuteToolCalls={executeToolCalls}
-              onStopRun={stopAgentRun}
-              onRetryRun={retryAgentRun}
-              workspaceId={workspacePath}
+        <div ref={scrollContainerRef} className="absolute inset-0 z-10 w-full h-full overflow-y-auto">
+          {transcriptHeader}
+          <div className="min-h-full flex flex-col justify-end">
+            <MessagesTimeline
+              messages={messages}
+              scrollContainer={scrollContainerRef.current}
             />
-          )}
-        />
+          </div>
+        </div>
       )}
 
       {hasMessages && (
