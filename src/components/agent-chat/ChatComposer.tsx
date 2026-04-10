@@ -81,9 +81,14 @@ export function ChatComposer({
   const actionLabel = submitLabel || (showStopButton ? "Stop run" : "Send");
 
   return (
-    <div className={cn("mx-auto w-full transition-all duration-300", centered ? "max-w-4xl" : "max-w-[46rem]")}>
-      <div className="overflow-hidden rounded-[24px] border border-primary/55 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_62%,transparent),color-mix(in_srgb,var(--background)_48%,transparent))] shadow-[0_32px_100px_-70px_rgba(0,0,0,0.95)] backdrop-blur-[24px]">
-        <div className="px-4 pb-2.5 pt-3">
+    <div className={cn("mx-auto w-full transition-all duration-300", centered ? "max-w-[47rem]" : "max-w-[46rem]")}>
+      <div
+        className={cn(
+          "overflow-hidden border border-primary/50 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_62%,transparent),color-mix(in_srgb,var(--background)_48%,transparent))] shadow-[0_32px_100px_-70px_rgba(0,0,0,0.95)] backdrop-blur-[24px]",
+          centered ? "rounded-[26px]" : "rounded-[24px]",
+        )}
+      >
+        <div className={cn("px-4 pb-2.5 pt-3", centered && "px-4.5 pb-2.5 pt-3.5")}>
 
           {attachments.length > 0 ? (
             <div className="mb-2.5 flex flex-wrap gap-2">
@@ -124,13 +129,18 @@ export function ChatComposer({
             placeholder="Ask MaTE anything, use @ for files or launch a concrete task."
             className={cn(
               "w-full resize-none border-none bg-transparent px-0 py-0 text-[14px] leading-7 text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground/34 focus-visible:border-none focus-visible:ring-0",
-              centered ? "min-h-[110px]" : "min-h-[58px]",
+              centered ? "min-h-[88px] text-[15px] leading-7" : "min-h-[58px]",
             )}
             disabled={inputDisabled}
           />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-background/14 px-3.5 py-2">
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-background/14 px-3.5 py-2",
+            centered && "border-t-0 bg-transparent px-4 pb-3 pt-1",
+          )}
+        >
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
             <Button
               variant="ghost"

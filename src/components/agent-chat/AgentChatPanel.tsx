@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Eraser, FileText, Gamepad2, Sparkles } from "lucide-react";
+import { AppWindow, Eraser, FileText, Gamepad2, Layers3 } from "lucide-react";
 
 import * as tauri from "../../services/tauri";
 import { cn } from "../../lib/utils";
@@ -57,22 +57,34 @@ interface AgentChatPanelProps {
 const PROMPTS = [
   {
     icon: Gamepad2,
-    title: "Ship a polished Snake game for this repo.",
+    title: "Build game",
     prompt: "Build a polished Snake game in this repo with responsive UI, score persistence, and keyboard controls.",
     accent: "text-sky-500",
   },
   {
-    icon: FileText,
-    title: "Generate an investor-grade one-page brief.",
+    icon: Layers3,
+    title: "Create slides",
     prompt: "Create a one-page PDF that summarizes this app for technical founders and investors.",
     accent: "text-rose-500",
   },
   {
-    icon: Eraser,
-    title: "Inspect T3CODE chat patterns and port them here.",
-    prompt:
-      "Inspect the local T3CODE repo and return the most important chat UX patterns to replicate here, including streaming behavior and timeline density. Answer in English with exact file paths.",
+    icon: FileText,
+    title: "Build website",
+    prompt: "Design and implement a crisp landing page for this project with production-ready copy, layout, and responsive styling.",
+    accent: "text-emerald-500",
+  },
+  {
+    icon: AppWindow,
+    title: "Desktop app",
+    prompt: "Design and implement a professional desktop workflow for this repository, including UX improvements and the core UI states.",
     accent: "text-amber-500",
+  },
+  {
+    icon: Eraser,
+    title: "More",
+    prompt:
+      "Inspect this repository, identify the highest-leverage next improvement, and implement it with clean modular changes and verification.",
+    accent: "text-violet-500",
   },
 ];
 
@@ -86,32 +98,23 @@ const EmptyStatePrompts = React.memo(function EmptyStatePrompts({
   onApplyPrompt: (prompt: string) => void;
 }) {
   return (
-    <div className="mb-8 flex w-full max-w-2xl flex-col gap-2.5 px-2 md:flex-row">
+    <div className="mt-4 flex w-full max-w-3xl flex-wrap items-center justify-center gap-2.5 px-2">
       {PROMPTS.map(({ accent, icon: Icon, prompt, title }) => (
         <button
           key={title}
           type="button"
           onClick={() => onApplyPrompt(prompt)}
-          className="group relative flex-1 overflow-hidden rounded-[26px] border border-border/70 bg-card/72 p-4 text-left shadow-[0_24px_80px_-64px_rgba(0,0,0,0.7)] transition-colors hover:bg-card"
+          className="group inline-flex items-center gap-2 rounded-full border border-border/55 bg-card/44 px-3.5 py-1.5 text-[13px] text-foreground/86 shadow-[0_18px_60px_-48px_rgba(0,0,0,0.65)] backdrop-blur-xl transition-colors hover:bg-card/64"
         >
-          <div className="relative z-10 flex h-full flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div
-                className={cn(
-                  "flex size-8 items-center justify-center rounded-xl border border-border/60 bg-background/75",
-                  accent,
-                )}
-              >
-                <Icon className="size-3.5" />
-              </div>
-              <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60">
-                Explore
-              </span>
-            </div>
-            <p className="text-xs font-medium leading-relaxed tracking-[-0.01em] text-foreground/90">
-              {title}
-            </p>
-          </div>
+          <span
+            className={cn(
+              "flex size-4.5 items-center justify-center rounded-full border border-border/50 bg-background/65",
+              accent,
+            )}
+          >
+            <Icon className="size-3" />
+          </span>
+          <span>{title}</span>
         </button>
       ))}
     </div>
@@ -558,37 +561,16 @@ export function AgentChatPanel({
       <div className="relative z-10 flex h-full flex-col pt-16">
         {!hasMessages ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-4 pb-12 pt-10 md:px-6">
+            <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center px-4 pb-12 pt-8 md:px-6">
               <div className="flex flex-1 flex-col items-center justify-center">
-                <div className="mb-4 flex size-11 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-[0_24px_80px_-64px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-                  <Sparkles className="size-5 text-primary" />
-                </div>
-
-                <div className="mb-7 max-w-2xl text-center">
-                  <div className="mb-3 inline-flex items-center rounded-full border border-border/70 bg-card/75 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur-xl">
-                    Nightless
-                  </div>
-                  <h1 className="text-3xl font-semibold tracking-[-0.04em] text-foreground">
-                    Precision chat for governed workspace execution
+                <div className="mb-5 max-w-2xl text-center">
+                  <h1 className="text-[clamp(2rem,4vw,3rem)] font-semibold tracking-[-0.055em] text-foreground">
+                    What can I do for you?
                   </h1>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Dense timeline, cleaner streaming, tighter control surface. Built to feel deliberate instead of inflated.
+                    Assign a task, ask a question, or launch a complete workflow.
                   </p>
                 </div>
-
-                <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
-                  <Badge variant="outline" className="rounded-full border-border/70 bg-card/72 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-xl">
-                    Stable streaming
-                  </Badge>
-                  <Badge variant="outline" className="rounded-full border-border/70 bg-card/72 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-xl">
-                    Dense work logs
-                  </Badge>
-                  <Badge variant="outline" className="rounded-full border-border/70 bg-card/72 px-2.5 py-0.5 text-[9px] uppercase tracking-[0.14em] backdrop-blur-xl">
-                    Launchpad-ready
-                  </Badge>
-                </div>
-
-                <EmptyStatePrompts onApplyPrompt={applyPrompt} />
 
                 <ChatComposer
                   input={input}
@@ -616,6 +598,8 @@ export function AgentChatPanel({
                   onAddAttachments={handleAddAttachments}
                   onRemoveAttachment={handleRemoveAttachment}
                 />
+
+                <EmptyStatePrompts onApplyPrompt={applyPrompt} />
               </div>
             </div>
           </div>
