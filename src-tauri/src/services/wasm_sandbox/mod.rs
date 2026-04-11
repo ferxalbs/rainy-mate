@@ -33,7 +33,7 @@ impl ResourceLimiter for SandboxLimits {
         _current: usize,
         desired: usize,
         _maximum: Option<usize>,
-    ) -> Result<bool, anyhow::Error> {
+    ) -> Result<bool, wasmtime::Error> {
         Ok(desired <= self.max_memory_bytes)
     }
 
@@ -42,7 +42,7 @@ impl ResourceLimiter for SandboxLimits {
         _current: usize,
         desired: usize,
         _maximum: Option<usize>,
-    ) -> Result<bool, anyhow::Error> {
+    ) -> Result<bool, wasmtime::Error> {
         Ok(desired <= self.max_table_elements)
     }
 }
@@ -67,7 +67,6 @@ impl Default for WasmSandboxService {
 impl WasmSandboxService {
     pub fn new() -> Self {
         let mut config = Config::new();
-        config.async_support(false);
         config.consume_fuel(true);
         config.max_wasm_stack(512 * 1024);
         let engine = Engine::new(&config).expect("Failed to initialize Wasmtime engine");
