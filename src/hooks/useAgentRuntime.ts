@@ -19,6 +19,12 @@ export type AgentEvent =
   | {
       runId?: string;
       timestampMs?: number;
+      type: "reasoning";
+      data: string;
+    }
+  | {
+      runId?: string;
+      timestampMs?: number;
       type: "tool_call";
       data: any;
     }
@@ -39,6 +45,17 @@ export type AgentEvent =
       timestampMs?: number;
       type: "stream_chunk";
       data: string;
+    }
+  | {
+      runId?: string;
+      timestampMs?: number;
+      type: "usage";
+      data: {
+        model?: string;
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+      };
     }
   | {
       runId?: string;

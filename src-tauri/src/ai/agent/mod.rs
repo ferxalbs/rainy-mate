@@ -10,6 +10,7 @@ pub mod memory;
 pub mod prompt_guard;
 pub mod protocol;
 pub mod runtime;
+pub mod runtime_events;
 pub mod runtime_registry;
 pub mod specialist;
 pub mod supervisor;

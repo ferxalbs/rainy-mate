@@ -215,6 +215,7 @@ impl AIProvider for OpenAIProvider {
             embeddings: true,
             streaming: true,
             function_calling: true,
+            tool_call_streaming: false,
             vision: true,               // GPT-4o supports vision
             web_search: false,          // Not directly supported
             max_context_tokens: 128000, // GPT-4o context window

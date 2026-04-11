@@ -35,6 +35,7 @@ pub use provider_types::{
     ProviderEventCallback, ProviderResult, ProviderStreamEvent, ProviderType, StreamingCallback,
     StreamingChunk, TokenUsage,
 };
+pub use agent::runtime_events::{RuntimeEventCallback, RuntimeStreamEvent};
 pub use router::IntelligentRouter;
 
 // PHASE 4 exports

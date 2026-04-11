@@ -6,6 +6,9 @@ use crate::ai::provider_types::{
     ProviderCapabilities, ProviderHealth, ProviderId, ProviderResult, ProviderType,
     ProviderEventCallback, ProviderStreamEvent, StreamingCallback, StreamingChunk,
 };
+use crate::ai::agent::runtime_events::{
+    RuntimeContentDelta, RuntimeContentStreamKind, RuntimeEventCallback, RuntimeStreamEvent,
+};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -58,6 +61,53 @@ pub trait AIProvider: Send + Sync {
         });
 
         self.complete_stream(request, adapter).await
+    }
+
+    /// Complete a chat request with provider-agnostic runtime stream events.
+    async fn complete_runtime_stream(
+        &self,
+        request: ChatCompletionRequest,
+        callback: RuntimeEventCallback,
+    ) -> ProviderResult<()> {
+        callback(RuntimeStreamEvent::TurnStarted {
+            tool_streaming: request
+                .tools
+                .as_ref()
+                .is_some_and(|tools| !tools.is_empty()),
+        });
+        let runtime_callback = Arc::clone(&callback);
+        let adapter: ProviderEventCallback = Arc::new(move |event: ProviderStreamEvent| match event {
+            ProviderStreamEvent::TextDelta(text) => {
+                if !text.is_empty() {
+                    runtime_callback(RuntimeStreamEvent::ContentDelta(RuntimeContentDelta {
+                        stream_kind: RuntimeContentStreamKind::AssistantText,
+                        delta: text,
+                    }));
+                }
+            }
+            ProviderStreamEvent::ThoughtDelta(thought) => {
+                if !thought.is_empty() {
+                    runtime_callback(RuntimeStreamEvent::ContentDelta(RuntimeContentDelta {
+                        stream_kind: RuntimeContentStreamKind::ReasoningText,
+                        delta: thought,
+                    }));
+                }
+            }
+            ProviderStreamEvent::ToolCallDelta(lifecycle) => {
+                runtime_callback(RuntimeStreamEvent::ToolCallLifecycle(lifecycle));
+            }
+            ProviderStreamEvent::Usage(usage) => {
+                runtime_callback(RuntimeStreamEvent::Usage(usage));
+            }
+            ProviderStreamEvent::Completed { finish_reason } => {
+                runtime_callback(RuntimeStreamEvent::TurnCompleted { finish_reason });
+            }
+            ProviderStreamEvent::Raw(value) => {
+                runtime_callback(RuntimeStreamEvent::Raw(value));
+            }
+        });
+
+        self.complete_event_stream(request, adapter).await
     }
 
     /// Generate embeddings

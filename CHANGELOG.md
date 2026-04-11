@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/src/ai/provider_types.rs`, `src-tauri/src/ai/provider_trait.rs`, `src-tauri/src/ai/router/router.rs`, `src-tauri/src/ai/mod.rs` — added a richer provider event contract (`ProviderStreamEvent`, tool lifecycle deltas, usage payloads, event callback plumbing) while preserving the legacy chunk callback path for non-migrated providers
   - `src-tauri/src/ai/providers/rainy_sdk.rs` — upgraded the Rainy provider to consume the real streaming shape exposed by the current local `rainy-sdk` checkout (`content`, `thought`, `tool_calls`, final `usage`) and project it as typed provider events instead of only mapping plain text chunks
   - `src-tauri/src/ai/agent/events.rs`, `src-tauri/src/ai/agent/workflow.rs`, `src-tauri/src/services/command_poller_agent.rs` — added runtime-facing streamed tool and usage events, plus a Rainy-first ThinkStep path that keeps streaming enabled even when tools are advertised so the agent can render draft text, queued tool intent, and post-tool continuation in one continuous turn
+- **The Rainy runtime now uses a canonical provider-agnostic stream layer instead of Rainy-specific workflow heuristics** — streamed reasoning, token usage, and tool preparation now flow through a typed runtime event contract before frontend projection, so the desktop agent no longer depends on `ProviderType::RainySDK` checks or `RUN_USAGE:` / `Thinking trace:` status encodings:
+  - `src-tauri/src/ai/agent/runtime_events.rs`, `src-tauri/src/ai/provider_trait.rs`, `src-tauri/src/ai/router/router.rs`, `src-tauri/src/ai/agent/workflow.rs` — added `RuntimeStreamEvent`, runtime-stream callback plumbing, capability-based tool-streaming selection, and workflow consumption of provider-agnostic runtime events
+  - `src-tauri/src/ai/provider_types.rs`, `src-tauri/src/ai/providers/openai.rs`, `src-tauri/src/ai/providers/anthropic.rs`, `src-tauri/src/ai/providers/gemini_adapter.rs`, `src-tauri/src/ai/providers/moonshot.rs`, `src-tauri/src/ai/providers/xai.rs`, `src-tauri/src/ai/providers/rainy_sdk.rs` — introduced `tool_call_streaming` provider capabilities and switched the Rainy provider to `rainy-sdk` 0.6.14 typed chat stream events, including native billing-to-usage mapping
+  - `src-tauri/src/ai/agent/events.rs`, `src-tauri/src/commands/agent_frontend_events.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/services/command_poller_agent.rs`, `src/hooks/useAgentChat.ts`, `src/hooks/useAgentRuntime.ts` — added explicit reasoning events, moved runtime telemetry persistence to typed usage events, and removed the frontend dependency on usage/reasoning status-string parsing
 
 ### Added
 
@@ -24,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `cd src-tauri && cargo check -q` → pass
 - `pnpm exec tsc --noEmit` → pass
+- `cd src-tauri && cargo check -q` → pass (canonical runtime stream migration)
+- `pnpm exec tsc --noEmit` → pass (canonical runtime stream migration)
 
 ## [0.6.8] - 2026-04-09 - AGENT CHAT TIMELINE OVERHAUL
 

@@ -4,9 +4,10 @@
 use crate::ai::provider_trait::ProviderWithStats;
 use crate::ai::provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
-    ProviderEventCallback, ProviderId, ProviderResult, ProviderStreamEvent, ProviderType,
-    StreamingCallback,
+    ProviderCapabilities, ProviderEventCallback, ProviderId, ProviderResult, ProviderStreamEvent,
+    ProviderType, StreamingCallback,
 };
+use crate::ai::agent::runtime_events::RuntimeEventCallback;
 use crate::ai::router::fallback_chain::FallbackStrategy;
 use crate::ai::router::load_balancer::LoadBalancingStrategy;
 use crate::ai::router::{
@@ -276,6 +277,7 @@ impl IntelligentRouter {
     }
 
     /// Complete a chat request with the provider event stream.
+    #[allow(dead_code)]
     pub async fn complete_event_stream(
         &self,
         request: ChatCompletionRequest,
@@ -306,6 +308,70 @@ impl IntelligentRouter {
                 let result = provider
                     .provider()
                     .complete_event_stream(request.clone(), Arc::clone(&callback))
+                    .await;
+
+                match result {
+                    Ok(()) => {
+                        if let Some(cb) = self.circuit_breakers.get(&provider_id) {
+                            cb.record_success().await;
+                        }
+
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        if let Some(cb) = self.circuit_breakers.get(&provider_id) {
+                            cb.record_failure().await;
+                        }
+
+                        last_error = Some(e.clone());
+                        tracing::warn!(
+                            "Provider {} failed on attempt {}: {}",
+                            provider_id,
+                            attempt + 1,
+                            e
+                        );
+                    }
+                }
+            } else {
+                return Err(Self::pinned_provider_error(&request.model)
+                    .unwrap_or_else(|| AIError::Internal("No providers available".to_string())));
+            }
+        }
+
+        Err(last_error
+            .unwrap_or_else(|| AIError::Internal("All provider attempts failed".to_string())))
+    }
+
+    pub async fn complete_runtime_stream(
+        &self,
+        request: ChatCompletionRequest,
+        callback: RuntimeEventCallback,
+    ) -> ProviderResult<()> {
+        if request.model != "default" {
+            crate::ai::model_catalog::ensure_supported_model_slug(&request.model)
+                .map_err(AIError::InvalidRequest)?;
+        }
+        let mut last_error = None;
+
+        for attempt in 0..self.config.max_retries {
+            let provider = self.select_provider(&request).await;
+
+            if let Some(provider) = provider {
+                let provider_id = provider.provider().id().clone();
+
+                if let Some(cb) = self.circuit_breakers.get(&provider_id) {
+                    if !cb.allow_request().await {
+                        tracing::warn!(
+                            "Circuit breaker open for provider {}, skipping",
+                            provider_id
+                        );
+                        continue;
+                    }
+                }
+
+                let result = provider
+                    .provider()
+                    .complete_runtime_stream(request.clone(), Arc::clone(&callback))
                     .await;
 
                 match result {
@@ -486,6 +552,7 @@ impl IntelligentRouter {
         self.load_balancer.select_provider()
     }
 
+    #[allow(dead_code)]
     pub async fn selected_provider_type(
         &self,
         request: &ChatCompletionRequest,
@@ -493,6 +560,14 @@ impl IntelligentRouter {
         self.select_provider(request)
             .await
             .map(|provider| provider.provider().provider_type())
+    }
+
+    pub async fn selected_provider_capabilities(
+        &self,
+        request: &ChatCompletionRequest,
+    ) -> Option<ProviderCapabilities> {
+        let provider = self.select_provider(request).await?;
+        provider.provider().capabilities().await.ok()
     }
 
     /// Select a provider for embeddings

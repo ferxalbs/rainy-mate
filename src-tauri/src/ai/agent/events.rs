@@ -111,6 +111,7 @@ pub struct StreamToolCallPayload {
 pub enum AgentEvent {
     Status(String),
     Thought(String),
+    Reasoning(String),
     StreamChunk(String),
     StreamToolCall(StreamToolCallPayload),
     Usage(ProviderStreamUsage),

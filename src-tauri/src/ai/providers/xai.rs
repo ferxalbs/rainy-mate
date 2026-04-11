@@ -110,6 +110,7 @@ impl AIProvider for XAIProvider {
             embeddings: false,
             streaming: true,
             function_calling: true,
+            tool_call_streaming: false,
             vision: true,
             web_search: true,
             max_context_tokens: 2_000_000, // grok-4-1 family has 2M context

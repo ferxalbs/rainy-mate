@@ -74,6 +74,8 @@ pub struct ProviderCapabilities {
     pub streaming: bool,
     /// Whether the provider supports function calling
     pub function_calling: bool,
+    /// Whether the provider can stream structured tool lifecycle events.
+    pub tool_call_streaming: bool,
     /// Whether the provider supports vision/image analysis
     pub vision: bool,
     /// Whether the provider supports web search
@@ -93,6 +95,7 @@ impl Default for ProviderCapabilities {
             embeddings: false,
             streaming: false,
             function_calling: false,
+            tool_call_streaming: false,
             vision: false,
             web_search: false,
             max_context_tokens: 4096,

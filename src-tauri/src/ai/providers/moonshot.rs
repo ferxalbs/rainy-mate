@@ -188,6 +188,7 @@ impl AIProvider for MoonshotProvider {
             embeddings: false, // Moonshot doesn't provide embeddings yet
             streaming: true,
             function_calling: false, // Check if supported
+            tool_call_streaming: false,
             vision: false, // Kimi supports vision but requires multipart/form-data with file upload first (handled separately if needed)
             web_search: true, // Kimi has built-in search
             max_context_tokens: 128000,

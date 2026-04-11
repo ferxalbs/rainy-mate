@@ -1521,93 +1521,77 @@ pub async fn run_agent_workflow_internal(
                     },
                 );
 
-                if let AgentEvent::Status(text) = projected_event {
-                    if text.starts_with("RAG_TELEMETRY:") {
-                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(
-                            &text["RAG_TELEMETRY:".len()..],
-                        ) {
-                            let history_source = value
-                                .get("history_source")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("persisted_long_chat")
-                                .to_string();
-                            let retrieval_mode = value
-                                .get("retrieval_mode")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("unavailable")
-                                .to_string();
-                            let embedding_profile = value
-                                .get("embedding_profile")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or(crate::services::memory_vault::types::EMBEDDING_MODEL)
-                                .to_string();
-                            let manager = agent_manager_clone.clone();
-                            let chat_id = chat_id_for_events.clone();
-                            let workspace_memory_root = telemetry_memory_root.clone();
-                            let workspace_memory_enabled = telemetry_memory_enabled;
-                            let last_model = telemetry_model.clone();
-                            tauri::async_runtime::spawn(async move {
-                                let _ = manager
-                                    .upsert_chat_runtime_telemetry(
-                                        &chat_id,
-                                        &history_source,
-                                        &retrieval_mode,
-                                        &embedding_profile,
-                                        "local",
-                                        workspace_memory_enabled,
-                                        workspace_memory_root.as_deref(),
-                                        last_model.as_deref(),
-                                        0,
-                                        0,
-                                        0,
-                                    )
-                                    .await;
-                            });
-                        }
-                    } else if text.starts_with("RUN_USAGE:") {
-                        if let Ok(value) =
-                            serde_json::from_str::<serde_json::Value>(&text["RUN_USAGE:".len()..])
-                        {
-                            let prompt_tokens = value
-                                .get("prompt_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0);
-                            let completion_tokens = value
-                                .get("completion_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0);
-                            let total_tokens = value
-                                .get("total_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0);
-                            let last_model = value
-                                .get("model")
-                                .and_then(|v| v.as_str())
-                                .map(|v| v.to_string());
-                            let manager = agent_manager_clone.clone();
-                            let chat_id = chat_id_for_events.clone();
-                            let workspace_memory_root = telemetry_memory_root.clone();
-                            let workspace_memory_enabled = telemetry_memory_enabled;
-                            let last_model = last_model.or_else(|| telemetry_model.clone());
-                            tauri::async_runtime::spawn(async move {
-                                let _ = manager
-                                    .upsert_chat_runtime_telemetry(
-                                        &chat_id,
-                                        "persisted_long_chat",
-                                        "unavailable",
-                                        crate::services::memory_vault::types::EMBEDDING_MODEL,
-                                        "local",
-                                        workspace_memory_enabled,
-                                        workspace_memory_root.as_deref(),
-                                        last_model.as_deref(),
-                                        prompt_tokens,
-                                        completion_tokens,
-                                        total_tokens,
-                                    )
-                                    .await;
-                            });
+                match projected_event {
+                    AgentEvent::Status(text) => {
+                        if text.starts_with("RAG_TELEMETRY:") {
+                            if let Ok(value) = serde_json::from_str::<serde_json::Value>(
+                                &text["RAG_TELEMETRY:".len()..],
+                            ) {
+                                let history_source = value
+                                    .get("history_source")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("persisted_long_chat")
+                                    .to_string();
+                                let retrieval_mode = value
+                                    .get("retrieval_mode")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("unavailable")
+                                    .to_string();
+                                let embedding_profile = value
+                                    .get("embedding_profile")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(crate::services::memory_vault::types::EMBEDDING_MODEL)
+                                    .to_string();
+                                let manager = agent_manager_clone.clone();
+                                let chat_id = chat_id_for_events.clone();
+                                let workspace_memory_root = telemetry_memory_root.clone();
+                                let workspace_memory_enabled = telemetry_memory_enabled;
+                                let last_model = telemetry_model.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = manager
+                                        .upsert_chat_runtime_telemetry(
+                                            &chat_id,
+                                            &history_source,
+                                            &retrieval_mode,
+                                            &embedding_profile,
+                                            "local",
+                                            workspace_memory_enabled,
+                                            workspace_memory_root.as_deref(),
+                                            last_model.as_deref(),
+                                            0,
+                                            0,
+                                            0,
+                                        )
+                                        .await;
+                                });
+                            }
                         }
                     }
+                    AgentEvent::Usage(usage) => {
+                        let manager = agent_manager_clone.clone();
+                        let chat_id = chat_id_for_events.clone();
+                        let workspace_memory_root = telemetry_memory_root.clone();
+                        let workspace_memory_enabled = telemetry_memory_enabled;
+                        let last_model = usage.model.or_else(|| telemetry_model.clone());
+                        tauri::async_runtime::spawn(async move {
+                            let _ = manager
+                                .upsert_chat_runtime_telemetry(
+                                    &chat_id,
+                                    "persisted_long_chat",
+                                    "unavailable",
+                                    crate::services::memory_vault::types::EMBEDDING_MODEL,
+                                    "local",
+                                    workspace_memory_enabled,
+                                    workspace_memory_root.as_deref(),
+                                    last_model.as_deref(),
+                                    usage.prompt_tokens as i64,
+                                    usage.completion_tokens as i64,
+                                    usage.total_tokens as i64,
+                                )
+                                .await;
+                        });
+                    }
+                    _ => {}
                 }
             }
         })

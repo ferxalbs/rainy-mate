@@ -74,6 +74,13 @@ type RuntimeAgentEventData = {
   trigger_tokens?: number;
 };
 
+function extractEventText(data?: RuntimeAgentEventData | string): string | undefined {
+  if (typeof data === "string") {
+    return data;
+  }
+  return data?.text;
+}
+
 type RuntimeAgentEvent =
   | {
       runId?: string;
@@ -87,6 +94,7 @@ type RuntimeAgentEvent =
         | "supervisor_summary"
         | "status"
         | "thought"
+        | "reasoning"
         | "stream_chunk"
         | "stream_tool_call"
         | "usage"
@@ -609,6 +617,30 @@ export function useAgentChat(
             },
           };
         }
+        case "reasoning": {
+          const reasoningText = extractEventText(payload.data as
+            | RuntimeAgentEventData
+            | string
+            | undefined);
+          if (!reasoningText) {
+            return message;
+          }
+          return {
+            ...message,
+            neuralState: "thinking",
+            runPhase: message.runPhase === "tool_running" ? "tool_running" : "streaming",
+            statusText: "Streaming reasoning",
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                "think",
+                "Reasoning update",
+                { preview: reasoningText.slice(0, 180) },
+                payload.timestampMs,
+              ),
+            ],
+          };
+        }
         case "tool_call": {
           const functionName = payload.data?.function?.name || "";
           if (payload.data?.id) {
@@ -712,7 +744,13 @@ export function useAgentChat(
         case "supervisor_summary":
           return {
             ...message,
-            content: appendStreamText(message.content, payload.data?.text),
+            content: appendStreamText(
+              message.content,
+              extractEventText(payload.data as
+                | RuntimeAgentEventData
+                | string
+                | undefined),
+            ),
             neuralState: "thinking",
             runPhase:
               message.trace?.some((entry) => entry.phase === "tool") ||
@@ -793,35 +831,6 @@ export function useAgentChat(
               return {
                 ...message,
                 ragTelemetry: nextTelemetry,
-              };
-            } catch {
-              return message;
-            }
-          }
-          if (statusText.startsWith("RUN_USAGE:")) {
-            try {
-              const raw = statusText.slice("RUN_USAGE:".length);
-              const parsed = JSON.parse(raw) as {
-                model?: string;
-                prompt_tokens?: number;
-                completion_tokens?: number;
-                total_tokens?: number;
-              };
-              return {
-                ...message,
-                ragTelemetry: {
-                  ...message.ragTelemetry,
-                  lastModel:
-                    parsed.model || message.ragTelemetry?.lastModel,
-                  promptTokens:
-                    parsed.prompt_tokens ?? message.ragTelemetry?.promptTokens ?? 0,
-                  completionTokens:
-                    parsed.completion_tokens ??
-                    message.ragTelemetry?.completionTokens ??
-                    0,
-                  totalTokens:
-                    parsed.total_tokens ?? message.ragTelemetry?.totalTokens ?? 0,
-                },
               };
             } catch {
               return message;
@@ -2261,6 +2270,31 @@ export function useAgentChat(
                 },
               };
             }
+            case "reasoning": {
+              const reasoningText = extractEventText(payload.data as
+                | RuntimeAgentEventData
+                | string
+                | undefined);
+              if (!reasoningText) {
+                return message;
+              }
+              return {
+                ...message,
+                neuralState: "thinking",
+                runPhase:
+                  message.runPhase === "tool_running" ? "tool_running" : "streaming",
+                statusText: "Streaming reasoning",
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(
+                    "think",
+                    "Reasoning update",
+                    { preview: reasoningText.slice(0, 180) },
+                    payload.timestampMs,
+                  ),
+                ],
+              };
+            }
             case "tool_call": {
               const functionName = payload.data?.function?.name || "";
               if (payload.data?.id) {
@@ -2364,7 +2398,13 @@ export function useAgentChat(
             case "supervisor_summary":
               return {
                 ...message,
-                content: appendStreamText(message.content, payload.data?.text),
+                content: appendStreamText(
+                  message.content,
+                  extractEventText(payload.data as
+                    | RuntimeAgentEventData
+                    | string
+                    | undefined),
+                ),
                 neuralState: "thinking",
                 runPhase:
                   message.trace?.some((entry) => entry.phase === "tool") ||
@@ -2445,37 +2485,6 @@ export function useAgentChat(
                   return {
                     ...message,
                     ragTelemetry: nextTelemetry,
-                  };
-                } catch {
-                  return message;
-                }
-              }
-              if (statusText.startsWith("RUN_USAGE:")) {
-                try {
-                  const raw = statusText.slice("RUN_USAGE:".length);
-                  const parsed = JSON.parse(raw) as {
-                    model?: string;
-                    prompt_tokens?: number;
-                    completion_tokens?: number;
-                    total_tokens?: number;
-                  };
-                  return {
-                    ...message,
-                    ragTelemetry: {
-                      ...message.ragTelemetry,
-                      lastModel:
-                        parsed.model || message.ragTelemetry?.lastModel,
-                      promptTokens:
-                        parsed.prompt_tokens ??
-                        message.ragTelemetry?.promptTokens ??
-                        0,
-                      completionTokens:
-                        parsed.completion_tokens ??
-                        message.ragTelemetry?.completionTokens ??
-                        0,
-                      totalTokens:
-                        parsed.total_tokens ?? message.ragTelemetry?.totalTokens ?? 0,
-                    },
                   };
                 } catch {
                   return message;

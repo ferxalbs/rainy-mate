@@ -9,7 +9,7 @@ use crate::ai::provider_types::{
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use rainy_sdk::models::{
-    build_reasoning_config, CapabilityFlag, FunctionDefinition, ModelCatalogItem,
+    build_reasoning_config, CapabilityFlag, ChatStreamEvent, FunctionDefinition, ModelCatalogItem,
     OpenAIChatCompletionRequest, OpenAIChatMessage, OpenAIContentPart, OpenAIFunctionCall,
     OpenAIImageUrl, OpenAIMessageContent, OpenAIMessageRole, OpenAIToolCall, ReasoningMode,
     ReasoningPreference, ResponsesApiResponse, ResponsesRequest, ThinkingConfig, ThinkingLevel,
@@ -710,6 +710,7 @@ impl RainySDKProvider {
                     embeddings: false,
                     streaming: true,
                     function_calling,
+                    tool_call_streaming: function_calling,
                     vision,
                     web_search: true,
                     max_context_tokens,
@@ -722,6 +723,7 @@ impl RainySDKProvider {
                 embeddings: false,
                 streaming: true,
                 function_calling: true,
+                tool_call_streaming: true,
                 vision: true,
                 web_search: true,
                 max_context_tokens: 128_000,
@@ -931,7 +933,7 @@ impl AIProvider for RainySDKProvider {
 
                 let mut stream = self
                     .client
-                    .create_openai_chat_completion_stream(api_request)
+                    .create_openai_chat_completion_stream_events(api_request)
                     .await
                     .map_err(|e| {
                         AIError::APIError(format!(
@@ -946,7 +948,7 @@ impl AIProvider for RainySDKProvider {
 
                 while let Some(chunk_result) = stream.next().await {
                     match chunk_result {
-                        Ok(chunk) => {
+                        Ok(ChatStreamEvent::Chunk(chunk)) => {
                             if let Some(choice) = chunk.choices.first() {
                                 if let Some(content) =
                                     choice.delta.content.as_ref().filter(|value| !value.is_empty())
@@ -1003,6 +1005,20 @@ impl AIProvider for RainySDKProvider {
                                     }
                                 }
                             }
+                        }
+                        Ok(ChatStreamEvent::Billing(billing)) => {
+                            if let Some(usage) = billing.usage {
+                                callback(ProviderStreamEvent::Usage(ProviderStreamUsage {
+                                    model: Some(request.model.clone()),
+                                    prompt_tokens: usage.prompt_tokens.unwrap_or(0),
+                                    completion_tokens: usage.completion_tokens.unwrap_or(0),
+                                    total_tokens: usage.prompt_tokens.unwrap_or(0)
+                                        + usage.completion_tokens.unwrap_or(0),
+                                }));
+                            }
+                        }
+                        Ok(ChatStreamEvent::Raw(raw)) => {
+                            callback(ProviderStreamEvent::Raw(raw));
                         }
                         Err(e) => {
                             return Err(AIError::APIError(format!(

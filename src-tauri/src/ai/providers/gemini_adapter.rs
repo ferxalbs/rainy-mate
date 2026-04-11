@@ -684,6 +684,7 @@ impl AIProvider for GeminiProviderAdapter {
             embeddings: false,
             streaming: true,
             function_calling: true,
+            tool_call_streaming: false,
             vision: false,
             web_search: false,
             max_context_tokens: 1_000_000,

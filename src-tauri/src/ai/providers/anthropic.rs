@@ -219,6 +219,7 @@ impl AIProvider for AnthropicProvider {
             embeddings: false, // Anthropic doesn't provide embeddings
             streaming: true,
             function_calling: true,
+            tool_call_streaming: false,
             vision: true,               // Claude 3.5 Sonnet supports vision
             web_search: false,          // Not directly supported
             max_context_tokens: 200000, // Claude 3.5 Sonnet context window

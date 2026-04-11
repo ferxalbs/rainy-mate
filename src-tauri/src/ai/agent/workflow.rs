@@ -2,9 +2,12 @@
 // ThinkStep (LLM interaction) lives here. ActStep (tool execution) lives in act_step.rs.
 use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::memory::AgentMemory;
+use crate::ai::agent::runtime_events::{
+    RuntimeContentStreamKind, RuntimeEventCallback, RuntimeStreamEvent,
+};
 use crate::ai::agent::runtime::{AgentContent, AgentMessage, RuntimeOptions};
 use crate::ai::provider_types::{
-    FunctionCall, ProviderEventCallback, ProviderStreamEvent, ProviderToolCallDelta, ToolCall,
+    FunctionCall, ProviderToolCallDelta, ToolCall,
 };
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::AgentSpec;
@@ -413,16 +416,16 @@ impl WorkflowStep for ThinkStep {
             reasoning_effort: self.reasoning_effort.clone(),
         };
 
-        // 3. Call Router — Rainy can keep streaming with tools; legacy providers stay blocking.
+        // 3. Call Router — providers with tool-call streaming can keep the turn live.
         let router_guard = self.router.read().await;
-        let supports_event_stream = self.allow_streaming
-            && matches!(
-                router_guard.selected_provider_type(&request).await,
-                Some(crate::ai::provider_types::ProviderType::RainySDK)
-            );
-        request.stream = self.allow_streaming && (!has_tools || supports_event_stream);
+        let selected_capabilities = router_guard.selected_provider_capabilities(&request).await;
+        let supports_tool_call_streaming = self.allow_streaming
+            && selected_capabilities
+                .as_ref()
+                .is_some_and(|caps| caps.streaming && caps.tool_call_streaming);
+        request.stream = self.allow_streaming && (!has_tools || supports_tool_call_streaming);
 
-        let (assistant_content, tool_calls) = if supports_event_stream {
+        let (assistant_content, tool_calls) = if request.stream {
             let event_fn: Arc<dyn Fn(AgentEvent) + Send + Sync> = Arc::from(on_event);
             let event_clone = Arc::clone(&event_fn);
             let accumulated = Arc::new(std::sync::Mutex::new(String::new()));
@@ -437,25 +440,26 @@ impl WorkflowStep for ThinkStep {
                 "Streaming response...".to_string()
             }));
 
-            let callback: ProviderEventCallback = Arc::new(move |event: ProviderStreamEvent| {
+            let callback: RuntimeEventCallback = Arc::new(move |event: RuntimeStreamEvent| {
                 match event {
-                    ProviderStreamEvent::TextDelta(text) => {
-                        if !text.is_empty() {
-                            event_clone(AgentEvent::StreamChunk(text.clone()));
-                            if let Ok(mut guard) = accumulated_clone.lock() {
-                                guard.push_str(&text);
+                    RuntimeStreamEvent::TurnStarted { .. } => {}
+                    RuntimeStreamEvent::ContentDelta(content) => match content.stream_kind {
+                        RuntimeContentStreamKind::AssistantText => {
+                            if !content.delta.is_empty() {
+                                event_clone(AgentEvent::StreamChunk(content.delta.clone()));
+                                if let Ok(mut guard) = accumulated_clone.lock() {
+                                    guard.push_str(&content.delta);
+                                }
                             }
                         }
-                    }
-                    ProviderStreamEvent::ThoughtDelta(thought) => {
-                        if !thought.is_empty() {
-                            event_clone(AgentEvent::Status(format!(
-                                "Thinking trace: {}",
-                                truncate_to_max_bytes(&thought, 240)
-                            )));
+                        RuntimeContentStreamKind::ReasoningText => {
+                            if !content.delta.is_empty() {
+                                event_clone(AgentEvent::Reasoning(content.delta));
+                            }
                         }
-                    }
-                    ProviderStreamEvent::ToolCallDelta(lifecycle) => {
+                        RuntimeContentStreamKind::PlanText => {}
+                    },
+                    RuntimeStreamEvent::ToolCallLifecycle(lifecycle) => {
                         if let Ok(mut guard) = streamed_tool_calls_clone.lock() {
                             let entry = guard
                                 .entry(lifecycle.tool_call.index)
@@ -476,19 +480,13 @@ impl WorkflowStep for ThinkStep {
                             },
                         ));
                     }
-                    ProviderStreamEvent::Usage(usage) => {
-                        event_clone(AgentEvent::Status(format!(
-                            "RUN_USAGE:{}",
-                            serde_json::json!({
-                                "model": usage.model,
-                                "prompt_tokens": usage.prompt_tokens,
-                                "completion_tokens": usage.completion_tokens,
-                                "total_tokens": usage.total_tokens,
-                            })
-                        )));
+                    RuntimeStreamEvent::Usage(usage) => {
                         event_clone(AgentEvent::Usage(usage));
                     }
-                    ProviderStreamEvent::Completed { finish_reason } => {
+                    RuntimeStreamEvent::Warning(message) => {
+                        event_clone(AgentEvent::Status(message));
+                    }
+                    RuntimeStreamEvent::TurnCompleted { finish_reason } => {
                         if let Some(reason) = finish_reason {
                             event_clone(AgentEvent::Status(format!(
                                 "Provider stream completed: {}",
@@ -496,12 +494,12 @@ impl WorkflowStep for ThinkStep {
                             )));
                         }
                     }
-                    ProviderStreamEvent::Raw(_) => {}
+                    RuntimeStreamEvent::Raw(_) => {}
                 }
             });
 
             router_guard
-                .complete_event_stream(request.clone(), callback)
+                .complete_runtime_stream(request.clone(), callback)
                 .await
                 .map_err(|e| format!("ThinkStep Event Streaming Failed: {}", e))?;
 

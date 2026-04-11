@@ -18,6 +18,7 @@ pub struct FrontendAgentEvent {
 #[derive(Default)]
 pub struct FrontendEventProjector {
     buffered_stream: String,
+    buffered_reasoning: String,
     last_stream_emit: Option<Instant>,
     last_thought_emit: Option<Instant>,
     last_status_emit: Option<Instant>,
@@ -44,8 +45,23 @@ impl FrontendEventProjector {
                 }
                 projected
             }
+            AgentEvent::Reasoning(delta) => {
+                self.buffered_reasoning.push_str(delta);
+                if self.should_emit_thought(now) {
+                    let mut projected = self.flush_stream(now);
+                    if let Some(reasoning) = self.flush_reasoning(now) {
+                        projected.push(reasoning);
+                    }
+                    projected
+                } else {
+                    Vec::new()
+                }
+            }
             AgentEvent::Status(text) => {
                 let mut projected = self.flush_stream(now);
+                if let Some(reasoning) = self.flush_reasoning(now) {
+                    projected.push(reasoning);
+                }
                 if self.should_emit_status(text, now) {
                     self.last_status_emit = Some(now);
                     self.last_status_text = Some(text.clone());
@@ -55,6 +71,9 @@ impl FrontendEventProjector {
             }
             _ => {
                 let mut projected = self.flush_stream(now);
+                if let Some(reasoning) = self.flush_reasoning(now) {
+                    projected.push(reasoning);
+                }
                 projected.push(event.clone());
                 projected
             }
@@ -62,7 +81,12 @@ impl FrontendEventProjector {
     }
 
     pub fn flush_pending(&mut self) -> Vec<AgentEvent> {
-        self.flush_stream(Instant::now())
+        let now = Instant::now();
+        let mut projected = self.flush_stream(now);
+        if let Some(reasoning) = self.flush_reasoning(now) {
+            projected.push(reasoning);
+        }
+        projected
     }
 
     fn flush_stream(&mut self, now: Instant) -> Vec<AgentEvent> {
@@ -74,6 +98,17 @@ impl FrontendEventProjector {
         vec![AgentEvent::StreamChunk(std::mem::take(
             &mut self.buffered_stream,
         ))]
+    }
+
+    fn flush_reasoning(&mut self, now: Instant) -> Option<AgentEvent> {
+        if self.buffered_reasoning.is_empty() {
+            return None;
+        }
+
+        self.last_thought_emit = Some(now);
+        Some(AgentEvent::Reasoning(std::mem::take(
+            &mut self.buffered_reasoning,
+        )))
     }
 
     fn should_emit_stream(&self, now: Instant) -> bool {

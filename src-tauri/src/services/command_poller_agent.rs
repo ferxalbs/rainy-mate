@@ -53,6 +53,13 @@ fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
                 "text": progress_preview(text),
             }),
         ),
+        AgentEvent::Reasoning(text) => (
+            "Agent reasoning".to_string(),
+            serde_json::json!({
+                "type": "reasoning",
+                "text": progress_preview(text),
+            }),
+        ),
         AgentEvent::StreamChunk(text) => (
             "Stream chunk".to_string(),
             serde_json::json!({
