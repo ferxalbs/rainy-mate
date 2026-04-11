@@ -241,6 +241,7 @@ impl MacOSNativeShellBridge {
         false
     }
 
+    #[allow(dead_code)]
     pub fn initialize(
         _app: tauri::AppHandle,
         _native_shell: std::sync::Arc<crate::services::NativeShellService>,

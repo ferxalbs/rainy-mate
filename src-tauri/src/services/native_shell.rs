@@ -46,6 +46,7 @@ pub struct NativeShellService {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct NativeShellResumePayload {
     workspace_id: String,
     chat_id: String,
@@ -105,6 +106,7 @@ impl NativeShellService {
         Ok(snapshot)
     }
 
+    #[allow(dead_code)]
     pub async fn handle_bridge_action(&self, action: String, payload: Option<String>) {
         match action.as_str() {
             "hotkey" | "show_palette" => {

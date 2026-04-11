@@ -393,6 +393,8 @@ pub async fn get_unified_models(
     Ok(models)
 }
 
+// PERF: Replacing blocking std::fs operations with non-blocking tokio::fs in the async thread pool
+// to prevent executor thread starvation.
 async fn load_user_preferences(app: &AppHandle) -> UserModelPreferences {
     let preferences_path = app
         .path()
@@ -400,7 +402,7 @@ async fn load_user_preferences(app: &AppHandle) -> UserModelPreferences {
         .unwrap()
         .join("model_preferences.json");
 
-    if let Ok(content) = std::fs::read_to_string(&preferences_path) {
+    if let Ok(content) = tokio::fs::read_to_string(&preferences_path).await {
         if let Ok(preferences) = serde_json::from_str::<UserModelPreferences>(&content) {
             return preferences;
         }
@@ -422,7 +424,8 @@ async fn save_user_preferences(
     let content = serde_json::to_string_pretty(preferences)
         .map_err(|e| format!("Failed to serialize preferences: {}", e))?;
 
-    std::fs::write(&preferences_path, content)
+    tokio::fs::write(&preferences_path, content)
+        .await
         .map_err(|e| format!("Failed to write preferences: {}", e))?;
 
     Ok(())

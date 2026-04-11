@@ -166,25 +166,30 @@ fn default_mcp_json_template() -> String {
 }
 
 #[command]
+// PERF: Replacing blocking std::fs operations with non-blocking tokio::fs in the async thread pool
+// to prevent executor thread starvation.
 pub async fn get_or_create_default_mcp_json_config() -> Result<McpJsonConfigFile, String> {
     let path = default_mcp_json_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
+        tokio::fs::create_dir_all(parent)
+            .await
             .map_err(|e| format!("Failed to create MCP config directory: {}", e))?;
     }
 
-    if !path.exists() {
+    if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         let template = default_mcp_json_template();
         let pretty = serde_json::to_string_pretty(
             &serde_json::from_str::<serde_json::Value>(&template)
                 .map_err(|e| format!("Failed to build MCP default JSON template: {}", e))?,
         )
         .map_err(|e| format!("Failed to pretty-print MCP JSON template: {}", e))?;
-        std::fs::write(&path, pretty)
+        tokio::fs::write(&path, pretty)
+            .await
             .map_err(|e| format!("Failed to create MCP JSON config: {}", e))?;
     }
 
-    let content = std::fs::read_to_string(&path)
+    let content = tokio::fs::read_to_string(&path)
+        .await
         .map_err(|e| format!("Failed to read MCP JSON config: {}", e))?;
     Ok(McpJsonConfigFile {
         path: path.to_string_lossy().to_string(),
@@ -200,10 +205,13 @@ pub async fn save_default_mcp_json_config(content: String) -> Result<McpJsonConf
         .map_err(|e| format!("Failed to format JSON content: {}", e))?;
     let path = default_mcp_json_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
+        tokio::fs::create_dir_all(parent)
+            .await
             .map_err(|e| format!("Failed to create MCP config directory: {}", e))?;
     }
-    std::fs::write(&path, &pretty).map_err(|e| format!("Failed to save MCP JSON config: {}", e))?;
+    tokio::fs::write(&path, &pretty)
+        .await
+        .map_err(|e| format!("Failed to save MCP JSON config: {}", e))?;
     Ok(McpJsonConfigFile {
         path: path.to_string_lossy().to_string(),
         content: pretty,
@@ -216,7 +224,7 @@ pub async fn import_mcp_servers_from_default_json(
     auto_connect: bool,
 ) -> Result<McpJsonImportResult, String> {
     let path = default_mcp_json_path();
-    if !path.exists() {
+    if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         return Err("Default MCP JSON config does not exist yet".to_string());
     }
     mcp_service
