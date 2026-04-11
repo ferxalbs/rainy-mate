@@ -1121,8 +1121,11 @@ pub async fn run_agent_workflow_internal(
                     .join("agent_specs")
                     .join(format!("{}.json", spec_id));
 
-                if spec_path.exists() {
-                    let body = std::fs::read_to_string(&spec_path)
+                // PERF: Replacing blocking std::fs operations with non-blocking tokio::fs in the async thread pool
+                // to prevent executor thread starvation.
+                if tokio::fs::try_exists(&spec_path).await.unwrap_or(false) {
+                    let body = tokio::fs::read_to_string(&spec_path)
+                        .await
                         .map_err(|e| format!("Failed to read spec file: {}", e))?;
                     serde_json::from_str(&body)
                         .map_err(|e| format!("Invalid agent spec JSON: {}", e))?
