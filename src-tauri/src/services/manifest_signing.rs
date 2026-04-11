@@ -72,6 +72,7 @@ mod tests {
     use super::*;
     use crate::models::neural::{ParameterSchema, SkillMethod};
     use std::collections::HashMap;
+    use uuid::Uuid;
 
     fn test_manifest() -> SkillManifest {
         let mut params = HashMap::new();
@@ -120,7 +121,8 @@ mod tests {
 
     #[test]
     fn empty_manifests_still_signs() {
-        let digest = sign_skills_manifest(&[], "secret");
+        let test_secret = Uuid::new_v4().to_string();
+        let digest = sign_skills_manifest(&[], &test_secret);
         assert_eq!(digest.len(), 64);
     }
 
