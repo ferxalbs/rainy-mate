@@ -93,7 +93,8 @@ impl GeminiProvider {
     pub async fn validate_key(&self, api_key: &str) -> Result<bool, AIError> {
         let response = self
             .client
-            .get(format!("{}/models?key={}", GEMINI_API_BASE_URL, api_key))
+            .get(format!("{}/models", GEMINI_API_BASE_URL))
+            .header("x-goog-api-key", api_key)
             .send()
             .await
             .map_err(|e| AIError::RequestFailed(e.to_string()))?;
