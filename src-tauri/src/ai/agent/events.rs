@@ -1,5 +1,7 @@
 use super::protocol::{SpecialistRole, SpecialistStatus, SupervisorPlan};
-use crate::ai::provider_types::ToolCall;
+use crate::ai::provider_types::{
+    ProviderStreamUsage, ProviderToolLifecycleState, ToolCall,
+};
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
@@ -92,11 +94,26 @@ pub struct SupervisorSummaryPayload {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamToolCallPayload {
+    pub state: ProviderToolLifecycleState,
+    pub index: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum AgentEvent {
     Status(String),
     Thought(String),
     StreamChunk(String),
+    StreamToolCall(StreamToolCallPayload),
+    Usage(ProviderStreamUsage),
     ToolCall(ToolCall),
     ToolResult {
         id: String,

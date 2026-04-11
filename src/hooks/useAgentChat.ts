@@ -55,6 +55,14 @@ type RuntimeAgentEventData = {
     name?: string;
     arguments?: string;
   };
+  state?: string;
+  name?: string;
+  arguments?: string;
+  index?: number;
+  model?: string;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
   id?: string;
   result?: string;
   text?: string;
@@ -80,6 +88,8 @@ type RuntimeAgentEvent =
         | "status"
         | "thought"
         | "stream_chunk"
+        | "stream_tool_call"
+        | "usage"
         | "tool_call"
         | "tool_result";
       data?: RuntimeAgentEventData;
@@ -108,6 +118,47 @@ type ActiveChatSessionBinding = {
 };
 
 const EXTERNAL_SESSION_POLL_INTERVAL_MS = 2000;
+type AgentRunPhase = NonNullable<AgentMessage["runPhase"]>;
+
+function appendStreamText(current: string, next: string | undefined): string {
+  if (typeof next !== "string" || next.trim().length === 0) {
+    return current;
+  }
+  return `${current}${current ? "\n" : ""}${next}`;
+}
+
+function deriveStatusRunPhase(statusText: string): AgentRunPhase | null {
+  const lower = statusText.toLowerCase();
+  if (
+    lower.includes("awaiting airlock approval") ||
+    (lower.includes("approval") && lower.includes("mcp"))
+  ) {
+    return "awaiting_approval";
+  }
+  if (lower.includes("executing tool:")) {
+    return "tool_running";
+  }
+  if (lower.includes("streaming plan and tool intent")) {
+    return "tool_waiting";
+  }
+  if (lower.includes("analyzing and planning tools")) {
+    return "planning";
+  }
+  if (lower.includes("thinking")) {
+    return "planning";
+  }
+  if (lower.includes("execution cancelled") || lower.includes("cancelled")) {
+    return null;
+  }
+  return null;
+}
+
+function clearTransientRunDecorations(): Partial<AgentMessage> {
+  return {
+    activeToolName: undefined,
+    statusText: undefined,
+  };
+}
 
 function mergeDefinedFields<T>(current: T, next: Partial<T>): T {
   const merged = { ...(current as Record<string, unknown>) };
@@ -349,6 +400,8 @@ export function useAgentChat(
           return {
             ...message,
             neuralState: "planning",
+            runPhase: "planning",
+            statusText: payload.data?.summary || "Supervisor plan ready",
             trace: [
               ...(message.trace || []),
               createTraceEntry(
@@ -388,6 +441,8 @@ export function useAgentChat(
               : activeTool
                 ? resolveNeuralState(activeTool)
                 : "planning",
+            runPhase: waitingOnAirlock ? "awaiting_approval" : activeTool ? "tool_running" : "planning",
+            statusText: payload.data?.detail || `${payload.data?.role || "specialist"}: ${payload.data?.status || "running"}`,
             trace: [
               ...(message.trace || []),
               createTraceEntry(
@@ -424,6 +479,7 @@ export function useAgentChat(
           return {
             ...message,
             neuralState: "thinking",
+            runPhase: "responding",
             trace: [
               ...(message.trace || []),
               createTraceEntry(
@@ -435,7 +491,7 @@ export function useAgentChat(
                 payload.timestampMs,
               ),
             ],
-            activeToolName: undefined,
+            ...clearTransientRunDecorations(),
             specialists: upsert({
               agentId: payload.data?.agentId ?? "unknown",
               role: payload.data?.role ?? "specialist",
@@ -466,6 +522,7 @@ export function useAgentChat(
           return {
             ...message,
             neuralState: "thinking",
+            runPhase: "responding",
             trace: [
               ...(message.trace || []),
               createTraceEntry(
@@ -475,7 +532,7 @@ export function useAgentChat(
                 payload.timestampMs,
               ),
             ],
-            activeToolName: undefined,
+            ...clearTransientRunDecorations(),
             specialists: upsert({
               agentId: payload.data?.agentId ?? "unknown",
               role: payload.data?.role ?? "specialist",
@@ -491,6 +548,65 @@ export function useAgentChat(
               branchId: payload.data?.branchId,
               spawnReason: payload.data?.spawnReason,
             }),
+          };
+        }
+        case "stream_tool_call": {
+          const functionName = payload.data?.name || "";
+          const toolCallId =
+            payload.data?.id ||
+            `stream-tool-${payload.data?.index ?? functionName ?? "pending"}`;
+          const state = String(payload.data?.state || "announced");
+          if (functionName) {
+            toolCallIndex.set(toolCallId, {
+              name: functionName,
+              arguments: payload.data?.arguments,
+            });
+          }
+          return {
+            ...message,
+            neuralState: functionName ? resolveNeuralState(functionName) : "planning",
+            runPhase: "tool_waiting",
+            statusText:
+              state === "ready"
+                ? `Queued ${getToolDisplayName(functionName || "tool")}`
+                : `Preparing ${getToolDisplayName(functionName || "tool")}`,
+            activeToolName: getToolDisplayName(functionName || "tool"),
+            trace: [
+              ...(message.trace || []),
+              createTraceEntry(
+                "think",
+                state === "ready"
+                  ? `Tool ready: ${getToolDisplayName(functionName || "tool")}`
+                  : `Tool draft: ${getToolDisplayName(functionName || "tool")}`,
+                {
+                  toolName: functionName || undefined,
+                  preview: payload.data?.arguments?.slice(0, 180),
+                },
+                payload.timestampMs,
+              ),
+            ],
+          };
+        }
+        case "usage": {
+          return {
+            ...message,
+            ragTelemetry: {
+              ...message.ragTelemetry,
+              lastModel:
+                payload.data?.model || message.ragTelemetry?.lastModel,
+              promptTokens:
+                (payload.data?.prompt_tokens as number | undefined) ??
+                message.ragTelemetry?.promptTokens ??
+                0,
+              completionTokens:
+                (payload.data?.completion_tokens as number | undefined) ??
+                message.ragTelemetry?.completionTokens ??
+                0,
+              totalTokens:
+                (payload.data?.total_tokens as number | undefined) ??
+                message.ragTelemetry?.totalTokens ??
+                0,
+            },
           };
         }
         case "tool_call": {
@@ -510,6 +626,8 @@ export function useAgentChat(
           return {
             ...message,
             neuralState: resolveNeuralState(functionName),
+            runPhase: "tool_running",
+            statusText: `Executing ${getToolDisplayName(functionName)}`,
             airlockLevel: Math.max(message.airlockLevel ?? 0, incomingLevel),
             trace: [
               ...(message.trace || []),
@@ -567,6 +685,8 @@ export function useAgentChat(
                 )
               : mergeExternalSessionArtifacts(message.artifacts, externalSessions),
             neuralState: "thinking",
+            runPhase: "responding",
+            statusText: externalSessionSummary || "Tool execution completed",
             trace: [
               ...(message.trace || []),
               createTraceEntry(
@@ -584,7 +704,7 @@ export function useAgentChat(
                 payload.timestampMs,
               ),
             ],
-            activeToolName: undefined,
+            ...clearTransientRunDecorations(),
           };
         }
         case "thought":
@@ -592,14 +712,19 @@ export function useAgentChat(
         case "supervisor_summary":
           return {
             ...message,
-            content:
-              payload.type === "stream_chunk" &&
-              typeof payload.data?.text === "string" &&
-              payload.data.text.trim().length > 0
-                ? `${message.content}${message.content ? "\n" : ""}${payload.data.text}`
-                : message.content,
+            content: appendStreamText(message.content, payload.data?.text),
             neuralState: "thinking",
-            activeToolName: undefined,
+            runPhase:
+              message.trace?.some((entry) => entry.phase === "tool") ||
+              message.activeToolName
+                ? "responding"
+                : "streaming",
+            statusText:
+              payload.type === "supervisor_summary"
+                ? payload.data?.summary || message.statusText
+                : "Streaming response",
+            activeToolName:
+              payload.type === "stream_chunk" ? message.activeToolName : undefined,
           };
         case "status": {
           const statusText = String(payload.data || "");
@@ -750,9 +875,12 @@ export function useAgentChat(
                   : isCancelled
                     ? "cancelled"
                     : "think";
+          const nextRunPhase = deriveStatusRunPhase(statusText);
           return {
             ...message,
             neuralState: "planning",
+            ...(nextRunPhase ? { runPhase: nextRunPhase } : {}),
+            statusText,
             runState: isCancelled ? "cancelled" : message.runState,
             trace: [
               ...(message.trace || []),
@@ -995,6 +1123,8 @@ export function useAgentChat(
         isLoading: true,
         timestamp: new Date(),
         neuralState: "thinking",
+        runPhase: "starting",
+        statusText: "Binding live session",
         runState: "running",
         requestContext: {
           runId,
@@ -1829,6 +1959,8 @@ export function useAgentChat(
         timestamp: new Date(),
         modelUsed: { name: modelId, thinkingEnabled: true },
         neuralState: "thinking",
+        runPhase: "starting",
+        statusText: "Starting agent workflow",
         runState: "running",
         requestContext: {
           runId: clientRunId,
@@ -1919,6 +2051,8 @@ export function useAgentChat(
               return {
                 ...message,
                 neuralState: "planning",
+                runPhase: "planning",
+                statusText: payload.data?.summary || "Supervisor plan ready",
                 trace: [
                   ...(message.trace || []),
                   createTraceEntry(
@@ -1959,6 +2093,8 @@ export function useAgentChat(
                   : activeTool
                     ? resolveNeuralState(activeTool)
                     : "planning",
+                runPhase: waitingOnAirlock ? "awaiting_approval" : activeTool ? "tool_running" : "planning",
+                statusText: payload.data?.detail || `${payload.data?.role || "specialist"}: ${payload.data?.status || "running"}`,
                 trace: [
                   ...(message.trace || []),
                   createTraceEntry(
@@ -1995,6 +2131,7 @@ export function useAgentChat(
               return {
                 ...message,
                 neuralState: "thinking",
+                runPhase: "responding",
                 trace: [
                   ...(message.trace || []),
                   createTraceEntry(
@@ -2006,7 +2143,7 @@ export function useAgentChat(
                     payload.timestampMs,
                   ),
                 ],
-                activeToolName: undefined,
+                ...clearTransientRunDecorations(),
                 specialists: upsertSpecialist(message.specialists, {
                   agentId: payload.data?.agentId ?? "unknown",
                   role: payload.data?.role ?? "specialist",
@@ -2037,6 +2174,7 @@ export function useAgentChat(
               return {
                 ...message,
                 neuralState: "thinking",
+                runPhase: "responding",
                 trace: [
                   ...(message.trace || []),
                   createTraceEntry(
@@ -2046,7 +2184,7 @@ export function useAgentChat(
                     payload.timestampMs,
                   ),
                 ],
-                activeToolName: undefined,
+                ...clearTransientRunDecorations(),
                 specialists: upsertSpecialist(message.specialists, {
                   agentId: payload.data?.agentId ?? "unknown",
                   role: payload.data?.role ?? "specialist",
@@ -2062,6 +2200,65 @@ export function useAgentChat(
                   branchId: payload.data?.branchId,
                   spawnReason: payload.data?.spawnReason,
                 }),
+              };
+            }
+            case "stream_tool_call": {
+              const functionName = payload.data?.name || "";
+              const toolCallId =
+                payload.data?.id ||
+                `stream-tool-${payload.data?.index ?? functionName ?? "pending"}`;
+              const state = String(payload.data?.state || "announced");
+              if (functionName) {
+                toolCallIndex.set(toolCallId, {
+                  name: functionName,
+                  arguments: payload.data?.arguments,
+                });
+              }
+              return {
+                ...message,
+                neuralState: functionName ? resolveNeuralState(functionName) : "planning",
+                runPhase: "tool_waiting",
+                statusText:
+                  state === "ready"
+                    ? `Queued ${getToolDisplayName(functionName || "tool")}`
+                    : `Preparing ${getToolDisplayName(functionName || "tool")}`,
+                activeToolName: getToolDisplayName(functionName || "tool"),
+                trace: [
+                  ...(message.trace || []),
+                  createTraceEntry(
+                    "think",
+                    state === "ready"
+                      ? `Tool ready: ${getToolDisplayName(functionName || "tool")}`
+                      : `Tool draft: ${getToolDisplayName(functionName || "tool")}`,
+                    {
+                      toolName: functionName || undefined,
+                      preview: payload.data?.arguments?.slice(0, 180),
+                    },
+                    payload.timestampMs,
+                  ),
+                ],
+              };
+            }
+            case "usage": {
+              return {
+                ...message,
+                ragTelemetry: {
+                  ...message.ragTelemetry,
+                  lastModel:
+                    payload.data?.model || message.ragTelemetry?.lastModel,
+                  promptTokens:
+                    (payload.data?.prompt_tokens as number | undefined) ??
+                    message.ragTelemetry?.promptTokens ??
+                    0,
+                  completionTokens:
+                    (payload.data?.completion_tokens as number | undefined) ??
+                    message.ragTelemetry?.completionTokens ??
+                    0,
+                  totalTokens:
+                    (payload.data?.total_tokens as number | undefined) ??
+                    message.ragTelemetry?.totalTokens ??
+                    0,
+                },
               };
             }
             case "tool_call": {
@@ -2081,6 +2278,8 @@ export function useAgentChat(
               return {
                 ...message,
                 neuralState: resolveNeuralState(functionName),
+                runPhase: "tool_running",
+                statusText: `Executing ${getToolDisplayName(functionName)}`,
                 airlockLevel: Math.max(message.airlockLevel ?? 0, incomingLevel),
                 trace: [
                   ...(message.trace || []),
@@ -2138,6 +2337,8 @@ export function useAgentChat(
                     )
                   : mergeExternalSessionArtifacts(message.artifacts, externalSessions),
                 neuralState: "thinking",
+                runPhase: "responding",
+                statusText: externalSessionSummary || "Tool execution completed",
                 trace: [
                   ...(message.trace || []),
                   createTraceEntry(
@@ -2155,7 +2356,7 @@ export function useAgentChat(
                     payload.timestampMs,
                   ),
                 ],
-                activeToolName: undefined,
+                ...clearTransientRunDecorations(),
               };
             }
             case "thought":
@@ -2163,8 +2364,19 @@ export function useAgentChat(
             case "supervisor_summary":
               return {
                 ...message,
+                content: appendStreamText(message.content, payload.data?.text),
                 neuralState: "thinking",
-                activeToolName: undefined,
+                runPhase:
+                  message.trace?.some((entry) => entry.phase === "tool") ||
+                  message.activeToolName
+                    ? "responding"
+                    : "streaming",
+                statusText:
+                  payload.type === "supervisor_summary"
+                    ? payload.data?.summary || message.statusText
+                    : "Streaming response",
+                activeToolName:
+                  payload.type === "stream_chunk" ? message.activeToolName : undefined,
               };
             case "status": {
               const statusText = String(payload.data || "");
@@ -2317,9 +2529,12 @@ export function useAgentChat(
                       : isCancelled
                         ? "cancelled"
                         : "think";
+              const nextRunPhase = deriveStatusRunPhase(statusText);
               return {
                 ...message,
                 neuralState: "planning",
+                ...(nextRunPhase ? { runPhase: nextRunPhase } : {}),
+                statusText,
                 runState: isCancelled ? "cancelled" : message.runState,
                 trace: [
                   ...(message.trace || []),
@@ -2403,7 +2618,8 @@ export function useAgentChat(
               ),
             ],
             neuralState: undefined,
-            activeToolName: undefined,
+            runPhase: undefined,
+            ...clearTransientRunDecorations(),
             specialists: message.specialists,
             supervisorPlan: message.supervisorPlan,
           })),
@@ -2462,7 +2678,8 @@ export function useAgentChat(
               ),
             ],
             neuralState: undefined,
-            activeToolName: undefined,
+            runPhase: undefined,
+            ...clearTransientRunDecorations(),
             specialists: message.specialists,
             supervisorPlan: message.supervisorPlan,
           })),
@@ -2515,6 +2732,11 @@ export function useAgentChat(
           isLoading: res.status === "cancelled" ? false : message.isLoading,
           neuralState: res.status === "cancelled" ? undefined : message.neuralState,
           runState: res.status === "cancelled" ? "cancelled" : message.runState,
+          runPhase: res.status === "cancelled" ? undefined : message.runPhase,
+          statusText:
+            res.status === "cancelled"
+              ? "Cancellation requested by user."
+              : message.statusText,
           trace: [
             ...(message.trace || []),
             createTraceEntry(
@@ -2550,6 +2772,11 @@ export function useAgentChat(
           isLoading: res.status === "cancelled" ? false : message.isLoading,
           neuralState: res.status === "cancelled" ? undefined : message.neuralState,
           runState: res.status === "cancelled" ? "cancelled" : message.runState,
+          runPhase: res.status === "cancelled" ? undefined : message.runPhase,
+          statusText:
+            res.status === "cancelled"
+              ? "Cancellation requested by user."
+              : message.statusText,
           trace: [
             ...(message.trace || []),
             createTraceEntry(

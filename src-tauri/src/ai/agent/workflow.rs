@@ -3,6 +3,9 @@
 use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::memory::AgentMemory;
 use crate::ai::agent::runtime::{AgentContent, AgentMessage, RuntimeOptions};
+use crate::ai::provider_types::{
+    FunctionCall, ProviderEventCallback, ProviderStreamEvent, ProviderToolCallDelta, ToolCall,
+};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::AgentSpec;
 use crate::models::neural::ToolAccessPolicy;
@@ -53,6 +56,57 @@ pub(crate) fn truncate_to_max_bytes(input: &str, max_bytes: usize) -> String {
     let mut out = input[..cut].to_string();
     out.push_str("\n\n[TRUNCATED: content exceeded size limits]");
     out
+}
+
+#[derive(Clone, Debug, Default)]
+struct StreamedToolCallAccumulator {
+    index: u32,
+    id: Option<String>,
+    tool_type: Option<String>,
+    name: Option<String>,
+    arguments: String,
+}
+
+impl StreamedToolCallAccumulator {
+    fn merge(&mut self, delta: &ProviderToolCallDelta) {
+        self.index = delta.index;
+        if let Some(id) = delta.id.as_ref() {
+            self.id = Some(id.clone());
+        }
+        if let Some(tool_type) = delta.r#type.as_ref() {
+            self.tool_type = Some(tool_type.clone());
+        }
+        if let Some(name) = delta.name.as_ref() {
+            self.name = Some(name.clone());
+        }
+        if let Some(arguments) = delta.arguments.as_ref() {
+            if self.arguments.is_empty() || arguments.starts_with('{') || arguments.starts_with('[')
+            {
+                self.arguments = arguments.clone();
+            } else {
+                self.arguments.push_str(arguments);
+            }
+        }
+    }
+
+    fn into_tool_call(self) -> Option<ToolCall> {
+        Some(ToolCall {
+            id: self
+                .id
+                .unwrap_or_else(|| format!("stream_tool_call_{}", self.index)),
+            r#type: self.tool_type.unwrap_or_else(|| "function".to_string()),
+            extra_content: None,
+            function: FunctionCall {
+                name: self.name?,
+                arguments: if self.arguments.trim().is_empty() {
+                    "{}".to_string()
+                } else {
+                    self.arguments
+                },
+            },
+            airlock_level: None,
+        })
+    }
 }
 
 /// Shared state passed between workflow steps
@@ -339,7 +393,7 @@ impl WorkflowStep for ThinkStep {
         tools.retain(|tool| is_tool_allowed_by_spec(state.spec.as_ref(), &tool.function.name));
         let has_tools = !tools.is_empty();
 
-        let request = crate::ai::provider_types::ChatCompletionRequest {
+        let mut request = crate::ai::provider_types::ChatCompletionRequest {
             model: self.model.clone(),
             messages,
             temperature: Some(self.temperature.unwrap_or(0.7)),
@@ -359,10 +413,118 @@ impl WorkflowStep for ThinkStep {
             reasoning_effort: self.reasoning_effort.clone(),
         };
 
-        // 3. Call Router — streaming when no tools, blocking otherwise
+        // 3. Call Router — Rainy can keep streaming with tools; legacy providers stay blocking.
         let router_guard = self.router.read().await;
+        let supports_event_stream = self.allow_streaming
+            && matches!(
+                router_guard.selected_provider_type(&request).await,
+                Some(crate::ai::provider_types::ProviderType::RainySDK)
+            );
+        request.stream = self.allow_streaming && (!has_tools || supports_event_stream);
 
-        let (assistant_content, tool_calls) = if has_tools || !self.allow_streaming {
+        let (assistant_content, tool_calls) = if supports_event_stream {
+            let event_fn: Arc<dyn Fn(AgentEvent) + Send + Sync> = Arc::from(on_event);
+            let event_clone = Arc::clone(&event_fn);
+            let accumulated = Arc::new(std::sync::Mutex::new(String::new()));
+            let accumulated_clone = Arc::clone(&accumulated);
+            let streamed_tool_calls =
+                Arc::new(std::sync::Mutex::new(HashMap::<u32, StreamedToolCallAccumulator>::new()));
+            let streamed_tool_calls_clone = Arc::clone(&streamed_tool_calls);
+
+            event_fn(AgentEvent::Status(if has_tools {
+                "Streaming plan and tool intent...".to_string()
+            } else {
+                "Streaming response...".to_string()
+            }));
+
+            let callback: ProviderEventCallback = Arc::new(move |event: ProviderStreamEvent| {
+                match event {
+                    ProviderStreamEvent::TextDelta(text) => {
+                        if !text.is_empty() {
+                            event_clone(AgentEvent::StreamChunk(text.clone()));
+                            if let Ok(mut guard) = accumulated_clone.lock() {
+                                guard.push_str(&text);
+                            }
+                        }
+                    }
+                    ProviderStreamEvent::ThoughtDelta(thought) => {
+                        if !thought.is_empty() {
+                            event_clone(AgentEvent::Status(format!(
+                                "Thinking trace: {}",
+                                truncate_to_max_bytes(&thought, 240)
+                            )));
+                        }
+                    }
+                    ProviderStreamEvent::ToolCallDelta(lifecycle) => {
+                        if let Ok(mut guard) = streamed_tool_calls_clone.lock() {
+                            let entry = guard
+                                .entry(lifecycle.tool_call.index)
+                                .or_insert_with(|| StreamedToolCallAccumulator {
+                                    index: lifecycle.tool_call.index,
+                                    ..Default::default()
+                                });
+                            entry.merge(&lifecycle.tool_call);
+                        }
+
+                        event_clone(AgentEvent::StreamToolCall(
+                            crate::ai::agent::events::StreamToolCallPayload {
+                                state: lifecycle.state,
+                                index: lifecycle.tool_call.index,
+                                id: lifecycle.tool_call.id,
+                                name: lifecycle.tool_call.name,
+                                arguments: lifecycle.tool_call.arguments,
+                            },
+                        ));
+                    }
+                    ProviderStreamEvent::Usage(usage) => {
+                        event_clone(AgentEvent::Status(format!(
+                            "RUN_USAGE:{}",
+                            serde_json::json!({
+                                "model": usage.model,
+                                "prompt_tokens": usage.prompt_tokens,
+                                "completion_tokens": usage.completion_tokens,
+                                "total_tokens": usage.total_tokens,
+                            })
+                        )));
+                        event_clone(AgentEvent::Usage(usage));
+                    }
+                    ProviderStreamEvent::Completed { finish_reason } => {
+                        if let Some(reason) = finish_reason {
+                            event_clone(AgentEvent::Status(format!(
+                                "Provider stream completed: {}",
+                                reason
+                            )));
+                        }
+                    }
+                    ProviderStreamEvent::Raw(_) => {}
+                }
+            });
+
+            router_guard
+                .complete_event_stream(request.clone(), callback)
+                .await
+                .map_err(|e| format!("ThinkStep Event Streaming Failed: {}", e))?;
+
+            let content = accumulated
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            let tool_calls = streamed_tool_calls
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .values()
+                .cloned()
+                .filter_map(StreamedToolCallAccumulator::into_tool_call)
+                .collect::<Vec<_>>();
+
+            let tool_calls = if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            };
+
+            (content, tool_calls)
+        } else if has_tools || !self.allow_streaming {
             let event_fn: Arc<dyn Fn(AgentEvent) + Send + Sync> = Arc::from(on_event);
 
             // Emit a single status so the UI shows active planning.

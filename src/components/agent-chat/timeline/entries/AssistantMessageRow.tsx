@@ -17,7 +17,22 @@ function statusCopy(message: AgentMessage): { label: string; tone: string; icon:
     return { label: "Cancelled", tone: "text-muted-foreground", icon: Clock3 };
   }
   if (message.runState === "running") {
-    return { label: "Streaming", tone: "text-primary", icon: LoaderCircle };
+    switch (message.runPhase) {
+      case "starting":
+        return { label: "Starting", tone: "text-primary", icon: LoaderCircle };
+      case "planning":
+        return { label: "Planning", tone: "text-primary", icon: LoaderCircle };
+      case "awaiting_approval":
+        return { label: "Awaiting approval", tone: "text-amber-400", icon: LoaderCircle };
+      case "tool_waiting":
+        return { label: "Preparing tools", tone: "text-orange-300", icon: LoaderCircle };
+      case "tool_running":
+        return { label: "Using tools", tone: "text-primary", icon: LoaderCircle };
+      case "responding":
+        return { label: "Continuing response", tone: "text-primary", icon: LoaderCircle };
+      default:
+        return { label: "Streaming", tone: "text-primary", icon: LoaderCircle };
+    }
   }
   return { label: "Delivered", tone: "text-muted-foreground", icon: Clock3 };
 }
@@ -36,6 +51,9 @@ export function AssistantMessageRow({ message }: AssistantMessageRowProps) {
             <StatusIcon className={cn("size-3", isStreaming && "animate-spin")} />
             {status.label}
           </span>
+          {message.statusText && message.runState === "running" ? (
+            <span className="text-[11px] text-muted-foreground/78">{message.statusText}</span>
+          ) : null}
           {message.modelUsed?.name ? (
             <span className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
               {message.modelUsed.name}

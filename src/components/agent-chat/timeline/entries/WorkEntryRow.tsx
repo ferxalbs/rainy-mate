@@ -11,10 +11,33 @@ import {
 
 import type { TimelineWorkEntry } from "../MessagesTimeline.logic";
 import { cn } from "../../../../lib/utils";
+import type { AgentMessage } from "../../../../types/agent";
 
 interface WorkEntryRowProps {
   entries: TimelineWorkEntry[];
+  message?: AgentMessage;
   defaultExpanded?: boolean;
+}
+
+function phaseMeta(message?: AgentMessage): { label: string; detail?: string } | null {
+  switch (message?.runPhase) {
+    case "starting":
+      return { label: "Session boot", detail: message.statusText };
+    case "planning":
+      return { label: "Planning", detail: message.statusText };
+    case "streaming":
+      return { label: "Streaming draft", detail: message.statusText };
+    case "awaiting_approval":
+      return { label: "Awaiting approval", detail: message.statusText };
+    case "tool_waiting":
+      return { label: message.activeToolName || "Tool queued", detail: message.statusText };
+    case "tool_running":
+      return { label: message.activeToolName || "Tool execution", detail: message.statusText };
+    case "responding":
+      return { label: "Finalizing response", detail: message.statusText };
+    default:
+      return null;
+  }
 }
 
 function toneIcon(entry: TimelineWorkEntry) {
@@ -35,6 +58,7 @@ function toneIcon(entry: TimelineWorkEntry) {
 
 export function WorkEntryRow({
   entries,
+  message,
   defaultExpanded = false,
 }: WorkEntryRowProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -45,12 +69,13 @@ export function WorkEntryRow({
 
   const runningCount = entries.filter((entry) => entry.status === "running").length;
   const failedCount = entries.filter((entry) => entry.status === "failed").length;
+  const phase = phaseMeta(message);
   const headerLabel =
-    runningCount > 0 ? "Working" : failedCount > 0 ? "Attention required" : "Work log";
+    phase?.label || (runningCount > 0 ? "Working" : failedCount > 0 ? "Attention required" : "Work log");
 
   return (
     <div className="mb-5 flex w-full justify-start">
-      <div className="w-full max-w-[min(100%,40rem)] rounded-[22px] border border-border/70 bg-card/72 px-3 py-3 backdrop-blur-xl">
+      <div className="w-full max-w-[min(100%,42rem)] rounded-[24px] border border-border/70 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_86%,transparent),color-mix(in_srgb,var(--background)_72%,transparent))] px-3.5 py-3.5 shadow-[0_28px_80px_-64px_rgba(0,0,0,0.85)] backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -72,6 +97,10 @@ export function WorkEntryRow({
             {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
           </button>
         </div>
+
+        {phase?.detail ? (
+          <div className="mt-2 px-0.5 text-[12px] text-muted-foreground/78">{phase.detail}</div>
+        ) : null}
 
         {isExpanded ? (
           <div className="mt-3 space-y-2">

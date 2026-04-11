@@ -4,7 +4,7 @@
 use crate::ai::provider_types::{
     ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
     ProviderCapabilities, ProviderHealth, ProviderId, ProviderResult, ProviderType,
-    StreamingCallback,
+    ProviderEventCallback, ProviderStreamEvent, StreamingCallback, StreamingChunk,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -36,6 +36,29 @@ pub trait AIProvider: Send + Sync {
         request: ChatCompletionRequest,
         callback: StreamingCallback,
     ) -> ProviderResult<()>;
+
+    /// Complete a chat request with the richer provider event stream.
+    async fn complete_event_stream(
+        &self,
+        request: ChatCompletionRequest,
+        callback: ProviderEventCallback,
+    ) -> ProviderResult<()> {
+        let adapter: StreamingCallback = Arc::new(move |chunk: StreamingChunk| {
+            if !chunk.content.is_empty() {
+                callback(ProviderStreamEvent::TextDelta(chunk.content.clone()));
+            }
+            if let Some(thought) = chunk.thought.as_ref().filter(|thought| !thought.is_empty()) {
+                callback(ProviderStreamEvent::ThoughtDelta(thought.clone()));
+            }
+            if chunk.is_final {
+                callback(ProviderStreamEvent::Completed {
+                    finish_reason: chunk.finish_reason.clone(),
+                });
+            }
+        });
+
+        self.complete_stream(request, adapter).await
+    }
 
     /// Generate embeddings
     async fn embed(&self, request: EmbeddingRequest) -> ProviderResult<EmbeddingResponse>;

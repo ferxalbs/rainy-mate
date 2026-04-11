@@ -235,6 +235,17 @@ export interface AgentMessage {
   isExecuted?: boolean;
   /** Real-time neural state from backend agent events */
   neuralState?: string;
+  /** High-level execution phase for the current turn. */
+  runPhase?:
+    | "starting"
+    | "planning"
+    | "streaming"
+    | "tool_waiting"
+    | "awaiting_approval"
+    | "tool_running"
+    | "responding";
+  /** Latest operator-facing runtime status line. */
+  statusText?: string;
   /** Name of the tool currently being executed by the agent */
   activeToolName?: string;
   /** Highest Airlock tier reached so far this run (0=Safe, 1=Sensitive, 2=Dangerous). Ratchets up, never down. */

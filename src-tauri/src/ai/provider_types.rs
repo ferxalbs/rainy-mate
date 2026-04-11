@@ -479,6 +479,61 @@ pub struct StreamingChunk {
     pub finish_reason: Option<String>,
 }
 
+/// Provider-level streamed usage payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderStreamUsage {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
+}
+
+/// Partial tool call information emitted while the provider is still streaming arguments.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderToolCallDelta {
+    pub index: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<String>,
+}
+
+/// Lifecycle state for a streamed tool call before the agent executes it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderToolLifecycleState {
+    Announced,
+    ArgumentsDelta,
+    Ready,
+}
+
+/// Provider-emitted lifecycle event for a streamed tool call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderToolLifecycleEvent {
+    pub state: ProviderToolLifecycleState,
+    pub tool_call: ProviderToolCallDelta,
+}
+
+/// Rich provider event stream used by the agent runtime.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum ProviderStreamEvent {
+    TextDelta(String),
+    ThoughtDelta(String),
+    ToolCallDelta(ProviderToolLifecycleEvent),
+    Usage(ProviderStreamUsage),
+    Completed {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        finish_reason: Option<String>,
+    },
+    Raw(serde_json::Value),
+}
+
 /// Provider error
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AIError {
@@ -531,3 +586,6 @@ pub type ProviderResult<T> = Result<T, AIError>;
 
 /// Streaming callback type
 pub type StreamingCallback = Arc<dyn Fn(StreamingChunk) + Send + Sync>;
+
+/// Rich provider event callback type
+pub type ProviderEventCallback = Arc<dyn Fn(ProviderStreamEvent) + Send + Sync>;

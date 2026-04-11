@@ -63,9 +63,9 @@ export function ChatTopbar({
     <div className="pointer-events-none absolute inset-x-0 top-0 z-40 px-4 pt-3 md:px-6">
       <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-16" />
 
-      <div className="pointer-events-auto mx-auto flex w-full max-w-6xl items-center justify-between gap-3 rounded-full border border-white/8 bg-background/22 px-3 py-1.5 shadow-[0_18px_60px_-38px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
+      <div className="pointer-events-auto mx-auto flex w-full max-w-6xl items-center justify-between gap-3 rounded-full border border-white/8 bg-[linear-gradient(180deg,rgba(9,13,20,0.82),rgba(9,13,20,0.66))] px-3 py-1.5 shadow-[0_18px_60px_-38px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-background/28 text-primary">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-primary">
             <Compass className="size-3.5" />
           </div>
           <div className="min-w-0">

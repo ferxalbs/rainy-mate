@@ -84,7 +84,8 @@ export function ChatComposer({
     <div className={cn("mx-auto w-full transition-all duration-300", centered ? "max-w-[47rem]" : "max-w-[46rem]")}>
       <div
         className={cn(
-          "overflow-hidden border border-primary/50 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_62%,transparent),color-mix(in_srgb,var(--background)_48%,transparent))] shadow-[0_32px_100px_-70px_rgba(0,0,0,0.95)] backdrop-blur-[24px]",
+          "overflow-hidden border bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--background)_68%,transparent))] shadow-[0_36px_120px_-76px_rgba(0,0,0,0.95)] backdrop-blur-[24px]",
+          showStopButton ? "border-primary/70 shadow-[0_40px_140px_-84px_color-mix(in_srgb,var(--primary)_28%,transparent)]" : "border-white/10",
           centered ? "rounded-[26px]" : "rounded-[24px]",
         )}
       >
@@ -128,7 +129,7 @@ export function ChatComposer({
             onKeyDown={onKeyDown}
             placeholder="Ask MaTE anything, use @ for files or launch a concrete task."
             className={cn(
-              "w-full resize-none border-none bg-transparent px-0 py-0 text-[14px] leading-7 text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground/34 focus-visible:border-none focus-visible:ring-0",
+              "w-full resize-none border-none bg-transparent px-0 py-0 text-[14px] leading-7 text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground/28 focus-visible:border-none focus-visible:ring-0",
               centered ? "min-h-[88px] text-[15px] leading-7" : "min-h-[58px]",
             )}
             disabled={inputDisabled}
@@ -137,7 +138,7 @@ export function ChatComposer({
 
         <div
           className={cn(
-            "flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-background/14 px-3.5 py-2",
+            "flex flex-wrap items-center justify-between gap-3 border-t border-white/8 bg-black/10 px-3.5 py-2",
             centered && "border-t-0 bg-transparent px-4 pb-3 pt-1",
           )}
         >

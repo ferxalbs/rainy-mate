@@ -5,6 +5,26 @@ All notable changes to Rainy MaTE will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-04-10 - TOWARD 0.6.9
+
+### Changed
+
+- **Rainy agent streaming now begins the migration from emulated chunks to a typed provider-event pipeline** — the desktop runtime can now consume richer `rainy-sdk` stream deltas, preserve partial assistant output while tool intent is still forming, and route those lifecycle signals through the agent stack instead of flattening everything into plain text/status heuristics:
+  - `src-tauri/src/ai/provider_types.rs`, `src-tauri/src/ai/provider_trait.rs`, `src-tauri/src/ai/router/router.rs`, `src-tauri/src/ai/mod.rs` — added a richer provider event contract (`ProviderStreamEvent`, tool lifecycle deltas, usage payloads, event callback plumbing) while preserving the legacy chunk callback path for non-migrated providers
+  - `src-tauri/src/ai/providers/rainy_sdk.rs` — upgraded the Rainy provider to consume the real streaming shape exposed by the current local `rainy-sdk` checkout (`content`, `thought`, `tool_calls`, final `usage`) and project it as typed provider events instead of only mapping plain text chunks
+  - `src-tauri/src/ai/agent/events.rs`, `src-tauri/src/ai/agent/workflow.rs`, `src-tauri/src/services/command_poller_agent.rs` — added runtime-facing streamed tool and usage events, plus a Rainy-first ThinkStep path that keeps streaming enabled even when tools are advertised so the agent can render draft text, queued tool intent, and post-tool continuation in one continuous turn
+
+### Added
+
+- **Agent Chat timeline now has an explicit streamed tool-preparation phase before execution begins** — the frontend no longer has to infer all intermediate work from generic status strings once Rainy starts emitting tool intent during streaming:
+  - `src/types/agent.ts`, `src/hooks/useAgentChat.ts` — added `tool_waiting` run phase support and handling for `stream_tool_call` / `usage` runtime events, including live token accounting updates and queued tool previews
+  - `src/components/agent-chat/timeline/MessagesTimeline.logic.ts`, `src/components/agent-chat/timeline/entries/WorkEntryRow.tsx`, `src/components/agent-chat/timeline/entries/AssistantMessageRow.tsx` — timeline rows now surface the compact flow `partial text → tool preparation → tool execution → continued response` without reverting to the old monolithic transcript feel
+
+### Validation
+
+- `cd src-tauri && cargo check -q` → pass
+- `pnpm exec tsc --noEmit` → pass
+
 ## [0.6.8] - 2026-04-09 - AGENT CHAT TIMELINE OVERHAUL
 
 ### Changed

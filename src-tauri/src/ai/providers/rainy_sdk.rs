@@ -2,7 +2,9 @@ use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
 use crate::ai::provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, ContentPart, EmbeddingRequest,
     EmbeddingResponse, FunctionCall, MessageContent, ProviderCapabilities, ProviderConfig,
-    ProviderHealth, ProviderId, ProviderResult, ProviderType, StreamingCallback, ToolCall,
+    ProviderEventCallback, ProviderStreamEvent, ProviderStreamUsage, ProviderToolCallDelta,
+    ProviderToolLifecycleEvent, ProviderToolLifecycleState, ProviderHealth, ProviderId,
+    ProviderResult, ProviderType, StreamingCallback, ToolCall,
 };
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -15,6 +17,7 @@ use rainy_sdk::models::{
 };
 use rainy_sdk::RainyClient;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +36,36 @@ pub struct RainySDKProvider {
 }
 
 impl RainySDKProvider {
+    fn map_stream_usage(
+        model: &str,
+        usage: Option<rainy_sdk::models::Usage>,
+    ) -> Option<ProviderStreamUsage> {
+        usage.map(|usage| ProviderStreamUsage {
+            model: Some(model.to_string()),
+            prompt_tokens: usage.prompt_tokens,
+            completion_tokens: usage.completion_tokens,
+            total_tokens: usage.total_tokens,
+        })
+    }
+
+    fn map_stream_tool_delta(
+        tool_call: &rainy_sdk::models::ToolCall,
+    ) -> ProviderToolCallDelta {
+        ProviderToolCallDelta {
+            index: tool_call.index,
+            id: tool_call.id.clone(),
+            r#type: tool_call.r#type.clone(),
+            name: tool_call
+                .function
+                .as_ref()
+                .and_then(|function| function.name.clone()),
+            arguments: tool_call
+                .function
+                .as_ref()
+                .and_then(|function| function.arguments.clone()),
+        }
+    }
+
     pub fn new(config: ProviderConfig) -> ProviderResult<Self> {
         let api_key = config
             .api_key
@@ -883,6 +916,126 @@ impl AIProvider for RainySDKProvider {
         match Self::resolve_transport_for_request(&request) {
             RainyTransport::ChatCompletions => self.complete_chat(request).await,
             RainyTransport::Responses => self.complete_responses(request).await,
+        }
+    }
+
+    async fn complete_event_stream(
+        &self,
+        request: ChatCompletionRequest,
+        callback: ProviderEventCallback,
+    ) -> ProviderResult<()> {
+        match Self::resolve_transport_for_request(&request) {
+            RainyTransport::ChatCompletions => {
+                let catalog = self.cached_catalog.read().await;
+                let api_request = Self::build_openai_request(&request, &catalog).with_stream(true);
+
+                let mut stream = self
+                    .client
+                    .create_openai_chat_completion_stream(api_request)
+                    .await
+                    .map_err(|e| {
+                        AIError::APIError(format!(
+                            "Rainy chat.completions stream failed for model '{}': {}",
+                            request.model, e
+                        ))
+                    })?;
+
+                let mut latest_tool_calls: HashMap<u32, ProviderToolCallDelta> = HashMap::new();
+                let mut announced_tool_calls: HashMap<u32, ProviderToolCallDelta> = HashMap::new();
+                let mut last_finish_reason: Option<String> = None;
+
+                while let Some(chunk_result) = stream.next().await {
+                    match chunk_result {
+                        Ok(chunk) => {
+                            if let Some(choice) = chunk.choices.first() {
+                                if let Some(content) =
+                                    choice.delta.content.as_ref().filter(|value| !value.is_empty())
+                                {
+                                    callback(ProviderStreamEvent::TextDelta(content.clone()));
+                                }
+
+                                if let Some(thought) =
+                                    choice.delta.thought.as_ref().filter(|value| !value.is_empty())
+                                {
+                                    callback(ProviderStreamEvent::ThoughtDelta(thought.clone()));
+                                }
+
+                                if let Some(tool_calls) = choice.delta.tool_calls.as_ref() {
+                                    for tool_call in tool_calls {
+                                        let mapped = Self::map_stream_tool_delta(tool_call);
+                                        let state = if announced_tool_calls
+                                            .contains_key(&tool_call.index)
+                                        {
+                                            ProviderToolLifecycleState::ArgumentsDelta
+                                        } else {
+                                            ProviderToolLifecycleState::Announced
+                                        };
+                                        latest_tool_calls.insert(tool_call.index, mapped.clone());
+                                        announced_tool_calls
+                                            .entry(tool_call.index)
+                                            .or_insert_with(|| mapped.clone());
+                                        callback(ProviderStreamEvent::ToolCallDelta(
+                                            ProviderToolLifecycleEvent {
+                                                state,
+                                                tool_call: mapped,
+                                            },
+                                        ));
+                                    }
+                                }
+
+                                if let Some(usage) =
+                                    Self::map_stream_usage(&chunk.model, chunk.usage.clone())
+                                {
+                                    callback(ProviderStreamEvent::Usage(usage));
+                                }
+
+                                if let Some(finish_reason) = choice.finish_reason.clone() {
+                                    last_finish_reason = Some(finish_reason.clone());
+                                    if finish_reason == "tool_calls" {
+                                        for tool_call in latest_tool_calls.values() {
+                                            callback(ProviderStreamEvent::ToolCallDelta(
+                                                ProviderToolLifecycleEvent {
+                                                    state: ProviderToolLifecycleState::Ready,
+                                                    tool_call: tool_call.clone(),
+                                                },
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            return Err(AIError::APIError(format!(
+                                "Rainy chat.completions stream error for model '{}': {}",
+                                request.model, e
+                            )));
+                        }
+                    }
+                }
+
+                callback(ProviderStreamEvent::Completed {
+                    finish_reason: last_finish_reason,
+                });
+                Ok(())
+            }
+            RainyTransport::Responses => {
+                let response = self.complete_responses(request).await?;
+                if let Some(content) = response.content.as_ref().filter(|value| !value.is_empty()) {
+                    callback(ProviderStreamEvent::TextDelta(content.clone()));
+                }
+                if let Some(usage) = Some(ProviderStreamUsage {
+                    model: Some(response.model.clone()),
+                    prompt_tokens: response.usage.prompt_tokens,
+                    completion_tokens: response.usage.completion_tokens,
+                    total_tokens: response.usage.total_tokens,
+                }) {
+                    callback(ProviderStreamEvent::Usage(usage));
+                }
+                callback(ProviderStreamEvent::Completed {
+                    finish_reason: Some(response.finish_reason),
+                });
+                Ok(())
+            }
         }
     }
 

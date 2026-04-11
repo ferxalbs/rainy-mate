@@ -12,6 +12,77 @@ export interface TimelineWorkEntry {
   timestamp: Date;
 }
 
+function buildLivePhaseEntry(message: AgentMessage): TimelineWorkEntry | null {
+  if (message.runState !== "running") {
+    return null;
+  }
+
+  const detail = message.statusText?.trim();
+  const timestamp = message.timestamp;
+  switch (message.runPhase) {
+    case "starting":
+      return {
+        id: `phase-${message.id}-starting`,
+        tone: "info",
+        detail: detail || "Preparing the runtime for this turn.",
+        status: "running",
+        timestamp,
+      };
+    case "planning":
+      return {
+        id: `phase-${message.id}-planning`,
+        tone: "thinking",
+        detail: detail || "Planning the next step.",
+        status: "running",
+        timestamp,
+      };
+    case "awaiting_approval":
+      return {
+        id: `phase-${message.id}-approval`,
+        tone: "info",
+        detail: detail || "Waiting for approval before continuing.",
+        status: "running",
+        timestamp,
+      };
+    case "tool_waiting":
+      return {
+        id: `phase-${message.id}-tool-waiting`,
+        tone: "tool",
+        detail: detail || "Preparing tool work from the streamed plan.",
+        command: message.activeToolName,
+        status: "running",
+        timestamp,
+      };
+    case "tool_running":
+      return {
+        id: `phase-${message.id}-tool`,
+        tone: "tool",
+        detail: detail || "Running tool work.",
+        command: message.activeToolName,
+        status: "running",
+        timestamp,
+      };
+    case "responding":
+      return {
+        id: `phase-${message.id}-responding`,
+        tone: "thinking",
+        detail: detail || "Continuing the response after tool execution.",
+        status: "running",
+        timestamp,
+      };
+    case "streaming":
+      return {
+        id: `phase-${message.id}-streaming`,
+        tone: "thinking",
+        detail: detail || "Streaming assistant output.",
+        status: "running",
+        timestamp,
+      };
+    default:
+      return null;
+  }
+}
+
 export interface MessagesTimelineRow {
   id: string;
   kind: TimelineRowKind;
@@ -79,19 +150,9 @@ function deriveWorkEntries(message: AgentMessage): TimelineWorkEntry[] {
     }
   }
 
-  if (message.runState === "running" && message.activeToolName) {
-    const runningEntryId = `running-${message.id}-${message.activeToolName}`;
-    const alreadyPresent = entries.some((entry) => entry.id === runningEntryId);
-    if (!alreadyPresent) {
-      entries.push({
-        id: runningEntryId,
-        tone: "tool",
-        detail: `Executing ${message.activeToolName}`,
-        command: message.activeToolName,
-        status: "running",
-        timestamp: message.timestamp,
-      });
-    }
+  const livePhaseEntry = buildLivePhaseEntry(message);
+  if (livePhaseEntry && !entries.some((entry) => entry.id === livePhaseEntry.id)) {
+    entries.push(livePhaseEntry);
   }
 
   return entries;
@@ -117,6 +178,23 @@ export function deriveMessagesTimelineRows(messages: AgentMessage[]): MessagesTi
     }
 
     const workEntries = deriveWorkEntries(message);
+    const shouldSurfaceAssistantBody =
+      Boolean(message.content) ||
+      Boolean(message.artifacts?.length) ||
+      message.runState === "completed" ||
+      message.runState === "failed" ||
+      message.runState === "cancelled";
+
+    if (shouldSurfaceAssistantBody && message.runState === "running") {
+      rows.push({
+        id: `response-${message.id}`,
+        kind: "assistant-message",
+        messageId: message.id,
+        message,
+        createdAt: message.timestamp.toISOString(),
+      });
+    }
+
     if (workEntries.length > 0) {
       rows.push({
         id: `work-${message.id}`,
@@ -128,7 +206,10 @@ export function deriveMessagesTimelineRows(messages: AgentMessage[]): MessagesTi
       });
     }
 
-    if (message.content || message.artifacts?.length || message.runState === "completed" || message.runState === "failed" || message.runState === "cancelled") {
+    if (
+      shouldSurfaceAssistantBody &&
+      message.runState !== "running"
+    ) {
       rows.push({
         id: `response-${message.id}`,
         kind: "assistant-message",
@@ -176,7 +257,7 @@ export function estimateTimelineRowHeight(row: MessagesTimelineRow, widthPx: num
   if (row.kind === "assistant-message") {
     const content = row.message?.content ?? "";
     const artifactCount = row.message?.artifacts?.length ?? 0;
-    return estimateTextHeight(content || "Awaiting response", charsPerLine, 24, 68 + artifactCount * 34);
+    return estimateTextHeight(content || "Awaiting response", charsPerLine, 24, 82 + artifactCount * 34);
   }
 
   return 54;

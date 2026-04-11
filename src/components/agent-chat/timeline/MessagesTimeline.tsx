@@ -37,6 +37,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               <WorkEntryRow
                 key={row.id}
                 entries={row.groupedEntries}
+                message={row.message}
                 defaultExpanded={row.message?.runState === "running"}
               />
             );
@@ -51,7 +52,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               <div key={row.id} className="mb-6 flex w-full justify-start">
                 <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/75 px-3 py-2 text-xs text-muted-foreground backdrop-blur-xl">
                   <LoaderCircle className="size-3.5 animate-spin text-primary" />
-                  Awaiting first streamed tokens
+                  {row.message?.statusText || "Awaiting first streamed tokens"}
                 </div>
               </div>
             );

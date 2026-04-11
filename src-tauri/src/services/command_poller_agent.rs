@@ -60,6 +60,26 @@ fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
                 "text": text,
             }),
         ),
+        AgentEvent::StreamToolCall(payload) => (
+            "Streamed tool call".to_string(),
+            serde_json::json!({
+                "type": "stream_tool_call",
+                "toolCallId": payload.id,
+                "toolName": payload.name,
+                "arguments": payload.arguments,
+                "state": payload.state,
+            }),
+        ),
+        AgentEvent::Usage(usage) => (
+            "Usage update".to_string(),
+            serde_json::json!({
+                "type": "usage",
+                "model": usage.model,
+                "promptTokens": usage.prompt_tokens,
+                "completionTokens": usage.completion_tokens,
+                "totalTokens": usage.total_tokens,
+            }),
+        ),
         AgentEvent::ToolCall(call) => (
             format!("Tool call: {}", call.function.name),
             serde_json::json!({

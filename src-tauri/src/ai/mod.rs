@@ -32,7 +32,8 @@ pub use provider_trait::{AIProvider, AIProviderFactory};
 pub use provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, EmbeddingRequest,
     EmbeddingResponse, ProviderCapabilities, ProviderConfig, ProviderHealth, ProviderId,
-    ProviderResult, ProviderType, StreamingCallback, StreamingChunk, TokenUsage,
+    ProviderEventCallback, ProviderResult, ProviderStreamEvent, ProviderType, StreamingCallback,
+    StreamingChunk, TokenUsage,
 };
 pub use router::IntelligentRouter;
 

@@ -4,7 +4,8 @@
 use crate::ai::provider_trait::ProviderWithStats;
 use crate::ai::provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
-    ProviderId, ProviderResult, StreamingCallback,
+    ProviderEventCallback, ProviderId, ProviderResult, ProviderStreamEvent, ProviderType,
+    StreamingCallback,
 };
 use crate::ai::router::fallback_chain::FallbackStrategy;
 use crate::ai::router::load_balancer::LoadBalancingStrategy;
@@ -274,6 +275,71 @@ impl IntelligentRouter {
             .unwrap_or_else(|| AIError::Internal("All provider attempts failed".to_string())))
     }
 
+    /// Complete a chat request with the provider event stream.
+    pub async fn complete_event_stream(
+        &self,
+        request: ChatCompletionRequest,
+        callback: ProviderEventCallback,
+    ) -> ProviderResult<()> {
+        if request.model != "default" {
+            crate::ai::model_catalog::ensure_supported_model_slug(&request.model)
+                .map_err(AIError::InvalidRequest)?;
+        }
+        let mut last_error = None;
+
+        for attempt in 0..self.config.max_retries {
+            let provider = self.select_provider(&request).await;
+
+            if let Some(provider) = provider {
+                let provider_id = provider.provider().id().clone();
+
+                if let Some(cb) = self.circuit_breakers.get(&provider_id) {
+                    if !cb.allow_request().await {
+                        tracing::warn!(
+                            "Circuit breaker open for provider {}, skipping",
+                            provider_id
+                        );
+                        continue;
+                    }
+                }
+
+                let result = provider
+                    .provider()
+                    .complete_event_stream(request.clone(), Arc::clone(&callback))
+                    .await;
+
+                match result {
+                    Ok(()) => {
+                        if let Some(cb) = self.circuit_breakers.get(&provider_id) {
+                            cb.record_success().await;
+                        }
+
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        if let Some(cb) = self.circuit_breakers.get(&provider_id) {
+                            cb.record_failure().await;
+                        }
+
+                        last_error = Some(e.clone());
+                        tracing::warn!(
+                            "Provider {} failed on attempt {}: {}",
+                            provider_id,
+                            attempt + 1,
+                            e
+                        );
+                    }
+                }
+            } else {
+                return Err(Self::pinned_provider_error(&request.model)
+                    .unwrap_or_else(|| AIError::Internal("No providers available".to_string())));
+            }
+        }
+
+        Err(last_error
+            .unwrap_or_else(|| AIError::Internal("All provider attempts failed".to_string())))
+    }
+
     /// Generate embeddings with intelligent routing
     pub async fn embed(&self, request: EmbeddingRequest) -> ProviderResult<EmbeddingResponse> {
         let mut last_error = None;
@@ -418,6 +484,15 @@ impl IntelligentRouter {
 
         // Fallback to load balancer
         self.load_balancer.select_provider()
+    }
+
+    pub async fn selected_provider_type(
+        &self,
+        request: &ChatCompletionRequest,
+    ) -> Option<ProviderType> {
+        self.select_provider(request)
+            .await
+            .map(|provider| provider.provider().provider_type())
     }
 
     /// Select a provider for embeddings
