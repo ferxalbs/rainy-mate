@@ -433,7 +433,11 @@ mod tests {
 
         assert_eq!(command.intent, "shell.execute_command");
         assert_eq!(
-            command.payload.tool_access_policy.as_ref().map(|value| value.mode.as_str()),
+            command
+                .payload
+                .tool_access_policy
+                .as_ref()
+                .map(|value| value.mode.as_str()),
             Some("all")
         );
         assert_eq!(

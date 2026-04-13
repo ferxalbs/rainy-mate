@@ -2,13 +2,11 @@
 // ThinkStep (LLM interaction) lives here. ActStep (tool execution) lives in act_step.rs.
 use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::memory::AgentMemory;
+use crate::ai::agent::runtime::{AgentContent, AgentMessage, RuntimeOptions};
 use crate::ai::agent::runtime_events::{
     RuntimeContentStreamKind, RuntimeEventCallback, RuntimeStreamEvent,
 };
-use crate::ai::agent::runtime::{AgentContent, AgentMessage, RuntimeOptions};
-use crate::ai::provider_types::{
-    FunctionCall, ProviderToolCallDelta, ToolCall,
-};
+use crate::ai::provider_types::{FunctionCall, ProviderToolCallDelta, ToolCall};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::AgentSpec;
 use crate::models::neural::ToolAccessPolicy;
@@ -414,6 +412,7 @@ impl WorkflowStep for ThinkStep {
             presence_penalty: None,
             stop: None,
             reasoning_effort: self.reasoning_effort.clone(),
+            ..Default::default()
         };
 
         // 3. Call Router — providers with tool-call streaming can keep the turn live.
@@ -430,8 +429,10 @@ impl WorkflowStep for ThinkStep {
             let event_clone = Arc::clone(&event_fn);
             let accumulated = Arc::new(std::sync::Mutex::new(String::new()));
             let accumulated_clone = Arc::clone(&accumulated);
-            let streamed_tool_calls =
-                Arc::new(std::sync::Mutex::new(HashMap::<u32, StreamedToolCallAccumulator>::new()));
+            let streamed_tool_calls = Arc::new(std::sync::Mutex::new(HashMap::<
+                u32,
+                StreamedToolCallAccumulator,
+            >::new()));
             let streamed_tool_calls_clone = Arc::clone(&streamed_tool_calls);
 
             event_fn(AgentEvent::Status(if has_tools {
@@ -440,8 +441,8 @@ impl WorkflowStep for ThinkStep {
                 "Streaming response...".to_string()
             }));
 
-            let callback: RuntimeEventCallback = Arc::new(move |event: RuntimeStreamEvent| {
-                match event {
+            let callback: RuntimeEventCallback =
+                Arc::new(move |event: RuntimeStreamEvent| match event {
                     RuntimeStreamEvent::TurnStarted { .. } => {}
                     RuntimeStreamEvent::ContentDelta(content) => match content.stream_kind {
                         RuntimeContentStreamKind::AssistantText => {
@@ -461,11 +462,12 @@ impl WorkflowStep for ThinkStep {
                     },
                     RuntimeStreamEvent::ToolCallLifecycle(lifecycle) => {
                         if let Ok(mut guard) = streamed_tool_calls_clone.lock() {
-                            let entry = guard
-                                .entry(lifecycle.tool_call.index)
-                                .or_insert_with(|| StreamedToolCallAccumulator {
-                                    index: lifecycle.tool_call.index,
-                                    ..Default::default()
+                            let entry =
+                                guard.entry(lifecycle.tool_call.index).or_insert_with(|| {
+                                    StreamedToolCallAccumulator {
+                                        index: lifecycle.tool_call.index,
+                                        ..Default::default()
+                                    }
                                 });
                             entry.merge(&lifecycle.tool_call);
                         }
@@ -495,8 +497,7 @@ impl WorkflowStep for ThinkStep {
                         }
                     }
                     RuntimeStreamEvent::Raw(_) => {}
-                }
-            });
+                });
 
             router_guard
                 .complete_runtime_stream(request.clone(), callback)

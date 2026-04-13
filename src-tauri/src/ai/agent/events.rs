@@ -1,7 +1,5 @@
 use super::protocol::{SpecialistRole, SpecialistStatus, SupervisorPlan};
-use crate::ai::provider_types::{
-    ProviderStreamUsage, ProviderToolLifecycleState, ToolCall,
-};
+use crate::ai::provider_types::{ProviderStreamUsage, ProviderToolLifecycleState, ToolCall};
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]

@@ -791,7 +791,10 @@ mod policy_tests {
             SkillExecutor::effective_tool_policy(Some(&explicit), Some(&fallback)).expect("policy");
 
         assert!(std::ptr::eq(chosen, &explicit));
-        assert!(SkillExecutor::is_tool_allowed("execute_command", Some(chosen)));
+        assert!(SkillExecutor::is_tool_allowed(
+            "execute_command",
+            Some(chosen)
+        ));
     }
 }
 

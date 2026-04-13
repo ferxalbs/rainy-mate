@@ -45,7 +45,9 @@ pub async fn list_external_agent_sessions(
     workspace_path: Option<String>,
     external_runtime: State<'_, Arc<ExternalAgentRuntime>>,
 ) -> Result<Vec<ExternalAgentSession>, String> {
-    external_runtime.list_sessions(workspace_path.as_deref()).await
+    external_runtime
+        .list_sessions(workspace_path.as_deref())
+        .await
 }
 
 #[tauri::command]

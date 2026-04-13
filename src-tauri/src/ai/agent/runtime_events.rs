@@ -1,6 +1,4 @@
-use crate::ai::provider_types::{
-    ProviderStreamUsage, ProviderToolLifecycleEvent,
-};
+use crate::ai::provider_types::{ProviderStreamUsage, ProviderToolLifecycleEvent};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

@@ -1,13 +1,13 @@
 // AI Provider Trait
 // Defines the interface that all AI providers must implement
 
-use crate::ai::provider_types::{
-    ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
-    ProviderCapabilities, ProviderHealth, ProviderId, ProviderResult, ProviderType,
-    ProviderEventCallback, ProviderStreamEvent, StreamingCallback, StreamingChunk,
-};
 use crate::ai::agent::runtime_events::{
     RuntimeContentDelta, RuntimeContentStreamKind, RuntimeEventCallback, RuntimeStreamEvent,
+};
+use crate::ai::provider_types::{
+    ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
+    ProviderCapabilities, ProviderEventCallback, ProviderHealth, ProviderId, ProviderResult,
+    ProviderStreamEvent, ProviderType, StreamingCallback, StreamingChunk,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -76,36 +76,37 @@ pub trait AIProvider: Send + Sync {
                 .is_some_and(|tools| !tools.is_empty()),
         });
         let runtime_callback = Arc::clone(&callback);
-        let adapter: ProviderEventCallback = Arc::new(move |event: ProviderStreamEvent| match event {
-            ProviderStreamEvent::TextDelta(text) => {
-                if !text.is_empty() {
-                    runtime_callback(RuntimeStreamEvent::ContentDelta(RuntimeContentDelta {
-                        stream_kind: RuntimeContentStreamKind::AssistantText,
-                        delta: text,
-                    }));
+        let adapter: ProviderEventCallback =
+            Arc::new(move |event: ProviderStreamEvent| match event {
+                ProviderStreamEvent::TextDelta(text) => {
+                    if !text.is_empty() {
+                        runtime_callback(RuntimeStreamEvent::ContentDelta(RuntimeContentDelta {
+                            stream_kind: RuntimeContentStreamKind::AssistantText,
+                            delta: text,
+                        }));
+                    }
                 }
-            }
-            ProviderStreamEvent::ThoughtDelta(thought) => {
-                if !thought.is_empty() {
-                    runtime_callback(RuntimeStreamEvent::ContentDelta(RuntimeContentDelta {
-                        stream_kind: RuntimeContentStreamKind::ReasoningText,
-                        delta: thought,
-                    }));
+                ProviderStreamEvent::ThoughtDelta(thought) => {
+                    if !thought.is_empty() {
+                        runtime_callback(RuntimeStreamEvent::ContentDelta(RuntimeContentDelta {
+                            stream_kind: RuntimeContentStreamKind::ReasoningText,
+                            delta: thought,
+                        }));
+                    }
                 }
-            }
-            ProviderStreamEvent::ToolCallDelta(lifecycle) => {
-                runtime_callback(RuntimeStreamEvent::ToolCallLifecycle(lifecycle));
-            }
-            ProviderStreamEvent::Usage(usage) => {
-                runtime_callback(RuntimeStreamEvent::Usage(usage));
-            }
-            ProviderStreamEvent::Completed { finish_reason } => {
-                runtime_callback(RuntimeStreamEvent::TurnCompleted { finish_reason });
-            }
-            ProviderStreamEvent::Raw(value) => {
-                runtime_callback(RuntimeStreamEvent::Raw(value));
-            }
-        });
+                ProviderStreamEvent::ToolCallDelta(lifecycle) => {
+                    runtime_callback(RuntimeStreamEvent::ToolCallLifecycle(lifecycle));
+                }
+                ProviderStreamEvent::Usage(usage) => {
+                    runtime_callback(RuntimeStreamEvent::Usage(usage));
+                }
+                ProviderStreamEvent::Completed { finish_reason } => {
+                    runtime_callback(RuntimeStreamEvent::TurnCompleted { finish_reason });
+                }
+                ProviderStreamEvent::Raw(value) => {
+                    runtime_callback(RuntimeStreamEvent::Raw(value));
+                }
+            });
 
         self.complete_event_stream(request, adapter).await
     }

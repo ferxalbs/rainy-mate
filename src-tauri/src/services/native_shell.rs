@@ -1,8 +1,7 @@
 use crate::ai::agent::manager::{AgentManager, ChatSessionDto};
 use crate::services::quick_delegate_modal::{focus_main_window, run_native_delegate_prompt};
 use crate::services::{
-    MacOSNativeShellBridge, QuickDelegateModalService,
-    session_coordinator::SessionCoordinator,
+    session_coordinator::SessionCoordinator, MacOSNativeShellBridge, QuickDelegateModalService,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

@@ -1,13 +1,13 @@
 // Intelligent Router
 // Orchestrates load balancing, cost optimization, capability matching, and fallback
 
+use crate::ai::agent::runtime_events::RuntimeEventCallback;
 use crate::ai::provider_trait::ProviderWithStats;
 use crate::ai::provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, EmbeddingRequest, EmbeddingResponse,
     ProviderCapabilities, ProviderEventCallback, ProviderId, ProviderResult, ProviderStreamEvent,
     ProviderType, StreamingCallback,
 };
-use crate::ai::agent::runtime_events::RuntimeEventCallback;
 use crate::ai::router::fallback_chain::FallbackStrategy;
 use crate::ai::router::load_balancer::LoadBalancingStrategy;
 use crate::ai::router::{

@@ -18,8 +18,8 @@ use services::{
     BrowserController, CommandPoller, DocumentService, ExternalAgentRuntime, FileManager,
     FileOperationEngine, FolderManager, ImageService, KeychainAccessService, LLMClient,
     MacOSAutoLaunchBridge, ManagedResearchService, MemoryManager, NativeShellService,
-    NeuralService, NodeAuthenticator, QuickDelegateModalService, SettingsManager,
-    SkillExecutor, SocketClient, WorkflowRecorderService, WorkspaceManager,
+    NeuralService, NodeAuthenticator, QuickDelegateModalService, SettingsManager, SkillExecutor,
+    SocketClient, WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
 use tauri::Manager;

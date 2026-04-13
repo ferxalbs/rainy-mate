@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src-tauri/src/ai/agent/runtime_events.rs`, `src-tauri/src/ai/provider_trait.rs`, `src-tauri/src/ai/router/router.rs`, `src-tauri/src/ai/agent/workflow.rs` — added `RuntimeStreamEvent`, runtime-stream callback plumbing, capability-based tool-streaming selection, and workflow consumption of provider-agnostic runtime events
   - `src-tauri/src/ai/provider_types.rs`, `src-tauri/src/ai/providers/openai.rs`, `src-tauri/src/ai/providers/anthropic.rs`, `src-tauri/src/ai/providers/gemini_adapter.rs`, `src-tauri/src/ai/providers/moonshot.rs`, `src-tauri/src/ai/providers/xai.rs`, `src-tauri/src/ai/providers/rainy_sdk.rs` — introduced `tool_call_streaming` provider capabilities and switched the Rainy provider to `rainy-sdk` 0.6.14 typed chat stream events, including native billing-to-usage mapping
   - `src-tauri/src/ai/agent/events.rs`, `src-tauri/src/commands/agent_frontend_events.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/services/command_poller_agent.rs`, `src/hooks/useAgentChat.ts`, `src/hooks/useAgentRuntime.ts` — added explicit reasoning events, moved runtime telemetry persistence to typed usage events, and removed the frontend dependency on usage/reasoning status-string parsing
+- **Rainy SDK integration now uses the full Rust-side request surface and native Responses streaming for GPT-5/o-series paths** — MaTE no longer degrades `Responses` models into a blocking fallback while the chat-completions path streams correctly, and the provider contract now mirrors the SDK fields needed for future BYOK abstraction through Rainy instead of custom wrappers:
+  - `src-tauri/src/ai/provider_types.rs` — extended `ChatCompletionRequest` with the modern Rainy/OpenAI-compatible request controls exposed by `rainy-sdk` `0.6.14`, including reasoning, metadata, service-tier, provider-options, stream-options, and Responses-oriented continuation fields
+  - `src-tauri/src/ai/providers/rainy_sdk.rs` — mapped the expanded request surface into SDK-native `OpenAIChatCompletionRequest` / `ResponsesRequest`, replaced the blocking `Responses` fallback with `RainyClient::create_response_stream(...)`, and normalized raw Responses SSE payloads into MaTE’s typed provider-event pipeline for assistant text, reasoning deltas, tool-call lifecycle, usage, and completion
+  - `src-tauri/src/ai/agent/workflow.rs`, `src-tauri/src/commands/router.rs`, `src-tauri/src/commands/ai_providers.rs`, `src-tauri/src/commands/agent.rs`, `src-tauri/src/ai/providers/xai.rs` — updated request construction sites and focused tests so the larger Rust request contract compiles cleanly without pushing logic into TypeScript
 
 ### Added
 
@@ -30,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pnpm exec tsc --noEmit` → pass
 - `cd src-tauri && cargo check -q` → pass (canonical runtime stream migration)
 - `pnpm exec tsc --noEmit` → pass (canonical runtime stream migration)
+- `cd src-tauri && cargo check -q` → pass (Rainy SDK request parity + native Responses streaming)
+- `pnpm exec tsc --noEmit` → pass (Rainy SDK request parity + native Responses streaming)
+- `cd src-tauri && cargo test rainy_sdk -- --nocapture` → fail (pre-existing unrelated `MemoryManager::new(...)` test break in `src-tauri/src/ai/agent/act_step.rs`)
 
 ## [0.6.8] - 2026-04-09 - AGENT CHAT TIMELINE OVERHAUL
 

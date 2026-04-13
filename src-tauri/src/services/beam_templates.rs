@@ -1,8 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use crate::models::neural::{
     AirlockLevel, CommandPriority, CommandStatus, QueuedCommand, RainyPayload,
 };
@@ -10,6 +8,8 @@ use crate::services::beam_rpc::{
     BeamNetwork, BeamRpcService, GasEstimate, TransactionReceipt, TransactionRequest,
 };
 use crate::services::{AirlockService, MateLaunchpadService, WorkspaceManager};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 include!(concat!(env!("OUT_DIR"), "/beam_template_artifacts.rs"));
 

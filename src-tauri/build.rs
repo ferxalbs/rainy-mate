@@ -197,7 +197,10 @@ fn compile_beam_templates() {
 
         generated.push_str("    PrecompiledBeamTemplateArtifact {\n");
         generated.push_str(&format!("        id: {:?},\n", spec.id));
-        generated.push_str(&format!("        contract_name: {:?},\n", spec.contract_name));
+        generated.push_str(&format!(
+            "        contract_name: {:?},\n",
+            spec.contract_name
+        ));
         generated.push_str(&format!("        abi_json: {:?},\n", abi_json.trim()));
         generated.push_str(&format!("        bytecode: {:?},\n", bytecode.trim()));
         generated.push_str("        compiler_version: \"solcjs 0.8.34\",\n");
@@ -218,7 +221,10 @@ fn find_solc_output(dir: &PathBuf, contract_name: &str, extension: &str) -> Path
         let path = entry
             .unwrap_or_else(|e| panic!("failed to inspect solc output entry: {}", e))
             .path();
-        let file_name = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
+        let file_name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("");
         if file_name.ends_with(&suffix) {
             return path;
         }

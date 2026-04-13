@@ -1035,10 +1035,18 @@ fn summarize_planned_actions(tool_ids: &[String]) -> WorkspacePlannedActionSumma
             "write_file" | "append_file" | "mkdir" | "pdf_create" | "excel_write"
             | "docx_create" | "archive_create" => create_or_update.push(tool.clone()),
             "move_file" | "delete_file" => move_or_delete.push(tool.clone()),
-            "execute_command" | "browse_url" | "open_new_tab" | "click_element" | "type_text"
-            | "go_back" | "submit_form" | "http_post_json"
-            | "spawn_external_agent_session" | "send_external_agent_message"
-            | "wait_external_agent_session" | "list_external_agent_sessions"
+            "execute_command"
+            | "browse_url"
+            | "open_new_tab"
+            | "click_element"
+            | "type_text"
+            | "go_back"
+            | "submit_form"
+            | "http_post_json"
+            | "spawn_external_agent_session"
+            | "send_external_agent_message"
+            | "wait_external_agent_session"
+            | "list_external_agent_sessions"
             | "cancel_external_agent_session" => external_actions.push(tool.clone()),
             "save_memory" | "recall_memory" | "ingest_document" => {
                 memory_actions.push(tool.clone())
@@ -1239,12 +1247,10 @@ mod tests {
             .find(|scenario| scenario.id == "codebase_copilot")
             .expect("copilot scenario");
 
-        assert!(
-            copilot
-                .recommended_pack_ids
-                .iter()
-                .any(|pack_id| pack_id == "parallel_coders")
-        );
+        assert!(copilot
+            .recommended_pack_ids
+            .iter()
+            .any(|pack_id| pack_id == "parallel_coders"));
     }
 
     #[test]
@@ -1299,9 +1305,15 @@ mod tests {
             &workspace.launchpad.trust_preset,
         );
 
-        assert!(active.iter().any(|tool| tool == "spawn_external_agent_session"));
-        assert!(active.iter().any(|tool| tool == "send_external_agent_message"));
-        assert!(active.iter().any(|tool| tool == "wait_external_agent_session"));
+        assert!(active
+            .iter()
+            .any(|tool| tool == "spawn_external_agent_session"));
+        assert!(active
+            .iter()
+            .any(|tool| tool == "send_external_agent_message"));
+        assert!(active
+            .iter()
+            .any(|tool| tool == "wait_external_agent_session"));
     }
 
     #[test]

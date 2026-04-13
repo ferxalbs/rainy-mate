@@ -27,15 +27,15 @@ pub mod specs;
 pub use provider::AIProviderManager;
 
 // PHASE 3 exports - only what's actively used
+pub use agent::runtime_events::{RuntimeEventCallback, RuntimeStreamEvent};
 pub use provider_registry::ProviderRegistry;
 pub use provider_trait::{AIProvider, AIProviderFactory};
 pub use provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, EmbeddingRequest,
-    EmbeddingResponse, ProviderCapabilities, ProviderConfig, ProviderHealth, ProviderId,
-    ProviderEventCallback, ProviderResult, ProviderStreamEvent, ProviderType, StreamingCallback,
+    EmbeddingResponse, ProviderCapabilities, ProviderConfig, ProviderEventCallback, ProviderHealth,
+    ProviderId, ProviderResult, ProviderStreamEvent, ProviderType, StreamingCallback,
     StreamingChunk, TokenUsage,
 };
-pub use agent::runtime_events::{RuntimeEventCallback, RuntimeStreamEvent};
 pub use router::IntelligentRouter;
 
 // PHASE 4 exports

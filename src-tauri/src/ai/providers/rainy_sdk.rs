@@ -2,9 +2,9 @@ use crate::ai::provider_trait::{AIProvider, AIProviderFactory};
 use crate::ai::provider_types::{
     AIError, ChatCompletionRequest, ChatCompletionResponse, ContentPart, EmbeddingRequest,
     EmbeddingResponse, FunctionCall, MessageContent, ProviderCapabilities, ProviderConfig,
-    ProviderEventCallback, ProviderStreamEvent, ProviderStreamUsage, ProviderToolCallDelta,
-    ProviderToolLifecycleEvent, ProviderToolLifecycleState, ProviderHealth, ProviderId,
-    ProviderResult, ProviderType, StreamingCallback, ToolCall,
+    ProviderEventCallback, ProviderHealth, ProviderId, ProviderResult, ProviderStreamEvent,
+    ProviderStreamUsage, ProviderToolCallDelta, ProviderToolLifecycleEvent,
+    ProviderToolLifecycleState, ProviderType, StreamingCallback, ToolCall,
 };
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -12,8 +12,8 @@ use rainy_sdk::models::{
     build_reasoning_config, CapabilityFlag, ChatStreamEvent, FunctionDefinition, ModelCatalogItem,
     OpenAIChatCompletionRequest, OpenAIChatMessage, OpenAIContentPart, OpenAIFunctionCall,
     OpenAIImageUrl, OpenAIMessageContent, OpenAIMessageRole, OpenAIToolCall, ReasoningMode,
-    ReasoningPreference, ResponsesApiResponse, ResponsesRequest, ThinkingConfig, ThinkingLevel,
-    Tool, ToolChoice, ToolFunction, ToolType,
+    ReasoningPreference, ResponsesApiResponse, ResponsesRequest, ResponsesUsage, ThinkingConfig,
+    ThinkingLevel, Tool, ToolChoice, ToolFunction, ToolType,
 };
 use rainy_sdk::RainyClient;
 use serde_json::{json, Value};
@@ -48,9 +48,7 @@ impl RainySDKProvider {
         })
     }
 
-    fn map_stream_tool_delta(
-        tool_call: &rainy_sdk::models::ToolCall,
-    ) -> ProviderToolCallDelta {
+    fn map_stream_tool_delta(tool_call: &rainy_sdk::models::ToolCall) -> ProviderToolCallDelta {
         ProviderToolCallDelta {
             index: tool_call.index,
             id: tool_call.id.clone(),
@@ -393,6 +391,9 @@ impl RainySDKProvider {
         if let Some(max_tokens) = request.max_tokens {
             sdk_request = sdk_request.with_max_tokens(max_tokens);
         }
+        if let Some(max_completion_tokens) = request.max_completion_tokens {
+            sdk_request = sdk_request.with_max_completion_tokens(max_completion_tokens);
+        }
         if let Some(temperature) = request.temperature {
             sdk_request = sdk_request.with_temperature(temperature);
         }
@@ -408,11 +409,71 @@ impl RainySDKProvider {
         if let Some(stop) = request.stop.clone() {
             sdk_request = sdk_request.with_stop(stop);
         }
+        if let Some(stream_options) = request.stream_options.clone() {
+            sdk_request = sdk_request.with_stream_options(stream_options);
+        }
         if let Some(tools) = Self::map_tools(request.tools.as_deref()) {
             sdk_request = sdk_request.with_tools(tools);
         }
         if let Some(tool_choice) = Self::map_tool_choice(request.tool_choice.as_ref()) {
             sdk_request = sdk_request.with_tool_choice(tool_choice);
+        }
+        if let Some(parallel_tool_calls) = request.parallel_tool_calls {
+            sdk_request.parallel_tool_calls = Some(parallel_tool_calls);
+        }
+        if let Some(seed) = request.seed {
+            sdk_request.seed = Some(seed);
+        }
+        if let Some(prompt_cache_key) = request.prompt_cache_key.clone() {
+            sdk_request.prompt_cache_key = Some(prompt_cache_key);
+        }
+        if let Some(provider) = request.provider.clone() {
+            sdk_request = sdk_request.with_provider(provider);
+        }
+        if let Some(provider_options) = request.provider_options.clone() {
+            sdk_request.provider_options = Some(provider_options);
+        }
+        if let Some(prompt_cache_retention) = request.prompt_cache_retention.clone() {
+            sdk_request.prompt_cache_retention = Some(prompt_cache_retention);
+        }
+        if let Some(reasoning) = request.reasoning.clone() {
+            sdk_request = sdk_request.with_reasoning(reasoning);
+        }
+        if let Some(include_reasoning) = request.include_reasoning {
+            sdk_request = sdk_request.with_include_reasoning(include_reasoning);
+        }
+        if let Some(metadata) = request.metadata.clone() {
+            sdk_request = sdk_request.with_metadata(metadata);
+        }
+        if let Some(service_tier) = request.service_tier.clone() {
+            sdk_request = sdk_request.with_service_tier(service_tier);
+        }
+        if let Some(store) = request.store {
+            sdk_request.store = Some(store);
+        }
+        if let Some(safety_identifier) = request.safety_identifier.clone() {
+            sdk_request.safety_identifier = Some(safety_identifier);
+        }
+        if let Some(modalities) = request.modalities.clone() {
+            sdk_request.modalities = Some(modalities);
+        }
+        if let Some(audio) = request.audio.clone() {
+            sdk_request.audio = Some(audio);
+        }
+        if let Some(prediction) = request.prediction.clone() {
+            sdk_request.prediction = Some(prediction);
+        }
+        if let Some(verbosity) = request.verbosity.clone() {
+            sdk_request.verbosity = Some(verbosity);
+        }
+        if let Some(web_search_options) = request.web_search_options.clone() {
+            sdk_request.web_search_options = Some(web_search_options);
+        }
+        if let Some(functions) = request.functions.clone() {
+            sdk_request.functions = Some(functions);
+        }
+        if let Some(function_call) = request.function_call.clone() {
+            sdk_request.function_call = Some(function_call);
         }
 
         sdk_request
@@ -516,9 +577,28 @@ impl RainySDKProvider {
         sdk_request.stream = Some(request.stream);
         sdk_request.temperature = request.temperature;
         sdk_request.top_p = request.top_p;
-        sdk_request.max_output_tokens = request.max_tokens;
+        sdk_request.max_output_tokens = request.max_completion_tokens.or(request.max_tokens);
         sdk_request.tool_choice = Self::map_responses_tool_choice(request.tool_choice.as_ref());
         sdk_request.user = Some("rainy-mate".to_string());
+        sdk_request.prompt_cache_key = request.prompt_cache_key.clone();
+        sdk_request.reasoning = request.reasoning.clone();
+        sdk_request.include_reasoning = request.include_reasoning;
+        sdk_request.parallel_tool_calls = request.parallel_tool_calls;
+        sdk_request.metadata = request.metadata.clone();
+        sdk_request.service_tier = request.service_tier.clone();
+        sdk_request.store = request.store;
+        sdk_request.safety_identifier = request.safety_identifier.clone();
+        sdk_request.provider_options = request.provider_options.clone();
+        sdk_request.prompt_cache_retention = request.prompt_cache_retention.clone();
+        sdk_request.text = request.text.clone();
+        sdk_request.instructions = request.instructions.clone();
+        sdk_request.include = request.include.clone();
+        sdk_request.previous_response_id = request.previous_response_id.clone();
+        sdk_request.conversation = request.conversation.clone();
+        sdk_request.prompt = request.prompt.clone();
+        sdk_request.background = request.background;
+        sdk_request.context_management = request.context_management.clone();
+        sdk_request.truncation = request.truncation.clone();
 
         if let Some(tools) = request.tools.as_ref() {
             let mapped_tools = tools
@@ -542,12 +622,152 @@ impl RainySDKProvider {
                 .filter(|v| !v.is_empty())
                 .unwrap_or("medium");
             // "none"/"disabled" means the user wants to turn off reasoning entirely.
-            if !matches!(effort.to_lowercase().as_str(), "none" | "disabled") {
+            if sdk_request.reasoning.is_none()
+                && !matches!(effort.to_lowercase().as_str(), "none" | "disabled")
+            {
                 sdk_request.reasoning = Some(json!({ "effort": effort }));
             }
         }
 
         sdk_request
+    }
+
+    fn response_event_type(value: &Value) -> Option<&str> {
+        value.get("type").and_then(Value::as_str)
+    }
+
+    fn response_usage(value: &Value) -> Option<ResponsesUsage> {
+        value
+            .pointer("/response/usage")
+            .cloned()
+            .or_else(|| value.get("usage").cloned())
+            .and_then(|usage| serde_json::from_value::<ResponsesUsage>(usage).ok())
+    }
+
+    fn map_responses_usage(
+        model: &str,
+        usage: Option<ResponsesUsage>,
+    ) -> Option<ProviderStreamUsage> {
+        usage.map(|usage| {
+            let prompt_tokens = usage.input_tokens.unwrap_or(0)
+                + usage.cache_creation_input_tokens.unwrap_or(0)
+                + usage.cache_read_input_tokens.unwrap_or(0);
+            let completion_tokens = usage.output_tokens.unwrap_or(0);
+            ProviderStreamUsage {
+                model: Some(model.to_string()),
+                prompt_tokens,
+                completion_tokens,
+                total_tokens: prompt_tokens + completion_tokens,
+            }
+        })
+    }
+
+    fn response_text_delta(value: &Value) -> Option<(bool, String)> {
+        let event_type = Self::response_event_type(value)?;
+        let text = value
+            .get("delta")
+            .and_then(Value::as_str)
+            .or_else(|| value.get("text").and_then(Value::as_str))
+            .map(ToString::to_string)?;
+
+        if text.is_empty() {
+            return None;
+        }
+
+        if event_type.contains("output_text") {
+            return Some((false, text));
+        }
+
+        if event_type.contains("reasoning") {
+            return Some((true, text));
+        }
+
+        None
+    }
+
+    fn response_tool_delta_from_item(item: &Value) -> Option<ProviderToolCallDelta> {
+        let item_type = item.get("type").and_then(Value::as_str)?;
+        if item_type != "function_call" {
+            return None;
+        }
+
+        let index = item
+            .get("output_index")
+            .and_then(Value::as_u64)
+            .or_else(|| item.get("index").and_then(Value::as_u64))
+            .unwrap_or(0) as u32;
+
+        Some(ProviderToolCallDelta {
+            index,
+            id: item
+                .get("call_id")
+                .and_then(Value::as_str)
+                .or_else(|| item.get("id").and_then(Value::as_str))
+                .map(ToString::to_string),
+            r#type: Some("function".to_string()),
+            name: item
+                .get("name")
+                .and_then(Value::as_str)
+                .map(ToString::to_string),
+            arguments: item
+                .get("arguments")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+                .or_else(|| item.get("arguments").map(Value::to_string)),
+        })
+    }
+
+    fn response_tool_delta(value: &Value) -> Option<ProviderToolCallDelta> {
+        let event_type = Self::response_event_type(value)?;
+        if event_type.contains("function_call_arguments") {
+            return Some(ProviderToolCallDelta {
+                index: value
+                    .get("output_index")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as u32,
+                id: value
+                    .get("call_id")
+                    .and_then(Value::as_str)
+                    .or_else(|| value.get("item_id").and_then(Value::as_str))
+                    .map(ToString::to_string),
+                r#type: Some("function".to_string()),
+                name: value
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string),
+                arguments: value
+                    .get("delta")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+                    .or_else(|| {
+                        value
+                            .get("arguments")
+                            .and_then(Value::as_str)
+                            .map(ToString::to_string)
+                    }),
+            });
+        }
+
+        value
+            .get("item")
+            .and_then(Self::response_tool_delta_from_item)
+            .or_else(|| {
+                value
+                    .get("output_item")
+                    .and_then(Self::response_tool_delta_from_item)
+            })
+    }
+
+    fn completed_response_from_event(value: Value) -> Option<ResponsesApiResponse> {
+        if let Some(response) = value.get("response").cloned() {
+            return serde_json::from_value::<ResponsesApiResponse>(response).ok();
+        }
+
+        if value.get("output_text").is_some() || value.get("output").is_some() {
+            return serde_json::from_value::<ResponsesApiResponse>(value).ok();
+        }
+
+        None
     }
 
     fn extract_text_from_output(output: &[Value]) -> Option<String> {
@@ -864,6 +1084,137 @@ impl RainySDKProvider {
         }
         Ok(mapped)
     }
+
+    async fn complete_responses_event_stream(
+        &self,
+        request: &ChatCompletionRequest,
+        callback: ProviderEventCallback,
+    ) -> ProviderResult<()> {
+        let api_request = Self::build_responses_request(request).with_stream(true);
+        let mut stream = self
+            .client
+            .create_response_stream(api_request)
+            .await
+            .map_err(|e| {
+                AIError::APIError(format!(
+                    "Rainy responses stream failed for model '{}': {}",
+                    request.model, e
+                ))
+            })?;
+
+        let mut latest_tool_calls: HashMap<u32, ProviderToolCallDelta> = HashMap::new();
+        let mut announced_tool_calls: HashMap<u32, ProviderToolCallDelta> = HashMap::new();
+        let mut assistant_text = String::new();
+        let mut last_finish_reason: Option<String> = None;
+
+        while let Some(event_result) = stream.next().await {
+            let raw = event_result.map_err(|e| {
+                AIError::APIError(format!(
+                    "Rainy responses stream error for model '{}': {}",
+                    request.model, e
+                ))
+            })?;
+
+            if let Some((is_reasoning, delta)) = Self::response_text_delta(&raw) {
+                if is_reasoning {
+                    callback(ProviderStreamEvent::ThoughtDelta(delta));
+                } else {
+                    assistant_text.push_str(&delta);
+                    callback(ProviderStreamEvent::TextDelta(delta));
+                }
+            }
+
+            if let Some(mapped) = Self::response_tool_delta(&raw) {
+                let state = if announced_tool_calls.contains_key(&mapped.index) {
+                    ProviderToolLifecycleState::ArgumentsDelta
+                } else {
+                    ProviderToolLifecycleState::Announced
+                };
+                latest_tool_calls.insert(mapped.index, mapped.clone());
+                announced_tool_calls
+                    .entry(mapped.index)
+                    .or_insert_with(|| mapped.clone());
+                callback(ProviderStreamEvent::ToolCallDelta(
+                    ProviderToolLifecycleEvent {
+                        state,
+                        tool_call: mapped,
+                    },
+                ));
+            }
+
+            if let Some(usage) =
+                Self::map_responses_usage(&request.model, Self::response_usage(&raw))
+            {
+                callback(ProviderStreamEvent::Usage(usage));
+            }
+
+            if matches!(
+                Self::response_event_type(&raw),
+                Some("response.completed" | "response.failed" | "response.incomplete")
+            ) {
+                if let Some(response) = Self::completed_response_from_event(raw.clone()) {
+                    if let Some(final_text) = response.output_text.clone() {
+                        let remaining = final_text
+                            .strip_prefix(&assistant_text)
+                            .unwrap_or(final_text.as_str());
+                        if !remaining.is_empty() {
+                            assistant_text.push_str(remaining);
+                            callback(ProviderStreamEvent::TextDelta(remaining.to_string()));
+                        }
+                    }
+
+                    if let Some(usage) =
+                        Self::map_responses_usage(&request.model, response.usage.clone())
+                    {
+                        callback(ProviderStreamEvent::Usage(usage));
+                    }
+
+                    if let Some(output) = response.output.clone() {
+                        if let Some(tool_calls) = Self::extract_tool_calls_from_output(&output) {
+                            for (index, tool_call) in tool_calls.into_iter().enumerate() {
+                                callback(ProviderStreamEvent::ToolCallDelta(
+                                    ProviderToolLifecycleEvent {
+                                        state: ProviderToolLifecycleState::Ready,
+                                        tool_call: ProviderToolCallDelta {
+                                            index: index as u32,
+                                            id: Some(tool_call.id),
+                                            r#type: Some(tool_call.r#type),
+                                            name: Some(tool_call.function.name),
+                                            arguments: Some(tool_call.function.arguments),
+                                        },
+                                    },
+                                ));
+                            }
+                        }
+                    } else if !latest_tool_calls.is_empty() {
+                        for tool_call in latest_tool_calls.values() {
+                            callback(ProviderStreamEvent::ToolCallDelta(
+                                ProviderToolLifecycleEvent {
+                                    state: ProviderToolLifecycleState::Ready,
+                                    tool_call: tool_call.clone(),
+                                },
+                            ));
+                        }
+                    }
+
+                    last_finish_reason = response.status.clone().or_else(|| {
+                        if latest_tool_calls.is_empty() {
+                            Some("stop".to_string())
+                        } else {
+                            Some("tool_calls".to_string())
+                        }
+                    });
+                }
+            }
+
+            callback(ProviderStreamEvent::Raw(raw));
+        }
+
+        callback(ProviderStreamEvent::Completed {
+            finish_reason: last_finish_reason,
+        });
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -950,14 +1301,20 @@ impl AIProvider for RainySDKProvider {
                     match chunk_result {
                         Ok(ChatStreamEvent::Chunk(chunk)) => {
                             if let Some(choice) = chunk.choices.first() {
-                                if let Some(content) =
-                                    choice.delta.content.as_ref().filter(|value| !value.is_empty())
+                                if let Some(content) = choice
+                                    .delta
+                                    .content
+                                    .as_ref()
+                                    .filter(|value| !value.is_empty())
                                 {
                                     callback(ProviderStreamEvent::TextDelta(content.clone()));
                                 }
 
-                                if let Some(thought) =
-                                    choice.delta.thought.as_ref().filter(|value| !value.is_empty())
+                                if let Some(thought) = choice
+                                    .delta
+                                    .thought
+                                    .as_ref()
+                                    .filter(|value| !value.is_empty())
                                 {
                                     callback(ProviderStreamEvent::ThoughtDelta(thought.clone()));
                                 }
@@ -1035,22 +1392,8 @@ impl AIProvider for RainySDKProvider {
                 Ok(())
             }
             RainyTransport::Responses => {
-                let response = self.complete_responses(request).await?;
-                if let Some(content) = response.content.as_ref().filter(|value| !value.is_empty()) {
-                    callback(ProviderStreamEvent::TextDelta(content.clone()));
-                }
-                if let Some(usage) = Some(ProviderStreamUsage {
-                    model: Some(response.model.clone()),
-                    prompt_tokens: response.usage.prompt_tokens,
-                    completion_tokens: response.usage.completion_tokens,
-                    total_tokens: response.usage.total_tokens,
-                }) {
-                    callback(ProviderStreamEvent::Usage(usage));
-                }
-                callback(ProviderStreamEvent::Completed {
-                    finish_reason: Some(response.finish_reason),
-                });
-                Ok(())
+                self.complete_responses_event_stream(&request, callback)
+                    .await
             }
         }
     }
@@ -1105,14 +1448,43 @@ impl AIProvider for RainySDKProvider {
                 Ok(())
             }
             RainyTransport::Responses => {
-                let response = self.complete_responses(request).await?;
-                callback(crate::ai::provider_types::StreamingChunk {
-                    content: response.content.unwrap_or_default(),
-                    thought: None,
-                    is_final: true,
-                    finish_reason: Some(response.finish_reason),
+                let streaming_callback = Arc::clone(&callback);
+                let adapter: ProviderEventCallback = Arc::new(move |event| match event {
+                    ProviderStreamEvent::TextDelta(content) => {
+                        if !content.is_empty() {
+                            streaming_callback(crate::ai::provider_types::StreamingChunk {
+                                content,
+                                thought: None,
+                                is_final: false,
+                                finish_reason: None,
+                            });
+                        }
+                    }
+                    ProviderStreamEvent::ThoughtDelta(thought) => {
+                        if !thought.is_empty() {
+                            streaming_callback(crate::ai::provider_types::StreamingChunk {
+                                content: String::new(),
+                                thought: Some(thought),
+                                is_final: false,
+                                finish_reason: None,
+                            });
+                        }
+                    }
+                    ProviderStreamEvent::Completed { finish_reason } => {
+                        streaming_callback(crate::ai::provider_types::StreamingChunk {
+                            content: String::new(),
+                            thought: None,
+                            is_final: true,
+                            finish_reason,
+                        });
+                    }
+                    ProviderStreamEvent::ToolCallDelta(_)
+                    | ProviderStreamEvent::Usage(_)
+                    | ProviderStreamEvent::Raw(_) => {}
                 });
-                Ok(())
+
+                self.complete_responses_event_stream(&request, adapter)
+                    .await
             }
         }
     }
@@ -1156,5 +1528,90 @@ impl AIProviderFactory for RainySDKProviderFactory {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_text_delta_maps_output_and_reasoning_events() {
+        let output = json!({
+            "type": "response.output_text.delta",
+            "delta": "hello"
+        });
+        let reasoning = json!({
+            "type": "response.reasoning_text.delta",
+            "delta": "thinking"
+        });
+
+        assert_eq!(
+            RainySDKProvider::response_text_delta(&output),
+            Some((false, "hello".to_string()))
+        );
+        assert_eq!(
+            RainySDKProvider::response_text_delta(&reasoning),
+            Some((true, "thinking".to_string()))
+        );
+    }
+
+    #[test]
+    fn response_tool_delta_maps_argument_deltas_and_output_items() {
+        let arguments_delta = json!({
+            "type": "response.function_call_arguments.delta",
+            "output_index": 2,
+            "call_id": "call_123",
+            "name": "list_files",
+            "delta": "{\"path\":\"src\"}"
+        });
+        let output_item = json!({
+            "type": "response.output_item.added",
+            "item": {
+                "type": "function_call",
+                "output_index": 3,
+                "call_id": "call_456",
+                "name": "read_file",
+                "arguments": "{\"path\":\"Cargo.toml\"}"
+            }
+        });
+
+        let mapped_delta = RainySDKProvider::response_tool_delta(&arguments_delta)
+            .expect("argument delta should map");
+        assert_eq!(mapped_delta.index, 2);
+        assert_eq!(mapped_delta.id.as_deref(), Some("call_123"));
+        assert_eq!(mapped_delta.name.as_deref(), Some("list_files"));
+
+        let mapped_item =
+            RainySDKProvider::response_tool_delta(&output_item).expect("output item should map");
+        assert_eq!(mapped_item.index, 3);
+        assert_eq!(mapped_item.id.as_deref(), Some("call_456"));
+        assert_eq!(mapped_item.name.as_deref(), Some("read_file"));
+    }
+
+    #[test]
+    fn completed_response_from_event_reads_nested_response_payload() {
+        let event = json!({
+            "type": "response.completed",
+            "response": {
+                "id": "resp_1",
+                "model": "openai/gpt-5",
+                "status": "completed",
+                "output_text": "done",
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 4
+                }
+            }
+        });
+
+        let response = RainySDKProvider::completed_response_from_event(event)
+            .expect("completed response should deserialize");
+        assert_eq!(response.output_text.as_deref(), Some("done"));
+        assert_eq!(response.status.as_deref(), Some("completed"));
+        assert_eq!(
+            response.usage.and_then(|usage| usage.input_tokens),
+            Some(10)
+        );
     }
 }

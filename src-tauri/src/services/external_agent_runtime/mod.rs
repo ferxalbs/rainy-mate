@@ -2,14 +2,14 @@ mod models;
 
 pub use models::{
     ExternalAgentAuditEvent, ExternalAgentAuditEventType, ExternalAgentSession,
-    ExternalAgentSessionStatus, ExternalRuntimeKind, ExternalRuntimeAvailability,
+    ExternalAgentSessionStatus, ExternalRuntimeAvailability, ExternalRuntimeKind,
     NewExternalAgentSession,
 };
 
-use async_trait::async_trait;
 use crate::models::neural::AirlockLevel;
 use crate::services::audit_emitter::{AuditEmitter, FleetAuditEvent};
 use crate::services::chat_artifacts::{artifact_from_path, push_unique_artifact};
+use async_trait::async_trait;
 use regex::Regex;
 use std::collections::HashMap;
 use std::env;
@@ -321,11 +321,7 @@ impl ExternalAgentRuntime {
         let runtime_kind = snapshot.runtime_kind;
         let mut command = self
             .command_factory
-            .build_command(
-                runtime_kind,
-                Path::new(&snapshot.workspace_path),
-                &prompt,
-            )
+            .build_command(runtime_kind, Path::new(&snapshot.workspace_path), &prompt)
             .await?;
         let mut child = command
             .spawn()
@@ -555,7 +551,10 @@ impl ExternalAgentRuntime {
             }
         }
         handle.completion.notify_waiters();
-        tracing::info!("External agent session {} reached terminal state", session_id);
+        tracing::info!(
+            "External agent session {} reached terminal state",
+            session_id
+        );
     }
 
     async fn capture_stream<R>(
@@ -935,7 +934,10 @@ mod tests {
                     path, path
                 )
             } else {
-                format!("printf '{}:{}\\n'; printf 'warn:{}\\n' >&2", mode, escaped_prompt, mode)
+                format!(
+                    "printf '{}:{}\\n'; printf 'warn:{}\\n' >&2",
+                    mode, escaped_prompt, mode
+                )
             };
             cmd.arg("-lc").arg(script);
             cmd.current_dir(workspace_path);
@@ -952,7 +954,9 @@ mod tests {
 
     fn should_run_real_smoke() -> bool {
         matches!(
-            std::env::var("RUN_REAL_EXTERNAL_AGENT_SMOKE").ok().as_deref(),
+            std::env::var("RUN_REAL_EXTERNAL_AGENT_SMOKE")
+                .ok()
+                .as_deref(),
             Some("1") | Some("true") | Some("TRUE")
         )
     }
@@ -1070,12 +1074,10 @@ mod tests {
 
         assert_eq!(cancelled.status, ExternalAgentSessionStatus::Cancelled);
         assert_eq!(factory.launch_count.load(Ordering::Relaxed), 0);
-        assert!(
-            cancelled
-                .audit_events
-                .iter()
-                .any(|event| matches!(event.event_type, ExternalAgentAuditEventType::SessionCancelled))
-        );
+        assert!(cancelled.audit_events.iter().any(|event| matches!(
+            event.event_type,
+            ExternalAgentAuditEventType::SessionCancelled
+        )));
     }
 
     #[tokio::test]
@@ -1097,7 +1099,9 @@ mod tests {
             .send_message(&session.session_id, "sleep-then-cancel".to_string())
             .await
             .expect("start session");
-        let result = runtime.wait_for_session(&session.session_id, Some(10)).await;
+        let result = runtime
+            .wait_for_session(&session.session_id, Some(10))
+            .await;
 
         assert!(result.is_err());
         let snapshot = runtime
@@ -1168,18 +1172,14 @@ mod tests {
             .to_string_lossy()
             .to_string();
 
-        assert!(
-            completed
-                .touched_paths
-                .iter()
-                .any(|path| path == &canonical_artifact_path)
-        );
-        assert!(
-            completed
-                .artifacts
-                .iter()
-                .any(|artifact| artifact.path == canonical_artifact_path)
-        );
+        assert!(completed
+            .touched_paths
+            .iter()
+            .any(|path| path == &canonical_artifact_path));
+        assert!(completed
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.path == canonical_artifact_path));
     }
 
     #[tokio::test]

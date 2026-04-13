@@ -29,13 +29,16 @@ impl SkillExecutor {
                 )
                 .await
             }
-            "send_external_agent_message" => {
-                self.handle_send_external_agent_message(params).await
-            }
+            "send_external_agent_message" => self.handle_send_external_agent_message(params).await,
             "wait_external_agent_session" => self.handle_wait_external_agent_session(params).await,
             "list_external_agent_sessions" => {
-                self.handle_list_external_agent_sessions(workspace_id, params, allowed_paths, blocked_paths)
-                    .await
+                self.handle_list_external_agent_sessions(
+                    workspace_id,
+                    params,
+                    allowed_paths,
+                    blocked_paths,
+                )
+                .await
             }
             "cancel_external_agent_session" => {
                 self.handle_cancel_external_agent_session(params).await
@@ -174,8 +177,10 @@ impl SkillExecutor {
         allowed_paths: &[String],
         blocked_paths: &[String],
     ) -> CommandResult {
-        let args: ListExternalAgentSessionsArgs = serde_json::from_value(params.clone())
-            .unwrap_or(ListExternalAgentSessionsArgs { workspace_path: None });
+        let args: ListExternalAgentSessionsArgs =
+            serde_json::from_value(params.clone()).unwrap_or(ListExternalAgentSessionsArgs {
+                workspace_path: None,
+            });
         let workspace_filter = match args.workspace_path.as_deref() {
             Some(path) => match self
                 .resolve_path(workspace_id, path, allowed_paths, blocked_paths)

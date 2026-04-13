@@ -601,6 +601,7 @@ Use 2 to 6 words, preserve the user's language, and keep it specific."
         tool_choice: None,
         json_mode: false,
         reasoning_effort: None,
+        ..Default::default()
     };
 
     let response = router
@@ -744,6 +745,7 @@ Output sections exactly:
         tool_choice: None,
         json_mode: false,
         reasoning_effort: None,
+        ..Default::default()
     };
 
     let response = router
@@ -1540,7 +1542,9 @@ pub async fn run_agent_workflow_internal(
                                 let embedding_profile = value
                                     .get("embedding_profile")
                                     .and_then(|v| v.as_str())
-                                    .unwrap_or(crate::services::memory_vault::types::EMBEDDING_MODEL)
+                                    .unwrap_or(
+                                        crate::services::memory_vault::types::EMBEDDING_MODEL,
+                                    )
                                     .to_string();
                                 let manager = agent_manager_clone.clone();
                                 let chat_id = chat_id_for_events.clone();
@@ -2057,9 +2061,18 @@ mod tests {
         assert_eq!(spec.airlock.tool_policy.mode, original_spec_policy.mode);
         assert_eq!(spec.airlock.tool_policy.allow, original_spec_policy.allow);
         assert_eq!(spec.airlock.tool_policy.deny, original_spec_policy.deny);
-        assert_eq!(effective_policy.tool_access_policy.mode, original_effective_policy.mode);
-        assert_eq!(effective_policy.tool_access_policy.allow, original_effective_policy.allow);
-        assert_eq!(effective_policy.tool_access_policy.deny, original_effective_policy.deny);
+        assert_eq!(
+            effective_policy.tool_access_policy.mode,
+            original_effective_policy.mode
+        );
+        assert_eq!(
+            effective_policy.tool_access_policy.allow,
+            original_effective_policy.allow
+        );
+        assert_eq!(
+            effective_policy.tool_access_policy.deny,
+            original_effective_policy.deny
+        );
         assert_eq!(effective_policy.tool_access_policy_source, original_source);
     }
 

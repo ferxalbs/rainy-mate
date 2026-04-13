@@ -79,10 +79,7 @@ impl QuickDelegateModalService {
                 }
 
                 if let Err(error) = self.begin_run() {
-                    let _ = MacOSQuickDelegateBridge::set_state(
-                        "error",
-                        Some(&error),
-                    );
+                    let _ = MacOSQuickDelegateBridge::set_state("error", Some(&error));
                     return;
                 }
 
@@ -123,7 +120,10 @@ pub fn focus_main_window(app_handle: &AppHandle) -> Result<(), String> {
     }
 }
 
-pub async fn run_native_delegate_prompt(app_handle: AppHandle, prompt: String) -> Result<(), String> {
+pub async fn run_native_delegate_prompt(
+    app_handle: AppHandle,
+    prompt: String,
+) -> Result<(), String> {
     let file_manager = app_handle.state::<Arc<FileManager>>();
     let workspace_id = file_manager
         .get_workspace()

@@ -427,6 +427,7 @@ pub async fn complete_chat(
         tool_choice: None,
         json_mode: false,
         reasoning_effort: None,
+        ..Default::default()
     };
 
     // Execute completion

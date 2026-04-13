@@ -82,9 +82,7 @@ fn native_shell_bridge() -> Result<&'static NativeShellBridgeSymbols, String> {
                 )
                 .map_err(|e| e.to_string())?;
             let show_palette = *library
-                .get::<unsafe extern "C" fn() -> i32>(
-                    b"rainy_native_shell_bridge_show_palette\0",
-                )
+                .get::<unsafe extern "C" fn() -> i32>(b"rainy_native_shell_bridge_show_palette\0")
                 .map_err(|e| e.to_string())?;
             let update_snapshot = *library
                 .get::<unsafe extern "C" fn(*const c_char) -> i32>(
@@ -145,8 +143,7 @@ extern "C" fn native_shell_callback(action: *const c_char, payload: *const c_cha
 
 #[cfg(target_os = "macos")]
 fn c_string(input: &str) -> Result<CString, String> {
-    CString::new(input)
-        .map_err(|_| "Native shell payload contains interior null byte".to_string())
+    CString::new(input).map_err(|_| "Native shell payload contains interior null byte".to_string())
 }
 
 #[cfg(target_os = "macos")]
@@ -219,8 +216,8 @@ impl MacOSNativeShellBridge {
             return Ok(());
         }
 
-        let payload =
-            serde_json::to_string(snapshot).map_err(|e| format!("Invalid shell snapshot: {}", e))?;
+        let payload = serde_json::to_string(snapshot)
+            .map_err(|e| format!("Invalid shell snapshot: {}", e))?;
         let payload = c_string(&payload)?;
         let bridge = native_shell_bridge()?;
         let ok = unsafe { (bridge.update_snapshot)(payload.as_ptr()) };
@@ -251,9 +248,7 @@ impl MacOSNativeShellBridge {
         Err("Native shell is only available on macOS".to_string())
     }
 
-    pub fn update_snapshot(
-        _snapshot: &crate::services::NativeShellSnapshot,
-    ) -> Result<(), String> {
+    pub fn update_snapshot(_snapshot: &crate::services::NativeShellSnapshot) -> Result<(), String> {
         Ok(())
     }
 }

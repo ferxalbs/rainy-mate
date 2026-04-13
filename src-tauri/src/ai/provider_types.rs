@@ -366,6 +366,8 @@ pub struct ChatCompletionRequest {
     pub temperature: Option<f32>,
     /// Maximum tokens to generate
     pub max_tokens: Option<u32>,
+    /// Upper bound for completion tokens in modern OpenAI-compatible payloads
+    pub max_completion_tokens: Option<u32>,
     /// Top P (0.0 to 1.0)
     pub top_p: Option<f32>,
     /// Frequency penalty (-2.0 to 2.0)
@@ -376,14 +378,72 @@ pub struct ChatCompletionRequest {
     pub stop: Option<Vec<String>>,
     /// Whether to stream the response
     pub stream: bool,
+    /// Stream behavior options (`include_usage`, etc.)
+    pub stream_options: Option<serde_json::Value>,
     /// Tools available to the model
     pub tools: Option<Vec<Tool>>,
     /// Tool choice strategy
     pub tool_choice: Option<ToolChoice>,
+    /// Whether multiple tool calls may be emitted in parallel
+    pub parallel_tool_calls: Option<bool>,
+    /// Seed for deterministic sampling where supported
+    pub seed: Option<i64>,
+    /// Prompt cache key for provider routing/cache optimization
+    pub prompt_cache_key: Option<String>,
+    /// Optional provider/router hint
+    pub provider: Option<String>,
+    /// Provider-specific option bag
+    pub provider_options: Option<serde_json::Value>,
+    /// Prompt cache retention mode
+    pub prompt_cache_retention: Option<String>,
     /// Whether to enforce JSON mode
     pub json_mode: bool,
     /// Optional reasoning effort / thinking level for compatible models
     pub reasoning_effort: Option<String>,
+    /// Reasoning settings (bool/object depending on provider)
+    pub reasoning: Option<serde_json::Value>,
+    /// Include reasoning traces where supported
+    pub include_reasoning: Option<bool>,
+    /// Arbitrary request metadata
+    pub metadata: Option<HashMap<String, String>>,
+    /// Requested service tier (`auto`, `default`, `flex`, etc.)
+    pub service_tier: Option<String>,
+    /// Persist request/response server-side when supported
+    pub store: Option<bool>,
+    /// Stable identifier used by safety systems
+    pub safety_identifier: Option<String>,
+    /// Requested output modalities
+    pub modalities: Option<Vec<String>>,
+    /// Audio generation options
+    pub audio: Option<serde_json::Value>,
+    /// Prediction optimization payload
+    pub prediction: Option<serde_json::Value>,
+    /// Verbosity hint for some models
+    pub verbosity: Option<String>,
+    /// Native web search options
+    pub web_search_options: Option<serde_json::Value>,
+    /// Legacy functions field accepted by compat layers
+    pub functions: Option<Vec<serde_json::Value>>,
+    /// Legacy function-call directive accepted by compat layers
+    pub function_call: Option<serde_json::Value>,
+    /// Text/output controls supported by modern Responses API
+    pub text: Option<serde_json::Value>,
+    /// System-level instructions
+    pub instructions: Option<String>,
+    /// Include directives for response rendering/metadata
+    pub include: Option<Vec<String>>,
+    /// Previous response ID for multi-turn server-side continuation
+    pub previous_response_id: Option<String>,
+    /// Conversation identifier or object
+    pub conversation: Option<serde_json::Value>,
+    /// Prompt object for hosted prompts/templates
+    pub prompt: Option<serde_json::Value>,
+    /// Request asynchronous/background processing where supported
+    pub background: Option<bool>,
+    /// Context management directives
+    pub context_management: Option<Vec<serde_json::Value>>,
+    /// Truncation strategy (`auto` or `disabled`)
+    pub truncation: Option<String>,
 }
 
 impl Default for ChatCompletionRequest {
@@ -393,15 +453,45 @@ impl Default for ChatCompletionRequest {
             model: "default".to_string(),
             temperature: Some(0.7),
             max_tokens: None,
+            max_completion_tokens: None,
             top_p: Some(1.0),
             frequency_penalty: Some(0.0),
             presence_penalty: Some(0.0),
             stop: None,
             stream: false,
+            stream_options: None,
             tools: None,
             tool_choice: None,
+            parallel_tool_calls: None,
+            seed: None,
+            prompt_cache_key: None,
+            provider: None,
+            provider_options: None,
+            prompt_cache_retention: None,
             json_mode: false,
             reasoning_effort: None,
+            reasoning: None,
+            include_reasoning: None,
+            metadata: None,
+            service_tier: None,
+            store: None,
+            safety_identifier: None,
+            modalities: None,
+            audio: None,
+            prediction: None,
+            verbosity: None,
+            web_search_options: None,
+            functions: None,
+            function_call: None,
+            text: None,
+            instructions: None,
+            include: None,
+            previous_response_id: None,
+            conversation: None,
+            prompt: None,
+            background: None,
+            context_management: None,
+            truncation: None,
         }
     }
 }

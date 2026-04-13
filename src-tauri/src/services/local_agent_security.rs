@@ -343,31 +343,36 @@ mod tests {
         assert!(policy.deny.iter().any(|item| item == "write_file"));
         assert!(policy.deny.iter().any(|item| item == "execute_command"));
         assert!(policy.deny.iter().any(|item| item == "delete_file"));
-        assert!(!policy.deny.iter().any(|item| item == "spawn_external_agent_session"));
+        assert!(!policy
+            .deny
+            .iter()
+            .any(|item| item == "spawn_external_agent_session"));
         assert!(!policy.deny.iter().any(|item| item == "read_file"));
     }
 
     #[test]
     fn create_agent_tools_follow_can_create_agents_not_can_execute() {
-        let blocked = LocalAgentSecurityService::tool_policy_from_permissions(&WorkspacePermissions {
-            can_read: true,
-            can_write: true,
-            can_execute: false,
-            can_delete: false,
-            can_create_agents: false,
-        });
+        let blocked =
+            LocalAgentSecurityService::tool_policy_from_permissions(&WorkspacePermissions {
+                can_read: true,
+                can_write: true,
+                can_execute: false,
+                can_delete: false,
+                can_create_agents: false,
+            });
         assert!(blocked
             .deny
             .iter()
             .any(|item| item == "spawn_external_agent_session"));
 
-        let allowed = LocalAgentSecurityService::tool_policy_from_permissions(&WorkspacePermissions {
-            can_read: true,
-            can_write: true,
-            can_execute: false,
-            can_delete: false,
-            can_create_agents: true,
-        });
+        let allowed =
+            LocalAgentSecurityService::tool_policy_from_permissions(&WorkspacePermissions {
+                can_read: true,
+                can_write: true,
+                can_execute: false,
+                can_delete: false,
+                can_create_agents: true,
+            });
         assert!(!allowed
             .deny
             .iter()
