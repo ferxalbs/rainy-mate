@@ -64,6 +64,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          shared-key: "v2"
 
       - name: Build Rust
         run: cd src-tauri && cargo build --lib
@@ -127,7 +128,17 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsqlite3-dev pkg-config
+          echo "LIBSQLITE3_SYS_USE_PKG_CONFIG=1" >> $GITHUB_ENV
+
+      - name: Install dependencies (windows only)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          vcpkg install sqlite3:x64-windows
+          echo "VCPKGRS_DYNAMIC=1" >> $GITHUB_ENV
+          echo "VCPKG_ROOT=C:/vcpkg" >> $GITHUB_ENV
+          echo "C:/vcpkg/installed/x64-windows/bin" >> $GITHUB_PATH
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -148,6 +159,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          shared-key: "v2"
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
