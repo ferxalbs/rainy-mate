@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { Bell, Power, ShieldCheck, Zap } from "lucide-react";
 import { Button, Switch } from "@heroui/react";
 import {
+  getUserSettings,
   getLaunchAtLoginStatus,
   getNotificationStatus,
   openLaunchAtLoginSettings,
   requestNotificationPermission,
   sendTestNotification,
+  setAuditLegacyModeEnabled,
   setLaunchAtLoginEnabled,
   setNotifications,
 } from "../../../services/tauri";
@@ -20,6 +22,7 @@ export function PermissionsTab() {
   const [launchAtLoginSupported, setLaunchAtLoginSupported] = useState(false);
   const [launchAtLoginRequiresApproval, setLaunchAtLoginRequiresApproval] =
     useState(false);
+  const [auditLegacyModeEnabled, setAuditLegacyModeState] = useState(false);
   const [notificationPermission, setNotificationPermission] =
     useState<PermissionState>("unknown");
   const [isBusy, setIsBusy] = useState(false);
@@ -46,6 +49,10 @@ export function PermissionsTab() {
         setLaunchAtLoginState(launchStatus.enabled);
         setLaunchAtLoginSupported(launchStatus.supported);
         setLaunchAtLoginRequiresApproval(launchStatus.requiresApproval);
+
+        const userSettings = await getUserSettings();
+        if (cancelled) return;
+        setAuditLegacyModeState(userSettings.auditLegacyModeEnabled);
       } catch (error) {
         if (cancelled) return;
         console.error("Failed to load notification status:", error);
@@ -103,6 +110,24 @@ export function PermissionsTab() {
     } catch (error) {
       console.error("Failed to open Login Items settings:", error);
       toast.error("Failed to open Login Items settings");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleAuditLegacyModeToggle = async (enabled: boolean) => {
+    setIsBusy(true);
+    try {
+      await setAuditLegacyModeEnabled(enabled);
+      setAuditLegacyModeState(enabled);
+      toast.success(
+        enabled
+          ? "AUDIT (Legacy) enabled"
+          : "Modern stream pipeline enabled",
+      );
+    } catch (error) {
+      console.error("Failed to update runtime mode:", error);
+      toast.error("Failed to update runtime mode");
     } finally {
       setIsBusy(false);
     }
@@ -216,6 +241,32 @@ export function PermissionsTab() {
             </span>
           </div>
           <Switch isSelected isDisabled>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-muted/10 border border-border/5 hover:bg-muted/20 transition-all group">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-bold flex items-center gap-2 tracking-tight uppercase opacity-80">
+              <ShieldCheck className="size-4 text-primary" />
+              AUDIT (Legacy)
+            </span>
+            <span className="text-xs text-muted-foreground max-w-sm">
+              Re-enable the older buffered event transport for comparison and debugging. Leave this off for the modern Rainy stream pipeline.
+            </span>
+            <span className="text-[11px] text-muted-foreground/80">
+              {auditLegacyModeEnabled
+                ? "Legacy batching and status-string audit mode active"
+                : "Modern typed streaming active"}
+            </span>
+          </div>
+          <Switch
+            isDisabled={isBusy}
+            isSelected={auditLegacyModeEnabled}
+            onChange={handleAuditLegacyModeToggle}
+          >
             <Switch.Control>
               <Switch.Thumb />
             </Switch.Control>

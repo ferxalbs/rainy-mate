@@ -12,7 +12,9 @@ use crate::ai::{
     },
     providers::{GeminiProviderFactory, RainySDKProviderFactory},
 };
-use crate::commands::agent_frontend_events::{FrontendAgentEvent, FrontendEventProjector};
+use crate::commands::agent_frontend_events::{
+    FrontendAgentEvent, FrontendEventProjector, FrontendProjectionMode,
+};
 use crate::commands::ai_providers::ProviderRegistryState;
 use crate::commands::airlock::AirlockServiceState;
 use crate::commands::memory::MemoryManagerState;
@@ -22,6 +24,7 @@ use crate::services::agent_run_control::{AgentRunControl, CancelRunResult};
 use crate::services::chat_artifacts::{
     artifact_from_tool_result, push_unique_artifact, ChatArtifact,
 };
+use crate::services::settings::SettingsManager;
 use crate::services::{KeychainAccessService, PromptSkillDiscoveryService, SkillExecutor};
 use chrono::Utc;
 use regex::Regex;
@@ -1017,6 +1020,10 @@ pub async fn run_agent_workflow_internal(
         .state::<Arc<crate::services::session_coordinator::SessionCoordinator>>()
         .inner()
         .clone();
+    let settings = app_handle
+        .state::<Arc<Mutex<SettingsManager>>>()
+        .inner()
+        .clone();
     let router_state = IntelligentRouterState(router.clone());
     let provider_registry_state = ProviderRegistryState(provider_registry.clone());
 
@@ -1031,6 +1038,14 @@ pub async fn run_agent_workflow_internal(
     .await?;
     let selected_model_id = model_id.clone();
     let run_id = run_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let frontend_projection_mode = {
+        let settings = settings.lock().await;
+        if settings.get_settings().audit_legacy_mode_enabled {
+            FrontendProjectionMode::AuditLegacy
+        } else {
+            FrontendProjectionMode::Modern
+        }
+    };
 
     // --- Prompt injection guard: sanitize user input before any processing ---
     let guard_result = crate::ai::agent::prompt_guard::sanitize_user_input(&prompt);
@@ -1374,19 +1389,38 @@ pub async fn run_agent_workflow_internal(
             FrontendAgentEvent {
                 run_id: run_id.clone(),
                 timestamp_ms: Utc::now().timestamp_millis(),
-                payload: AgentEvent::Status(format!(
-                    "CONTEXT_COMPACTION:{}",
-                    serde_json::json!({
-                        "applied": true,
-                        "trigger_tokens": AUTO_COMPACTION_TRIGGER_TOKENS,
-                        "source_estimated_tokens": compaction.source_estimated_tokens,
-                        "source_message_count": compaction.source_message_count,
-                        "kept_recent_count": compaction.kept_recent_count,
-                        "compression_model": compaction.compression_model,
-                        "best_practice": "rolling_summary_context_compaction",
-                    })
-                    .to_string()
-                )),
+                payload: if frontend_projection_mode == FrontendProjectionMode::AuditLegacy {
+                    AgentEvent::Status(format!(
+                        "CONTEXT_COMPACTION:{}",
+                        serde_json::json!({
+                            "applied": true,
+                            "trigger_tokens": AUTO_COMPACTION_TRIGGER_TOKENS,
+                            "source_estimated_tokens": compaction.source_estimated_tokens,
+                            "source_message_count": compaction.source_message_count,
+                            "kept_recent_count": compaction.kept_recent_count,
+                            "compression_model": compaction.compression_model,
+                            "best_practice": "rolling_summary_context_compaction",
+                        })
+                        .to_string()
+                    ))
+                } else {
+                    AgentEvent::ContextCompaction(
+                        crate::ai::agent::events::ContextCompactionPayload {
+                            applied: true,
+                            trigger_tokens: AUTO_COMPACTION_TRIGGER_TOKENS as u32,
+                            source_estimated_tokens: Some(compaction.source_estimated_tokens as u32),
+                            source_message_count: usize::try_from(
+                                compaction.source_message_count,
+                            )
+                            .ok(),
+                            kept_recent_count: usize::try_from(compaction.kept_recent_count).ok(),
+                            compression_model: Some(compaction.compression_model.clone()),
+                            best_practice: Some(
+                                "rolling_summary_context_compaction".to_string(),
+                            ),
+                        },
+                    )
+                },
             },
         );
     }
@@ -1423,7 +1457,9 @@ pub async fn run_agent_workflow_internal(
     let telemetry_memory_root = options.workspace_memory_root.clone();
     let telemetry_memory_enabled = options.workspace_memory_enabled;
     let telemetry_model = options.model.clone();
-    let frontend_event_projector = Arc::new(StdMutex::new(FrontendEventProjector::default()));
+    let frontend_event_projector = Arc::new(StdMutex::new(FrontendEventProjector::new(
+        frontend_projection_mode,
+    )));
     let tool_call_index = Arc::new(StdMutex::new(HashMap::<String, (String, String)>::new()));
     let collected_artifacts = Arc::new(StdMutex::new(Vec::<ChatArtifact>::new()));
     let actual_tool_ids = Arc::new(StdMutex::new(BTreeSet::<String>::new()));

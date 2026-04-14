@@ -87,6 +87,27 @@ fn map_agent_event(event: &AgentEvent) -> (String, serde_json::Value) {
                 "totalTokens": usage.total_tokens,
             }),
         ),
+        AgentEvent::RagTelemetry(payload) => (
+            "RAG telemetry".to_string(),
+            serde_json::json!({
+                "type": "rag_telemetry",
+                "historySource": payload.history_source,
+                "retrievalMode": payload.retrieval_mode,
+                "embeddingProfile": payload.embedding_profile,
+            }),
+        ),
+        AgentEvent::ContextCompaction(payload) => (
+            "Context compaction".to_string(),
+            serde_json::json!({
+                "type": "context_compaction",
+                "applied": payload.applied,
+                "triggerTokens": payload.trigger_tokens,
+                "sourceEstimatedTokens": payload.source_estimated_tokens,
+                "sourceMessageCount": payload.source_message_count,
+                "keptRecentCount": payload.kept_recent_count,
+                "compressionModel": payload.compression_model,
+            }),
+        ),
         AgentEvent::ToolCall(call) => (
             format!("Tool call: {}", call.function.name),
             serde_json::json!({

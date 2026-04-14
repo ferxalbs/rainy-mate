@@ -105,6 +105,31 @@ pub struct StreamToolCallPayload {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RagTelemetryPayload {
+    pub history_source: String,
+    pub retrieval_mode: String,
+    pub embedding_profile: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextCompactionPayload {
+    pub applied: bool,
+    pub trigger_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_estimated_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_message_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kept_recent_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compression_model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub best_practice: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum AgentEvent {
     Status(String),
@@ -113,6 +138,8 @@ pub enum AgentEvent {
     StreamChunk(String),
     StreamToolCall(StreamToolCallPayload),
     Usage(ProviderStreamUsage),
+    RagTelemetry(RagTelemetryPayload),
+    ContextCompaction(ContextCompactionPayload),
     ToolCall(ToolCall),
     ToolResult {
         id: String,

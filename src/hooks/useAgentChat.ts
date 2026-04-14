@@ -72,6 +72,11 @@ type RuntimeAgentEventData = {
   embedding_profile?: string;
   applied?: boolean;
   trigger_tokens?: number;
+  source_estimated_tokens?: number;
+  source_message_count?: number;
+  kept_recent_count?: number;
+  compression_model?: string;
+  best_practice?: string;
 };
 
 function extractEventText(data?: RuntimeAgentEventData | string): string | undefined {
@@ -98,6 +103,8 @@ type RuntimeAgentEvent =
         | "stream_chunk"
         | "stream_tool_call"
         | "usage"
+        | "rag_telemetry"
+        | "context_compaction"
         | "tool_call"
         | "tool_result";
       data?: RuntimeAgentEventData;
@@ -298,6 +305,76 @@ function applyExternalSessionUpdates(
     ...message,
     externalSessions: mergedSessions,
     artifacts: mergeExternalSessionArtifacts(message.artifacts, sessions),
+  };
+}
+
+/**
+ * Keeps runtime telemetry updates isolated from the larger message reducer so
+ * both local runs and rebound live sessions apply the same payload contract.
+ */
+function applyRagTelemetryUpdate(
+  message: AgentMessage,
+  payload: RuntimeAgentEventData | undefined,
+  defaults: {
+    historySource: string;
+    retrievalMode: string;
+    embeddingProfile: string;
+    executionMode: string;
+    workspaceMemoryEnabled: boolean;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  },
+): AgentMessage {
+  return {
+    ...message,
+    ragTelemetry: {
+      historySource:
+        payload?.history_source ||
+        message.ragTelemetry?.historySource ||
+        defaults.historySource,
+      retrievalMode:
+        payload?.retrieval_mode ||
+        message.ragTelemetry?.retrievalMode ||
+        defaults.retrievalMode,
+      embeddingProfile:
+        payload?.embedding_profile ||
+        message.ragTelemetry?.embeddingProfile ||
+        defaults.embeddingProfile,
+      executionMode:
+        message.ragTelemetry?.executionMode || defaults.executionMode,
+      workspaceMemoryEnabled:
+        message.ragTelemetry?.workspaceMemoryEnabled ??
+        defaults.workspaceMemoryEnabled,
+      workspaceMemoryRoot: message.ragTelemetry?.workspaceMemoryRoot,
+      lastModel: message.ragTelemetry?.lastModel,
+      promptTokens:
+        message.ragTelemetry?.promptTokens ?? defaults.promptTokens,
+      completionTokens:
+        message.ragTelemetry?.completionTokens ?? defaults.completionTokens,
+      totalTokens:
+        message.ragTelemetry?.totalTokens ?? defaults.totalTokens,
+      compressionApplied: message.ragTelemetry?.compressionApplied,
+      compressionTriggerTokens: message.ragTelemetry?.compressionTriggerTokens,
+    },
+  };
+}
+
+function applyContextCompactionUpdate(
+  message: AgentMessage,
+  payload: RuntimeAgentEventData | undefined,
+): AgentMessage {
+  return {
+    ...message,
+    ragTelemetry: {
+      ...message.ragTelemetry,
+      compressionApplied:
+        (payload?.applied as boolean | undefined) ??
+        message.ragTelemetry?.compressionApplied,
+      compressionTriggerTokens:
+        (payload?.trigger_tokens as number | undefined) ||
+        message.ragTelemetry?.compressionTriggerTokens,
+    },
   };
 }
 
@@ -617,6 +694,16 @@ export function useAgentChat(
             },
           };
         }
+        case "rag_telemetry": {
+          return applyRagTelemetryUpdate(
+            message,
+            payload.data,
+            defaultRagTelemetry,
+          );
+        }
+        case "context_compaction": {
+          return applyContextCompactionUpdate(message, payload.data);
+        }
         case "reasoning": {
           const reasoningText = extractEventText(payload.data as
             | RuntimeAgentEventData
@@ -779,59 +866,12 @@ export function useAgentChat(
           if (statusText.startsWith("RAG_TELEMETRY:")) {
             try {
               const raw = statusText.slice("RAG_TELEMETRY:".length);
-              const parsed = JSON.parse(raw) as {
-                history_source?: string;
-                retrieval_mode?: string;
-                embedding_profile?: string;
-              };
-              const nextTelemetry = {
-                historySource:
-                  parsed.history_source ||
-                  message.ragTelemetry?.historySource ||
-                  defaultRagTelemetry.historySource,
-                retrievalMode:
-                  parsed.retrieval_mode ||
-                  message.ragTelemetry?.retrievalMode ||
-                  defaultRagTelemetry.retrievalMode,
-                embeddingProfile:
-                  parsed.embedding_profile ||
-                  message.ragTelemetry?.embeddingProfile ||
-                  defaultRagTelemetry.embeddingProfile,
-                executionMode:
-                  message.ragTelemetry?.executionMode ||
-                  defaultRagTelemetry.executionMode,
-                workspaceMemoryEnabled:
-                  message.ragTelemetry?.workspaceMemoryEnabled ??
-                  defaultRagTelemetry.workspaceMemoryEnabled,
-                workspaceMemoryRoot: message.ragTelemetry?.workspaceMemoryRoot,
-                lastModel: message.ragTelemetry?.lastModel,
-                promptTokens:
-                  message.ragTelemetry?.promptTokens ??
-                  defaultRagTelemetry.promptTokens,
-                completionTokens:
-                  message.ragTelemetry?.completionTokens ??
-                  defaultRagTelemetry.completionTokens,
-                totalTokens:
-                  message.ragTelemetry?.totalTokens ??
-                  defaultRagTelemetry.totalTokens,
-                compressionApplied: message.ragTelemetry?.compressionApplied,
-                compressionTriggerTokens:
-                  message.ragTelemetry?.compressionTriggerTokens,
-              };
-              if (
-                message.ragTelemetry?.historySource ===
-                  nextTelemetry.historySource &&
-                message.ragTelemetry?.retrievalMode ===
-                  nextTelemetry.retrievalMode &&
-                message.ragTelemetry?.embeddingProfile ===
-                  nextTelemetry.embeddingProfile
-              ) {
-                return message;
-              }
-              return {
-                ...message,
-                ragTelemetry: nextTelemetry,
-              };
+              const parsed = JSON.parse(raw) as RuntimeAgentEventData;
+              return applyRagTelemetryUpdate(
+                message,
+                parsed,
+                defaultRagTelemetry,
+              );
             } catch {
               return message;
             }
@@ -839,21 +879,8 @@ export function useAgentChat(
           if (statusText.startsWith("CONTEXT_COMPACTION:")) {
             try {
               const raw = statusText.slice("CONTEXT_COMPACTION:".length);
-              const parsed = JSON.parse(raw) as {
-                applied?: boolean;
-                trigger_tokens?: number;
-              };
-              return {
-                ...message,
-                ragTelemetry: {
-                  ...message.ragTelemetry,
-                  compressionApplied:
-                    parsed.applied ?? message.ragTelemetry?.compressionApplied,
-                  compressionTriggerTokens:
-                    parsed.trigger_tokens ||
-                    message.ragTelemetry?.compressionTriggerTokens,
-                },
-              };
+              const parsed = JSON.parse(raw) as RuntimeAgentEventData;
+              return applyContextCompactionUpdate(message, parsed);
             } catch {
               return message;
             }
@@ -2267,8 +2294,18 @@ export function useAgentChat(
                     (payload.data?.total_tokens as number | undefined) ??
                     message.ragTelemetry?.totalTokens ??
                     0,
-                },
-              };
+                  },
+                };
+              }
+            case "rag_telemetry": {
+              return applyRagTelemetryUpdate(
+                message,
+                payload.data,
+                defaultRagTelemetry,
+              );
+            }
+            case "context_compaction": {
+              return applyContextCompactionUpdate(message, payload.data);
             }
             case "reasoning": {
               const reasoningText = extractEventText(payload.data as
@@ -2433,59 +2470,12 @@ export function useAgentChat(
               if (statusText.startsWith("RAG_TELEMETRY:")) {
                 try {
                   const raw = statusText.slice("RAG_TELEMETRY:".length);
-                  const parsed = JSON.parse(raw) as {
-                    history_source?: string;
-                    retrieval_mode?: string;
-                    embedding_profile?: string;
-                  };
-                  const nextTelemetry = {
-                    historySource:
-                      parsed.history_source ||
-                      message.ragTelemetry?.historySource ||
-                      defaultRagTelemetry.historySource,
-                    retrievalMode:
-                      parsed.retrieval_mode ||
-                      message.ragTelemetry?.retrievalMode ||
-                      defaultRagTelemetry.retrievalMode,
-                    embeddingProfile:
-                      parsed.embedding_profile ||
-                      message.ragTelemetry?.embeddingProfile ||
-                      defaultRagTelemetry.embeddingProfile,
-                    executionMode:
-                      message.ragTelemetry?.executionMode ||
-                      defaultRagTelemetry.executionMode,
-                    workspaceMemoryEnabled:
-                      message.ragTelemetry?.workspaceMemoryEnabled ??
-                      defaultRagTelemetry.workspaceMemoryEnabled,
-                    workspaceMemoryRoot: message.ragTelemetry?.workspaceMemoryRoot,
-                    lastModel: message.ragTelemetry?.lastModel,
-                    promptTokens:
-                      message.ragTelemetry?.promptTokens ??
-                      defaultRagTelemetry.promptTokens,
-                    completionTokens:
-                      message.ragTelemetry?.completionTokens ??
-                      defaultRagTelemetry.completionTokens,
-                    totalTokens:
-                      message.ragTelemetry?.totalTokens ??
-                      defaultRagTelemetry.totalTokens,
-                    compressionApplied: message.ragTelemetry?.compressionApplied,
-                    compressionTriggerTokens:
-                      message.ragTelemetry?.compressionTriggerTokens,
-                  };
-                  if (
-                    message.ragTelemetry?.historySource ===
-                      nextTelemetry.historySource &&
-                    message.ragTelemetry?.retrievalMode ===
-                      nextTelemetry.retrievalMode &&
-                    message.ragTelemetry?.embeddingProfile ===
-                      nextTelemetry.embeddingProfile
-                  ) {
-                    return message;
-                  }
-                  return {
-                    ...message,
-                    ragTelemetry: nextTelemetry,
-                  };
+                  const parsed = JSON.parse(raw) as RuntimeAgentEventData;
+                  return applyRagTelemetryUpdate(
+                    message,
+                    parsed,
+                    defaultRagTelemetry,
+                  );
                 } catch {
                   return message;
                 }
@@ -2493,21 +2483,8 @@ export function useAgentChat(
               if (statusText.startsWith("CONTEXT_COMPACTION:")) {
                 try {
                   const raw = statusText.slice("CONTEXT_COMPACTION:".length);
-                  const parsed = JSON.parse(raw) as {
-                    applied?: boolean;
-                    trigger_tokens?: number;
-                  };
-                  return {
-                    ...message,
-                    ragTelemetry: {
-                      ...message.ragTelemetry,
-                      compressionApplied:
-                        parsed.applied ?? message.ragTelemetry?.compressionApplied,
-                      compressionTriggerTokens:
-                        parsed.trigger_tokens ||
-                        message.ragTelemetry?.compressionTriggerTokens,
-                    },
-                  };
+                  const parsed = JSON.parse(raw) as RuntimeAgentEventData;
+                  return applyContextCompactionUpdate(message, parsed);
                 } catch {
                   return message;
                 }

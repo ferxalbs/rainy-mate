@@ -449,6 +449,7 @@ export interface UserSettings {
   theme: string;
   notificationsEnabled: boolean;
   launchAtLoginEnabled: boolean;
+  auditLegacyModeEnabled: boolean;
   autoReconnectCloud: boolean;
   profile: UserProfile;
   embedderProvider: string;
@@ -526,6 +527,12 @@ export async function setLaunchAtLoginEnabled(
   enabled: boolean,
 ): Promise<LaunchAtLoginStatus> {
   return invoke<LaunchAtLoginStatus>("set_launch_at_login_enabled", { enabled });
+}
+
+export async function setAuditLegacyModeEnabled(
+  enabled: boolean,
+): Promise<void> {
+  return invoke<void>("set_audit_legacy_mode_enabled", { enabled });
 }
 
 export async function openLaunchAtLoginSettings(): Promise<void> {

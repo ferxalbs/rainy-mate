@@ -147,6 +147,15 @@ pub async fn set_launch_at_login_enabled(
 }
 
 #[tauri::command]
+pub async fn set_audit_legacy_mode_enabled(
+    enabled: bool,
+    settings: State<'_, Arc<Mutex<SettingsManager>>>,
+) -> Result<(), String> {
+    let mut settings = settings.lock().await;
+    settings.set_audit_legacy_mode(enabled)
+}
+
+#[tauri::command]
 pub async fn open_launch_at_login_settings() -> Result<(), String> {
     MacOSAutoLaunchBridge::open_system_settings()
 }

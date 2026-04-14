@@ -695,6 +695,7 @@ pub fn run() {
             commands::set_notifications,
             commands::get_launch_at_login_status,
             commands::set_launch_at_login_enabled,
+            commands::set_audit_legacy_mode_enabled,
             commands::open_launch_at_login_settings,
             commands::get_notification_status,
             commands::request_notification_permission,

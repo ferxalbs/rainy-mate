@@ -15,8 +15,17 @@ pub struct FrontendAgentEvent {
     pub payload: AgentEvent,
 }
 
-#[derive(Default)]
+/// Controls how agent runtime events are projected to the frontend.
+/// `Modern` preserves the provider/runtime stream as directly as possible.
+/// `AuditLegacy` keeps the older batched/debounced transport for comparison.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrontendProjectionMode {
+    Modern,
+    AuditLegacy,
+}
+
 pub struct FrontendEventProjector {
+    mode: FrontendProjectionMode,
     buffered_stream: String,
     buffered_reasoning: String,
     last_stream_emit: Option<Instant>,
@@ -26,7 +35,23 @@ pub struct FrontendEventProjector {
 }
 
 impl FrontendEventProjector {
+    pub fn new(mode: FrontendProjectionMode) -> Self {
+        Self {
+            mode,
+            buffered_stream: String::new(),
+            buffered_reasoning: String::new(),
+            last_stream_emit: None,
+            last_thought_emit: None,
+            last_status_emit: None,
+            last_status_text: None,
+        }
+    }
+
     pub fn project(&mut self, event: &AgentEvent) -> Vec<AgentEvent> {
+        if self.mode == FrontendProjectionMode::Modern {
+            return Self::project_modern(event);
+        }
+
         let now = Instant::now();
         match event {
             AgentEvent::StreamChunk(chunk) => {
@@ -81,6 +106,10 @@ impl FrontendEventProjector {
     }
 
     pub fn flush_pending(&mut self) -> Vec<AgentEvent> {
+        if self.mode == FrontendProjectionMode::Modern {
+            return Vec::new();
+        }
+
         let now = Instant::now();
         let mut projected = self.flush_stream(now);
         if let Some(reasoning) = self.flush_reasoning(now) {
@@ -148,16 +177,90 @@ impl FrontendEventProjector {
             || lower.contains("cancel")
             || lower.contains("terminated")
     }
+
+    fn project_modern(event: &AgentEvent) -> Vec<AgentEvent> {
+        match event {
+            AgentEvent::Status(text) => Self::translate_status(text)
+                .map(|translated| vec![translated])
+                .unwrap_or_else(|| vec![event.clone()]),
+            _ => vec![event.clone()],
+        }
+    }
+
+    fn translate_status(text: &str) -> Option<AgentEvent> {
+        if let Some(raw) = text.strip_prefix("RAG_TELEMETRY:") {
+            let parsed = serde_json::from_str::<serde_json::Value>(raw).ok()?;
+            return Some(AgentEvent::RagTelemetry(
+                crate::ai::agent::events::RagTelemetryPayload {
+                    history_source: parsed
+                        .get("history_source")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("persisted_long_chat")
+                        .to_string(),
+                    retrieval_mode: parsed
+                        .get("retrieval_mode")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unavailable")
+                        .to_string(),
+                    embedding_profile: parsed
+                        .get("embedding_profile")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(crate::services::memory_vault::types::EMBEDDING_MODEL)
+                        .to_string(),
+                },
+            ));
+        }
+
+        if let Some(raw) = text.strip_prefix("CONTEXT_COMPACTION:") {
+            let parsed = serde_json::from_str::<serde_json::Value>(raw).ok()?;
+            let trigger_tokens = parsed
+                .get("trigger_tokens")
+                .and_then(|v| v.as_u64())
+                .and_then(|value| u32::try_from(value).ok())
+                .unwrap_or_default();
+            return Some(AgentEvent::ContextCompaction(
+                crate::ai::agent::events::ContextCompactionPayload {
+                    applied: parsed
+                        .get("applied")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    trigger_tokens,
+                    source_estimated_tokens: parsed
+                        .get("source_estimated_tokens")
+                        .and_then(|v| v.as_u64())
+                        .and_then(|value| u32::try_from(value).ok()),
+                    source_message_count: parsed
+                        .get("source_message_count")
+                        .and_then(|v| v.as_u64())
+                        .and_then(|value| usize::try_from(value).ok()),
+                    kept_recent_count: parsed
+                        .get("kept_recent_count")
+                        .and_then(|v| v.as_u64())
+                        .and_then(|value| usize::try_from(value).ok()),
+                    compression_model: parsed
+                        .get("compression_model")
+                        .and_then(|v| v.as_str())
+                        .map(ToString::to_string),
+                    best_practice: parsed
+                        .get("best_practice")
+                        .and_then(|v| v.as_str())
+                        .map(ToString::to_string),
+                },
+            ));
+        }
+
+        None
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::FrontendEventProjector;
+    use super::{FrontendEventProjector, FrontendProjectionMode};
     use crate::ai::agent::events::AgentEvent;
 
     #[test]
     fn batches_stream_chunks_until_boundary() {
-        let mut projector = FrontendEventProjector::default();
+        let mut projector = FrontendEventProjector::new(FrontendProjectionMode::AuditLegacy);
 
         assert!(matches!(
             projector.project(&AgentEvent::StreamChunk("hello".to_string())).as_slice(),
@@ -175,11 +278,42 @@ mod tests {
 
     #[test]
     fn debounces_duplicate_statuses() {
-        let mut projector = FrontendEventProjector::default();
+        let mut projector = FrontendEventProjector::new(FrontendProjectionMode::AuditLegacy);
         let first = projector.project(&AgentEvent::Status("Planning".to_string()));
         let second = projector.project(&AgentEvent::Status("Planning".to_string()));
 
         assert_eq!(first.len(), 1);
         assert!(second.is_empty());
+    }
+
+    #[test]
+    fn modern_mode_translates_telemetry_statuses() {
+        let mut projector = FrontendEventProjector::new(FrontendProjectionMode::Modern);
+        let events = projector.project(&AgentEvent::Status(
+            "RAG_TELEMETRY:{\"history_source\":\"persisted_long_chat\",\"retrieval_mode\":\"ann\",\"embedding_profile\":\"gemini-embedding-001\"}".to_string(),
+        ));
+
+        assert!(matches!(
+            events.as_slice(),
+            [AgentEvent::RagTelemetry(payload)]
+                if payload.retrieval_mode == "ann"
+                    && payload.embedding_profile == "gemini-embedding-001"
+        ));
+    }
+
+    #[test]
+    fn modern_mode_keeps_stream_chunks_unbuffered() {
+        let mut projector = FrontendEventProjector::new(FrontendProjectionMode::Modern);
+        let first = projector.project(&AgentEvent::StreamChunk("hello".to_string()));
+        let second = projector.project(&AgentEvent::StreamChunk(" world".to_string()));
+
+        assert!(matches!(
+            first.as_slice(),
+            [AgentEvent::StreamChunk(chunk)] if chunk == "hello"
+        ));
+        assert!(matches!(
+            second.as_slice(),
+            [AgentEvent::StreamChunk(chunk)] if chunk == " world"
+        ));
     }
 }

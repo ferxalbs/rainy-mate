@@ -34,6 +34,8 @@ pub struct UserSettings {
     pub notifications_enabled: bool,
     #[serde(default)]
     pub launch_at_login_enabled: bool,
+    #[serde(default)]
+    pub audit_legacy_mode_enabled: bool,
     pub profile: UserProfile,
     pub auto_reconnect_cloud: bool,
     pub tool_policy_version_floor: HashMap<String, u64>,
@@ -73,6 +75,7 @@ impl Default for UserSettings {
             theme: "system".to_string(),
             notifications_enabled: true,
             launch_at_login_enabled: false,
+            audit_legacy_mode_enabled: false,
             profile: UserProfile::default(),
             auto_reconnect_cloud: true,
             tool_policy_version_floor: HashMap::new(),
@@ -197,6 +200,12 @@ impl SettingsManager {
     /// Set launch-at-login and persist
     pub fn set_launch_at_login(&mut self, enabled: bool) -> Result<(), String> {
         self.settings.launch_at_login_enabled = enabled;
+        self.save_to_disk()
+    }
+
+    /// Set the legacy audit-mode toggle and persist it.
+    pub fn set_audit_legacy_mode(&mut self, enabled: bool) -> Result<(), String> {
+        self.settings.audit_legacy_mode_enabled = enabled;
         self.save_to_disk()
     }
 
