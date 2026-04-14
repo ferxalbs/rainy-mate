@@ -937,53 +937,58 @@ GUIDELINES:
                 session_coordinator_for_events
                     .emit_agent_event(&session_run_id_for_events, event.clone());
 
-                if let AgentEvent::Status(text) = &event {
-                    if text.starts_with("RUN_USAGE:") {
-                        if let Ok(value) =
-                            serde_json::from_str::<serde_json::Value>(&text["RUN_USAGE:".len()..])
-                        {
-                            let prompt_tokens = value
-                                .get("prompt_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0);
-                            let completion_tokens = value
-                                .get("completion_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0);
-                            let total_tokens = value
-                                .get("total_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0);
-                            let last_model = value
-                                .get("model")
-                                .and_then(|v| v.as_str())
-                                .map(|v| v.to_string())
-                                .or_else(|| telemetry_model.clone());
-                            let manager = telemetry_agent_manager.clone();
-                            let chat_id = telemetry_chat_id.clone();
-                            let workspace_memory_root = telemetry_memory_root.clone();
-                            tokio::spawn(async move {
-                                let _ = manager
-                                    .upsert_chat_runtime_telemetry(
-                                        &chat_id,
-                                        "persisted_long_chat",
-                                        "unavailable",
-                                        crate::services::memory_vault::types::EMBEDDING_MODEL,
-                                        "local",
-                                        telemetry_memory_enabled,
-                                        workspace_memory_root.as_deref(),
-                                        last_model.as_deref(),
-                                        prompt_tokens,
-                                        completion_tokens,
-                                        total_tokens,
-                                    )
-                                    .await;
-                            });
-                        }
-                    }
+                if let AgentEvent::RagTelemetry(payload) = &event {
+                    let manager = telemetry_agent_manager.clone();
+                    let chat_id = telemetry_chat_id.clone();
+                    let workspace_memory_root = telemetry_memory_root.clone();
+                    let payload = payload.clone();
+                    let telemetry_model_for_spawn = telemetry_model.clone();
+                    tokio::spawn(async move {
+                        let _ = manager
+                            .upsert_chat_runtime_telemetry(
+                                &chat_id,
+                                &payload.history_source,
+                                &payload.retrieval_mode,
+                                &payload.embedding_profile,
+                                "local",
+                                telemetry_memory_enabled,
+                                workspace_memory_root.as_deref(),
+                                telemetry_model_for_spawn.as_deref(),
+                                0,
+                                0,
+                                0,
+                            )
+                            .await;
+                    });
                 }
 
                 match event {
+                    AgentEvent::Usage(ref usage) => {
+                        let manager = telemetry_agent_manager.clone();
+                        let chat_id = telemetry_chat_id.clone();
+                        let workspace_memory_root = telemetry_memory_root.clone();
+                        let last_model = usage.model.clone().or_else(|| telemetry_model.clone());
+                        let prompt_tokens = usage.prompt_tokens as i64;
+                        let completion_tokens = usage.completion_tokens as i64;
+                        let total_tokens = usage.total_tokens as i64;
+                        tokio::spawn(async move {
+                            let _ = manager
+                                .upsert_chat_runtime_telemetry(
+                                    &chat_id,
+                                    "persisted_long_chat",
+                                    "unavailable",
+                                    crate::services::memory_vault::types::EMBEDDING_MODEL,
+                                    "local",
+                                    telemetry_memory_enabled,
+                                    workspace_memory_root.as_deref(),
+                                    last_model.as_deref(),
+                                    prompt_tokens,
+                                    completion_tokens,
+                                    total_tokens,
+                                )
+                                .await;
+                        });
+                    }
                     AgentEvent::ToolCall(ref call) => {
                         let audit_emitter = audit_emitter.clone();
                         let agent_id = audit_agent_id.clone();

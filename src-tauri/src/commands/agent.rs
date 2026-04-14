@@ -1607,6 +1607,30 @@ pub async fn run_agent_workflow_internal(
                             }
                         }
                     }
+                    AgentEvent::RagTelemetry(payload) => {
+                        let manager = agent_manager_clone.clone();
+                        let chat_id = chat_id_for_events.clone();
+                        let workspace_memory_root = telemetry_memory_root.clone();
+                        let workspace_memory_enabled = telemetry_memory_enabled;
+                        let last_model = telemetry_model.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = manager
+                                .upsert_chat_runtime_telemetry(
+                                    &chat_id,
+                                    &payload.history_source,
+                                    &payload.retrieval_mode,
+                                    &payload.embedding_profile,
+                                    "local",
+                                    workspace_memory_enabled,
+                                    workspace_memory_root.as_deref(),
+                                    last_model.as_deref(),
+                                    0,
+                                    0,
+                                    0,
+                                )
+                                .await;
+                        });
+                    }
                     AgentEvent::Usage(usage) => {
                         let manager = agent_manager_clone.clone();
                         let chat_id = chat_id_for_events.clone();

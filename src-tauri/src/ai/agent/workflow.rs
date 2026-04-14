@@ -6,7 +6,9 @@ use crate::ai::agent::runtime::{AgentContent, AgentMessage, RuntimeOptions};
 use crate::ai::agent::runtime_events::{
     RuntimeContentStreamKind, RuntimeEventCallback, RuntimeStreamEvent,
 };
-use crate::ai::provider_types::{FunctionCall, ProviderToolCallDelta, ToolCall};
+use crate::ai::provider_types::{
+    ChatCompletionRequest, FunctionCall, ProviderStreamUsage, ProviderToolCallDelta, ToolCall,
+};
 use crate::ai::router::IntelligentRouter;
 use crate::ai::specs::manifest::AgentSpec;
 use crate::models::neural::ToolAccessPolicy;
@@ -22,6 +24,7 @@ use tokio::sync::RwLock;
 
 const MAX_MODEL_MESSAGE_BYTES: usize = 95 * 1024;
 pub const CANCELLED_RUN_MESSAGE: &str = "Execution cancelled.";
+pub(crate) const LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY: &str = "last_executed_tool_signature";
 pub const FILESYSTEM_TOOL_NAMES: &[&str] = &[
     "read_file",
     "read_many_files",
@@ -57,6 +60,52 @@ pub(crate) fn truncate_to_max_bytes(input: &str, max_bytes: usize) -> String {
     let mut out = input[..cut].to_string();
     out.push_str("\n\n[TRUNCATED: content exceeded size limits]");
     out
+}
+
+fn emit_usage_event(
+    on_event: &Arc<dyn Fn(AgentEvent) + Send + Sync>,
+    model: String,
+    usage: &crate::ai::provider_types::TokenUsage,
+) {
+    on_event(AgentEvent::Usage(ProviderStreamUsage {
+        model: Some(model),
+        prompt_tokens: usage.prompt_tokens,
+        completion_tokens: usage.completion_tokens,
+        total_tokens: usage.total_tokens,
+    }));
+}
+
+pub(crate) fn tool_call_signature(calls: &[ToolCall]) -> String {
+    calls.iter()
+        .map(|call| format!("{}::{}", call.function.name, call.function.arguments.trim()))
+        .collect::<Vec<_>>()
+        .join("||")
+}
+
+async fn request_plaintext_followup(
+    router: &IntelligentRouter,
+    request: &ChatCompletionRequest,
+    on_event: Arc<dyn Fn(AgentEvent) + Send + Sync>,
+) -> Result<(String, Option<Vec<ToolCall>>), String> {
+    let mut recovery_request = request.clone();
+    recovery_request.stream = false;
+    recovery_request.tools = None;
+    recovery_request.tool_choice = None;
+    recovery_request.messages.push(crate::ai::provider_types::ChatMessage::user(
+        "Using the previous tool results, provide the final answer in plain text. Do not call tools. Do not repeat prior tool calls.",
+    ));
+
+    let recovery = router
+        .complete(recovery_request)
+        .await
+        .map_err(|e| format!("ThinkStep Recovery Failed: {}", e))?;
+
+    emit_usage_event(&on_event, recovery.model.clone(), &recovery.usage);
+
+    Ok((
+        recovery.content.unwrap_or_default(),
+        recovery.tool_calls.filter(|calls| !calls.is_empty()),
+    ))
 }
 
 #[derive(Clone, Debug, Default)]
@@ -504,7 +553,7 @@ impl WorkflowStep for ThinkStep {
                 .await
                 .map_err(|e| format!("ThinkStep Event Streaming Failed: {}", e))?;
 
-            let content = accumulated
+            let mut content = accumulated
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .clone();
@@ -516,11 +565,35 @@ impl WorkflowStep for ThinkStep {
                 .filter_map(StreamedToolCallAccumulator::into_tool_call)
                 .collect::<Vec<_>>();
 
-            let tool_calls = if tool_calls.is_empty() {
+            let mut tool_calls = if tool_calls.is_empty() {
                 None
             } else {
                 Some(tool_calls)
             };
+
+            if content.trim().is_empty() {
+                if let Some(signature) = tool_calls
+                    .as_ref()
+                    .map(|calls| tool_call_signature(calls.as_slice()))
+                {
+                    if state
+                        .context
+                        .get(LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY)
+                        .is_some_and(|previous| previous == &signature)
+                    {
+                        let (recovered_content, recovered_tool_calls) =
+                            request_plaintext_followup(
+                                &router_guard,
+                                &request,
+                                Arc::clone(&event_fn),
+                            )
+                            .await?;
+                        content = recovered_content;
+                        tool_calls = recovered_tool_calls
+                            .filter(|calls| tool_call_signature(calls.as_slice()) != signature);
+                    }
+                }
+            }
 
             (content, tool_calls)
         } else if has_tools || !self.allow_streaming {
@@ -539,15 +612,7 @@ impl WorkflowStep for ThinkStep {
                 .await
                 .map_err(|e| format!("ThinkStep Failed: {}", e))?;
 
-            event_fn(AgentEvent::Status(format!(
-                "RUN_USAGE:{}",
-                serde_json::json!({
-                    "model": response.model,
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens,
-                })
-            )));
+            emit_usage_event(&event_fn, response.model.clone(), &response.usage);
 
             let mut content = response.content.clone().unwrap_or_default();
             let mut resolved_tool_calls = response.tool_calls.clone();
@@ -560,33 +625,39 @@ impl WorkflowStep for ThinkStep {
                     .map(|calls| calls.is_empty())
                     .unwrap_or(true)
             {
-                let mut recovery_request = request.clone();
-                recovery_request.stream = false;
-                recovery_request.tools = None;
-                recovery_request.tool_choice = None;
-                recovery_request.messages.push(crate::ai::provider_types::ChatMessage::user(
-                    "Using the previous tool results, provide the final answer in plain text. Do not call tools.",
-                ));
-
-                let recovery = router_guard
-                    .complete(recovery_request)
-                    .await
-                    .map_err(|e| format!("ThinkStep Recovery Failed: {}", e))?;
-
-                event_fn(AgentEvent::Status(format!(
-                    "RUN_USAGE:{}",
-                    serde_json::json!({
-                        "model": recovery.model,
-                        "prompt_tokens": recovery.usage.prompt_tokens,
-                        "completion_tokens": recovery.usage.completion_tokens,
-                        "total_tokens": recovery.usage.total_tokens,
-                    })
-                )));
-
-                if let Some(recovered_text) = recovery.content {
+                let (recovered_text, recovered_tool_calls) =
+                    request_plaintext_followup(&router_guard, &request, Arc::clone(&event_fn))
+                        .await?;
+                if !recovered_text.is_empty() {
                     content = recovered_text;
                 }
-                resolved_tool_calls = recovery.tool_calls;
+                resolved_tool_calls = recovered_tool_calls;
+            }
+
+            if content.trim().is_empty() {
+                if let Some(signature) = resolved_tool_calls
+                    .as_ref()
+                    .map(|calls| tool_call_signature(calls.as_slice()))
+                {
+                    if state
+                        .context
+                        .get(LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY)
+                        .is_some_and(|previous| previous == &signature)
+                    {
+                        let (recovered_text, recovered_tool_calls) =
+                            request_plaintext_followup(
+                                &router_guard,
+                                &request,
+                                Arc::clone(&event_fn),
+                            )
+                            .await?;
+                        if !recovered_text.is_empty() {
+                            content = recovered_text;
+                        }
+                        resolved_tool_calls = recovered_tool_calls
+                            .filter(|calls| tool_call_signature(calls.as_slice()) != signature);
+                    }
+                }
             }
 
             if !content.is_empty() {
@@ -646,6 +717,8 @@ impl WorkflowStep for ThinkStep {
                 });
             }
         }
+
+        state.context.remove(LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY);
 
         // No tool calls -> Done
         Ok(StepResult {

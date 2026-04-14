@@ -3,8 +3,8 @@
 use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::runtime::{AgentContent, AgentMessage};
 use crate::ai::agent::workflow::{
-    is_tool_allowed_by_spec, truncate_to_max_bytes, AgentState, StepResult, WorkflowStep,
-    CANCELLED_RUN_MESSAGE,
+    is_tool_allowed_by_spec, tool_call_signature, AgentState, StepResult, WorkflowStep,
+    CANCELLED_RUN_MESSAGE, LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY, truncate_to_max_bytes,
 };
 use crate::ai::specs::manifest::AgentSpec;
 use crate::models::neural::{
@@ -124,6 +124,7 @@ impl WorkflowStep for ActStep {
                 });
             }
         };
+        let executed_tool_signature = tool_call_signature(tool_calls.as_slice());
 
         let mut results = Vec::new();
 
@@ -357,6 +358,10 @@ impl WorkflowStep for ActStep {
 
         // Update state with all tool outputs
         state.messages.extend(results);
+        state.context.insert(
+            LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY.to_string(),
+            executed_tool_signature,
+        );
 
         // Loop back to Think
         Ok(StepResult {

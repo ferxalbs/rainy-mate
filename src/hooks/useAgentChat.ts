@@ -139,7 +139,7 @@ function appendStreamText(current: string, next: string | undefined): string {
   if (typeof next !== "string" || next.trim().length === 0) {
     return current;
   }
-  return `${current}${current ? "\n" : ""}${next}`;
+  return `${current}${next}`;
 }
 
 function deriveStatusRunPhase(statusText: string): AgentRunPhase | null {
