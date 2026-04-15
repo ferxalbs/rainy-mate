@@ -877,6 +877,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn get_history_preserves_insert_order_for_same_second_messages() {
         let manager = setup_manager().await;
         let chat_id = "chat-history-order";
@@ -905,6 +906,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn ensure_default_local_agent_named_refreshes_existing_spec() {
         let manager = setup_manager().await;
         let default_agent_id = crate::services::default_agent_spec::DEFAULT_LOCAL_AGENT_ID;

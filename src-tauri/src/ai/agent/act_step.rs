@@ -385,13 +385,11 @@ mod tests {
     use std::sync::Arc;
 
     #[tokio::test]
-    #[serial]
+    #[serial_test::serial]
     async fn queued_command_carries_agent_tool_access_policy() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let memory_manager = Arc::new(
-            crate::services::MemoryManager::new(temp_dir.path().to_path_buf())
-                .await
-                .expect("memory manager"),
+            crate::services::MemoryManager::new(10, temp_dir.path().to_path_buf())
         );
         let memory = Arc::new(
             AgentMemory::new(

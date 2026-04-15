@@ -63,6 +63,7 @@ struct BeamTemplateManifest {
     title: String,
     summary: String,
     description: String,
+    #[serde(rename = "contract_name")]
     contract_name: String,
     contract_file: String,
     category: String,
@@ -77,6 +78,7 @@ pub struct BeamTemplateSummary {
     pub title: String,
     pub summary: String,
     pub description: String,
+    #[serde(rename = "contract_name")]
     pub contract_name: String,
     pub contract_file: String,
     pub category: String,
