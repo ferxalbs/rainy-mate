@@ -769,7 +769,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
+    #[serial_test::serial]
     async fn test_workflow_execution() {
         use crate::ai::specs::skills::AgentSkills;
         use crate::ai::specs::soul::AgentSoul;

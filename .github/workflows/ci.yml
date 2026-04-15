@@ -63,7 +63,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: rust-cache-v3
+          shared-key: rust-cache-v4
           workspaces: './src-tauri -> target'
 
       - name: Build Rust
@@ -105,7 +105,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: rust-cache-v3
+          shared-key: rust-cache-v4
           workspaces: './src-tauri -> target'
 
       - name: Run Rust Tests (Intel)
@@ -168,7 +168,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: rust-cache-v3
+          shared-key: rust-cache-v4
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies

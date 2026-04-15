@@ -385,7 +385,7 @@ mod tests {
     use std::sync::Arc;
 
     #[tokio::test]
-    #[serial]
+    #[serial_test::serial]
     async fn queued_command_carries_agent_tool_access_policy() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let memory_manager = Arc::new(
