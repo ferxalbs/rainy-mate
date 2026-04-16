@@ -63,7 +63,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "macos-v4"
+          shared-key: "macos-v5"
           workspaces: './src-tauri -> target'
 
       - name: Build Rust
@@ -105,7 +105,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "macos-intel-v4"
+          shared-key: "macos-intel-v5"
           workspaces: './src-tauri -> target'
 
       - name: Run Rust Tests (Intel)
@@ -167,11 +167,14 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "${{ matrix.platform }}-v4"
+          shared-key: "${{ matrix.platform }}-v5"
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Force Clean LibSqlite
+        run: cd src-tauri && cargo clean -p libsqlite3-sys && cargo clean -p sqlx-sqlite
 
       - name: Tauri Build
         shell: bash
