@@ -43,6 +43,7 @@ pub struct NativeShellService {
     app_handle: AppHandle,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeShellResumePayload {
@@ -104,6 +105,7 @@ impl NativeShellService {
         Ok(snapshot)
     }
 
+    #[allow(dead_code)]
     pub async fn handle_bridge_action(&self, action: String, payload: Option<String>) {
         match action.as_str() {
             "hotkey" | "show_palette" => {
