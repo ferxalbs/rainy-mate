@@ -1,4 +1,4 @@
-use crate::services::chat_artifacts::{ensure_openable_artifact_path, ChatArtifactOpenMode};
+use crate::services::chat_artifacts::ensure_openable_artifact_path;
 use std::process::Command;
 
 #[tauri::command]

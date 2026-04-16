@@ -63,7 +63,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "macos-v3"
+          shared-key: "macos-v4"
           workspaces: './src-tauri -> target'
 
       - name: Build Rust
@@ -105,7 +105,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "macos-intel-v3"
+          shared-key: "macos-intel-v4"
           workspaces: './src-tauri -> target'
 
       - name: Run Rust Tests (Intel)
@@ -167,14 +167,17 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "${{ matrix.platform }}-v3"
+          shared-key: "${{ matrix.platform }}-v4"
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Tauri Build
-        run: pnpm run tauri build ${{ matrix.args }}
+        shell: bash
+        run: |
+          echo '{"bundle":{"createUpdaterArtifacts":false}}' > src-tauri/ci-config.json
+          pnpm run tauri build --config src-tauri/ci-config.json ${{ matrix.args }}
 
       - name: Verify Universal Binary
         if: matrix.platform == 'macos-latest'

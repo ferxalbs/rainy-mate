@@ -1,7 +1,7 @@
 use crate::commands::agent::{run_agent_workflow_internal, WorkflowInvocationSource};
 use crate::commands::settings::DesktopNotificationRequest;
 use crate::services::{
-    FileManager, MacOSNativeNotificationBridge, MacOSQuickDelegateBridge, SettingsManager,
+    FileManager, MacOSQuickDelegateBridge, SettingsManager,
 };
 use serde::Serialize;
 use std::sync::{

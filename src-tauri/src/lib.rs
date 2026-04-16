@@ -22,7 +22,6 @@ use services::{
     SocketClient, WorkflowRecorderService, WorkspaceManager,
 };
 use std::sync::Arc;
-use tauri::Manager;
 use tokio::sync::{Mutex, RwLock};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -931,7 +930,7 @@ pub fn run() {
         }
     };
 
-    tauri_app.run(|app_handle, event| {
+    tauri_app.run(|_app_handle, _event| {
         #[cfg(target_os = "macos")]
         if let tauri::RunEvent::Ready = event {
             let airlock_state = app_handle.state::<commands::airlock::AirlockServiceState>();
