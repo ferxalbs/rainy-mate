@@ -169,7 +169,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "tauri-build-rust-cache-${{ matrix.platform }}-v3"
+          shared-key: "tauri-build-rust-cache-${{ matrix.platform }}-v4"
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
