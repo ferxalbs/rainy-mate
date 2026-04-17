@@ -51,7 +51,7 @@ pub enum RuntimeMode {
     HierarchicalSupervisor,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeConfig {
     #[serde(default)]
