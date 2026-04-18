@@ -3,6 +3,8 @@ import { TextArea, Button, Select, Label, ListBox } from "@heroui/react";
 import { Play, Sparkles } from "lucide-react";
 import { AI_PROVIDERS, PROVIDER_MODELS, type ProviderType } from "../../types";
 
+const EMPTY_MODELS_ARRAY: string[] = [];
+
 interface TaskInputProps {
   onSubmit?: (task: string, provider: ProviderType, model: string) => void;
   isLoading?: boolean;
@@ -38,7 +40,7 @@ export function TaskInput({ onSubmit, isLoading = false }: TaskInputProps) {
   const selectedProviderObj = AI_PROVIDERS.find(
     (p) => p.id === selectedProvider,
   );
-  const availableModels = PROVIDER_MODELS[selectedProvider] || [];
+  const availableModels = PROVIDER_MODELS[selectedProvider] || EMPTY_MODELS_ARRAY;
 
   return (
     <div className="space-y-4">

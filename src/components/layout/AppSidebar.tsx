@@ -52,6 +52,7 @@ interface AppSidebarProps {
 
 const EMPTY_FOLDERS: Folder[] = [];
 const EMPTY_CHAT_SESSIONS_BY_WORKSPACE: Record<string, ChatSession[]> = {};
+const EMPTY_SESSIONS_ARRAY: ChatSession[] = [];
 
 const folderIcons: Record<string, any> = {
   Documents: FileText,
@@ -393,7 +394,7 @@ export function AppSidebar({
                     const Icon = folderIcons[folder.name] || FolderOpen;
                     const isExpanded = expandedWorkspaces[folder.path] ??
                       (folder.path === activeWorkspacePath || isActive);
-                    const sessions = chatSessionsByWorkspace[folder.path] || [];
+                    const sessions = chatSessionsByWorkspace[folder.path] || EMPTY_SESSIONS_ARRAY;
 
                     return isCollapsed ? (
                       <Tooltip key={folder.id} delay={0}>
