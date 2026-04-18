@@ -4,7 +4,7 @@ use super::soul::AgentSoul;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentSpec {
     pub id: String,
     pub version: String, // "3.0.0"
@@ -204,7 +204,7 @@ impl RuntimeConfig {
 // Airlock — tool permissions, scopes, and rate limits
 // ──────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AirlockConfig {
     #[serde(default)]
     pub tool_policy: AirlockToolPolicy,
@@ -246,7 +246,7 @@ impl AirlockConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AirlockToolPolicy {
     #[serde(default = "default_policy_mode")]
     pub mode: String, // "all" | "allowlist"
@@ -270,7 +270,7 @@ impl Default for AirlockToolPolicy {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AirlockScopes {
     #[serde(default)]
     pub allowed_paths: Vec<String>,
@@ -299,7 +299,7 @@ pub struct AirlockRateLimits {
     pub max_requests_per_minute: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MemoryConfig {
     pub strategy: String, // "vector", "simple_buffer", "hybrid"
 
