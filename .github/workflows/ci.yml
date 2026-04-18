@@ -53,6 +53,16 @@ jobs:
           shared-key: "sqlite3-fix"
           workspaces: './src-tauri -> target'
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Install solc-js
         run: pnpm install --frozen-lockfile
 
@@ -78,6 +88,16 @@ jobs:
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Install solc-js
         run: pnpm install --frozen-lockfile
