@@ -51,7 +51,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          shared-key: "v2-bust-sqlite-cache"
+          shared-key: "v3-bust-sqlite-cache"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
