@@ -4,7 +4,7 @@ use super::soul::AgentSoul;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSpec {
     pub id: String,
     pub version: String, // "3.0.0"
