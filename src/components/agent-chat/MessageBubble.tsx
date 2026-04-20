@@ -31,13 +31,6 @@ import {
 import { ThoughtDisplay } from "./ThoughtDisplay";
 import type { SpecialistRunState } from "../../types/agent";
 
-// Bolt optimization: Extract inline fallback arrays as a stable global constant.
-// 💡 What: Replaced inline `|| []` with a single `EMPTY_ARRAY` constant.
-// 🎯 Why: Inline arrays create new references on every render, defeating `React.memo` on child components (`TraceAccordion`, `SupervisorRail`) during streaming token updates.
-// 📊 Impact: Prevents unnecessary AST/component teardowns on every token stream tick for complex rail components.
-// 🔬 Measurement: Verified referential equality across render cycles; components only update when actual array length/contents change.
-const EMPTY_ARRAY: never[] = [];
-
 // Map step types to icons
 const stepIcons: Record<string, React.ElementType> = {
   createFile: FileCode,
@@ -95,7 +88,7 @@ function MessageBubbleComponent({
   };
 
   const traceStats = useMemo(() => {
-    const trace = message.trace || EMPTY_ARRAY;
+    const trace = message.trace || [];
     let toolCalls = 0;
     let retries = 0;
     let errors = 0;
@@ -282,7 +275,7 @@ function MessageBubbleComponent({
 
         {!isUser && (message.trace?.length || message.isLoading) ? (
           <TraceAccordion
-            trace={message.trace || EMPTY_ARRAY}
+            trace={message.trace || []}
             runState={message.runState}
             stats={traceStats}
           />
@@ -297,8 +290,8 @@ function MessageBubbleComponent({
             (message.specialists && message.specialists.length > 0)) && (
             <SupervisorRail
               summary={message.supervisorPlan?.summary}
-              steps={message.supervisorPlan?.steps || EMPTY_ARRAY}
-              specialists={message.specialists || EMPTY_ARRAY}
+              steps={message.supervisorPlan?.steps || []}
+              specialists={message.specialists || []}
             />
           )}
 

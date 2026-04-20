@@ -136,6 +136,14 @@ fn compile_beam_templates() {
         .parent()
         .expect("failed to resolve repo root")
         .to_path_buf();
+    let solc_entry = PathBuf::from("node_modules/.pnpm/solc@0.8.34/node_modules/solc/solc.js");
+
+    if !solc_entry.is_file() {
+        let _ = Command::new("pnpm").arg("install").status();
+    }
+
+    let _ = Command::new("pnpm").arg("install").status();
+
     let solc_entry = repo_root
         .join("node_modules")
         .join(".pnpm")
