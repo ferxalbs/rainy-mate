@@ -77,6 +77,7 @@ pub struct BeamTemplateSummary {
     pub title: String,
     pub summary: String,
     pub description: String,
+    #[serde(rename = "contract_name")]
     pub contract_name: String,
     pub contract_file: String,
     pub category: String,
@@ -132,6 +133,7 @@ pub struct BeamDeploymentTransactionPreview {
     pub explorer_url: String,
     pub rpc_url: String,
     pub data_bytes: usize,
+    #[serde(rename = "contract_name")]
     pub contract_name: String,
 }
 
