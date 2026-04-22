@@ -3,8 +3,8 @@
 use crate::ai::agent::events::AgentEvent;
 use crate::ai::agent::runtime::{AgentContent, AgentMessage};
 use crate::ai::agent::workflow::{
-    is_tool_allowed_by_spec, tool_call_signature, AgentState, StepResult, WorkflowStep,
-    CANCELLED_RUN_MESSAGE, LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY, truncate_to_max_bytes,
+    is_tool_allowed_by_spec, tool_call_signature, truncate_to_max_bytes, AgentState, StepResult,
+    WorkflowStep, CANCELLED_RUN_MESSAGE, LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY,
 };
 use crate::ai::specs::manifest::AgentSpec;
 use crate::models::neural::{
@@ -388,11 +388,10 @@ mod tests {
     #[serial]
     async fn queued_command_carries_agent_tool_access_policy() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
-        let memory_manager = Arc::new(
-            crate::services::MemoryManager::new(temp_dir.path().to_path_buf())
-                .await
-                .expect("memory manager"),
-        );
+        let memory_manager = Arc::new(crate::services::MemoryManager::new(
+            100,
+            temp_dir.path().to_path_buf(),
+        ));
         let memory = Arc::new(
             AgentMemory::new(
                 "test-ws",

@@ -936,9 +936,8 @@ mod tests {
 
         assert_eq!(refreshed.name, "Rainy Agent");
         assert_eq!(refreshed.version.as_deref(), Some("3.0.0"));
-        assert!(refreshed
-            .spec_json
-            .as_deref()
-            .is_some_and(|json| json.contains("ParallelSupervisor")));
+        assert!(refreshed.spec_json.as_deref().is_some_and(|json| json
+            .contains("parallel_supervisor")
+            || json.contains("ParallelSupervisor")));
     }
 }

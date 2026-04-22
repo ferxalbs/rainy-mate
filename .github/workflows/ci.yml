@@ -162,7 +162,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          shared-key: 'rust-cache-v2-bust'
+          shared-key: 'rust-cache-v3-bust'
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile

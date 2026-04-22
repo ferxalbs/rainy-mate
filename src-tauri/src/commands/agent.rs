@@ -1408,16 +1408,14 @@ pub async fn run_agent_workflow_internal(
                         crate::ai::agent::events::ContextCompactionPayload {
                             applied: true,
                             trigger_tokens: AUTO_COMPACTION_TRIGGER_TOKENS as u32,
-                            source_estimated_tokens: Some(compaction.source_estimated_tokens as u32),
-                            source_message_count: usize::try_from(
-                                compaction.source_message_count,
-                            )
-                            .ok(),
+                            source_estimated_tokens: Some(
+                                compaction.source_estimated_tokens as u32,
+                            ),
+                            source_message_count: usize::try_from(compaction.source_message_count)
+                                .ok(),
                             kept_recent_count: usize::try_from(compaction.kept_recent_count).ok(),
                             compression_model: Some(compaction.compression_model.clone()),
-                            best_practice: Some(
-                                "rolling_summary_context_compaction".to_string(),
-                            ),
+                            best_practice: Some("rolling_summary_context_compaction".to_string()),
                         },
                     )
                 },
