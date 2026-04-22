@@ -63,9 +63,12 @@ struct BeamTemplateManifest {
     title: String,
     summary: String,
     description: String,
+    #[serde(rename = "contract_name")]
     contract_name: String,
+    #[serde(rename = "contract_file")]
     contract_file: String,
     category: String,
+    #[serde(rename = "recommended_network")]
     recommended_network: String,
     tags: Vec<String>,
 }

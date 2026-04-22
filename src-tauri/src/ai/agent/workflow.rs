@@ -76,7 +76,8 @@ fn emit_usage_event(
 }
 
 pub(crate) fn tool_call_signature(calls: &[ToolCall]) -> String {
-    calls.iter()
+    calls
+        .iter()
         .map(|call| format!("{}::{}", call.function.name, call.function.arguments.trim()))
         .collect::<Vec<_>>()
         .join("||")
@@ -581,13 +582,12 @@ impl WorkflowStep for ThinkStep {
                         .get(LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY)
                         .is_some_and(|previous| previous == &signature)
                     {
-                        let (recovered_content, recovered_tool_calls) =
-                            request_plaintext_followup(
-                                &router_guard,
-                                &request,
-                                Arc::clone(&event_fn),
-                            )
-                            .await?;
+                        let (recovered_content, recovered_tool_calls) = request_plaintext_followup(
+                            &router_guard,
+                            &request,
+                            Arc::clone(&event_fn),
+                        )
+                        .await?;
                         content = recovered_content;
                         tool_calls = recovered_tool_calls
                             .filter(|calls| tool_call_signature(calls.as_slice()) != signature);
@@ -644,13 +644,12 @@ impl WorkflowStep for ThinkStep {
                         .get(LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY)
                         .is_some_and(|previous| previous == &signature)
                     {
-                        let (recovered_text, recovered_tool_calls) =
-                            request_plaintext_followup(
-                                &router_guard,
-                                &request,
-                                Arc::clone(&event_fn),
-                            )
-                            .await?;
+                        let (recovered_text, recovered_tool_calls) = request_plaintext_followup(
+                            &router_guard,
+                            &request,
+                            Arc::clone(&event_fn),
+                        )
+                        .await?;
                         if !recovered_text.is_empty() {
                             content = recovered_text;
                         }
@@ -718,7 +717,9 @@ impl WorkflowStep for ThinkStep {
             }
         }
 
-        state.context.remove(LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY);
+        state
+            .context
+            .remove(LAST_EXECUTED_TOOL_SIGNATURE_CONTEXT_KEY);
 
         // No tool calls -> Done
         Ok(StepResult {
