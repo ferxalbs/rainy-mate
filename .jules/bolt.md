@@ -1,0 +1,3 @@
+## 2026-05-02 - Memoize frequently updated chat components
+**Learning:** The MessageBubble component acts as a parent for many sub-components (TraceAccordion, SupervisorRail, PlanCard, etc.) and is frequently updated during a streaming chat response. Passing inline arrays (e.g., `message.trace || []`) or inline callback functions (like `() => onExecuteToolCalls(...)`) breaks `React.memo()` on child components because referential equality fails on every render.
+**Action:** Always extract empty fallback arrays as stable constants (e.g., `const EMPTY_ARRAY: never[] = []`) outside the component and wrap callback props in `React.useCallback` to preserve referential equality and enable effective memoization in high-frequency update loops.
