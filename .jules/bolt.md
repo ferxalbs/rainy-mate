@@ -1,0 +1,3 @@
+## 2025-05-06 - [React Performance: Inline Array Fallbacks Defeating Memoization]
+**Learning:** Found a common React performance anti-pattern where components that were properly wrapped in `React.memo` still re-rendered due to the usage of inline fallback arrays (e.g., `trace={message.trace || []}`). Because `[] !== []` in JavaScript, this creates referential inequality on every render.
+**Action:** Extract fallback arrays as stable global constants (e.g., `const EMPTY_ARRAY: never[] = [];`) outside the component to preserve memoization across renders. Also ensure functions passed as props are wrapped in `React.useCallback`.
