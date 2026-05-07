@@ -32,7 +32,10 @@ const methodColors: Record<string, string> = {
   default: "text-gray-400 bg-gray-400/10 border-gray-400/20",
 };
 
-export function PlanConfirmationCard({
+// ⚡ Bolt Performance Optimization
+// Memoize this static card to prevent re-rendering when the parent MessageBubble
+// streams new tokens. Requires onExecute to be wrapped in useCallback in the parent.
+export const PlanConfirmationCard = React.memo(function PlanConfirmationCard({
   toolCalls,
   onExecute,
   isExecuting,
@@ -88,4 +91,4 @@ export function PlanConfirmationCard({
       </div>
     </Card>
   );
-}
+});

@@ -1,0 +1,4 @@
+
+## 2024-05-07 - MessageBubble Streaming Render Optimization
+**Learning:** In a streaming chat interface, passing unmemoized callbacks or using unmemoized child components inside the message list (like `MessageBubble.tsx`) causes tearing down and rebuilding of complex layouts on every parent token stream update, heavily degrading React performance and increasing the diffing workload.
+**Action:** Always wrap complex child components of `MessageBubble` (like `SupervisorRail`, `TraceAccordion`, `PlanCard`) in `React.memo()`. Also, remember to wrap callbacks passed to these child components with `React.useCallback()` to maintain referential equality, maximizing `React.memo` effectiveness. Always include explicit `// ⚡ Bolt Performance Optimization` explanatory comments when performing these optimizations to satisfy user constraints.
