@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, memo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { FileImage, FileSpreadsheet, FileText, Eye, ExternalLink } from "lucide-react";
 
@@ -27,7 +27,10 @@ interface ArtifactBadgeRowProps {
   artifacts: ChatArtifact[];
 }
 
-export function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
+// ⚡ Bolt Performance Optimization
+// Artifact arrays are stable. Memoizing this row prevents re-rendering images and
+// re-evaluating the map function on every parent token stream update.
+export const ArtifactBadgeRow = memo(function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
   const [openingPath, setOpeningPath] = useState<string | null>(null);
   const [errorByPath, setErrorByPath] = useState<Record<string, string>>({});
 
@@ -128,4 +131,4 @@ export function ArtifactBadgeRow({ artifacts }: ArtifactBadgeRowProps) {
       })}
     </div>
   );
-}
+});

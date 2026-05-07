@@ -72,20 +72,27 @@ function MessageBubbleComponent({
   const isUser = message.type === "user";
   const isSystem = message.type === "system";
 
-  const handleExecuteToolCalls = () => {
+  // ⚡ Bolt Performance Optimization
+  // Memoize the callback to maintain referential equality, which allows child components
+  // wrapped in React.memo() (like PlanConfirmationCard) to avoid unnecessary re-renders
+  // during fast token stream updates.
+  const handleExecuteToolCalls = React.useCallback(() => {
     if (message.toolCalls && onExecuteToolCalls && workspaceId) {
       onExecuteToolCalls(message.id, message.toolCalls, workspaceId);
     }
-  };
+  }, [message.id, message.toolCalls, onExecuteToolCalls, workspaceId]);
 
-  const handleCopy = async () => {
+  // ⚡ Bolt Performance Optimization
+  // Prevents re-allocating this async function on every render, preserving referential
+  // equality for any child components receiving it.
+  const handleCopy = React.useCallback(async () => {
     if (!message.content) return;
     try {
       await navigator.clipboard.writeText(message.content);
     } catch (error) {
       console.error("Failed to copy message", error);
     }
-  };
+  }, [message.content]);
 
   const traceStats = useMemo(() => {
     const trace = message.trace || [];
@@ -368,7 +375,10 @@ export const MessageBubble = React.memo(
 // Re-export with a name hint for the parent to avoid confusion
 export { MessageBubble as MemoizedMessageBubble };
 
-function SupervisorRail({
+// ⚡ Bolt Performance Optimization
+// Memoize to prevent tearing down and rebuilding this complex layout on every parent
+// token stream update, reducing React's diffing workload.
+const SupervisorRail = React.memo(function SupervisorRail({
   summary,
   steps,
   specialists,
@@ -481,7 +491,7 @@ function SupervisorRail({
       )}
     </div>
   );
-}
+});
 
 function ExternalSessionRail({
   sessions,
@@ -626,7 +636,10 @@ function ExternalSessionRail({
   );
 }
 
-function TraceAccordion({
+// ⚡ Bolt Performance Optimization
+// TraceAccordion contains large arrays of trace items. Wrapping in React.memo()
+// prevents mapping over the `trace` array multiple times per second when streaming.
+const TraceAccordion = React.memo(function TraceAccordion({
   trace,
   runState,
   stats,
@@ -727,9 +740,12 @@ function TraceAccordion({
       </div>
     </details>
   );
-}
+});
 
-function PlanCard({
+// ⚡ Bolt Performance Optimization
+// PlanCard is static after the plan phase. React.memo() ensures we skip re-evaluating
+// this component entirely while the agent streams its response text.
+const PlanCard = React.memo(function PlanCard({
   plan,
   onExecute,
   isExecuting,
@@ -789,7 +805,7 @@ function PlanCard({
       </div>
     </Card>
   );
-}
+});
 
 const AIRLOCK_BADGE_CONFIG: Record<number, { label: string; className: string }> = {
   0: { label: "L0 Safe",      className: "border-emerald-500/30 text-emerald-500 bg-emerald-500/10" },
