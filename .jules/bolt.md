@@ -1,0 +1,3 @@
+## 2024-05-18 - [Memoizing Components in High-Frequency Render Trees]
+**Learning:** In streaming chat interfaces (like `MessageBubble.tsx`), child components that receive arrays must not use inline fallbacks like `|| []` when passed as props. This causes referential inequality on every parent render, completely defeating `React.memo()`.
+**Action:** Extract fallback arrays into a stable global constant (e.g., `const EMPTY_ARRAY: never[] = []`) outside the component to preserve referential equality and enable effective memoization. Ensure that callback props passed down to memoized components are wrapped in `useCallback` with correct dependency arrays.
