@@ -1,0 +1,3 @@
+## 2025-02-23 - Prevent Inline Array Initialization in React Component Props
+**Learning:** Passing an inline array fallback like `prop={trace || []}` to a memoized child component defeats the purpose of `React.memo()`. During streaming UI renders (like token streaming), this results in referential inequality and triggers massive unnecessary re-renders of heavy components.
+**Action:** Extract default array structures (e.g. `const EMPTY_ARRAY: never[] = []`) to stable global constants outside the component tree. Always use stable references when utilizing `React.memo()` to preserve application performance during rapid state updates.
