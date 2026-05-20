@@ -1,0 +1,3 @@
+## 2024-05-18 - React Performance in MessageBubble
+**Learning:** MessageBubble rendered multiple complex UI components like SupervisorRail, TraceAccordion, and ArtifactBadgeRow which were re-rendering unnecessarily during streaming text updates or state changes because they lacked `React.memo()`. Also, using inline fallback arrays like `[]` or passing unmemoized callback functions dynamically creates new object/function references on every render, defeating the purpose of `React.memo()`.
+**Action:** Extract inline arrays to a global constant `EMPTY_ARRAY` and wrap callbacks like `handleExecuteToolCalls` in `useCallback` to preserve referential equality. Then, wrap those heavy child components with `React.memo()`.
